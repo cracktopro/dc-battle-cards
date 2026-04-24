@@ -1,0 +1,13 @@
+body {
+    font-family: Arial, sans-serif;
+    background-color: #222;
+    color: #fff;
+    text-align: center;
+}
+
+#gameCanvas {
+    border: 1px solid #fff;
+    margin-top: 20px;
+    width: 800px;
+    height: 600px;
+}

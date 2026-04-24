@@ -1,0 +1,997 @@
+/* jugarPartida.css */
+
+body {
+    background: url('https://images2.alphacoders.com/262/262522.jpg') no-repeat center center fixed;
+    background-size: cover;
+    color: #ffffff;
+    font-family: 'Orbitron', sans-serif;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+}
+
+.arena-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 16px;
+    margin-bottom: 14px;
+    border: 1px solid rgba(0, 209, 255, 0.35);
+    border-radius: 14px;
+    background: linear-gradient(120deg, rgba(8, 18, 36, 0.92), rgba(18, 36, 64, 0.72));
+    box-shadow: 0 0 18px rgba(0, 123, 255, 0.35);
+}
+
+.arena-title {
+    margin: 0;
+    color: #dff8ff;
+    font-size: 1.5rem;
+    text-transform: uppercase;
+}
+
+.arena-subtitle {
+    margin: 4px 0 0;
+    color: #9fd6ff;
+    font-size: 0.9rem;
+}
+
+.arena-actions {
+    display: flex;
+    align-items: center;
+}
+
+/* Estilo del contenedor del menú lateral */
+.menu-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 250px;
+    height: 100vh;
+    background-color: rgba(20, 20, 20, 0.7);
+    border-right: 2px solid rgba(0, 123, 255, 0.3);
+    box-shadow: 0 0 15px rgba(0, 123, 255, 0.5);
+    padding: 15px;
+    text-align: center;
+    z-index: 1000;
+}
+
+.btn-menu {
+    width: 100%;
+    margin: 10px 0;
+    background-color: rgba(0, 123, 255, 0.1);
+    border: 2px solid rgba(0, 123, 255, 0.3);
+    color: #007bff;
+    font-weight: bold;
+    text-shadow: 0 0 8px rgba(0, 123, 255, 0.8);
+    transition: all 0.3s ease;
+    font-size: 1rem;
+}
+
+.btn-menu:hover {
+    background-color: rgba(0, 123, 255, 0.2);
+    border-color: #007bff;
+    box-shadow: 0 0 15px rgba(0, 123, 255, 0.7), 0 0 25px rgba(0, 123, 255, 0.5);
+    color: #fff;
+}
+.btn-logout {
+    width: 100%;
+    margin: 10px 0;
+    background-color: rgba(255, 0, 0, 0.1);
+    border: 2px solid rgba(255, 0, 0, 0.3);
+    color: #ff0000;
+    font-weight: bold;
+    text-shadow: 0 0 8px rgba(255, 0, 0, 0.8);
+    transition: all 0.3s ease;
+    font-size: 1rem;
+}
+.btn-logout:hover {
+    background-color: rgba(201, 52, 52, 0.2);
+    border-color: #d31c1c;
+    box-shadow: 0 0 15px rgba(211, 28, 28, 0.7), 0 0 25px rgba(211, 28, 28, 0.5);
+    color: #fff;
+}
+
+/* Contenedor de comunicación para chat y lista de jugadores */
+.comunicacion-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: stretch;
+    gap: 14px;
+    margin-bottom: 20px;
+}
+
+/* Estilo del contenedor de chat */
+.chat-container {
+    background-color: rgba(30, 30, 30, 0.8);
+    border: 2px solid rgba(0, 123, 255, 0.5);
+    border-radius: 8px;
+    padding: 15px;
+    width: 60%; /* Ajusta el ancho del chat */
+    height: 460px !important; /* Caja más alta para mostrar más mensajes */
+    overflow-y: auto; /* Permite el scroll si hay muchos mensajes */
+    box-shadow: 0 0 15px rgba(0, 123, 255, 0.5);
+    flex: 1; /* Hace que el contenedor del chat se ajuste automáticamente */
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between; /* Distribuye el espacio entre el área de mensajes y el input */
+}
+/* Contenedor para alinear el input y el botón en la misma línea */
+.chat-input-container {
+    display: flex;
+    gap: 10px; /* Espacio entre el input y el botón */
+    margin-top: 10px; /* Espacio superior para separación del contenedor de mensajes */
+    align-items: center; /* Centra el input y el botón verticalmente */
+}
+/* Ajuste del campo de entrada de chat */
+#chat-input {
+    flex: 1; /* Permite que el input tome todo el espacio disponible */
+    padding: 10px;
+    border: 2px solid rgba(0, 123, 255, 0.5);
+    border-radius: 5px;
+    background-color: rgba(20, 20, 20, 0.9);
+    color: #ffffff;
+    font-size: 1rem;
+}
+/* Botón de enviar mensaje */
+#enviar-mensaje {
+    background-color: rgba(0, 123, 255, 0.3);
+    border: 2px solid rgba(0, 123, 255, 0.5);
+    color: #ffffff;
+    font-weight: bold;
+    text-shadow: 0 0 5px rgba(0, 123, 255, 0.8);
+    transition: all 0.3s ease;
+    padding: 10px 15px;
+    cursor: pointer;
+    border-radius: 5px;
+    flex-shrink: 0; /* Evita que el botón se reduzca */
+}
+
+#enviar-mensaje:hover {
+    background-color: rgba(0, 123, 255, 0.5);
+    border-color: #007bff;
+    box-shadow: 0 0 15px rgba(0, 123, 255, 0.7);
+}
+/* Estilo de los mensajes de chat */
+.chat-mensajes {
+    display: flex;
+    flex-direction: column;
+    gap: 10px; /* Espacio entre mensajes */
+    overflow-y: auto; /* Permite el scroll si hay muchos mensajes */
+    height: calc(100% - 60px); /* Ajusta la altura para dejar espacio para el input */
+}
+.btnChat {
+    width: 25%;
+    background-color: rgba(0, 123, 255, 0.2);
+    border: 2px solid rgba(0, 123, 255, 0.5);
+    color: #007bff;
+    font-weight: bold;
+    text-shadow: 0 0 10px rgba(0, 123, 255, 0.9);
+    transition: all 0.3s ease;
+    font-size: 1.1rem;
+}
+/* Ajustes para la lista de jugadores conectados */
+.jugadores-conectados-container {
+    background-color: rgba(30, 30, 30, 0.8);
+    border: 2px solid rgba(0, 123, 255, 0.5);
+    border-radius: 8px;
+    padding: 15px;
+    height: 460px !important; /* Igual tamaño que chat */
+    overflow: hidden; /* El scroll queda en la lista interna */
+    box-shadow: 0 0 15px rgba(0, 123, 255, 0.5);
+    flex: 1; /* Flex para ajustar el tamaño automáticamente */
+    display: flex;
+    flex-direction: column;
+}
+
+/* Ajustar estilo de los elementos de la lista de jugadores */
+.jugadores-conectados-container ul {
+    list-style: none; /* Quitar los puntos de la lista */
+    padding: 0;
+    margin: 0;
+}
+
+.jugadores-conectados-container li {
+    margin: 5px 0; /* Reducir el margen entre jugadores */
+    padding: 8px; /* Reducir el padding para ajustar el tamaño */
+    background-color: rgba(0, 123, 255, 0.2);
+    border: 1px solid rgba(0, 123, 255, 0.5);
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    color: #ffffff;
+    font-size: 0.9rem; /* Reducir el tamaño de la fuente */
+}
+
+.jugadores-conectados-container li:hover {
+    background-color: rgba(0, 123, 255, 0.4);
+    box-shadow: 0 0 10px rgba(0, 123, 255, 0.6);
+}
+
+/* Estilo personalizado para las barras de desplazamiento */
+.jugadores-conectados-container::-webkit-scrollbar,
+.chat-container::-webkit-scrollbar {
+    width: 8px; /* Ancho de la scrollbar */
+}
+
+.jugadores-conectados-container::-webkit-scrollbar-track,
+.chat-container::-webkit-scrollbar-track {
+    background: rgba(20, 20, 20, 0.5); /* Color de fondo del track */
+    border-radius: 10px; /* Bordes redondeados del track */
+}
+
+.jugadores-conectados-container::-webkit-scrollbar-thumb,
+.chat-container::-webkit-scrollbar-thumb {
+    background: rgba(0, 123, 255, 0.7); /* Color del thumb de la scrollbar */
+    border-radius: 10px; /* Bordes redondeados del thumb */
+    box-shadow: 0 0 10px rgba(0, 123, 255, 0.5); /* Sombra para efecto futurista */
+}
+
+.jugadores-conectados-container::-webkit-scrollbar-thumb:hover,
+.chat-container::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 123, 255, 0.9); /* Color más brillante al pasar el ratón */
+}
+
+
+/* Estilo de cada jugador en la lista */
+.lista-jugadores {
+    list-style-type: none; /* Elimina las viñetas */
+    padding: 0; /* Elimina el padding predeterminado */
+    margin: 0; /* Elimina el margen predeterminado */
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
+    padding-right: 4px;
+    max-height: none;
+}
+
+.lista-jugadores li {
+    margin: 10px 0;
+    padding: 10px;
+    background-color: rgba(0, 123, 255, 0.2);
+    border: 1px solid rgba(0, 123, 255, 0.5);
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    color: #ffffff;
+}
+
+.lista-jugadores li:hover {
+    background-color: rgba(0, 123, 255, 0.4);
+    box-shadow: 0 0 10px rgba(0, 123, 255, 0.6);
+    color: #ffffff;
+    text-shadow: 0 0 5px rgba(0, 123, 255, 0.7);
+}
+
+/* Ajuste del campo de selección de mazo */
+#select-mazo {
+    width: 100%;
+    height: 50px;
+    padding: 10px;
+    border: 2px solid rgba(0, 123, 255, 0.5);
+    border-radius: 5px;
+    background-color: rgba(20, 20, 20, 0.9);
+    color: #ffffff;
+    font-size: 1rem;
+    margin-bottom: 20px;
+    transition: all 0.3s ease;
+}
+
+#select-mazo:hover {
+    border-color: #007bff;
+}
+
+/* Botón de jugar */
+#jugar-btn {
+    width: 100%;
+    background-color: rgba(0, 123, 255, 0.3);
+    border: 2px solid rgba(0, 123, 255, 0.5);
+    color: #ffffff;
+    font-weight: bold;
+    text-shadow: 0 0 5px rgba(0, 123, 255, 0.8);
+    padding: 10px;
+    cursor: pointer;
+    border-radius: 5px;
+    font-size: 1.1rem;
+    transition: all 0.3s ease;
+}
+
+#jugar-btn:hover {
+    background-color: rgba(0, 123, 255, 0.5);
+    border-color: #007bff;
+    box-shadow: 0 0 15px rgba(0, 123, 255, 0.7);
+}
+
+.eventos-section {
+    margin-top: 20px;
+    border: 1px solid rgba(0, 209, 255, 0.35);
+    border-radius: 14px;
+    background: rgba(8, 18, 36, 0.86);
+    padding: 14px;
+    box-shadow: 0 0 16px rgba(0, 123, 255, 0.28);
+}
+
+.eventos-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+}
+
+.eventos-header h3 {
+    margin: 0;
+    color: #dff8ff;
+}
+
+.eventos-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 14px;
+    align-items: stretch;
+}
+
+.evento-card {
+    background: rgba(10, 22, 44, 0.88);
+    border: 1px solid rgba(0, 209, 255, 0.32);
+    border-radius: 12px;
+    padding: 12px;
+    box-shadow: 0 0 12px rgba(0, 123, 255, 0.22);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-height: 560px;
+    height: 100%;
+}
+
+.evento-card.pendiente {
+    box-shadow: 0 0 14px rgba(46, 255, 120, 0.3), 0 0 24px rgba(46, 255, 120, 0.18);
+    border-color: rgba(46, 255, 120, 0.45);
+}
+
+.evento-card.completado {
+    box-shadow: 0 0 14px rgba(255, 78, 78, 0.35), 0 0 24px rgba(255, 78, 78, 0.2);
+    border-color: rgba(255, 88, 88, 0.48);
+}
+
+.evento-nombre {
+    color: #dff8ff;
+    font-size: 1.05rem;
+    font-weight: 700;
+}
+
+.evento-descripcion {
+    color: #c6ecff;
+    font-size: 0.88rem;
+    min-height: 42px;
+}
+
+.evento-enemigos {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(78px, 78px));
+    gap: 8px;
+}
+
+.evento-enemigo-card {
+    width: 78px;
+    height: 108px;
+    border: 1px solid rgba(0, 123, 255, 0.5);
+    border-radius: 8px;
+    background-size: cover;
+    background-position: center;
+    position: relative;
+    overflow: hidden;
+}
+
+.evento-enemigo-card.boss {
+    border: 2px solid rgba(255, 102, 40, 0.95);
+    box-shadow: 0 0 10px rgba(255, 95, 31, 0.7), 0 0 16px rgba(255, 42, 42, 0.45);
+}
+
+.evento-enemigo-card.boss .evento-enemigo-nombre {
+    background: linear-gradient(90deg, rgba(150, 22, 22, 0.92), rgba(255, 95, 31, 0.88));
+}
+
+.evento-enemigo-nombre {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 3px 4px;
+    font-size: 0.56rem;
+    line-height: 1.1;
+    background: rgba(0, 0, 0, 0.72);
+    color: #fff;
+    text-align: center;
+}
+
+.evento-enemigos-label {
+    margin-top: 0;
+    margin-bottom: -2px;
+    color: #ff5f5f;
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    text-shadow: 0 0 8px rgba(255, 42, 42, 0.7);
+}
+
+.evento-recompensas-label {
+    color: #ffd700;
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    text-shadow: 0 0 8px rgba(255, 215, 0, 0.7);
+}
+
+.evento-recompensas {
+    background: rgba(255, 215, 0, 0.1);
+    border: 1px solid rgba(255, 215, 0, 0.42);
+    border-radius: 10px;
+    padding: 7px 9px;
+    color: #ffd700;
+    font-size: 0.78rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.evento-recompensa-card {
+    width: 64px;
+    height: 90px;
+    border: 1px solid rgba(255, 215, 0, 0.65);
+    border-radius: 8px;
+    background-size: cover;
+    background-position: center;
+    position: relative;
+    overflow: hidden;
+}
+
+.evento-recompensas-meta {
+    color: #ffe9a8;
+    font-size: 0.74rem;
+}
+
+.evento-recompensa-tag {
+    border: 1px solid rgba(255, 215, 0, 0.6);
+    background: rgba(255, 215, 0, 0.14);
+    border-radius: 999px;
+    padding: 3px 8px;
+    color: #ffd700;
+    font-size: 0.66rem;
+    text-transform: uppercase;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.evento-dificultad {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.evento-bottom {
+    margin-top: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.evento-dificultad-label {
+    color: #a8dcff;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+}
+
+.evento-dificultad-select {
+    width: 100%;
+    -webkit-appearance: none;
+    appearance: none;
+    background-color: rgba(9, 22, 42, 0.95);
+    background-image:
+        linear-gradient(180deg, rgba(16, 34, 62, 0.95), rgba(9, 22, 42, 0.95)),
+        linear-gradient(45deg, transparent 50%, #9ee8ff 50%),
+        linear-gradient(135deg, #9ee8ff 50%, transparent 50%);
+    background-position:
+        0 0,
+        calc(100% - 16px) calc(50% - 2px),
+        calc(100% - 10px) calc(50% - 2px);
+    background-size: 100% 100%, 6px 6px, 6px 6px;
+    background-repeat: no-repeat;
+    color: #e6f8ff;
+    border: 1px solid rgba(0, 209, 255, 0.45);
+    border-radius: 10px;
+    padding: 8px 10px;
+    font-size: 0.88rem;
+    box-shadow: inset 0 0 10px rgba(0, 123, 255, 0.22);
+    outline: none;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.evento-dificultad-select option {
+    background: #0b1a33;
+    color: #dff8ff;
+}
+
+.evento-dificultad-select:focus {
+    border-color: rgba(0, 209, 255, 0.8);
+    box-shadow: 0 0 10px rgba(0, 209, 255, 0.35);
+}
+
+.rotacion-wrapper {
+    width: min(280px, 100%);
+    margin-top: 2px;
+}
+
+.rotacion-timer {
+    color: #ffd700;
+    font-size: 0.9rem;
+    font-weight: 700;
+    text-align: right;
+    text-shadow: 0 0 8px rgba(255, 215, 0, 0.45);
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    white-space: nowrap;
+}
+
+.rotacion-timer-valor {
+    display: inline-block;
+    width: 8ch;
+    text-align: right;
+    font-family: "Consolas", "Courier New", monospace;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+}
+
+.rotacion-barra {
+    margin-top: 6px;
+    height: 10px;
+    border-radius: 999px;
+    background: rgba(38, 32, 4, 0.75);
+    border: 1px solid rgba(255, 215, 0, 0.4);
+    overflow: hidden;
+    box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.45);
+}
+
+.rotacion-barra-progreso {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #ffd700, #ffea70);
+    box-shadow: 0 0 12px rgba(255, 215, 0, 0.55);
+    transition: width 0.4s ease;
+}
+
+.modal-seleccion-mazo {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.78);
+    z-index: 2100;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 12px;
+}
+
+.modal-seleccion-contenido {
+    width: min(1120px, 96vw);
+    max-height: 92vh;
+    overflow: hidden;
+    background: rgba(8, 18, 36, 0.96);
+    border: 1px solid rgba(0, 209, 255, 0.36);
+    border-radius: 14px;
+    box-shadow: 0 0 20px rgba(0, 123, 255, 0.28);
+    display: flex;
+    flex-direction: column;
+}
+
+.modal-header-desafio {
+    padding: 12px 14px;
+    border-bottom: 1px solid rgba(0, 209, 255, 0.3);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.estado-seleccion {
+    color: #ffd700;
+    font-weight: 700;
+}
+
+.filtros-seleccion {
+    padding: 10px 14px;
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.cartas-seleccion-grid {
+    padding: 0 14px 14px;
+    overflow: auto;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 160px));
+    grid-auto-rows: max-content;
+    gap: 12px;
+    justify-content: start;
+    align-items: start;
+}
+
+.carta-mini {
+    position: relative;
+    width: 100%;
+    height: 224px;
+    border: 2px solid rgba(36, 156, 255, 0.7);
+    border-radius: 10px;
+    overflow: hidden;
+    cursor: pointer;
+    box-shadow: 0 0 10px rgba(0, 123, 255, 0.25);
+    transition: box-shadow 0.2s ease, transform 0.2s ease;
+    background-size: cover;
+    background-position: center;
+}
+
+.carta-mini.seleccionada {
+    box-shadow: 0 0 16px 4px rgba(255, 215, 0, 0.82);
+    border-color: rgba(255, 215, 0, 0.95);
+}
+
+.carta-mini .detalles-carta {
+    font-size: 0.64rem;
+    padding: 4px;
+}
+
+.carta-mini.nivel-legendaria {
+    border-color: rgba(172, 96, 255, 0.92);
+}
+
+.modal-footer-desafio {
+    padding: 12px 14px;
+    border-top: 1px solid rgba(0, 209, 255, 0.3);
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+/* Paneles informativos */
+.panel {
+    height: 150px;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    border: 2px solid rgba(0, 123, 255, 0.5);
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 20px;
+    max-height: 50vh; /* Limita la altura del contenedor de chat */
+    overflow-y: auto; /* Permite el scroll si hay muchos mensajes */
+    box-shadow: 0 0 15px rgba(0, 123, 255, 0.5);
+    text-transform: uppercase;
+    text-align: center;
+    color: rgb(255, 255, 255);
+    text-shadow: rgb(0, 0, 0) 2px 5px 4px;
+    filter: grayscale(75%);
+}
+
+.panel:hover {
+    filter: grayscale(0);
+}
+
+.panelText {
+    background-color: rgba(0, 0, 0, 0.8);
+    border-radius: 25%;
+}
+
+/* Detectar dispositivos de alta resolución */
+@media (max-width: 768px), (min-resolution: 2dppx), (orientation: portrait) {
+    .menu-container {
+        width: 150px; /* Reducir el ancho del menú en pantallas pequeñas */
+        padding: 10px;
+    }
+
+    .btn-menu, .btn-logout {
+        font-size: 0.6rem; /* Reducir el tamaño de la fuente de los botones */
+        padding: 8px; /* Reducir el padding de los botones */
+        margin: 8px 0;
+    }
+
+    .content-container {
+        margin-left: 200px; /* Ajustar el margen para acomodar el menú más pequeño */
+        padding: 15px;
+    }
+    #select-mazo{
+        width: 100%;
+        max-width: 100%;
+        font-size: 0.9rem;
+        min-height: 46px;
+        padding-right: 38px;
+    }
+    .chat-mensajes{
+        font-size: 12px;
+    }
+    #chat-input{
+        font-size: 12px;
+    }
+}
+
+/* Estilo del contenedor de cada jugador con el botón de invitar */
+.jugador-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: rgba(0, 123, 255, 0.2);
+    border: 1px solid rgba(0, 123, 255, 0.5);
+    border-radius: 5px;
+    padding: 10px;
+    margin-bottom: 10px;
+}
+
+.btn-invitar {
+    background-color: rgba(0, 123, 255, 0.3);
+    border: 2px solid rgba(0, 123, 255, 0.5);
+    color: #ffffff;
+    cursor: pointer;
+    padding: 5px 10px;
+    border-radius: 5px;
+    transition: all 0.3s ease;
+}
+
+.btn-invitar:hover {
+    background-color: rgba(0, 123, 255, 0.5);
+    border-color: #007bff;
+}
+
+/* Estilo para la ventana emergente */
+.overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.modal-invitacion {
+    background-color: rgba(20, 20, 20, 0.9);
+    border: 2px solid rgba(0, 123, 255, 0.5);
+    padding: 20px;
+    border-radius: 10px;
+    text-align: center;
+    color: #ffffff;
+    width: 300px;
+}
+
+.modal-invitacion button {
+    margin: 10px;
+    padding: 10px 20px;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+.btn-aceptar {
+    background-color: rgba(0, 123, 255, 0.5);
+    border: 2px solid rgba(0, 123, 255, 0.7);
+    color: #ffffff;
+}
+
+.btn-cancelar {
+    background-color: rgba(255, 0, 0, 0.5);
+    border: 2px solid rgba(255, 0, 0, 0.7);
+    color: #ffffff;
+}
+
+.btn-aceptar:hover, .btn-cancelar:hover {
+    opacity: 0.8;
+}
+.jugador-nombre {
+    color: #007bff; /* Azul clarito */
+    font-weight: bold;
+    text-shadow: 0 0 5px rgba(0, 123, 255, 0.8); /* Añadir un pequeño brillo para que resalte */
+}
+.jugador-invitado{
+    color: #007bff; /* Azul clarito */
+    font-weight: bold;
+    text-shadow: 0 0 5px rgba(0, 123, 255, 0.8); /* Añadir un pequeño brillo para que resalte */
+}
+/* Estilos para los mensajes del propio usuario (en blanco) */
+.mensaje-usuario {
+    align-self: flex-start;
+    background-color: rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    color: #ffffff;
+    padding: 10px;
+    border-radius: 5px;
+    box-shadow: 0 0 5px rgba(255, 255, 255, 0.4);
+}
+.mensaje-usuario .nombre-usuario {
+    color: #0099ff; /* Nombre "Tú" en azul */
+}
+/* Estilos para los mensajes de otros usuarios (en azul claro) */
+.mensaje-otro {
+    align-self: flex-start;
+    background-color: rgba(0, 123, 255, 0.2);
+    border: 1px solid rgba(0, 123, 255, 0.5);
+    color: #8ec4ff;
+    padding: 10px;
+    border-radius: 5px;
+    box-shadow: 0 0 5px rgba(0, 123, 255, 0.4);
+}
+.mensaje-otro .nombre-usuario {
+    color: #ffffff; /* Nombre de usuario en blanco */
+}
+
+.chat-msg-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 5px;
+}
+
+.chat-msg-avatar {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    object-fit: cover;
+    object-position: top center;
+    border: 1px solid rgba(255, 255, 255, 0.65);
+    box-shadow: 0 0 4px rgba(0, 123, 255, 0.45);
+    flex-shrink: 0;
+}
+
+.chat-msg-hora {
+    margin-left: auto;
+    font-size: 0.72rem;
+    opacity: 0.85;
+}
+
+.chat-msg-texto {
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.chat-separador-fecha {
+    align-self: center;
+    font-size: 0.72rem;
+    color: #c8ddff;
+    background: rgba(0, 60, 120, 0.3);
+    border: 1px solid rgba(0, 123, 255, 0.35);
+    border-radius: 999px;
+    padding: 2px 10px;
+    text-transform: capitalize;
+    box-shadow: 0 0 8px rgba(0, 123, 255, 0.2);
+}
+
+/* Estilos para el fondo de la ventana emergente */
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 2000; /* Asegura que esté sobre otros elementos */
+}
+
+/* Estilos del contenedor de la ventana emergente */
+.modal-content {
+    background-color: rgba(20, 20, 20, 0.95);
+    border: 2px solid rgba(0, 123, 255, 0.5);
+    padding: 24px 22px 26px;
+    border-radius: 14px;
+    box-shadow: 0 0 15px rgba(0, 123, 255, 0.5);
+    width: min(520px, calc(100vw - 32px));
+    max-width: 92%; /* Asegura que se adapte a pantallas más pequeñas */
+    color: #ffffff;
+    text-align: center;
+}
+
+/* Estilo del título en la ventana emergente */
+.modal-content h4 {
+    margin-bottom: 20px;
+    font-size: 1.5rem;
+    color: #00c5ff;
+    text-shadow: 0 0 8px rgba(0, 123, 255, 0.8);
+}
+
+/* Estilo para los selectores de mazo y dificultad */
+.modal-content select {
+    width: min(100%, 380px);
+    display: block;
+    margin: 0 auto 20px;
+    padding: 12px 42px 12px 14px;
+    border: 2px solid rgba(0, 123, 255, 0.5);
+    border-radius: 8px;
+    background-color: rgba(20, 20, 20, 0.9);
+    color: #ffffff;
+    font-size: 1.02rem;
+    line-height: 1.2;
+    text-align: center;
+    text-align-last: center;
+    box-sizing: border-box;
+    transition: all 0.3s ease;
+}
+
+.modal-content select:hover {
+    border-color: #007bff;
+    box-shadow: 0 0 12px rgba(0, 123, 255, 0.28);
+}
+
+.modal-content select:focus {
+    outline: none;
+    border-color: #00c5ff;
+    box-shadow: 0 0 16px rgba(0, 197, 255, 0.35);
+}
+
+.modal-content option {
+    text-align: left;
+}
+
+/* Botón para iniciar partida */
+#iniciar-partida-btn {
+    width: 100%;
+    padding: 10px;
+    background-color: rgba(0, 123, 255, 0.5);
+    border: 2px solid rgba(0, 123, 255, 0.7);
+    color: #ffffff;
+    font-weight: bold;
+    text-shadow: 0 0 8px rgba(0, 123, 255, 0.8);
+    border-radius: 5px;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    font-size: 1.1rem;
+}
+
+#iniciar-partida-btn:hover {
+    background-color: rgba(0, 123, 255, 0.7);
+    border-color: #007bff;
+    box-shadow: 0 0 15px rgba(0, 123, 255, 0.7);
+}
+/* Estilos para los botones de dificultad */
+.dificultad-container {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.dificultad-btn {
+    background-color: rgba(20, 20, 20, 0.9);
+    border: 2px solid rgba(0, 123, 255, 0.5);
+    padding: 10px;
+    border-radius: 5px;
+    display: flex;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.dificultad-btn img {
+    height: 30px; /* Tamaño de las estrellas */
+    margin: 0 5px; /* Espacio entre las estrellas */
+}
+
+.dificultad-btn.selected {
+    border-color: #007bff;
+    box-shadow: 0 0 15px rgba(0, 123, 255, 0.7);
+    background-color: rgba(0, 123, 255, 0.3);
+}
+
+.dificultad-btn:hover {
+    border-color: #007bff;
+    background-color: rgba(0, 123, 255, 0.2);
+}

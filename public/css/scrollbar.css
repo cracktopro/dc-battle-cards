@@ -1,0 +1,43 @@
+/* Estilo de la scrollbar para toda la página */
+::-webkit-scrollbar {
+    width: 8px; /* Ancho de la scrollbar */
+    height: 8px; /* Altura de la scrollbar (para elementos horizontales) */
+}
+
+::-webkit-scrollbar-track {
+    background: rgba(20, 20, 20, 0.8); /* Color del track de la scrollbar */
+    border-radius: 10px; /* Radio del borde para darle un efecto más redondeado */
+}
+
+::-webkit-scrollbar-thumb {
+    background-color: rgba(0, 123, 255, 0.5); /* Color del thumb (barra de desplazamiento) */
+    border-radius: 10px; /* Radio del borde para el thumb */
+    border: 2px solid rgba(0, 0, 0, 0.2); /* Borde alrededor del thumb para darle un efecto más definido */
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(0, 123, 255, 0.8); /* Color del thumb cuando se pasa el cursor */
+}
+
+/* Aplicar los estilos personalizados a los elementos con scroll */
+.chat-container, .lista-jugadores {
+    scrollbar-width: thin; /* Ancho de la scrollbar para Firefox */
+    scrollbar-color: rgba(0, 123, 255, 0.5) rgba(20, 20, 20, 0.8); /* Colores para Firefox */
+}
+
+/* Estilo de la scrollbar para Firefox */
+.chat-container::-webkit-scrollbar,
+.lista-jugadores::-webkit-scrollbar {
+    width: 8px; /* Ancho de la scrollbar */
+}
+
+.chat-container::-webkit-scrollbar-thumb,
+.lista-jugadores::-webkit-scrollbar-thumb {
+    background-color: rgba(0, 123, 255, 0.5); /* Color del thumb */
+    border-radius: 10px; /* Redondear el thumb */
+}
+
+.chat-container::-webkit-scrollbar-thumb:hover,
+.lista-jugadores::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(0, 123, 255, 0.8); /* Color del thumb cuando se pasa el cursor */
+}

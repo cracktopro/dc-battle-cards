@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tablero de Partida</title>
+    <!-- CSS personalizado -->
+    <link href="css/mazos.css" rel="stylesheet">
+    <link href="css/tablero.css" rel="stylesheet">
+    <script src="/socket.io/socket.io.js"></script>
+    <!-- Scripts -->
+</head>
+
+<body>
+
+<div class="menu-container">
+    <!-- Contenedor para el texto del turno -->
+    <div id="turno-texto" class="turno-texto"></div>
+    <button onclick="abandonarPartida()" class="btn btn-abandonar">Abandonar Partida</button>
+    <!-- Consola de logs de combate -->
+    <div class="logs-container">
+        <h3>Logs de Combate</h3>
+        <div id="logs-combate" class="logs-combate"></div>
+    </div>
+     <!-- Contenedor para el botón de ataque -->
+     <div id="boton-atacar-container" class="boton-atacar-container">
+        <button id="boton-atacar" class="btn btn-atacar" style="display: none;">Atacar</button>
+    </div>
+</div>
+
+<div class="tablero-container">
+    <div id="aviso-turno" class="aviso-turno"></div>
+    <div id="ventana-emergente-fin" class="ventana-emergente">
+        <div class="ventana-contenido">
+            <h2 id="titulo-fin-partida"></h2>
+            <p id="mensaje-fin-partida"></p>
+            <!-- Aquí se podrán mostrar las recompensas o más información -->
+            <div id="recompensas-container"></div>
+            <div class="acciones-fin-partida">
+                <button id="boton-reiniciar-partida">Reiniciar Partida</button>
+                <button id="boton-volver-menu">Volver al menú</button>
+            </div>
+        </div>
+    </div>
+    <!-- Jugador 1 (Oponente) en la parte superior -->
+    <div class="jugador jugador-oponente">
+        <div class="info-jugador">
+            <h2 id="nombre-oponente">Oponente</h2>
+            <div id="contador-mazo-oponente" class="contador-mazo"></div>
+        </div>
+        <div class="slots-jugador" id="slots-oponente">
+            <!-- 3 slots con identificadores únicos para el oponente -->
+            <div class="slot" id="slot-oponente-1"></div>
+            <div class="slot" id="slot-oponente-2"></div>
+            <div class="slot" id="slot-oponente-3"></div>
+            <button id="mazo-oponente" class="mazo-btn" disabled></button>
+        </div>
+    </div>
+
+    <!-- Jugador 2 (Tú) en la parte inferior -->
+    <div class="jugador jugador-propio">
+        <div class="info-jugador">
+            <h2 id="nombre-jugador">Tú</h2>
+            <div id="contador-mazo-jugador" class="contador-mazo"></div>
+        </div>
+        <div class="slots-jugador" id="slots-jugador">
+            <!-- 3 slots con identificadores únicos para el jugador -->
+            <div class="slot" id="slot-jugador-1"></div>
+            <div class="slot" id="slot-jugador-2"></div>
+            <div class="slot" id="slot-jugador-3"></div>
+            <button id="mazo-jugador" class="mazo-btn" onclick="sacarCarta()"></button> <!-- HACIENDO CLICK EN ESTE BOTÓN SE SACA LA CARTA -->
+        </div>
+    </div>
+</div>
+
+<!-- Bootstrap JS and dependencies -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.0/xlsx.full.min.js"></script>
+<script src="js/cartas.js"></script>
+<script src="partida.js"></script>
+<script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+
+</body>
+</html>

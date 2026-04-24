@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jugar Partida</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+    <!-- Custom Styles -->
+    <link href="css/mazos.css" rel="stylesheet">
+    <link href="css/jugarPartida.css" rel="stylesheet">
+    <link href="css/scrollbar.css" rel="stylesheet">
+    <script src="/socket.io/socket.io.js"></script> <!-- Actualiza la ruta a socket.io -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.0/xlsx.full.min.js"></script>
+
+</head>
+
+<body>
+
+<script>
+    localStorage.removeItem('mazoOponente');
+    localStorage.removeItem('nombreOponente');
+</script>
+
+<div class="menu-container">
+    <!-- Botones del menú -->
+    <a href="vistaJuego.html" class="btn btn-menu">Jugar Partida</a>
+    <a href="mazos.html" class="btn btn-menu">Mazos</a>
+    <a href="crearMazos.html" class="btn btn-menu">Crear Mazos</a>
+    <a href="mejorarCartas.html" class="btn btn-menu">Mejorar Cartas</a>
+    <a href="coleccion.html" class="btn btn-menu">Colección</a>
+    <a href="tienda.html" class="btn btn-menu">Tienda</a>
+    <a href="desafios.html" class="btn btn-menu">Desafíos</a>
+    <a href="opciones.html" class="btn btn-menu">Opciones</a>
+    <button onclick="abrirModalLogout()" class="btn btn-logout">Cerrar Sesión</button>
+</div>
+
+<!-- Contenedor principal de contenido -->
+<div class="content-container">
+    <section class="arena-header">
+        <div>
+            <h2 class="arena-title">Centro de Operaciones</h2>
+            <p class="arena-subtitle">Configura combates, participa en eventos y domina el multiverso.</p>
+        </div>
+        <div id="selector-mazo-container" class="arena-actions">
+            <button id="jugar-btn" class="btn btn-primary mt-2" disabled>Jugador VS CPU</button>
+        </div>
+
+        <!-- Ventana emergente para seleccionar mazo y dificultad -->
+        <div id="configuracion-partida" class="modal" style="display: none;">
+            <div class="modal-content">
+                <h4>Selecciona tu mazo y la dificultad</h4>
+                
+                <!-- Selector de mazo -->
+                <label for="select-mazo">Selecciona tu mazo:</label>
+                <select id="select-mazo" class="form-control"></select>
+
+                <!-- Botones de dificultad -->
+                <h4>Selecciona la dificultad</h4>
+                <div id="dificultad-botones" class="dificultad-container">
+                    <button class="dificultad-btn" data-dificultad="1">
+                        <img src="https://i.ibb.co/zZt4R3x/star-level.png" alt="1 estrella">
+                    </button>
+                    <button class="dificultad-btn" data-dificultad="2">
+                        <img src="https://i.ibb.co/zZt4R3x/star-level.png" alt="2 estrellas">
+                        <img src="https://i.ibb.co/zZt4R3x/star-level.png" alt="2 estrellas">
+                    </button>
+                    <button class="dificultad-btn" data-dificultad="3">
+                        <img src="https://i.ibb.co/zZt4R3x/star-level.png" alt="3 estrellas">
+                        <img src="https://i.ibb.co/zZt4R3x/star-level.png" alt="3 estrellas">
+                        <img src="https://i.ibb.co/zZt4R3x/star-level.png" alt="3 estrellas">
+                    </button>
+                    <button class="dificultad-btn" data-dificultad="4">
+                        <img src="https://i.ibb.co/zZt4R3x/star-level.png" alt="4 estrellas">
+                        <img src="https://i.ibb.co/zZt4R3x/star-level.png" alt="4 estrellas">
+                        <img src="https://i.ibb.co/zZt4R3x/star-level.png" alt="4 estrellas">
+                        <img src="https://i.ibb.co/zZt4R3x/star-level.png" alt="4 estrellas">
+                    </button>
+                    <button class="dificultad-btn" data-dificultad="5">
+                        <img src="https://i.ibb.co/zZt4R3x/star-level.png" alt="5 estrellas">
+                        <img src="https://i.ibb.co/zZt4R3x/star-level.png" alt="5 estrellas">
+                        <img src="https://i.ibb.co/zZt4R3x/star-level.png" alt="5 estrellas">
+                        <img src="https://i.ibb.co/zZt4R3x/star-level.png" alt="5 estrellas">
+                        <img src="https://i.ibb.co/zZt4R3x/star-level.png" alt="5 estrellas">
+                    </button>
+                    <button class="dificultad-btn" data-dificultad="6">
+                        <img src="https://i.ibb.co/zZt4R3x/star-level.png" alt="6 estrellas">
+                        <img src="https://i.ibb.co/zZt4R3x/star-level.png" alt="6 estrellas">
+                        <img src="https://i.ibb.co/zZt4R3x/star-level.png" alt="6 estrellas">
+                        <img src="https://i.ibb.co/zZt4R3x/star-level.png" alt="6 estrellas">
+                        <img src="https://i.ibb.co/zZt4R3x/star-level.png" alt="6 estrellas">
+                        <img src="https://i.ibb.co/zZt4R3x/star-level.png" alt="6 estrellas">
+                    </button>
+                </div>
+                
+                <div class="d-flex justify-content-center mt-3" style="gap:10px;">
+                    <button id="iniciar-partida-btn" class="btn btn-primary" disabled>Iniciar partida</button>
+                    <button id="cancelar-partida-btn" class="btn btn-secondary">Cancelar</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="aviso-sin-mazo-modal" class="modal" style="display: none; position: fixed; inset: 0; justify-content: center; align-items: center;">
+            <div class="modal-content">
+                <h4>Antes de poder jugar necesitas crear un mazo.</h4>
+                <div class="d-flex justify-content-center mt-3" style="gap:10px;">
+                    <button id="ir-crear-mazos-btn" class="btn btn-primary">Ir a crear Mazos</button>
+                    <button id="cancelar-sin-mazo-btn" class="btn btn-secondary">Cancelar</button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Contenedor de comunicación para chat y lista de jugadores -->
+    <section class="comunicacion-container">
+        <!-- Chat -->
+        <div class="chat-container">
+            <div id="chat-mensajes" class="chat-mensajes">
+                <!-- Mensajes del chat se cargarán aquí -->
+            </div>
+            <!-- Contenedor para alinear el input y el botón en la misma línea -->
+            <div class="chat-input-container">
+                <input type="text" id="chat-input" class="form-control" placeholder="Escribe un mensaje...">
+                <button id="enviar-mensaje" class="btn btn-success">Enviar</button>
+            </div>
+        </div>
+
+        <!-- Lista de jugadores conectados -->
+        <div class="jugadores-conectados-container">
+            <h4>Jugadores Conectados</h4>
+            <ul id="lista-jugadores" class="lista-jugadores">
+                <!-- Lista dinámica de jugadores conectados -->
+            </ul>
+        </div>
+    </section>
+
+    <section class="eventos-section">
+        <div class="eventos-header">
+            <h3>Eventos Activos</h3>
+            <div class="rotacion-wrapper">
+                <div id="eventos-rotacion-timer" class="rotacion-timer">
+                    <span>Nueva rotación en:</span>
+                    <span id="eventos-rotacion-timer-valor" class="rotacion-timer-valor">00:00:00</span>
+                </div>
+                <div class="rotacion-barra">
+                    <div id="eventos-rotacion-barra-progreso" class="rotacion-barra-progreso"></div>
+                </div>
+            </div>
+        </div>
+        <div id="mensaje-eventos" class="alert alert-warning" style="display:none;"></div>
+        <div id="eventos-grid" class="eventos-grid"></div>
+    </section>
+
+    <!-- Paneles informativos -->
+    <section class="paneles-informativos">
+        <div class="panel" style="background-image: url('https://wallpaper.dog/large/20398053.png');">
+            <h3 class="panelText">Combate contra otros jugadores en linea</h3>
+        </div>
+        <div class="panel" style="background-image: url('https://wallpaper.dog/large/20544152.jpg');">
+            <h3 class="panelText">Obtén recompensas por derrotar a tus enemigos y completa la colección</h3>
+        </div>
+        <div class="panel" style="background-image: url('https://images.alphacoders.com/104/thumb-1920-1046632.jpg');">
+            <h3 class="panelText">Mejora tus cartas repetidas para alcanzar la máxima potencia</h3>
+        </div>
+    </section>
+</div>
+
+<div id="modal-seleccion-evento" class="modal-seleccion-mazo" style="display:none;">
+    <div class="modal-seleccion-contenido">
+        <div class="modal-header-desafio">
+            <h4 style="margin:0;">Selecciona 6 cartas para el evento</h4>
+            <div id="estado-seleccion-evento" class="estado-seleccion">Seleccionadas: 0 / 6</div>
+        </div>
+        <div class="filtros-seleccion">
+            <div class="faccion-tabs">
+                <button id="filtro-evento-faccion-h" class="btn faccion-tab active" type="button">Héroes</button>
+                <button id="filtro-evento-faccion-v" class="btn faccion-tab" type="button">Villanos</button>
+            </div>
+            <select id="filtro-afiliacion-evento" class="form-control" style="width:auto; min-width:220px;"></select>
+        </div>
+        <div id="cartas-evento-grid" class="cartas-seleccion-grid"></div>
+        <div class="modal-footer-desafio">
+            <button id="cancelar-evento-btn" class="btn btn-secondary" type="button">Cancelar</button>
+            <button id="confirmar-evento-btn" class="btn btn-primary" type="button" disabled>Empezar Evento</button>
+        </div>
+    </div>
+</div>
+
+<!-- Scripts -->
+<script src="js/cartas.js"></script>
+<script src="cliente.js"></script>
+<script src="jugarPartida.js"></script>
+<!-- Bootstrap JS and dependencies -->
+<script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+
+</body>
+</html>

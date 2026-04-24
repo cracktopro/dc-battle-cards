@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Opciones</title>
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+    <link href="css/mazos.css" rel="stylesheet">
+    <link href="css/scrollbar.css" rel="stylesheet">
+    <style>
+        .opciones-layout {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 14px;
+            padding-bottom: 24px;
+        }
+
+        .opcion-panel {
+            background: rgba(8, 18, 36, 0.86);
+            border: 1px solid rgba(0, 209, 255, 0.35);
+            border-radius: 14px;
+            box-shadow: 0 0 16px rgba(0, 123, 255, 0.28);
+            padding: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .opcion-panel h4 {
+            margin: 0;
+            color: #dff8ff;
+        }
+
+        .opcion-panel .form-control {
+            width: 100% !important;
+        }
+
+        .modal-header-desafio,
+        .modal-footer-desafio {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 12px 14px;
+        }
+
+        .filtros-seleccion {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            padding: 0 14px 12px;
+        }
+
+        .estado-seleccion {
+            color: #ffd95a;
+            font-size: 0.9rem;
+            text-shadow: 0 0 8px rgba(255, 217, 90, 0.6);
+        }
+
+        .avatar-preview {
+            width: 130px;
+            aspect-ratio: 6.3 / 8.8;
+            border-radius: 10px;
+            border: 2px solid rgba(0, 123, 255, 0.55);
+            background-size: cover;
+            background-position: center;
+            box-shadow: 0 0 12px rgba(0, 123, 255, 0.32);
+        }
+
+        .admin-badge {
+            font-size: 0.75rem;
+            color: #ffd700;
+            border: 1px solid rgba(255, 215, 0, 0.45);
+            border-radius: 999px;
+            width: fit-content;
+            padding: 3px 8px;
+            background: rgba(255, 215, 0, 0.1);
+        }
+
+        .modal-seleccion-personaje {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.78);
+            z-index: 2300;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 12px;
+        }
+
+        .modal-personaje-contenido {
+            width: min(1120px, 96vw);
+            max-height: 92vh;
+            overflow: hidden;
+            background: rgba(8, 18, 36, 0.96);
+            border: 1px solid rgba(0, 209, 255, 0.36);
+            border-radius: 14px;
+            box-shadow: 0 0 20px rgba(0, 123, 255, 0.28);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .personajes-grid {
+            padding: 0 14px 14px;
+            overflow: auto;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(160px, 160px));
+            gap: 12px;
+            justify-content: start;
+        }
+
+        .filtros-seleccion .form-control {
+            width: auto !important;
+        }
+
+        .carta-mini-opcion {
+            position: relative;
+            width: 100%;
+            height: 224px;
+            border: 2px solid rgba(36, 156, 255, 0.7);
+            border-radius: 10px;
+            overflow: hidden;
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(0, 123, 255, 0.25);
+            background-size: cover;
+            background-position: center;
+        }
+
+        .carta-mini-opcion.seleccionada {
+            box-shadow: 0 0 16px 4px rgba(255, 215, 0, 0.82);
+            border-color: rgba(255, 215, 0, 0.95);
+        }
+
+        .modal-confirm-reset {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.78);
+            z-index: 2400;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 12px;
+        }
+
+        .modal-reset-contenido {
+            width: min(700px, 95vw);
+            background: rgba(10, 18, 32, 0.96);
+            border: 1px solid rgba(255, 70, 70, 0.5);
+            border-radius: 12px;
+            padding: 16px;
+            box-shadow: 0 0 18px rgba(255, 66, 66, 0.35);
+        }
+
+        #confirmacion-borrado-input {
+            width: 100%;
+            min-height: 78px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 70, 70, 0.55);
+            background: rgba(18, 14, 14, 0.9);
+            color: #ffe4e4;
+            padding: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="menu-container">
+        <a href="vistaJuego.html" class="btn btn-menu">Jugar Partida</a>
+        <a href="mazos.html" class="btn btn-menu">Mazos</a>
+        <a href="crearMazos.html" class="btn btn-menu">Crear Mazos</a>
+        <a href="mejorarCartas.html" class="btn btn-menu">Mejorar Cartas</a>
+        <a href="coleccion.html" class="btn btn-menu">Colección</a>
+        <a href="tienda.html" class="btn btn-menu">Tienda</a>
+        <a href="desafios.html" class="btn btn-menu">Desafíos</a>
+        <a href="opciones.html" class="btn btn-menu">Opciones</a>
+        <button onclick="abrirModalLogout()" class="btn btn-logout">Cerrar Sesión</button>
+    </div>
+
+    <div class="content-container">
+        <h2>Opciones</h2>
+        <div id="mensaje-opciones" class="alert alert-warning" style="display:none;"></div>
+
+        <div class="opciones-layout">
+            <section class="opcion-panel">
+                <h4>Perfil</h4>
+                <label for="nickname-input">Nickname</label>
+                <input id="nickname-input" class="form-control" type="text" maxlength="24" placeholder="Tu nickname de juego">
+                <div class="d-flex align-items-end" style="gap:10px; flex-wrap:wrap;">
+                    <div id="avatar-preview" class="avatar-preview"></div>
+                    <button id="abrir-selector-avatar-btn" class="btn btn-primary" type="button">Elegir Personaje Preferido</button>
+                </div>
+                <button id="guardar-perfil-btn" class="btn btn-success" type="button">Guardar perfil</button>
+            </section>
+
+            <section class="opcion-panel">
+                <h4>Cuenta</h4>
+                <p style="color:#ffd4d4; margin:0;">ADVERTENCIA: Se perderá todo el progreso obtenido con su cuenta y no será recuperable.</p>
+                <button id="abrir-reset-btn" class="btn btn-danger" type="button">Reiniciar progreso de la cuenta</button>
+            </section>
+
+            <section id="admin-panel" class="opcion-panel" style="display:none;">
+                <h4>Opciones de Administrador</h4>
+                <div class="admin-badge">Solo administrador</div>
+                <button id="admin-sumar-puntos-btn" class="btn btn-primary" type="button">Obtener 5000 puntos</button>
+                <button id="admin-obtener-cartas-btn" class="btn btn-primary" type="button">Obtener todas las cartas</button>
+                <div class="d-flex" style="gap:8px; flex-wrap:wrap;">
+                    <select id="admin-nivel-cartas" class="form-control" style="width:auto; min-width:170px;">
+                        <option value="1">Nivel 1</option>
+                        <option value="2">Nivel 2</option>
+                        <option value="3">Nivel 3</option>
+                        <option value="4">Nivel 4</option>
+                        <option value="5">Nivel 5</option>
+                        <option value="6">Nivel 6</option>
+                    </select>
+                    <button id="admin-mejorar-cartas-btn" class="btn btn-warning" type="button">Mejorar todas las cartas</button>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <div id="modal-seleccion-personaje" class="modal-seleccion-personaje">
+        <div class="modal-personaje-contenido">
+            <div class="modal-header-desafio">
+                <h4 style="margin:0;">Selecciona personaje preferido</h4>
+                <div id="personaje-seleccionado-label" class="estado-seleccion">Ninguno</div>
+            </div>
+            <div class="filtros-seleccion">
+                <div class="faccion-tabs">
+                    <button id="filtro-avatar-h" class="btn faccion-tab active" type="button">Héroes</button>
+                    <button id="filtro-avatar-v" class="btn faccion-tab" type="button">Villanos</button>
+                </div>
+                <input id="buscar-avatar-input" class="form-control" type="text" placeholder="Buscar..." style="width:auto; min-width:220px;">
+                <select id="filtro-afiliacion-avatar" class="form-control" style="width:auto; min-width:220px;"></select>
+            </div>
+            <div id="personajes-grid" class="personajes-grid"></div>
+            <div class="modal-footer-desafio">
+                <button id="cancelar-avatar-btn" class="btn btn-secondary" type="button">Cancelar</button>
+                <button id="confirmar-avatar-btn" class="btn btn-primary" type="button" disabled>Guardar avatar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-reset-progreso" class="modal-confirm-reset">
+        <div class="modal-reset-contenido">
+            <h4 style="color:#ffd2d2;">ADVERTENCIA</h4>
+            <p>Se perderá todo el progreso obtenido con su cuenta y no será recuperable. ¿Estás seguro de que desea continuar? Escribe: <strong>BORRAR</strong> para confirmar.</p>
+            <textarea id="confirmacion-borrado-input" placeholder="Escribe BORRAR aquí..."></textarea>
+            <div class="d-flex justify-content-end mt-3" style="gap:10px;">
+                <button id="cancelar-reset-btn" class="btn btn-secondary" type="button">Cancelar</button>
+                <button id="confirmar-reset-btn" class="btn btn-danger" type="button" disabled>Confirmar</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.0/xlsx.full.min.js"></script>
+    <script src="js/cartas.js"></script>
+    <script src="opciones.js"></script>
+</body>
+</html>

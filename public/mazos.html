@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mazos</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&amp;display=swap" rel="stylesheet">
+    <!-- Custom Styles -->
+    <link href="css/mazos.css" rel="stylesheet">
+    <link href="css/scrollbar.css" rel="stylesheet">
+</head>
+
+<body>
+
+    <div class="menu-container">
+        <!-- Botones del menú -->
+        <a href="vistaJuego.html" class="btn btn-menu">Jugar Partida</a>
+        <a href="mazos.html" class="btn btn-menu">Mazos</a>
+        <a href="crearMazos.html" class="btn btn-menu">Crear Mazos</a>
+        <a href="mejorarCartas.html" class="btn btn-menu">Mejorar Cartas</a>
+        <a href="coleccion.html" class="btn btn-menu">Colección</a>
+        <a href="tienda.html" class="btn btn-menu">Tienda</a>
+        <a href="desafios.html" class="btn btn-menu">Desafíos</a>
+        <a href="opciones.html" class="btn btn-menu">Opciones</a>
+        <button onclick="abrirModalLogout()" class="btn btn-logout">Cerrar Sesión</button>
+    </div>
+
+<!-- Contenedor principal de contenido -->
+<div class="content-container">
+    <h2>Mazos</h2>
+    <div id="mensaje" class="alert" style="display:none;"></div>
+
+    <div id="opciones-mazo">
+        <select id="select-mazo" class="form-control d-inline-block" style="width: 150px; margin-left: 10px;">
+            <!-- Se agregarán opciones dinámicamente -->
+        </select>
+        <!-- Botón para borrar el mazo seleccionado -->
+        <button id="borrar-mazo" class="btn btn-danger d-inline-block ml-2">Borrar Mazo</button>
+    </div>
+
+    <div class="poder-mazo-container">
+        <span class="poder-label">PODER TOTAL</span>
+        <span id="poder-total-mazo" class="poder-valor">0</span>
+    </div>
+
+    <div id="contenedor-cartas" class="contenedor-cartas">
+        <!-- Las cartas se cargarán aquí dinámicamente -->
+        <!-- Ejemplo de carta estática para visualización -->
+        <div class="carta" style="background-image: url('https://images-wixmp-ed30a86b8c4ca887773594c2.wixmp.com/f/b514e3cf-d394-43fb-be65-1711518576b6/dfyok4a-408964f4-35b9-4d3d-a323-0a54a3f48b17.png');">
+            <div class="detalles-carta">
+                <span class="nombre-carta">Supergirl</span>
+                <span class="poder-carta">6500</span>
+            </div>
+            <div class="estrellas-carta">
+                <img src="https://i.ibb.co/zZt4R3x/star-level.png" class="estrella" alt="star">
+                <img src="https://i.ibb.co/zZt4R3x/star-level.png" class="estrella" alt="star">
+                <img src="https://i.ibb.co/zZt4R3x/star-level.png" class="estrella" alt="star">
+                <img src="https://i.ibb.co/zZt4R3x/star-level.png" class="estrella" alt="star">
+                <img src="https://i.ibb.co/zZt4R3x/star-level.png" class="estrella" alt="star">
+            </div>
+        </div>
+        <!-- Fin de ejemplo de carta -->
+    </div>
+</div>
+
+<div id="aviso-sin-mazo-modal" class="modal-dc" style="display:none;">
+    <div class="modal-dc-content">
+        <h4>Antes de poder gestionar mazos necesitas crear un mazo.</h4>
+        <div class="modal-dc-actions">
+            <button id="ir-crear-mazos-btn" class="btn btn-primary">Ir a crear Mazos</button>
+            <button id="cancelar-sin-mazo-btn" class="btn btn-secondary">Cancelar</button>
+        </div>
+    </div>
+</div>
+
+<div id="cambiar-carta-modal" class="modal-dc" style="display:none;">
+    <div class="modal-dc-content modal-cambio-carta">
+        <h4 id="titulo-cambiar-carta">Cambiar carta</h4>
+        <p id="carta-a-reemplazar-texto"></p>
+        <div id="lista-cartas-reemplazo" class="lista-cartas-reemplazo"></div>
+        <div class="modal-dc-actions">
+            <button id="confirmar-cambio-carta-btn" class="btn btn-primary">Cambiar carta</button>
+            <button id="cancelar-cambio-carta-btn" class="btn btn-secondary">Cancelar</button>
+        </div>
+    </div>
+</div>
+
+<div id="confirmar-borrado-mazo-modal" class="modal-dc" style="display:none;">
+    <div class="modal-dc-content">
+        <h4>¿¿Estás seguro de que deseas borrar este mazo?</h4>
+        <div class="modal-dc-actions">
+            <button id="aceptar-borrado-mazo-btn" class="btn btn-danger">Aceptar</button>
+            <button id="cancelar-borrado-mazo-btn" class="btn btn-secondary">Cancelar</button>
+        </div>
+    </div>
+</div>
+
+<!-- Scripts -->
+ <script src="js/cartas.js"></script>
+<script src="mazos.js"></script>
+<!-- Bootstrap JS and dependencies -->
+<script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+
+</body>
+</html>

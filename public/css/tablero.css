@@ -1,0 +1,819 @@
+body {
+    background: url('https://i.ibb.co/HDqCpmjb/Prueba.png') no-repeat center center fixed;
+    background-size: cover;
+    font-family: 'Orbitron', sans-serif;
+    margin: 0;
+    padding: 0;
+    color: #ffffff;
+    overflow: hidden; /* Evitar scroll */
+}
+
+.menu-container {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    width: 150px;
+    background-color: rgba(20, 20, 20, 0.8);
+    padding: 15px;
+    z-index: 1000;
+}
+
+.tablero-container {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    width: calc(100vw - 460px);
+    margin-left: 190px;
+    margin-right: 270px;
+    padding: 12px clamp(8px, 2vw, 16px);
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+.aviso-turno {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0.92);
+    min-width: 280px;
+    max-width: 80vw;
+    padding: 18px 28px;
+    border-radius: 16px;
+    background: rgba(8, 16, 36, 0.86);
+    border: 2px solid rgba(76, 173, 255, 0.75);
+    box-shadow: 0 0 30px rgba(34, 112, 255, 0.45);
+    color: #f5fbff;
+    text-align: center;
+    font-size: 1.8rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 2500;
+    transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.aviso-turno.visible {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+}
+
+.jugador {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    max-width: min(980px, 100%);
+    margin: 0 auto;
+    padding: 4px;
+}
+
+.jugador h2 {
+    font-size: 1.5rem;
+    color: #ffffff;
+    text-align: left;
+}
+
+.info-jugador {
+    position: fixed;
+    right: 18px;
+    width: 240px;
+    padding: 12px 10px;
+    border-radius: 14px;
+    background: rgba(8, 20, 40, 0.86);
+    border: 1px solid rgba(0, 209, 255, 0.35);
+    box-shadow: 0 0 18px rgba(0, 123, 255, 0.28);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    z-index: 30;
+}
+
+.jugador-oponente .info-jugador {
+    top: 18px;
+}
+
+.jugador-propio .info-jugador {
+    bottom: 18px;
+}
+
+.contador-mazo {
+    padding: 8px 12px;
+    border-radius: 999px;
+    background: rgba(10, 20, 40, 0.8);
+    border: 1px solid rgba(0, 209, 255, 0.55);
+    box-shadow: 0 0 12px rgba(0, 209, 255, 0.25);
+    color: #dff8ff;
+    font-size: 0.95rem;
+    white-space: nowrap;
+}
+
+.bonus-activo-tablero {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+    margin: 2px 0 8px;
+    align-items: center;
+    min-height: 28px;
+}
+
+.bonus-activo-item {
+    padding: 5px 12px;
+    border-radius: 999px;
+    background: rgba(255, 215, 0, 0.14);
+    border: 1px solid rgba(255, 215, 0, 0.45);
+    color: #ffd700;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-shadow: 0 0 8px rgba(255, 215, 0, 0.45);
+    white-space: nowrap;
+    box-shadow: 0 0 12px rgba(255, 215, 0, 0.15);
+}
+
+.jugador-oponente, .jugador-propio {
+    max-width: min(1180px, 100%);
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin: 8px auto;
+}
+
+/* Ajustes para las cartas */
+.slots-jugador {
+    display: flex;
+    justify-content: center;
+    gap: clamp(8px, 1.5vw, 20px);
+    margin-top: 6px;
+    flex-wrap: wrap;
+    width: min(900px, 100%);
+}
+
+.slot {
+    width: clamp(94px, 10vw, 148px);
+    aspect-ratio: 7 / 10;
+    height: auto;
+    border: 2px solid rgba(0, 123, 255, 0.7);
+    background-color: rgba(0, 0, 0, 0.6);
+    border-radius: 15px;
+    box-shadow: 0 0 15px rgba(0, 123, 255, 0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+    overflow: visible;
+    transition: transform 0.2s ease;
+}
+
+.slot:hover {
+    transform: none;
+    box-shadow: 0 0 20px rgba(0, 170, 255, 0.85), 0 0 30px rgba(0, 123, 255, 0.35);
+}
+
+.carta {
+    width: 100%;
+    height: 100%;
+    background-size: cover;
+    background-position: center;
+    border-radius: 10px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    transition: transform 0.28s ease, box-shadow 0.28s ease, filter 0.28s ease;
+    will-change: transform, filter, box-shadow;
+}
+
+.carta.nivel-legendaria {
+    box-shadow: 0 0 16px rgba(156, 66, 255, 0.5), 0 0 26px rgba(112, 39, 199, 0.4);
+}
+
+.carta-seleccionada {
+    animation: pulsoSeleccion 0.9s ease-in-out infinite;
+    box-shadow: 0 0 14px 4px rgba(255, 230, 0, 0.72), inset 0 0 22px rgba(255, 230, 0, 0.16);
+    transform: translateY(-4px);
+}
+
+.carta-atacando {
+    animation: impulsoAtaque 0.46s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    box-shadow: 0 0 22px 6px rgba(0, 209, 255, 0.85), 0 0 30px rgba(0, 209, 255, 0.32);
+    filter: brightness(1.18) saturate(1.12);
+}
+
+.carta-objetivo {
+    animation: objetivoImpacto 0.5s ease-out both;
+    box-shadow: 0 0 20px 6px rgba(255, 82, 82, 0.85), 0 0 28px rgba(255, 82, 82, 0.28);
+    filter: brightness(1.1) saturate(1.08);
+}
+
+.carta-agotada {
+    opacity: 0.58;
+    filter: saturate(0.55) brightness(0.82);
+    transform: scale(0.98);
+}
+
+.carta-agotada .detalles-carta {
+    background-color: rgba(0, 0, 0, 0.82);
+    color: #b9d7df;
+}
+
+.carta-robada {
+    animation: cartaRobada 0.55s ease-out;
+}
+
+.danio-flotante {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: #ff4d4d;
+    font-size: 2rem;
+    font-weight: 700;
+    -webkit-text-stroke: 1px rgba(0, 0, 0, 0.85);
+    text-shadow:
+        0 0 8px rgba(255, 0, 0, 0.85),
+        0 0 18px rgba(255, 120, 120, 0.6),
+        1px 1px 0 rgba(0, 0, 0, 0.75);
+    pointer-events: none;
+    z-index: 30;
+    animation: danioAscendente 1.25s ease-out forwards;
+}
+
+@keyframes cartaRobada {
+    0% {
+        opacity: 0;
+        transform: translateY(28px) scale(0.84);
+        filter: brightness(1.35);
+    }
+    60% {
+        opacity: 1;
+        transform: translateY(-6px) scale(1.04);
+        filter: brightness(1.15);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+        filter: brightness(1);
+    }
+}
+
+@keyframes pulsoSeleccion {
+    0%, 100% {
+        box-shadow: 0 0 12px 4px rgba(255, 230, 0, 0.62), inset 0 0 18px rgba(255, 230, 0, 0.12);
+        filter: brightness(1);
+    }
+    50% {
+        box-shadow: 0 0 18px 6px rgba(255, 230, 0, 0.88), inset 0 0 24px rgba(255, 230, 0, 0.18);
+        filter: brightness(1.08);
+    }
+}
+
+@keyframes impulsoAtaque {
+    0% {
+        transform: translateY(0) scale(1);
+    }
+    55% {
+        transform: translateY(-7px) scale(1.045);
+    }
+    100% {
+        transform: translateY(-3px) scale(1.015);
+    }
+}
+
+@keyframes objetivoImpacto {
+    0% {
+        transform: scale(1);
+        filter: brightness(1) saturate(1);
+    }
+    35% {
+        transform: scale(1.04);
+        filter: brightness(1.18) saturate(1.22);
+    }
+    100% {
+        transform: scale(1.02);
+        filter: brightness(1.08) saturate(1.08);
+    }
+}
+
+@keyframes danioAscendente {
+    0% {
+        opacity: 0;
+        transform: translate(-50%, -20%) scale(0.55);
+    }
+    20% {
+        opacity: 1;
+        transform: translate(-50%, -45%) scale(1.2);
+    }
+    72% {
+        opacity: 1;
+        transform: translate(-50%, -90%) scale(1);
+    }
+    100% {
+        opacity: 0;
+        transform: translate(-50%, -145%) scale(0.92);
+    }
+}
+
+.estrellas-carta {
+    position: absolute;
+    top: 5px;
+    left: 5px;
+    display: flex;
+    gap: 3px;
+}
+
+.calavera-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    color: #ff4d4d;
+    font-size: 0.85rem;
+    text-shadow: 0 0 7px rgba(255, 77, 77, 0.85), 0 0 12px rgba(255, 184, 66, 0.45);
+}
+
+.detalles-carta {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    padding: 5px;
+    color: #00d1ff;
+    font-size: 0.9rem;
+    display: flex;
+    justify-content: space-between;
+    box-sizing: border-box;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    border-top-left-radius: 10px;
+    border-top-right-radius: 10px;
+}
+
+.carta.nivel-legendaria .detalles-carta {
+    color: #d5b5ff;
+    text-shadow: 0 0 6px rgba(186, 112, 255, 0.75);
+}
+
+/* Estilos para los botones del mazo */
+.mazo-btn {
+    width: clamp(94px, 10vw, 148px);
+    aspect-ratio: 7 / 10;
+    height: auto;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    border: 2px solid rgba(0, 123, 255, 0.7);
+    border-radius: 15px;
+    box-shadow: 0 0 15px rgba(0, 123, 255, 0.7);
+    cursor: pointer;
+}
+
+#mazo-jugador {
+    background-image: url('https://i.ibb.co/QJvLStm/zzz-Carta-Back.png');
+}
+
+#mazo-oponente {
+    background-image: url('https://i.ibb.co/VYVSBs6/zzz-Carta-Back.png');
+    cursor: default; /* El mazo del oponente no es clicable */
+}
+.overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.modal-turno {
+    background-color: rgba(20, 20, 20, 0.9);
+    border: 2px solid rgba(0, 123, 255, 0.5);
+    padding: 20px;
+    border-radius: 10px;
+    text-align: center;
+    color: #ffffff;
+    width: 300px;
+}
+
+/* Estilos para el botón de abandonar */
+.btn-abandonar {
+    background-color: #ff4d4d; /* Rojo vibrante */
+    border: none;
+    color: #fff;
+    padding: 10px 20px;
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
+    font-size: 1.2rem;
+    margin-top: 10px;
+    border-radius: 5px;
+    box-shadow: 0 0 10px rgba(255, 0, 0, 0.5); /* Efecto brillante */
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+.btn-abandonar:hover {
+    background-color: #e60000; /* Color al hacer hover */
+}
+
+/* Estilos para el texto del turno */
+.turno-texto {
+    font-size: 1.5rem;
+    color: #00ff00; /* Verde llamativo para estilo de videojuego */
+    text-align: center;
+    font-family: 'Orbitron', sans-serif;
+    margin-bottom: 10px;
+    text-shadow: 0 0 10px rgba(0, 255, 0, 0.8), 0 0 20px rgba(0, 255, 0, 0.6); /* Efecto de luz */
+}
+
+/* Responsividad para pantallas más pequeñas */
+@media (max-width: 768px) {
+    .danio-flotante {
+        font-size: 1.5rem;
+    }
+
+    .aviso-turno {
+        min-width: 220px;
+        font-size: 1.3rem;
+        padding: 14px 18px;
+    }
+
+    .btn-abandonar {
+        padding: 8px 15px;
+        font-size: 1rem;
+    }
+
+    .turno-texto {
+        font-size: 1.2rem;
+    }
+
+    .tablero-container {
+        width: calc(100vw - 120px);
+        margin-left: 120px;
+        margin-right: 0;
+        padding: 8px;
+    }
+
+    .info-jugador {
+        position: static;
+        width: 100%;
+        max-width: 360px;
+        margin: 0 auto 6px;
+        padding: 8px;
+    }
+
+    .jugador-oponente .info-jugador,
+    .jugador-propio .info-jugador {
+        top: auto;
+        bottom: auto;
+    }
+
+    .jugador {
+        gap: 6px;
+    }
+}
+
+@media (max-width: 480px) {
+    .btn-abandonar {
+        padding: 6px 10px;
+        font-size: 0.9rem;
+    }
+
+    .turno-texto {
+        font-size: 1rem;
+    }
+
+    .tablero-container {
+        width: calc(100vw - 96px);
+        margin-left: 96px;
+        margin-right: 0;
+        padding: 6px;
+    }
+
+    .info-jugador {
+        max-width: 300px;
+        padding: 6px;
+    }
+}
+
+/* Responsividad: ajustar tamaño de las cartas y evitar overflow */
+@media (max-width: 768px) {
+    .slot {
+        width: clamp(82px, 14vw, 118px);
+    }
+
+    .carta-recompensa-slot {
+        width: clamp(82px, 14vw, 118px);
+        height: auto;
+    }
+
+    .info-jugador h2 {
+        font-size: 1.2rem; /* Reducir tamaño del texto en pantallas más pequeñas */
+    }
+
+    .contador-mazo {
+        font-size: 0.8rem;
+        padding: 6px 10px;
+    }
+
+    .mazo-btn {
+        width: clamp(82px, 14vw, 118px);
+    }
+
+    .menu-container {
+        width: 100px;
+        padding: 10px;
+    }
+
+    .detalles-carta {
+        font-size: 0.7rem; /* Reducimos el tamaño de texto en pantallas pequeñas */
+    }
+
+    .logs-container {
+        max-height: 24vh;
+    }
+}
+
+@media (max-width: 480px) {
+    .danio-flotante {
+        font-size: 1.2rem;
+    }
+
+    .aviso-turno {
+        min-width: 190px;
+        font-size: 1.05rem;
+        padding: 12px 14px;
+    }
+
+    .slot {
+        width: clamp(68px, 18vw, 90px);
+    }
+
+    .carta-recompensa-slot {
+        width: clamp(68px, 18vw, 90px);
+        height: auto;
+    }
+
+    .mazo-btn {
+        width: clamp(68px, 18vw, 90px);
+    }
+
+    .detalles-carta {
+        font-size: 0.6rem;
+    }
+
+    .info-jugador h2 {
+        font-size: 1rem;
+    }
+
+    .contador-mazo {
+        font-size: 0.72rem;
+    }
+
+    .etiqueta-recompensa-bonus {
+        font-size: 0.58rem;
+        padding: 3px 7px;
+    }
+}
+.logs-container {
+    margin-top: 12px;
+    padding: 10px;
+    background-color: #2270ff;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    max-height: 28vh;
+    overflow-y: auto;
+}
+
+.logs-combate {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    color: #f3f7ff;
+}
+
+.log-turno {
+    color: yellow;
+    font-weight: bold;
+}
+.ventana-emergente {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    z-index: 9999;
+    justify-content: center;
+    align-items: center;
+    padding: 14px;
+    box-sizing: border-box;
+}
+
+.ventana-contenido {
+    background: linear-gradient(180deg, rgba(30, 34, 45, 0.97), rgba(21, 24, 33, 0.97));
+    color: #d7edff;
+    padding: 18px 18px 16px;
+    border-radius: 14px;
+    border: 1px solid rgba(0, 209, 255, 0.35);
+    box-shadow: 0 0 24px rgba(0, 0, 0, 0.55), 0 0 20px rgba(0, 123, 255, 0.2);
+    width: min(920px, 94vw);
+    max-height: min(88vh, 760px);
+    overflow-y: auto;
+    text-align: center;
+}
+
+.ventana-contenido h2 {
+    margin-bottom: 8px;
+    color: #f4fbff;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    text-shadow: 0 0 10px rgba(0, 209, 255, 0.25);
+}
+
+.recompensas-grid {
+    display: flex;
+    justify-content: center;
+    gap: clamp(10px, 1.5vw, 18px);
+    flex-wrap: wrap;
+    margin-top: 12px;
+    width: 100%;
+}
+
+.carta-recompensa-slot {
+    position: relative;
+    width: clamp(96px, 12vw, 160px);
+    aspect-ratio: 7 / 10;
+    height: auto;
+}
+
+.etiqueta-recompensa-bonus {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 40;
+    padding: 5px 12px;
+    border-radius: 999px;
+    background: rgba(255, 194, 0, 0.92);
+    color: #1f1b00;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    box-shadow: 0 0 10px rgba(255, 194, 0, 0.4);
+    pointer-events: none;
+}
+
+.acciones-fin-partida {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    margin-top: 15px;
+    flex-wrap: wrap;
+}
+
+#recompensas-container {
+    margin-top: 8px;
+}
+
+.texto-recompensa-estado,
+.texto-recompensa-resumen,
+.texto-recompensa-puntos,
+.texto-recompensa-error {
+    margin: 8px auto 0;
+    width: min(760px, 100%);
+    padding: 9px 12px;
+    border-radius: 10px;
+    font-size: clamp(0.85rem, 1.4vw, 1rem);
+    line-height: 1.35;
+}
+
+.texto-recompensa-estado {
+    color: #cfefff;
+    background: rgba(0, 123, 255, 0.12);
+    border: 1px solid rgba(0, 123, 255, 0.35);
+}
+
+.texto-recompensa-resumen {
+    color: #e8f8ff;
+    background: rgba(0, 209, 255, 0.1);
+    border: 1px solid rgba(0, 209, 255, 0.35);
+}
+
+.texto-recompensa-puntos {
+    color: #ffd700;
+    font-weight: 700;
+    background: rgba(255, 215, 0, 0.1);
+    border: 1px solid rgba(255, 215, 0, 0.45);
+    box-shadow: 0 0 12px rgba(255, 215, 0, 0.15);
+}
+
+.texto-recompensa-error {
+    color: #ffd6d6;
+    background: rgba(255, 77, 77, 0.12);
+    border: 1px solid rgba(255, 77, 77, 0.4);
+}
+
+#boton-reiniciar-partida {
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    cursor: pointer;
+    margin-top: 15px;
+}
+
+#boton-reiniciar-partida:hover {
+    background-color: #45a049;
+}
+
+#boton-volver-menu {
+    background-color: #2270ff;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    cursor: pointer;
+    margin-top: 15px;
+}
+
+#boton-volver-menu:hover {
+    background-color: #1258d9;
+}
+
+/* --- Animaciones y UI de Poder --- */
+
+@keyframes entradaSuave {
+    from {
+        opacity: 0;
+        transform: translateY(20px) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.carta-entrada {
+    animation: entradaSuave 0.5s ease-out forwards;
+}
+
+.poder-total-ui {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 1rem;
+    color: #ffd700;
+    text-shadow: 0 0 10px rgba(255, 215, 0, 0.4);
+    font-weight: 700;
+    margin-top: 10px;
+    padding: 8px 16px;
+    background: rgba(10, 20, 40, 0.9);
+    border-radius: 12px;
+    border: 1px solid rgba(255, 215, 0, 0.4);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.6);
+    min-width: 180px;
+    text-align: center;
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    z-index: 10;
+}
+
+.poder-total-ui.cambio {
+    transform: scale(1.15);
+    color: #ffffff;
+    border-color: #ffffff;
+    box-shadow: 0 0 20px rgba(255, 255, 255, 0.4);
+}
+
+@media (max-width: 768px) {
+    .ventana-contenido {
+        width: min(95vw, 700px);
+        max-height: 88vh;
+        padding: 14px 12px;
+    }
+}
+
+@media (max-width: 480px) {
+    .ventana-contenido {
+        width: 96vw;
+        max-height: 90vh;
+        padding: 12px 10px;
+    }
+
+    .texto-recompensa-estado,
+    .texto-recompensa-resumen,
+    .texto-recompensa-puntos,
+    .texto-recompensa-error {
+        padding: 8px 9px;
+        font-size: 0.82rem;
+    }
+}

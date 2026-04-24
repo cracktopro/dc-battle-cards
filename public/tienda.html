@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tienda</title>
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+    <link href="css/mazos.css" rel="stylesheet">
+    <link href="css/scrollbar.css" rel="stylesheet">
+    <style>
+        .tienda-panel {
+            background: rgba(8, 18, 36, 0.78);
+            border: 1px solid rgba(0, 209, 255, 0.38);
+            border-radius: 14px;
+            box-shadow: 0 0 18px rgba(0, 123, 255, 0.25);
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+
+        .tienda-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .puntos-usuario {
+            background: rgba(255, 215, 0, 0.14);
+            border: 1px solid rgba(255, 215, 0, 0.5);
+            color: #ffd700;
+            border-radius: 999px;
+            padding: 8px 14px;
+            font-weight: 700;
+            text-shadow: 0 0 8px rgba(255, 215, 0, 0.45);
+        }
+
+        .fecha-rotacion {
+            color: #ccefff;
+            font-size: 0.9rem;
+        }
+
+        .rotacion-wrapper {
+            width: min(280px, 100%);
+            margin-top: 6px;
+        }
+
+        .rotacion-timer {
+            color: #ffd700;
+            font-size: 0.9rem;
+            font-weight: 700;
+            text-align: right;
+            text-shadow: 0 0 8px rgba(255, 215, 0, 0.45);
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            gap: 6px;
+            width: 100%;
+            white-space: nowrap;
+        }
+
+        .rotacion-timer-valor {
+            display: inline-block;
+            width: 8ch;
+            text-align: right;
+            font-family: "Consolas", "Courier New", monospace;
+            font-variant-numeric: tabular-nums;
+            font-feature-settings: "tnum";
+        }
+
+        .rotacion-barra {
+            margin-top: 6px;
+            height: 10px;
+            border-radius: 999px;
+            background: rgba(38, 32, 4, 0.75);
+            border: 1px solid rgba(255, 215, 0, 0.4);
+            overflow: hidden;
+            box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.45);
+        }
+
+        .rotacion-barra-progreso {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #ffd700, #ffea70);
+            box-shadow: 0 0 12px rgba(255, 215, 0, 0.55);
+            transition: width 0.4s ease;
+        }
+
+        .tienda-grid-cartas {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 220px));
+            gap: 16px;
+            justify-content: start;
+        }
+
+        .item-tienda {
+            background: rgba(10, 20, 40, 0.85);
+            border: 1px solid rgba(0, 123, 255, 0.4);
+            border-radius: 12px;
+            box-shadow: 0 0 14px rgba(0, 123, 255, 0.2);
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .preview-carta {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 6.3 / 8.8;
+            border-radius: 10px;
+            overflow: hidden;
+            background-size: cover;
+            background-position: center;
+            border: 2px solid rgba(36, 156, 255, 0.7);
+        }
+
+        .preview-carta.nivel-legendaria {
+            border-color: rgba(172, 96, 255, 0.92);
+            box-shadow: 0 0 14px rgba(156, 66, 255, 0.45), 0 0 24px rgba(112, 39, 199, 0.34);
+        }
+
+        .preview-carta.nivel-legendaria .detalles-carta {
+            color: #d5b5ff;
+            text-shadow: 0 0 6px rgba(186, 112, 255, 0.75);
+        }
+
+        .preview-carta .detalles-carta {
+            font-size: 0.72rem;
+        }
+
+        .badge-nivel {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            padding: 4px 8px;
+            border-radius: 999px;
+            background: rgba(255, 215, 0, 0.9);
+            color: #2c2400;
+            font-size: 0.7rem;
+            font-weight: 700;
+            z-index: 3;
+        }
+
+        .precio-item {
+            color: #ffd700;
+            font-weight: 700;
+            text-shadow: 0 0 8px rgba(255, 215, 0, 0.35);
+        }
+
+        .agotada {
+            opacity: 0.58;
+            filter: grayscale(0.4);
+        }
+
+        .objetos-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 16px;
+        }
+
+        .objeto-tienda {
+            background: rgba(10, 20, 40, 0.85);
+            border: 1px solid rgba(0, 209, 255, 0.38);
+            border-radius: 12px;
+            padding: 14px;
+            box-shadow: 0 0 14px rgba(0, 123, 255, 0.2);
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .objeto-tienda h5 {
+            margin: 0;
+            color: #dff8ff;
+        }
+
+        .objeto-tienda p {
+            margin: 0;
+            color: #bde6ff;
+            font-size: 0.9rem;
+        }
+
+        #mensaje-tienda {
+            display: none;
+        }
+
+        @media (max-width: 768px) {
+            .tienda-grid-cartas {
+                grid-template-columns: repeat(auto-fill, minmax(160px, 160px));
+                gap: 10px;
+            }
+            .item-tienda {
+                padding: 8px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="menu-container">
+        <a href="vistaJuego.html" class="btn btn-menu">Jugar Partida</a>
+        <a href="mazos.html" class="btn btn-menu">Mazos</a>
+        <a href="crearMazos.html" class="btn btn-menu">Crear Mazos</a>
+        <a href="mejorarCartas.html" class="btn btn-menu">Mejorar Cartas</a>
+        <a href="coleccion.html" class="btn btn-menu">Colección</a>
+        <a href="tienda.html" class="btn btn-menu">Tienda</a>
+        <a href="desafios.html" class="btn btn-menu">Desafíos</a>
+        <a href="opciones.html" class="btn btn-menu">Opciones</a>
+        <button onclick="abrirModalLogout()" class="btn btn-logout">Cerrar Sesión</button>
+    </div>
+
+    <div class="content-container">
+        <div class="tienda-panel tienda-header">
+            <h2>Tienda Diaria</h2>
+            <div class="d-flex flex-column align-items-end">
+                <div id="puntos-usuario" class="puntos-usuario">Puntos: 0</div>
+                <div class="rotacion-wrapper">
+                    <div id="rotacion-timer" class="rotacion-timer">
+                        <span>Nuevas cartas en:</span>
+                        <span id="rotacion-timer-valor" class="rotacion-timer-valor">00:00:00</span>
+                    </div>
+                    <div class="rotacion-barra">
+                        <div id="rotacion-barra-progreso" class="rotacion-barra-progreso"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="mensaje-tienda" class="alert"></div>
+
+        <div class="tienda-panel">
+            <h4>Cartas</h4>
+            <div id="tienda-cartas" class="tienda-grid-cartas"></div>
+        </div>
+
+        <div class="tienda-panel">
+            <h4>Objetos</h4>
+            <div id="tienda-objetos" class="objetos-grid"></div>
+        </div>
+    </div>
+
+    <div id="modal-confirmacion" class="modal" style="display: none;">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content" style="background: rgba(12, 20, 36, 0.96); border: 1px solid rgba(0, 209, 255, 0.35); box-shadow: 0 0 18px rgba(0, 123, 255, 0.3);">
+                <div class="modal-body text-center">
+                    <h5 style="color:#dff8ff;">Confirmar compra</h5>
+                    <p id="texto-confirmacion" style="color:#bde6ff; margin-top: 10px;"></p>
+                    <div class="d-flex justify-content-center" style="gap: 10px;">
+                        <button id="btn-confirmar-compra" class="btn btn-primary">Aceptar</button>
+                        <button id="btn-cancelar-compra" class="btn btn-secondary">Cancelar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.0/xlsx.full.min.js"></script>
+    <script src="js/cartas.js"></script>
+    <script src="tienda.js"></script>
+</body>
+</html>

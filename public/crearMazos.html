@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crear Mazos</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+    <!-- Custom Styles -->
+    <link href="css/mazos.css" rel="stylesheet">
+    <link href="css/scrollbar.css" rel="stylesheet">
+    <!-- Firebase SDK Version 8.x -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
+</head>
+
+<body>
+    <div class="menu-container">
+        <!-- Botones del menú -->
+        <a href="vistaJuego.html" class="btn btn-menu">Jugar Partida</a>
+        <a href="mazos.html" class="btn btn-menu">Mazos</a>
+        <a href="crearMazos.html" class="btn btn-menu">Crear Mazos</a>
+        <a href="mejorarCartas.html" class="btn btn-menu">Mejorar Cartas</a>
+        <a href="coleccion.html" class="btn btn-menu">Colección</a>
+        <a href="tienda.html" class="btn btn-menu">Tienda</a>
+        <a href="desafios.html" class="btn btn-menu">Desafíos</a>
+        <a href="opciones.html" class="btn btn-menu">Opciones</a>
+        <button onclick="abrirModalLogout()" class="btn btn-logout">Cerrar Sesión</button>
+    </div>
+
+    <!-- Contenedor principal de contenido -->
+    <div class="content-container">
+        <h2>Crear Nuevo Mazo</h2>
+        <!-- Mensaje de error o instrucciones -->
+        <div id="mensaje" class="alert alert-warning" style="display: none;"></div>
+        <div class="faccion-toolbar">
+            <div class="faccion-tabs">
+                <button id="tab-heroes" class="btn faccion-tab active" data-faccion="H">Héroes</button>
+                <button id="tab-villanos" class="btn faccion-tab" data-faccion="V">Villanos</button>
+            </div>
+            <div id="faccion-actual" class="faccion-actual">Mazo en preparación: Héroes</div>
+        </div>
+        <!-- Input para el nombre del mazo y botón de guardar -->
+        <div id="formulario-mazo">
+            <input type="text" id="nombre-mazo" class="form-control" placeholder="Nombre del Mazo" required>
+            <button id="guardar-mazo" class="btn btn-primary mt-3" disabled>Guardar Mazo</button>
+        </div>
+
+        <div class="poder-mazo-container">
+            <span class="poder-label">PODER TOTAL</span>
+            <span id="poder-total-mazo" class="poder-valor">0</span>
+        </div>
+        
+        <!-- Contenedor para seleccionar las cartas -->
+        <div id="contenedor-cartas" class="contenedor-cartas">
+            <!-- Las cartas se cargarán aquí dinámicamente -->
+        </div>
+        
+    </div>
+
+    <!-- Script para inicializar Firebase -->
+    <script>
+    // Configuración de Firebase de tu proyecto
+    const firebaseConfig = {
+        apiKey: "AIzaSyBDx7E1BRInP2toeW-c_BLXsryQ_toPJRI",
+        authDomain: "dc-card-battle.firebaseapp.com",
+        projectId: "dc-card-battle",
+        storageBucket: "dc-card-battle.appspot.com",
+        messagingSenderId: "389571370658",
+        appId: "1:389571370658:web:eb9c69029ce677aab201fb"
+    };
+
+    // Inicializar Firebase
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+    </script>
+
+    <!-- Scripts -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.0/xlsx.full.min.js"></script>
+    <script src="js/cartas.js"></script>
+    <script src="crearMazos.js"></script>
+    <!-- Bootstrap JS and dependencies -->
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+</body>
+</html>

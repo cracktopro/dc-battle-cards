@@ -1,0 +1,530 @@
+/* Estilos generales */
+body {
+    background: url('https://images2.alphacoders.com/262/262522.jpg') no-repeat center center fixed;
+    background-size: cover;
+    color: #ffffff;
+    font-family: 'Orbitron', sans-serif;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+}
+
+.poder-mazo-container {
+    margin: 15px auto;
+    padding: 10px 25px;
+    width: fit-content;
+
+    display: flex;
+    align-items: center;
+    gap: 12px;
+
+    background: rgba(10, 25, 50, 0.65);
+    border: 1px solid rgba(0, 209, 255, 0.4);
+    border-radius: 12px;
+
+    box-shadow:
+        0 0 12px rgba(0, 209, 255, 0.25),
+        inset 0 0 10px rgba(0, 209, 255, 0.15);
+
+    backdrop-filter: blur(6px);
+
+    font-family: 'Orbitron', sans-serif;
+}
+
+/* BASE (ya la tienes, pero ajustamos glow base) */
+.poder-valor {
+    font-size: 1.6rem;
+    font-weight: bold;
+    transition: all 0.3s ease;
+}
+
+/* 🔹 Bajo */
+.poder-bajo {
+    color: #d2e6ff;
+    text-shadow: 0 0 4px rgba(0, 132, 255, 0.849);
+}
+
+/* 🔵 Medio */
+.poder-medio {
+    color: #c2ffe6;
+    text-shadow:
+        0 0 6px rgba(0, 255, 76, 0.8),
+        0 0 12px rgba(0, 255, 98, 0.6),
+        0 0 20px rgba(51, 255, 0, 0.4);
+}
+
+/* 🟣 Alto (épico) */
+.poder-alto {
+    color: #ffe9b8;
+    text-shadow:
+        0 0 8px rgba(255, 217, 0, 0.9),
+        0 0 18px rgba(255, 216, 44, 0.7),
+        0 0 30px rgba(255, 233, 35, 0.5);
+}
+
+/* 🟡 Legendario */
+.poder-legendario {
+    color: #ebc8ff;
+    animation: glowPulse 0.5s infinite alternate;
+}
+
+@keyframes glowPulse {
+    from {
+        text-shadow:
+            0 0 10px rgba(153, 0, 255, 0.8),
+            0 0 20px rgba(153, 0, 255, 0.6);
+    }
+    to {
+        text-shadow:
+            0 0 20px rgb(140, 0, 255),
+            0 0 40px rgba(140, 0, 255, 0.9);
+    }
+}
+
+.progreso-coleccion{
+    font-size: 25px;
+    width: max-content;
+    background-color: rgba(20, 20, 20, 0.7);
+    border-right: 2px solid rgba(0, 123, 255, 0.3);
+    box-shadow: 0 0 15px rgba(0, 123, 255, 0.5);
+    padding: 10px;
+    border-radius: 50%;
+    text-align: center;
+}
+
+.form-control{
+    width: 35% !important;
+}
+.menu-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 250px;
+    height: 100vh;
+    background-color: rgba(20, 20, 20, 0.7);
+    border-right: 2px solid rgba(0, 123, 255, 0.3);
+    box-shadow: 0 0 15px rgba(0, 123, 255, 0.5);
+    padding: 15px;
+    text-align: center;
+    z-index: 1000;
+}
+
+.menu-user-profile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 14px;
+    padding: 10px 8px;
+    border: 1px solid rgba(0, 209, 255, 0.34);
+    border-radius: 12px;
+    background: rgba(8, 18, 36, 0.72);
+    box-shadow: 0 0 12px rgba(0, 123, 255, 0.28);
+}
+
+.menu-user-avatar {
+    width: 92px;
+    height: 92px;
+    border-radius: 50%;
+    object-fit: cover;
+    object-position: top center;
+    border: 2px solid rgba(0, 209, 255, 0.65);
+    box-shadow: 0 0 12px rgba(0, 123, 255, 0.38);
+}
+
+.menu-user-name {
+    color: #dff8ff;
+    font-weight: 700;
+    font-size: 0.84rem;
+    text-align: center;
+    word-break: break-word;
+    text-shadow: 0 0 8px rgba(0, 123, 255, 0.45);
+}
+
+.btn-menu {
+    width: 100%;
+    margin: 10px 0;
+    background-color: rgba(0, 123, 255, 0.1);
+    border: 2px solid rgba(0, 123, 255, 0.3);
+    color: #007bff;
+    font-weight: bold;
+    text-shadow: 0 0 8px rgba(0, 123, 255, 0.8);
+    transition: all 0.3s ease;
+    font-size: 1rem;
+}
+
+.btn-menu:hover {
+    background-color: rgba(0, 123, 255, 0.2);
+    border-color: #007bff;
+    box-shadow: 0 0 15px rgba(0, 123, 255, 0.7), 0 0 25px rgba(0, 123, 255, 0.5);
+    color: #fff;
+}
+.btn-logout {
+    width: 100%;
+    margin: 10px 0;
+    background-color: rgba(255, 0, 0, 0.1);
+    border: 2px solid rgba(255, 0, 0, 0.3);
+    color: #ff0000;
+    font-weight: bold;
+    text-shadow: 0 0 8px rgba(255, 0, 0, 0.8);
+    transition: all 0.3s ease;
+    font-size: 1rem;
+}
+.btn-logout:hover {
+    background-color: rgba(201, 52, 52, 0.2);
+    border-color: #d31c1c;
+    box-shadow: 0 0 15px rgba(211, 28, 28, 0.7), 0 0 25px rgba(211, 28, 28, 0.5);
+    color: #fff;
+}
+
+.content-container {
+    margin-left: 250px;
+    padding: 20px;
+    height: 100vh;
+    overflow-y: auto;
+    box-sizing: border-box;
+}
+
+.faccion-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin: 16px 0 10px;
+}
+
+.faccion-tabs {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.faccion-tab {
+    min-width: 140px;
+    background-color: rgba(10, 22, 42, 0.72);
+    border: 2px solid rgba(0, 123, 255, 0.35);
+    color: #dff8ff;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.faccion-tab.active {
+    background: linear-gradient(180deg, rgba(0, 123, 255, 0.4), rgba(0, 123, 255, 0.2));
+    border-color: rgba(0, 197, 255, 0.9);
+    box-shadow: 0 0 16px rgba(0, 123, 255, 0.45);
+    color: #ffffff;
+}
+
+.faccion-actual {
+    padding: 10px 14px;
+    border-radius: 999px;
+    background-color: rgba(20, 20, 20, 0.72);
+    border: 1px solid rgba(0, 123, 255, 0.35);
+    box-shadow: 0 0 12px rgba(0, 123, 255, 0.2);
+    color: #cfefff;
+    font-size: 0.95rem;
+}
+
+#selector-afiliacion.form-control {
+    width: auto !important;
+    min-width: 220px;
+}
+
+/* Estilo para el contenedor de cartas */
+.contenedor-cartas {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 200px));
+    justify-content: start;
+    gap: 20px;
+    padding: 20px;
+}
+/* Estilo para cada carta */
+.carta {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 6.3 / 8.8;
+    background-size: cover;
+    background-position: center;
+    border: 3px solid rgba(36, 156, 255, 0.7);
+    border-radius: 15px;
+    overflow: hidden;
+    box-shadow: 0 0 10px rgba(0, 123, 255, 0.3), 0 0 20px rgba(0, 123, 255, 0.2);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.carta:hover {
+    transform: scale(1.05);
+    box-shadow: 0 0 20px rgba(0, 123, 255, 0.5), 0 0 30px rgba(0, 123, 255, 0.7);
+}
+
+.carta.nivel-legendaria {
+    border-color: rgba(172, 96, 255, 0.92);
+    box-shadow: 0 0 14px rgba(156, 66, 255, 0.45), 0 0 26px rgba(128, 0, 255, 0.34);
+}
+
+.carta.nivel-legendaria:hover {
+    box-shadow: 0 0 20px rgba(186, 112, 255, 0.68), 0 0 34px rgba(156, 66, 255, 0.55);
+}
+
+.carta.oculta-por-faccion {
+    display: none;
+}
+
+.faccion-carta {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    padding: 4px 9px;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    z-index: 2;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.35);
+}
+
+.faccion-carta.heroe {
+    background: rgba(45, 170, 255, 0.88);
+    color: #f7fdff;
+}
+
+.faccion-carta.villano {
+    background: rgba(204, 54, 54, 0.9);
+    color: #fff5f5;
+}
+
+/* Estilo para las estrellas */
+.estrellas-carta {
+    position: absolute;
+    top: 5px;
+    left: 5px;
+    padding: 3px;
+    background-color: rgba(0, 52, 82, 0.7);
+    border: 1px solid rgba(0, 123, 255, 0.5);
+    border-radius: 25px;
+    box-shadow: 0 0 5px rgba(0, 123, 255, 0.5);
+    display: flex;
+    gap: 3px;
+}
+
+.estrella {
+    width: 12px; /* Tamaño reducido de las estrellas */
+    height: 12px;
+    text-shadow: 0 0 5px rgba(255, 215, 0, 0.8);
+}
+
+/* Estilo combinado para nombre y poder */
+.detalles-carta {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    padding: 5px;
+    background-color: rgba(0, 0, 0, 0.7);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: #00d1ff;
+    font-size: 0.8rem;
+    text-shadow: 0 0 5px rgba(0, 209, 255, 0.7);
+    border-top: 1px solid rgba(0, 123, 255, 0.5);
+    box-shadow: 0 -2px 5px rgba(0, 123, 255, 0.3);
+}
+
+.carta.nivel-legendaria .detalles-carta {
+    color: #d5b5ff;
+    text-shadow: 0 0 6px rgba(186, 112, 255, 0.75);
+    border-top-color: rgba(186, 112, 255, 0.6);
+    box-shadow: 0 -2px 8px rgba(156, 66, 255, 0.45);
+}
+
+.carta.nivel-legendaria .estrellas-carta {
+    background-color: rgba(58, 24, 90, 0.78);
+    border-color: rgba(186, 112, 255, 0.6);
+    box-shadow: 0 0 8px rgba(156, 66, 255, 0.5);
+}
+
+.carta.carta-modificable {
+    cursor: pointer;
+}
+
+.carta.carta-modificable:hover {
+    box-shadow: 0 0 14px rgba(255, 225, 0, 0.7), 0 0 24px rgba(255, 225, 0, 0.5);
+}
+
+.carta-coleccion {
+    cursor: default;
+}
+
+.carta-coleccion:hover {
+    transform: none;
+}
+
+.carta-coleccion.no-conseguida {
+    filter: grayscale(75%) opacity(0.5);
+}
+
+.estado-coleccion {
+    position: absolute;
+    left: 6px;
+    right: 6px;
+    bottom: 36px;
+    text-align: center;
+    font-size: 0.66rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border-radius: 999px;
+    padding: 4px 6px;
+    z-index: 3;
+}
+
+.estado-coleccion.obtenida {
+    color: #bfffd8;
+    background: rgba(21, 120, 66, 0.78);
+    border: 1px solid rgba(64, 255, 170, 0.6);
+    box-shadow: 0 0 8px rgba(64, 255, 170, 0.3);
+}
+
+.estado-coleccion.no-obtenida {
+    color: #ffd0d0;
+    background: rgba(136, 26, 26, 0.72);
+    border: 1px solid rgba(255, 109, 109, 0.55);
+    box-shadow: 0 0 8px rgba(255, 109, 109, 0.22);
+}
+
+.modal-dc {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.75);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 2200;
+}
+
+.modal-dc-content {
+    width: min(760px, 90vw);
+    max-height: 85vh;
+    overflow-y: auto;
+    padding: 20px;
+    border-radius: 12px;
+    border: 1px solid rgba(0, 209, 255, 0.45);
+    background: rgba(6, 18, 34, 0.95);
+    box-shadow: 0 0 20px rgba(0, 123, 255, 0.45);
+}
+
+.modal-cambio-carta .lista-cartas-reemplazo {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(190px, 190px));
+    justify-content: start;
+    gap: 14px;
+    margin: 15px 0;
+    max-height: 50vh;
+    overflow-y: auto;
+    padding-bottom: 14px;
+}
+
+.modal-cambio-carta {
+    display: flex;
+    flex-direction: column;
+}
+
+.modal-cambio-carta .modal-dc-actions {
+    position: sticky;
+    bottom: 0;
+    margin-top: auto;
+    padding-top: 10px;
+    padding-bottom: 6px;
+    background: linear-gradient(to top, rgba(6, 18, 34, 0.96), rgba(6, 18, 34, 0.7));
+    border-top: 1px solid rgba(0, 209, 255, 0.28);
+}
+
+.item-carta-reemplazo {
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.item-carta-reemplazo:hover {
+    transform: scale(1.05);
+    box-shadow: 0 0 16px rgba(255, 219, 57, 0.45), 0 0 24px rgba(255, 219, 57, 0.4);
+}
+
+.item-carta-reemplazo.seleccionada {
+    border-color: #ffd93b !important;
+    box-shadow: 0 0 18px rgba(255, 217, 59, 0.8), 0 0 28px rgba(255, 217, 59, 0.55) !important;
+}
+
+.modal-dc-actions {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+/* Detectar dispositivos de alta resolución */
+@media (max-width: 768px), (min-resolution: 2dppx), (orientation: portrait) {
+    .contenedor-cartas {
+        grid-template-columns: repeat(auto-fill, minmax(120px, 120px));
+        justify-content: start;
+        gap: 10px;
+    }
+
+    .carta {
+        aspect-ratio: 6.3 / 8.8;
+        border-width: 2px;
+    }
+
+    .detalles-carta {
+        font-size: 0.6rem;
+        padding: 3px;
+    }
+
+    .estrella {
+        width: 8px;
+        height: 8px;
+    }
+    .menu-container {
+        width: 150px; /* Reducir el ancho del menú en pantallas pequeñas */
+        padding: 10px;
+    }
+
+    .btn-menu, .btn-logout {
+        font-size: 0.6rem; /* Reducir el tamaño de la fuente de los botones */
+        padding: 8px; /* Reducir el padding de los botones */
+        margin: 8px 0;
+    }
+
+    .content-container {
+        margin-left: 200px; /* Ajustar el margen para acomodar el menú más pequeño */
+        padding: 15px;
+    }
+    .faccion-toolbar {
+        align-items: flex-start;
+    }
+    .faccion-tab {
+        min-width: 110px;
+        font-size: 0.72rem;
+    }
+    .faccion-actual {
+        font-size: 0.75rem;
+        width: 100%;
+    }
+    .form-control, .d-inline-block{
+        height: 30px;
+        font-size: 10px;
+    }
+    .btn{
+        font-size: 10px;
+    }
+    .progreso-coleccion{
+        font-size: 18px;
+    }
+
+    .modal-cambio-carta .lista-cartas-reemplazo {
+        grid-template-columns: repeat(auto-fill, minmax(120px, 120px));
+        gap: 10px;
+    }
+}

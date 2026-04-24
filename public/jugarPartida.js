@@ -1,0 +1,1180 @@
+// Declarar las variables fuera del bloque para hacerlas accesibles en todo el código
+let dificultadSeleccionada = null;
+let mazoSeleccionado = null;
+let usuarioTieneMazos = false;
+let eventosActivos = [];
+let eventoPendiente = null;
+let dificultadEventoSeleccionada = null;
+let usuarioCartasEvento = [];
+let seleccionCartasEvento = new Set();
+let faccionEventoActiva = 'H';
+let afiliacionEventoActiva = 'todas';
+let catalogoCartasCache = null;
+let eventosEnRotacion = [];
+let temporizadorRotacionEventos = null;
+const ROTACION_EVENTOS_MS = 5 * 60 * 1000;
+const VERSION_ROTACION_EVENTOS = 'event-rotation-v1';
+const OBJETIVO_SINERGIA_POR_DIFICULTAD = {
+    1: 4,
+    2: 5,
+    3: 6,
+    4: 8,
+    5: 10,
+    6: 12
+};
+const ICONO_MEJORA = '/resources/icons/mejora.png';
+const ICONO_MEJORA_ESPECIAL = '/resources/icons/mejora_especial.png';
+
+function obtenerNombreVisibleUsuario() {
+    const usuario = JSON.parse(localStorage.getItem('usuario') || '{}');
+    const email = localStorage.getItem('email') || '';
+    const nickname = String(usuario?.nickname || '').trim();
+    if (nickname) {
+        return nickname;
+    }
+    return email ? email.split('@')[0] : 'Jugador';
+}
+
+function obtenerAvatarVisibleUsuario() {
+    const usuario = JSON.parse(localStorage.getItem('usuario') || '{}');
+    const avatar = String(usuario?.avatar || '').trim();
+    return avatar || 'https://i.ibb.co/QJvLStm/zzz-Carta-Back.png';
+}
+
+function formatearHoraMensaje(payload = {}) {
+    if (payload?.hora) {
+        return String(payload.hora);
+    }
+    const timestamp = Number(payload?.timestamp || 0);
+    if (!Number.isNaN(timestamp) && timestamp > 0) {
+        return new Date(timestamp).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+    }
+    return new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+}
+
+function obtenerFechaMensaje(payload = {}) {
+    const timestamp = Number(payload?.timestamp || 0);
+    const fecha = (!Number.isNaN(timestamp) && timestamp > 0) ? new Date(timestamp) : new Date();
+    const ahora = new Date();
+    const hoyInicio = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
+    const fechaInicio = new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate());
+    const diffMs = hoyInicio.getTime() - fechaInicio.getTime();
+    const diffDias = Math.round(diffMs / (24 * 60 * 60 * 1000));
+
+    let label = '';
+    if (diffDias === 0) {
+        label = 'Hoy';
+    } else if (diffDias === 1) {
+        label = 'Ayer';
+    } else {
+        label = fecha.toLocaleDateString('es-ES', {
+            weekday: 'short',
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric'
+        });
+    }
+
+    return {
+        key: `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}-${String(fecha.getDate()).padStart(2, '0')}`,
+        label
+    };
+}
+
+function insertarSeparadorFechaSiCorresponde(contenedor, payload = {}) {
+    if (!contenedor) return;
+    const { key, label } = obtenerFechaMensaje(payload);
+
+    let ultimaFechaRenderizada = null;
+    let cursor = contenedor.lastElementChild;
+    while (cursor) {
+        const keySeparador = cursor.dataset?.dateKey;
+        if (keySeparador) {
+            ultimaFechaRenderizada = keySeparador;
+            break;
+        }
+        cursor = cursor.previousElementSibling;
+    }
+
+    if (ultimaFechaRenderizada === key) {
+        return;
+    }
+
+    const separador = document.createElement('div');
+    separador.className = 'chat-separador-fecha';
+    separador.dataset.dateKey = key;
+    separador.textContent = label;
+    contenedor.appendChild(separador);
+}
+
+function verificarSeleccion() {
+    const iniciarBtn = document.getElementById('iniciar-partida-btn');
+    console.log('Verificación de selección - Dificultad:', dificultadSeleccionada, 'Mazo:', mazoSeleccionado);
+    
+    iniciarBtn.disabled = !(dificultadSeleccionada && mazoSeleccionado);
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    verificarMazosUsuario();
+    configurarChat();
+    configurarJugadoresConectados();
+    configurarModalEvento();
+    cargarEventosActivos();
+
+    const dificultadBotones = document.querySelectorAll('.dificultad-btn');
+    const selectMazo = document.getElementById('select-mazo');
+
+    // Manejo de la selección de dificultad
+    dificultadBotones.forEach(button => {
+        button.addEventListener('click', function () {
+            console.log('Dificultad seleccionada:', this.getAttribute('data-dificultad'));
+            // Deseleccionar cualquier botón previamente seleccionado
+            dificultadBotones.forEach(btn => btn.classList.remove('selected'));
+
+            // Seleccionar el botón actual
+            this.classList.add('selected');
+
+            // Almacenar la dificultad seleccionada
+            dificultadSeleccionada = parseInt(this.getAttribute('data-dificultad'));
+
+            // Verificar si ambos (mazo y dificultad) están seleccionados para habilitar el botón de "Iniciar partida"
+            verificarSeleccion();
+        });
+    });
+
+    // Manejo de la selección de mazo
+    selectMazo.addEventListener('change', function () {
+        const selectedIndex = selectMazo.value; // Selecciona el índice del mazo
+        const usuario = JSON.parse(localStorage.getItem('usuario')); // Obtiene el usuario del localStorage
+        mazoSeleccionado = usuario.mazos[selectedIndex]; // Selecciona el mazo correcto
+    
+        console.log('Mazo seleccionado:', mazoSeleccionado); // Verificación del mazo
+    
+        // Guarda el mazo seleccionado en localStorage
+        localStorage.setItem('mazoJugador', JSON.stringify({ Cartas: mazoSeleccionado.Cartas }));
+        localStorage.setItem('mazoJugadorBase', JSON.stringify({ Cartas: mazoSeleccionado.Cartas }));
+    
+        // Verifica si tanto el mazo como la dificultad están seleccionados para habilitar el botón
+        verificarSeleccion();
+    });
+
+    // Mostrar la ventana emergente al hacer clic en "Jugar"
+    document.getElementById('jugar-btn').addEventListener('click', function () {
+        console.log('Clic detectado en el botón Jugar');
+        const modal = usuarioTieneMazos
+            ? document.getElementById('configuracion-partida')
+            : document.getElementById('aviso-sin-mazo-modal');
+        if (modal) {
+            console.log('Modal encontrado, intentando mostrar...');
+            modal.style.display = 'block';
+            console.log('Modal debería estar visible ahora.');
+        } else {
+            console.log('Modal no encontrado.');
+        }
+    });
+
+    const cancelarPartidaBtn = document.getElementById('cancelar-partida-btn');
+    if (cancelarPartidaBtn) {
+        cancelarPartidaBtn.addEventListener('click', function () {
+            const modal = document.getElementById('configuracion-partida');
+            if (modal) {
+                modal.style.display = 'none';
+            }
+        });
+    }
+
+    const irCrearMazosBtn = document.getElementById('ir-crear-mazos-btn');
+    if (irCrearMazosBtn) {
+        irCrearMazosBtn.addEventListener('click', function () {
+            window.location.href = 'crearMazos.html';
+        });
+    }
+
+    const cancelarSinMazoBtn = document.getElementById('cancelar-sin-mazo-btn');
+    if (cancelarSinMazoBtn) {
+        cancelarSinMazoBtn.addEventListener('click', function () {
+            const modal = document.getElementById('aviso-sin-mazo-modal');
+            if (modal) {
+                modal.style.display = 'none';
+            }
+        });
+    }
+
+    document.getElementById('iniciar-partida-btn').addEventListener('click', function () {
+        console.log('Botón de iniciar partida clicado');
+        console.log('Dificultad seleccionada:', dificultadSeleccionada);
+        console.log('Mazo seleccionado:', mazoSeleccionado);
+    
+        if (!dificultadSeleccionada || !mazoSeleccionado) {
+            console.log('Faltan selecciones, no se puede iniciar la partida');
+            return;  // Verificar si se seleccionaron ambos
+        }
+
+        // 🔥 LIMPIAR MODO DESAFÍO
+        localStorage.removeItem('desafioActivo');
+
+        const mazoJugador = JSON.parse(localStorage.getItem('mazoJugador')).Cartas;
+        console.log('Mazo jugador:', mazoJugador);
+
+        // Generar el mazo del oponente
+        console.log('Iniciando fetch de cartas...');
+        fetch('resources/cartas.xlsx')
+        .then(response => response.arrayBuffer())
+        .then(data => {
+            console.log('Fetch exitoso');
+            const workbook = XLSX.read(data, { type: 'array' });
+            const sheetName = workbook.SheetNames[0]; // Asegúrate de que existe una hoja en el archivo
+            const sheet = workbook.Sheets[sheetName];
+            if (sheet) {
+                const cartas = XLSX.utils.sheet_to_json(sheet);
+                console.log('Cartas extraídas:', cartas);
+
+                // Seleccionar 12 cartas para el oponente con sinergia de afiliación por dificultad
+                let mazoOponente = generarMazoBotConSinergia(cartas, dificultadSeleccionada);
+                if (!Array.isArray(mazoOponente) || mazoOponente.length !== 12) {
+                    console.error('No se pudo construir un mazo BOT válido de 12 cartas para una sola facción.');
+                    return;
+                }
+
+                // Ajustar siempre nivel/poder al nivel de dificultad seleccionado
+                mazoOponente = mazoOponente.map(carta => {
+                    const nivelBase = Number(carta.Nivel || 1);
+                    const incrementoNiveles = Math.max(dificultadSeleccionada - nivelBase, 0);
+                    return {
+                        ...carta,
+                        Nivel: dificultadSeleccionada,
+                        Poder: Number(carta.Poder || 0) + (incrementoNiveles * 500)
+                    };
+                });
+
+                // Guardar el mazo del oponente en localStorage con la misma estructura que el mazoJugador
+                localStorage.setItem('mazoOponente', JSON.stringify({ Cartas: mazoOponente }));
+                localStorage.setItem('mazoOponenteBase', JSON.stringify({ Cartas: mazoOponente }));
+                localStorage.setItem('dificultad', dificultadSeleccionada);
+
+                // Redirigir a tablero.html
+                console.log('Redirigiendo a tablero.html...');
+                window.location.href = 'tablero.html';
+            } else {
+                console.error('No se pudo encontrar una hoja en el archivo Excel');
+            }
+        })
+        .catch(error => {
+            console.error('Error al hacer fetch de cartas:', error);
+        });
+    });
+});
+
+function normalizarNombre(nombre) {
+    return String(nombre || '').trim().toLowerCase();
+}
+
+function seleccionarCartasAleatorias(cartas, cantidad) {
+    const cartasAleatorias = [];
+    while (cartasAleatorias.length < cantidad) {
+        const carta = cartas[Math.floor(Math.random() * cartas.length)];
+        if (!cartasAleatorias.includes(carta)) {
+            cartasAleatorias.push(carta);
+        }
+    }
+    return cartasAleatorias;
+}
+
+function normalizarFaccion(valor) {
+    const faccionRaw = String(valor || '').trim().toUpperCase();
+    return faccionRaw === 'H' || faccionRaw === 'V' ? faccionRaw : '';
+}
+
+function normalizarAfiliacion(valor) {
+    return String(valor || '').trim().toLowerCase();
+}
+
+function obtenerAfiliacionesCarta(carta) {
+    const afiliacionRaw = String(carta?.Afiliacion || carta?.afiliacion || '');
+    if (!afiliacionRaw.trim()) {
+        return [];
+    }
+
+    return afiliacionRaw
+        .split(';')
+        .map(item => item.trim())
+        .filter(Boolean)
+        .map(normalizarAfiliacion);
+}
+
+async function obtenerCatalogoCartas() {
+    if (catalogoCartasCache) {
+        return catalogoCartasCache;
+    }
+
+    const response = await fetch('resources/cartas.xlsx');
+    if (!response.ok) {
+        throw new Error('No se pudo cargar el catálogo de cartas.');
+    }
+
+    const data = await response.arrayBuffer();
+    const workbook = XLSX.read(data, { type: 'array' });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    catalogoCartasCache = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+    return catalogoCartasCache;
+}
+
+async function cargarEventosActivos() {
+    try {
+        const response = await fetch('resources/eventos.xlsx');
+        if (!response.ok) {
+            throw new Error('No se pudo cargar eventos.xlsx');
+        }
+
+        const data = await response.arrayBuffer();
+        const workbook = XLSX.read(data, { type: 'array' });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const filas = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+        eventosActivos = filas.map((fila, index) => mapearEventoDesdeFila(fila, index));
+        iniciarTemporizadorRotacionEventos();
+        await renderizarEventosActivos();
+    } catch (error) {
+        console.error('Error cargando eventos:', error);
+        mostrarMensajeEventos('No se pudieron cargar los eventos activos.', 'danger');
+    }
+}
+
+function obtenerVentanaRotacionEventos() {
+    const ahora = Date.now();
+    const idVentana = Math.floor(ahora / ROTACION_EVENTOS_MS);
+    const inicio = idVentana * ROTACION_EVENTOS_MS;
+    const fin = inicio + ROTACION_EVENTOS_MS;
+    return { ahora, idVentana, inicio, fin };
+}
+
+function obtenerEventosRotacionActual() {
+    if (!Array.isArray(eventosActivos) || eventosActivos.length === 0) {
+        return [];
+    }
+
+    const { idVentana } = obtenerVentanaRotacionEventos();
+    const tamanoLote = 3;
+    const totalLotes = Math.ceil(eventosActivos.length / tamanoLote);
+    const loteActual = totalLotes > 0 ? (idVentana % totalLotes) : 0;
+    const inicio = loteActual * tamanoLote;
+    return eventosActivos.slice(inicio, inicio + tamanoLote);
+}
+
+function obtenerClaveRotacionEventos() {
+    const { idVentana } = obtenerVentanaRotacionEventos();
+    return `${VERSION_ROTACION_EVENTOS}-${idVentana}`;
+}
+
+function actualizarUIRotacionEventos() {
+    const timerValorEl = document.getElementById('eventos-rotacion-timer-valor');
+    const barraEl = document.getElementById('eventos-rotacion-barra-progreso');
+    if (!timerValorEl || !barraEl) {
+        return;
+    }
+
+    const { ahora, inicio, fin } = obtenerVentanaRotacionEventos();
+    const restante = fin - ahora;
+    const transcurrido = ahora - inicio;
+    const progreso = Math.min(100, Math.max(0, (transcurrido / ROTACION_EVENTOS_MS) * 100));
+    timerValorEl.textContent = formatearTiempo(restante);
+    barraEl.style.width = `${progreso}%`;
+}
+
+function iniciarTemporizadorRotacionEventos() {
+    if (temporizadorRotacionEventos) {
+        clearInterval(temporizadorRotacionEventos);
+    }
+
+    eventosEnRotacion = obtenerEventosRotacionActual();
+    actualizarUIRotacionEventos();
+
+    temporizadorRotacionEventos = setInterval(async () => {
+        const idsPrevios = eventosEnRotacion.map(evento => evento.id).join(',');
+        const nuevos = obtenerEventosRotacionActual();
+        const idsNuevos = nuevos.map(evento => evento.id).join(',');
+        eventosEnRotacion = nuevos;
+
+        if (idsPrevios !== idsNuevos) {
+            await renderizarEventosActivos();
+        }
+
+        actualizarUIRotacionEventos();
+    }, 1000);
+}
+
+function formatearTiempo(msRestantes) {
+    const totalSegundos = Math.max(0, Math.floor(msRestantes / 1000));
+    const horas = Math.floor(totalSegundos / 3600);
+    const minutos = Math.floor((totalSegundos % 3600) / 60);
+    const segundos = totalSegundos % 60;
+    return `${String(horas).padStart(2, '0')}:${String(minutos).padStart(2, '0')}:${String(segundos).padStart(2, '0')}`;
+}
+
+function mapearEventoDesdeFila(fila, fallbackIndex) {
+    const enemigos = [];
+    for (let i = 1; i <= 6; i++) {
+        const nombreEnemigo = String(fila[`enemigo${i}`] || '').trim();
+        if (nombreEnemigo) {
+            enemigos.push(nombreEnemigo);
+        }
+    }
+
+    if (enemigos.length === 0 && String(fila.enemigos || '').trim()) {
+        String(fila.enemigos)
+            .split(';')
+            .map(item => item.trim())
+            .filter(Boolean)
+            .forEach(nombre => enemigos.push(nombre));
+    }
+
+    return {
+        id: Number(fila.ID_evento ?? fila.id ?? fallbackIndex),
+        nombre: String(fila.nombre || `Evento ${fallbackIndex + 1}`).trim(),
+        descripcion: String(fila.Descripción || fila.descripcion || '').trim(),
+        enemigos,
+        boss: String(fila.boss || '').trim() || null,
+        puntos: Number(fila.puntos || 0),
+        mejora: Number(fila.mejora || 0),
+        mejora_especial: Number(fila.mejora_especial || 0),
+        cartaRecompensa: String(fila.cartas || fila.carta || '').trim(),
+        dificultadSeleccionada: 1
+    };
+}
+
+function mostrarMensajeEventos(mensaje, tipo = 'warning') {
+    const el = document.getElementById('mensaje-eventos');
+    if (!el) {
+        return;
+    }
+    el.textContent = mensaje;
+    el.className = `alert alert-${tipo}`;
+    el.style.display = 'block';
+}
+
+async function renderizarEventosActivos() {
+    const contenedor = document.getElementById('eventos-grid');
+    if (!contenedor) {
+        return;
+    }
+
+    contenedor.innerHTML = '';
+    const catalogo = await obtenerCatalogoCartas();
+    const mapaCatalogo = new Map(
+        catalogo.map(carta => [normalizarNombre(carta.Nombre), carta])
+    );
+
+    const usuario = JSON.parse(localStorage.getItem('usuario')) || {};
+    const claveRotacion = obtenerClaveRotacionEventos();
+    const jugadosPorRotacion = (usuario.eventosJugadosPorRotacion && typeof usuario.eventosJugadosPorRotacion === 'object')
+        ? usuario.eventosJugadosPorRotacion
+        : {};
+    const jugadosActual = new Set((jugadosPorRotacion[claveRotacion] || []).map(id => Number(id)));
+
+    eventosEnRotacion.forEach(evento => {
+        const card = document.createElement('div');
+        const yaJugadoRotacion = jugadosActual.has(Number(evento.id));
+        card.className = `evento-card ${yaJugadoRotacion ? 'completado' : 'pendiente'}`;
+
+        const nombre = document.createElement('div');
+        nombre.className = 'evento-nombre';
+        nombre.textContent = evento.nombre;
+
+        const descripcion = document.createElement('div');
+        descripcion.className = 'evento-descripcion';
+        descripcion.textContent = evento.descripcion || 'Sin descripción.';
+
+        const enemigos = document.createElement('div');
+        enemigos.className = 'evento-enemigos';
+        const etiquetaEnemigos = document.createElement('div');
+        etiquetaEnemigos.className = 'evento-enemigos-label';
+        etiquetaEnemigos.textContent = 'Enemigos';
+
+        const rivales = [
+            ...(evento.enemigos || []).map(nombre => ({ nombre, boss: false })),
+            ...(evento.boss ? [{ nombre: evento.boss, boss: true }] : [])
+        ];
+
+        rivales.forEach(rival => {
+            const nombreEnemigo = rival.nombre;
+            const cartaBase = mapaCatalogo.get(normalizarNombre(nombreEnemigo)) || { Nombre: nombreEnemigo, Nivel: 1 };
+            const enemigoCard = document.createElement('div');
+            enemigoCard.className = `evento-enemigo-card ${rival.boss ? 'boss' : ''}`;
+            enemigoCard.style.backgroundImage = `url(${obtenerImagenCarta(cartaBase)})`;
+
+            const etiqueta = document.createElement('div');
+            etiqueta.className = 'evento-enemigo-nombre';
+            etiqueta.textContent = nombreEnemigo;
+            enemigoCard.appendChild(etiqueta);
+            enemigos.appendChild(enemigoCard);
+        });
+        const recompensaLabel = document.createElement('div');
+        recompensaLabel.className = 'evento-recompensas-label';
+        recompensaLabel.textContent = 'Recompensas';
+
+        const recompensas = document.createElement('div');
+        recompensas.className = 'evento-recompensas';
+        const cartaRecompensaCatalogo = mapaCatalogo.get(normalizarNombre(evento.cartaRecompensa || ''));
+        if (cartaRecompensaCatalogo) {
+            const mini = document.createElement('div');
+            mini.className = 'evento-recompensa-card';
+            mini.style.backgroundImage = `url(${obtenerImagenCarta(cartaRecompensaCatalogo)})`;
+            const nombreMini = document.createElement('div');
+            nombreMini.className = 'evento-enemigo-nombre';
+            nombreMini.textContent = cartaRecompensaCatalogo.Nombre;
+            mini.appendChild(nombreMini);
+            recompensas.appendChild(mini);
+        }
+
+        const meta = document.createElement('div');
+        meta.className = 'evento-recompensas-meta';
+        meta.textContent = `Puntos base: ${evento.puntos}`;
+        recompensas.appendChild(meta);
+
+        if (Number(evento.mejora || 0) === 1) {
+            const tagMejora = document.createElement('div');
+            tagMejora.className = 'evento-recompensa-tag';
+            tagMejora.innerHTML = `<img src="${ICONO_MEJORA}" alt="Mejora" style="width:28px;height:28px;object-fit:contain;"> <span>Otorga mejora</span>`;
+            recompensas.appendChild(tagMejora);
+        }
+        if (Number(evento.mejora_especial || 0) === 1) {
+            const tagEspecial = document.createElement('div');
+            tagEspecial.className = 'evento-recompensa-tag';
+            tagEspecial.innerHTML = `<img src="${ICONO_MEJORA_ESPECIAL}" alt="Mejora especial" style="width:28px;height:28px;object-fit:contain;"> <span>Otorga mejora especial</span>`;
+            recompensas.appendChild(tagEspecial);
+        }
+
+        const contenedorDificultad = document.createElement('div');
+        contenedorDificultad.className = 'evento-dificultad';
+        const dificultadLabel = document.createElement('label');
+        dificultadLabel.className = 'evento-dificultad-label';
+        dificultadLabel.textContent = 'Dificultad';
+        const selectDificultad = document.createElement('select');
+        selectDificultad.className = 'evento-dificultad-select';
+        for (let d = 1; d <= 6; d++) {
+            const option = document.createElement('option');
+            option.value = String(d);
+            option.textContent = `${'★'.repeat(d)}  Nivel ${d}`;
+            selectDificultad.appendChild(option);
+        }
+        selectDificultad.value = String(Number(evento.dificultadSeleccionada || 1));
+        selectDificultad.addEventListener('change', () => seleccionarDificultadEvento(evento.id, Number(selectDificultad.value)));
+        contenedorDificultad.appendChild(dificultadLabel);
+        contenedorDificultad.appendChild(selectDificultad);
+
+        const botonIniciar = document.createElement('button');
+        botonIniciar.className = `btn ${yaJugadoRotacion ? 'btn-success' : 'btn-primary'}`;
+        botonIniciar.textContent = yaJugadoRotacion ? 'Ya jugado en esta rotación' : 'Empezar Evento';
+        botonIniciar.disabled = yaJugadoRotacion;
+        botonIniciar.addEventListener('click', async () => {
+            await abrirModalSeleccionEvento(evento);
+        });
+
+        const bloqueInferior = document.createElement('div');
+        bloqueInferior.className = 'evento-bottom';
+        bloqueInferior.appendChild(recompensaLabel);
+        bloqueInferior.appendChild(recompensas);
+        bloqueInferior.appendChild(contenedorDificultad);
+        bloqueInferior.appendChild(botonIniciar);
+
+        card.appendChild(nombre);
+        card.appendChild(descripcion);
+        card.appendChild(etiquetaEnemigos);
+        card.appendChild(enemigos);
+        card.appendChild(bloqueInferior);
+        contenedor.appendChild(card);
+    });
+}
+
+function seleccionarDificultadEvento(eventoId, dificultad) {
+    const evento = eventosActivos.find(item => item.id === eventoId);
+    if (evento) {
+        evento.dificultadSeleccionada = dificultad;
+    }
+}
+
+function configurarModalEvento() {
+    const cancelarBtn = document.getElementById('cancelar-evento-btn');
+    const confirmarBtn = document.getElementById('confirmar-evento-btn');
+    const filtroAfi = document.getElementById('filtro-afiliacion-evento');
+    const btnH = document.getElementById('filtro-evento-faccion-h');
+    const btnV = document.getElementById('filtro-evento-faccion-v');
+
+    if (!cancelarBtn || !confirmarBtn || !filtroAfi || !btnH || !btnV) {
+        return;
+    }
+
+    cancelarBtn.onclick = cerrarModalSeleccionEvento;
+    confirmarBtn.onclick = async () => {
+        await confirmarSeleccionEvento();
+    };
+    filtroAfi.onchange = () => {
+        afiliacionEventoActiva = normalizarAfiliacion(filtroAfi.value || 'todas');
+        renderizarCartasSeleccionEvento();
+    };
+
+    btnH.onclick = () => {
+        faccionEventoActiva = 'H';
+        afiliacionEventoActiva = 'todas';
+        actualizarBotonesFaccionEvento();
+        renderizarFiltroAfiliacionEvento();
+        renderizarCartasSeleccionEvento();
+    };
+
+    btnV.onclick = () => {
+        faccionEventoActiva = 'V';
+        afiliacionEventoActiva = 'todas';
+        actualizarBotonesFaccionEvento();
+        renderizarFiltroAfiliacionEvento();
+        renderizarCartasSeleccionEvento();
+    };
+}
+
+async function abrirModalSeleccionEvento(evento) {
+    if (!evento?.dificultadSeleccionada) {
+        mostrarMensajeEventos('Selecciona una dificultad para el evento.', 'warning');
+        return;
+    }
+
+    const email = localStorage.getItem('email');
+    const response = await fetch('/get-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+    });
+    const data = await response.json();
+    const usuario = data.usuario;
+    localStorage.setItem('usuario', JSON.stringify(usuario));
+
+    const claveRotacion = obtenerClaveRotacionEventos();
+    const jugadosPorRotacion = (usuario.eventosJugadosPorRotacion && typeof usuario.eventosJugadosPorRotacion === 'object')
+        ? usuario.eventosJugadosPorRotacion
+        : {};
+    const jugadosActual = new Set((jugadosPorRotacion[claveRotacion] || []).map(id => Number(id)));
+    if (jugadosActual.has(Number(evento.id))) {
+        mostrarMensajeEventos('Ya jugaste este evento en la rotación actual.', 'warning');
+        await renderizarEventosActivos();
+        return;
+    }
+
+    if (!usuario || !Array.isArray(usuario.cartas) || usuario.cartas.length < 6) {
+        mostrarMensajeEventos('Necesitas al menos 6 cartas en tu colección para un evento.', 'warning');
+        return;
+    }
+
+    const catalogo = await obtenerCatalogoCartas();
+    const mapaFaccionAfiliacion = new Map();
+    catalogo.forEach(carta => {
+        mapaFaccionAfiliacion.set(normalizarNombre(carta.Nombre), {
+            faccion: carta.faccion,
+            Afiliacion: carta.Afiliacion || ''
+        });
+    });
+
+    eventoPendiente = evento;
+    dificultadEventoSeleccionada = evento.dificultadSeleccionada;
+    usuarioCartasEvento = usuario.cartas
+        .map((carta, index) => {
+            const datos = mapaFaccionAfiliacion.get(normalizarNombre(carta.Nombre));
+            return {
+                index,
+                carta: {
+                    ...carta,
+                    faccion: carta.faccion || datos?.faccion || '',
+                    Afiliacion: carta.Afiliacion || datos?.Afiliacion || ''
+                }
+            };
+        })
+        .sort((a, b) => Number(b.carta.Poder || 0) - Number(a.carta.Poder || 0));
+
+    faccionEventoActiva = 'H';
+    afiliacionEventoActiva = 'todas';
+    seleccionCartasEvento = new Set();
+    actualizarBotonesFaccionEvento();
+    renderizarFiltroAfiliacionEvento();
+    renderizarCartasSeleccionEvento();
+    actualizarEstadoSeleccionEvento();
+    document.getElementById('modal-seleccion-evento').style.display = 'flex';
+}
+
+function actualizarBotonesFaccionEvento() {
+    document.getElementById('filtro-evento-faccion-h').classList.toggle('active', faccionEventoActiva === 'H');
+    document.getElementById('filtro-evento-faccion-v').classList.toggle('active', faccionEventoActiva === 'V');
+}
+
+function renderizarFiltroAfiliacionEvento() {
+    const filtro = document.getElementById('filtro-afiliacion-evento');
+    const mapa = new Map();
+    usuarioCartasEvento
+        .filter(item => normalizarFaccion(item.carta.faccion) === faccionEventoActiva)
+        .forEach(item => {
+            obtenerAfiliacionesCarta(item.carta).forEach(afi => {
+                const key = normalizarAfiliacion(afi);
+                if (key && !mapa.has(key)) {
+                    mapa.set(key, afi);
+                }
+            });
+        });
+
+    filtro.innerHTML = '';
+    const optTodas = document.createElement('option');
+    optTodas.value = 'todas';
+    optTodas.textContent = 'Todas';
+    filtro.appendChild(optTodas);
+
+    Array.from(mapa.entries())
+        .sort((a, b) => a[1].localeCompare(b[1]))
+        .forEach(([, afi]) => {
+            const option = document.createElement('option');
+            option.value = afi;
+            option.textContent = afi;
+            filtro.appendChild(option);
+        });
+
+    filtro.value = 'todas';
+}
+
+function renderizarCartasSeleccionEvento() {
+    const grid = document.getElementById('cartas-evento-grid');
+    grid.innerHTML = '';
+
+    const cartasFiltradas = usuarioCartasEvento
+        .filter(item => normalizarFaccion(item.carta.faccion) === faccionEventoActiva)
+        .filter(item => {
+            if (afiliacionEventoActiva === 'todas') {
+                return true;
+            }
+            const afiliaciones = obtenerAfiliacionesCarta(item.carta).map(normalizarAfiliacion);
+            return afiliaciones.includes(afiliacionEventoActiva);
+        });
+
+    cartasFiltradas.forEach(item => {
+        const carta = item.carta;
+        const cartaDiv = document.createElement('div');
+        cartaDiv.className = `carta-mini ${seleccionCartasEvento.has(item.index) ? 'seleccionada' : ''}`;
+        if (Number(carta.Nivel || 1) >= 6) {
+            cartaDiv.classList.add('nivel-legendaria');
+        }
+        cartaDiv.style.backgroundImage = `url(${obtenerImagenCarta(carta)})`;
+
+        const estrellasDiv = document.createElement('div');
+        estrellasDiv.className = 'estrellas-carta';
+        const nivel = Number(carta.Nivel || 1);
+        for (let i = 0; i < nivel; i++) {
+            const estrella = document.createElement('img');
+            estrella.className = 'estrella';
+            estrella.src = 'https://i.ibb.co/zZt4R3x/star-level.png';
+            estrella.alt = 'star';
+            estrellasDiv.appendChild(estrella);
+        }
+
+        const detallesDiv = document.createElement('div');
+        detallesDiv.className = 'detalles-carta';
+        const nombre = document.createElement('span');
+        nombre.className = 'nombre-carta';
+        nombre.textContent = carta.Nombre;
+        const poder = document.createElement('span');
+        poder.className = 'poder-carta';
+        poder.textContent = carta.Poder;
+        detallesDiv.appendChild(nombre);
+        detallesDiv.appendChild(poder);
+
+        cartaDiv.appendChild(estrellasDiv);
+        cartaDiv.appendChild(detallesDiv);
+        cartaDiv.onclick = () => toggleSeleccionCartaEvento(item.index);
+        grid.appendChild(cartaDiv);
+    });
+}
+
+function toggleSeleccionCartaEvento(indexCarta) {
+    if (seleccionCartasEvento.has(indexCarta)) {
+        seleccionCartasEvento.delete(indexCarta);
+    } else {
+        if (seleccionCartasEvento.size >= 6) {
+            mostrarMensajeEventos('Solo puedes seleccionar 6 cartas.', 'warning');
+            return;
+        }
+        seleccionCartasEvento.add(indexCarta);
+    }
+
+    actualizarEstadoSeleccionEvento();
+    renderizarCartasSeleccionEvento();
+}
+
+function actualizarEstadoSeleccionEvento() {
+    const estado = document.getElementById('estado-seleccion-evento');
+    const confirmarBtn = document.getElementById('confirmar-evento-btn');
+    estado.textContent = `Seleccionadas: ${seleccionCartasEvento.size} / 6`;
+    confirmarBtn.disabled = seleccionCartasEvento.size !== 6;
+}
+
+function cerrarModalSeleccionEvento() {
+    document.getElementById('modal-seleccion-evento').style.display = 'none';
+    eventoPendiente = null;
+    seleccionCartasEvento = new Set();
+}
+
+async function confirmarSeleccionEvento() {
+    if (!eventoPendiente || seleccionCartasEvento.size !== 6 || !dificultadEventoSeleccionada) {
+        return;
+    }
+
+    const usuario = JSON.parse(localStorage.getItem('usuario'));
+    const cartasSeleccionadas = Array.from(seleccionCartasEvento).map(index => ({ ...usuario.cartas[index] }));
+    const eventoParaPartida = {
+        tipo: 'evento',
+        id: eventoPendiente.id,
+        nombre: eventoPendiente.nombre,
+        descripcion: eventoPendiente.descripcion,
+        dificultad: dificultadEventoSeleccionada,
+        enemigos: eventoPendiente.enemigos || [],
+        boss: eventoPendiente.boss || null,
+        puntos: Number(eventoPendiente.puntos || 0) * Number(dificultadEventoSeleccionada || 1),
+        mejora: Number(eventoPendiente.mejora || 0),
+        mejora_especial: Number(eventoPendiente.mejora_especial || 0),
+        carta_recompensa: eventoPendiente.cartaRecompensa || ''
+    };
+
+    const claveRotacion = obtenerClaveRotacionEventos();
+    usuario.eventosJugadosPorRotacion = (usuario.eventosJugadosPorRotacion && typeof usuario.eventosJugadosPorRotacion === 'object')
+        ? usuario.eventosJugadosPorRotacion
+        : {};
+    const jugadosActual = new Set(
+        (usuario.eventosJugadosPorRotacion[claveRotacion] || []).map(id => Number(id))
+    );
+    jugadosActual.add(Number(eventoPendiente.id));
+    usuario.eventosJugadosPorRotacion[claveRotacion] = Array.from(jugadosActual);
+
+    const email = localStorage.getItem('email');
+    await actualizarUsuarioFirebaseVista(usuario, email);
+    localStorage.setItem('usuario', JSON.stringify(usuario));
+
+    localStorage.setItem('desafioActivo', JSON.stringify(eventoParaPartida));
+    localStorage.setItem('dificultad', String(dificultadEventoSeleccionada));
+    localStorage.setItem('mazoJugador', JSON.stringify({ Cartas: cartasSeleccionadas }));
+    localStorage.setItem('mazoJugadorBase', JSON.stringify({ Cartas: cartasSeleccionadas }));
+    localStorage.removeItem('mazoOponente');
+    localStorage.removeItem('mazoOponenteBase');
+    window.location.href = 'tablero.html';
+}
+
+async function actualizarUsuarioFirebaseVista(usuario, email) {
+    const response = await fetch('/update-user', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ usuario, email })
+    });
+
+    if (!response.ok) {
+        throw new Error('No se pudo guardar el progreso de eventos.');
+    }
+
+    return response.json();
+}
+
+function mezclarArray(array) {
+    const copia = [...array];
+    for (let i = copia.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [copia[i], copia[j]] = [copia[j], copia[i]];
+    }
+    return copia;
+}
+
+function obtenerObjetivoSinergiaPorDificultad(dificultad) {
+    return OBJETIVO_SINERGIA_POR_DIFICULTAD[dificultad] || OBJETIVO_SINERGIA_POR_DIFICULTAD[1];
+}
+
+function construirPoolUnicoPorNombre(cartas) {
+    const mapa = new Map();
+    cartas.forEach(carta => {
+        const nombre = String(carta?.Nombre || '').trim().toLowerCase();
+        if (!nombre || mapa.has(nombre)) {
+            return;
+        }
+        mapa.set(nombre, { ...carta });
+    });
+    return Array.from(mapa.values());
+}
+
+function escalarCartaANivel(carta, nivelObjetivo) {
+    const nivelActual = Number(carta.Nivel || 1);
+    const poderActual = Number(carta.Poder || 0);
+    const poderBaseNivel1 = Math.max(0, poderActual - ((nivelActual - 1) * 500));
+    return {
+        ...carta,
+        Nivel: nivelObjetivo,
+        Poder: poderBaseNivel1 + ((nivelObjetivo - 1) * 500)
+    };
+}
+
+function generarMazoBotConSinergia(cartasDisponibles, dificultad) {
+    const nivelObjetivo = Math.min(Math.max(Number(dificultad || 1), 1), 6);
+    const poolHeroes = construirPoolUnicoPorNombre(cartasDisponibles.filter(c => normalizarFaccion(c?.faccion) === 'H'));
+    const poolVillanos = construirPoolUnicoPorNombre(cartasDisponibles.filter(c => normalizarFaccion(c?.faccion) === 'V'));
+
+    const faccionesElegibles = [];
+    if (poolHeroes.length >= 12) {
+        faccionesElegibles.push('H');
+    }
+    if (poolVillanos.length >= 12) {
+        faccionesElegibles.push('V');
+    }
+
+    if (faccionesElegibles.length === 0) {
+        return [];
+    }
+
+    const faccionObjetivo = faccionesElegibles[Math.floor(Math.random() * faccionesElegibles.length)];
+    const pool = faccionObjetivo === 'H' ? poolHeroes : poolVillanos;
+    const objetivoSinergia = Math.min(obtenerObjetivoSinergiaPorDificultad(nivelObjetivo), 12);
+    const mazo = [];
+    const nombresEnMazo = new Set();
+
+    const mapaAfiliaciones = new Map();
+    pool.forEach(carta => {
+        const afiliaciones = new Set(obtenerAfiliacionesCarta(carta));
+        afiliaciones.forEach(afiliacion => {
+            if (!mapaAfiliaciones.has(afiliacion)) {
+                mapaAfiliaciones.set(afiliacion, []);
+            }
+            mapaAfiliaciones.get(afiliacion).push(carta);
+        });
+    });
+
+    const afiliacionesValidas = Array.from(mapaAfiliaciones.entries())
+        .filter(([, cartas]) => cartas.length >= 2)
+        .sort((a, b) => b[1].length - a[1].length);
+
+    if (afiliacionesValidas.length > 0) {
+        const [afiliacionObjetivo, cartasAfiliacion] = afiliacionesValidas[0];
+        const cartasSinergia = mezclarArray(cartasAfiliacion).slice(0, objetivoSinergia);
+
+        cartasSinergia.forEach(carta => {
+            const clave = String(carta.Nombre).trim().toLowerCase();
+            if (!nombresEnMazo.has(clave) && mazo.length < 12) {
+                mazo.push(carta);
+                nombresEnMazo.add(clave);
+            }
+        });
+
+        if (mazo.length < 2) {
+            const backup = mezclarArray(mapaAfiliaciones.get(afiliacionObjetivo) || []).slice(0, 2);
+            backup.forEach(carta => {
+                const clave = String(carta.Nombre).trim().toLowerCase();
+                if (!nombresEnMazo.has(clave) && mazo.length < 12) {
+                    mazo.push(carta);
+                    nombresEnMazo.add(clave);
+                }
+            });
+        }
+    }
+
+    const resto = mezclarArray(pool);
+    for (const carta of resto) {
+        if (mazo.length >= 12) {
+            break;
+        }
+        const clave = String(carta.Nombre).trim().toLowerCase();
+        if (nombresEnMazo.has(clave)) {
+            continue;
+        }
+        mazo.push(carta);
+        nombresEnMazo.add(clave);
+    }
+
+    return mazo.slice(0, 12).map(carta => escalarCartaANivel(carta, nivelObjetivo));
+}
+
+function verificarMazosUsuario() {
+    const usuario = JSON.parse(localStorage.getItem('usuario'));
+    const selectMazo = document.getElementById('select-mazo');
+    const jugarBtn = document.getElementById('jugar-btn');
+
+    // Limpiar cualquier opción anterior
+    selectMazo.innerHTML = '';
+
+    if (usuario && usuario.mazos && usuario.mazos.length > 0) {
+        usuarioTieneMazos = true;
+        console.log('Mazos del usuario:', usuario.mazos);
+    
+        usuario.mazos.forEach((mazo, index) => {
+            const option = document.createElement('option');
+            option.value = index;
+            option.textContent = mazo.Nombre;
+            selectMazo.appendChild(option);
+        });
+    
+        // Seleccionar el primer mazo por defecto
+        mazoSeleccionado = usuario.mazos[0];
+        localStorage.setItem('mazoJugador', JSON.stringify({ Cartas: mazoSeleccionado.Cartas }));
+        localStorage.setItem('mazoJugadorBase', JSON.stringify({ Cartas: mazoSeleccionado.Cartas }));
+
+        // Habilitar el botón "Jugar" porque ya hay mazos disponibles
+        jugarBtn.disabled = false;
+    
+        // Habilitar el botón de iniciar partida si ya se seleccionaron mazo y dificultad
+        verificarSeleccion();
+    } else {
+        usuarioTieneMazos = false;
+        jugarBtn.disabled = false;
+    }
+}
+
+//----------CHAT Y OTRAS FUNCIONALIDADES---------//
+
+// Función para configurar el chat
+function configurarChat() {
+    const chatInput = document.getElementById('chat-input');
+    const enviarBtn = document.getElementById('enviar-mensaje');
+    const chatMensajes = document.getElementById('chat-mensajes');
+
+    enviarBtn.addEventListener('click', function () {
+        const mensaje = chatInput.value.trim();
+        if (mensaje) {
+            chatInput.value = '';
+            enviarMensajeChat(mensaje);
+        }
+    });
+
+    // Enviar mensaje al presionar Enter
+    chatInput.addEventListener('keypress', function (e) {
+        if (e.key === 'Enter') {
+            enviarBtn.click();
+        }
+    });
+}
+
+// Función para agregar mensajes al chat localmente
+function agregarMensajeChat(payload, mensajeTexto) {
+    const chatMensajes = document.getElementById('chat-mensajes');
+    if (!chatMensajes) {
+        return;
+    }
+
+    const payloadObj = (typeof payload === 'object' && payload !== null)
+        ? payload
+        : { usuario: payload, mensaje: mensajeTexto };
+
+    const usuario = String(payloadObj.usuario || 'Jugador');
+    const mensaje = String(payloadObj.mensaje || '');
+    const hora = formatearHoraMensaje(payloadObj);
+    const avatar = String(payloadObj.avatar || '').trim() || 'https://i.ibb.co/QJvLStm/zzz-Carta-Back.png';
+
+    insertarSeparadorFechaSiCorresponde(chatMensajes, payloadObj);
+
+    const mensajeDiv = document.createElement('div');
+    const cabeceraDiv = document.createElement('div');
+    cabeceraDiv.className = 'chat-msg-header';
+
+    const avatarImg = document.createElement('img');
+    avatarImg.className = 'chat-msg-avatar';
+    avatarImg.src = avatar;
+    avatarImg.alt = `Avatar de ${usuario}`;
+    avatarImg.loading = 'lazy';
+
+    const nombreSpan = document.createElement('span');
+    nombreSpan.className = 'nombre-usuario';
+    nombreSpan.textContent = `${usuario}`;
+
+    const horaSpan = document.createElement('span');
+    horaSpan.className = 'chat-msg-hora';
+    horaSpan.textContent = hora;
+
+    const textoDiv = document.createElement('div');
+    textoDiv.className = 'chat-msg-texto';
+    textoDiv.textContent = mensaje;
+
+    const nombreUsuario = obtenerNombreVisibleUsuario();
+    if (usuario.trim().toLowerCase() === nombreUsuario.trim().toLowerCase()) {
+        mensajeDiv.classList.add('mensaje-usuario'); // Clase para los mensajes del propio usuario
+    } else {
+        mensajeDiv.classList.add('mensaje-otro'); // Clase para los mensajes de otros usuarios
+    }
+    mensajeDiv.dataset.dateKey = obtenerFechaMensaje(payloadObj).key;
+
+    cabeceraDiv.appendChild(avatarImg);
+    cabeceraDiv.appendChild(nombreSpan);
+    cabeceraDiv.appendChild(horaSpan);
+    mensajeDiv.appendChild(cabeceraDiv);
+    mensajeDiv.appendChild(textoDiv);
+    chatMensajes.appendChild(mensajeDiv);
+
+    // Autoscroll hacia abajo
+    chatMensajes.scrollTop = chatMensajes.scrollHeight;
+}
+
+// Función para enviar mensajes al servidor mediante socket.io
+function enviarMensajeChat(mensaje) {
+    const nombreUsuario = obtenerNombreVisibleUsuario();
+    const avatar = obtenerAvatarVisibleUsuario();
+    
+    if (typeof socket !== 'undefined') {
+        socket.emit('mensajeChat', { usuario: nombreUsuario, mensaje, avatar }); // Enviar nombre + avatar + mensaje
+    } else {
+        console.error('Socket no está definido');
+    }
+}
+
+// Configurar la lista de jugadores conectados
+function configurarJugadoresConectados() {
+    const listaJugadores = document.getElementById('lista-jugadores');
+    const email = localStorage.getItem('email');
+    const nombreUsuarioActual = obtenerNombreVisibleUsuario();
+
+    if (typeof socket !== 'undefined') {
+        // Recibir actualización de la lista de jugadores conectados
+        socket.on('jugadoresConectados', function (jugadores) {
+            listaJugadores.innerHTML = '';
+
+            const normalizados = (jugadores || []).map(jugador => {
+                if (typeof jugador === 'string') {
+                    return { email: '', nombre: jugador };
+                }
+                return {
+                    email: String(jugador?.email || ''),
+                    nombre: String(jugador?.nombre || '').trim() || String(jugador?.email || '').split('@')[0]
+                };
+            });
+
+            const otrosJugadores = normalizados.filter(jugador => {
+                if (jugador.email && email) {
+                    return jugador.email !== email;
+                }
+                return jugador.nombre !== nombreUsuarioActual;
+            });
+
+            otrosJugadores.forEach(jugador => {
+                const jugadorItem = document.createElement('div');
+                jugadorItem.classList.add('jugador-item');
+
+                const nombreDiv = document.createElement('span');
+                nombreDiv.textContent = jugador.nombre; // Mostrar nickname
+
+                const botonInvitar = document.createElement('button');
+                botonInvitar.textContent = 'Invitar a partida';
+                botonInvitar.classList.add('btn', 'btn-invitar');
+                botonInvitar.addEventListener('click', function () {
+                    invitarJugador(jugador.nombre);  // Mantiene compatibilidad con el flujo actual
+                });
+
+                jugadorItem.appendChild(nombreDiv);
+                jugadorItem.appendChild(botonInvitar);
+                listaJugadores.appendChild(jugadorItem);
+            });
+        });
+    } else {
+        console.error('Socket no está definido');
+    }
+}
+
+function logout() {
+    console.log('Cerrando sesión y limpiando localStorage...');
+    localStorage.removeItem('usuario');
+    localStorage.removeItem('email');
+    localStorage.removeItem('jugandoPartida');
+    localStorage.removeItem('mazoJugador');
+    localStorage.removeItem('mazoOponente');
+    window.location.href = '/login.html';
+}

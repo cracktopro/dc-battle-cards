@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Desafíos</title>
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+    <link href="css/mazos.css" rel="stylesheet">
+    <link href="css/scrollbar.css" rel="stylesheet">
+    <style>
+        .desafios-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 16px;
+            padding: 10px 0 20px;
+            align-items: stretch;
+        }
+
+        .desafio-card {
+            background: rgba(8, 18, 36, 0.82);
+            border: 1px solid rgba(0, 209, 255, 0.35);
+            border-radius: 14px;
+            box-shadow: 0 0 16px rgba(0, 123, 255, 0.25);
+            padding: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            min-height: 560px;
+            height: 100%;
+        }
+
+        .desafio-nombre {
+            color: #dff8ff;
+            font-size: 1.15rem;
+            font-weight: 700;
+        }
+
+        .desafio-descripcion {
+            color: #bde6ff;
+            font-size: 0.9rem;
+            min-height: 48px;
+        }
+
+        .desafio-meta {
+            color: #d6f2ff;
+            font-size: 0.84rem;
+        }
+
+        .desafio-recompensas {
+            background: rgba(255, 215, 0, 0.1);
+            border: 1px solid rgba(255, 215, 0, 0.42);
+            border-radius: 10px;
+            padding: 8px 10px;
+            color: #ffd700;
+            font-size: 0.8rem;
+        }
+
+        .desafio-card.pendiente {
+            box-shadow: 0 0 14px rgba(46, 255, 120, 0.28), 0 0 24px rgba(46, 255, 120, 0.16);
+            border-color: rgba(46, 255, 120, 0.42);
+        }
+
+        .desafio-card.completado {
+            box-shadow: 0 0 14px rgba(255, 78, 78, 0.35), 0 0 24px rgba(255, 78, 78, 0.2);
+            border-color: rgba(255, 88, 88, 0.48);
+        }
+
+        .desafio-enemigos-label {
+            color: #ff5f5f;
+            font-size: 0.68rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            text-shadow: 0 0 8px rgba(255, 42, 42, 0.7);
+            margin-bottom: -2px;
+        }
+
+        .desafio-enemigos {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(78px, 78px));
+            gap: 8px;
+        }
+
+        .desafio-enemigo-card {
+            width: 78px;
+            height: 108px;
+            border: 1px solid rgba(0, 123, 255, 0.5);
+            border-radius: 8px;
+            background-size: cover;
+            background-position: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .desafio-enemigo-card.boss {
+            border: 2px solid rgba(255, 102, 40, 0.95);
+            box-shadow: 0 0 10px rgba(255, 95, 31, 0.7), 0 0 16px rgba(255, 42, 42, 0.45);
+        }
+
+        .desafio-enemigo-nombre {
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            padding: 3px 4px;
+            font-size: 0.56rem;
+            line-height: 1.1;
+            background: rgba(0, 0, 0, 0.72);
+            color: #fff;
+            text-align: center;
+        }
+
+        .desafio-enemigo-card.boss .desafio-enemigo-nombre {
+            background: linear-gradient(90deg, rgba(150, 22, 22, 0.92), rgba(255, 95, 31, 0.88));
+        }
+
+        .desafio-recompensas-label {
+            color: #ffd700;
+            font-size: 0.68rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            text-shadow: 0 0 8px rgba(255, 215, 0, 0.7);
+            margin-bottom: -2px;
+        }
+
+        .desafio-recompensas {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .desafio-recompensas-meta {
+            color: #ffe9a8;
+            font-size: 0.74rem;
+        }
+
+        .desafio-recompensa-tag {
+            border: 1px solid rgba(255, 215, 0, 0.6);
+            background: rgba(255, 215, 0, 0.14);
+            border-radius: 999px;
+            padding: 3px 8px;
+            color: #ffd700;
+            font-size: 0.66rem;
+            text-transform: uppercase;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .desafio-bottom {
+            margin-top: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .modal-seleccion-mazo {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.78);
+            z-index: 2100;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 12px;
+        }
+
+        .modal-seleccion-contenido {
+            width: min(1120px, 96vw);
+            max-height: 92vh;
+            overflow: hidden;
+            background: rgba(8, 18, 36, 0.96);
+            border: 1px solid rgba(0, 209, 255, 0.36);
+            border-radius: 14px;
+            box-shadow: 0 0 20px rgba(0, 123, 255, 0.28);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .modal-header-desafio {
+            padding: 12px 14px;
+            border-bottom: 1px solid rgba(0, 209, 255, 0.3);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .estado-seleccion {
+            color: #ffd700;
+            font-weight: 700;
+        }
+
+        .filtros-seleccion {
+            padding: 10px 14px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .cartas-seleccion-grid {
+            padding: 0 14px 14px;
+            overflow: auto;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(160px, 160px));
+            grid-auto-rows: max-content;
+            gap: 12px;
+            justify-content: start;
+            align-items: start;
+        }
+
+        .carta-mini {
+            position: relative;
+            width: 100%;
+            height: 224px;
+            border: 2px solid rgba(36, 156, 255, 0.7);
+            border-radius: 10px;
+            overflow: hidden;
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(0, 123, 255, 0.25);
+            transition: box-shadow 0.2s ease, transform 0.2s ease;
+            background-size: cover;
+            background-position: center;
+        }
+
+        .carta-mini:hover {
+            box-shadow: 0 0 16px rgba(0, 209, 255, 0.55);
+        }
+
+        .carta-mini.seleccionada {
+            box-shadow: 0 0 16px 4px rgba(255, 215, 0, 0.82);
+            border-color: rgba(255, 215, 0, 0.95);
+        }
+
+        .carta-mini.nivel-legendaria.seleccionada {
+            border-color: rgba(255, 215, 0, 0.95);
+            box-shadow: 0 0 16px 4px rgba(255, 215, 0, 0.82), 0 0 24px rgba(156, 66, 255, 0.35);
+        }
+
+        .carta-mini .detalles-carta {
+            font-size: 0.64rem;
+            padding: 4px;
+        }
+
+        .carta-mini.nivel-legendaria {
+            border-color: rgba(172, 96, 255, 0.92);
+            box-shadow: 0 0 14px rgba(156, 66, 255, 0.45), 0 0 26px rgba(128, 0, 255, 0.34);
+        }
+
+        .carta-mini.nivel-legendaria .detalles-carta {
+            color: #d5b5ff;
+            text-shadow: 0 0 6px rgba(186, 112, 255, 0.75);
+            border-top-color: rgba(186, 112, 255, 0.6);
+            box-shadow: 0 -2px 8px rgba(156, 66, 255, 0.45);
+        }
+
+        .carta-mini.nivel-legendaria .estrellas-carta {
+            background-color: rgba(58, 24, 90, 0.78);
+            border-color: rgba(186, 112, 255, 0.6);
+            box-shadow: 0 0 8px rgba(156, 66, 255, 0.5);
+        }
+
+        .modal-footer-desafio {
+            padding: 12px 14px;
+            border-top: 1px solid rgba(0, 209, 255, 0.3);
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="menu-container">
+        <a href="vistaJuego.html" class="btn btn-menu">Jugar Partida</a>
+        <a href="mazos.html" class="btn btn-menu">Mazos</a>
+        <a href="crearMazos.html" class="btn btn-menu">Crear Mazos</a>
+        <a href="mejorarCartas.html" class="btn btn-menu">Mejorar Cartas</a>
+        <a href="coleccion.html" class="btn btn-menu">Colección</a>
+        <a href="tienda.html" class="btn btn-menu">Tienda</a>
+        <a href="desafios.html" class="btn btn-menu">Desafíos</a>
+        <a href="opciones.html" class="btn btn-menu">Opciones</a>
+        <button onclick="abrirModalLogout()" class="btn btn-logout">Cerrar Sesión</button>
+    </div>
+
+    <div class="content-container">
+        <h2>Desafíos</h2>
+        <div id="mensaje-desafios" class="alert alert-warning" style="display:none;"></div>
+        <div id="desafios-grid" class="desafios-grid"></div>
+    </div>
+
+    <div id="modal-seleccion-desafio" class="modal-seleccion-mazo">
+        <div class="modal-seleccion-contenido">
+            <div class="modal-header-desafio">
+                <h4 style="margin:0;">Selecciona 6 cartas para el desafío</h4>
+                <div id="estado-seleccion-desafio" class="estado-seleccion">Seleccionadas: 0 / 6</div>
+            </div>
+            <div class="filtros-seleccion">
+                <div class="faccion-tabs">
+                    <button id="filtro-faccion-h" class="btn faccion-tab active" type="button">Héroes</button>
+                    <button id="filtro-faccion-v" class="btn faccion-tab" type="button">Villanos</button>
+                </div>
+                <select id="filtro-afiliacion-desafio" class="form-control" style="width:auto; min-width:220px;"></select>
+            </div>
+            <div id="cartas-desafio-grid" class="cartas-seleccion-grid"></div>
+            <div class="modal-footer-desafio">
+                <button id="cancelar-desafio-btn" class="btn btn-secondary" type="button">Cancelar</button>
+                <button id="confirmar-desafio-btn" class="btn btn-primary" type="button" disabled>Jugar</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.0/xlsx.full.min.js"></script>
+    <script src="js/cartas.js"></script>
+    <script src="desafios.js"></script>
+</body>
+</html>

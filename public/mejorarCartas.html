@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mejorar Cartas</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+    <!-- Custom Styles -->
+    <link href="css/mazos.css" rel="stylesheet">
+    <!-- Firebase SDK Version 8.x -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
+</head>
+
+<body>
+    <div class="menu-container">
+        <!-- Botones del menú -->
+        <a href="vistaJuego.html" class="btn btn-menu">Jugar Partida</a>
+        <a href="mazos.html" class="btn btn-menu">Mazos</a>
+        <a href="crearMazos.html" class="btn btn-menu">Crear Mazos</a>
+        <a href="mejorarCartas.html" class="btn btn-menu">Mejorar Cartas</a>
+        <a href="coleccion.html" class="btn btn-menu">Colección</a>
+        <a href="tienda.html" class="btn btn-menu">Tienda</a>
+        <a href="desafios.html" class="btn btn-menu">Desafíos</a>
+        <a href="opciones.html" class="btn btn-menu">Opciones</a>
+        <button onclick="abrirModalLogout()" class="btn btn-logout">Cerrar Sesión</button>
+    </div>
+
+    <!-- Contenedor principal de contenido -->
+    <div class="content-container">
+        <h2>Mejorar Cartas</h2>
+        <div class="faccion-tabs mb-3">
+            <button id="tab-mejora-clasica" class="btn faccion-tab active" type="button">Mejora clásica</button>
+            <button id="tab-mejoras-objetos" class="btn faccion-tab" type="button">Mejoras especiales</button>
+        </div>
+        <!-- Mensaje de error o instrucciones -->
+        <div id="mensaje" class="alert alert-warning" style="display: none;"></div>
+        <div id="seccion-mejora-clasica">
+        <button id="mejorar-duplicados-auto" class="btn btn-warning mb-3">Mejorar Duplicados Automáticamente</button>
+
+        <!-- Contenedor visual de cartas -->
+        <div id="contenedor-cartas" class="contenedor-cartas">
+            <!-- Las cartas se cargarán aquí dinámicamente -->
+        </div>
+        </div>
+
+        <div id="seccion-mejoras-objetos" class="mt-4 p-3" style="display:none; background: rgba(8, 18, 36, 0.76); border: 1px solid rgba(0, 209, 255, 0.35); border-radius: 12px;">
+            <h3 style="margin-bottom: 12px;">Mejoras con objetos</h3>
+            <div id="resumen-objetos" class="mb-3" style="color:#dff8ff;">
+                <span id="contador-mejora-carta" style="margin-right: 14px;">Mejoras disponibles: 0</span>
+                <span id="contador-mejora-especial">Mejoras especiales: 0</span>
+            </div>
+
+            <div class="faccion-tabs mb-3">
+                <button id="subtab-mejora-carta" class="btn faccion-tab active" type="button">Mejora de carta (1★ → 4★)</button>
+                <button id="subtab-mejora-especial" class="btn faccion-tab" type="button">Mejora especial (5★ → 6★)</button>
+            </div>
+
+            <div id="panel-subtab-mejora-carta" class="mb-4">
+                <h5><img src="/resources/icons/mejora.png" alt="Mejora" style="width:44px; height:44px; object-fit:contain; margin-right:6px;">Mejora de carta (1★ → 4★)</h5>
+                <div id="contenedor-mejora-carta-objeto" class="contenedor-cartas"></div>
+            </div>
+
+            <div id="panel-subtab-mejora-especial" style="display:none;">
+                <h5><img src="/resources/icons/mejora_especial.png" alt="Mejora especial" style="width:44px; height:44px; object-fit:contain; margin-right:6px;">Mejora especial (5★ → 6★)</h5>
+                <div id="contenedor-mejora-especial-objeto" class="contenedor-cartas"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-confirmacion-objeto" class="modal" style="display:none; position:fixed; inset:0; z-index:2000; background:rgba(0,0,0,0.72); justify-content:center; align-items:center;">
+        <div style="width:min(520px,92vw); background: rgba(12, 20, 36, 0.96); border: 1px solid rgba(0, 209, 255, 0.35); border-radius: 12px; padding: 18px; text-align:center;">
+            <h4>Confirmar mejora</h4>
+            <p id="texto-confirmacion-objeto" style="color:#ccefff;"></p>
+            <div class="d-flex justify-content-center" style="gap:10px;">
+                <button id="btn-confirmar-objeto" class="btn btn-primary">Aceptar</button>
+                <button id="btn-cancelar-objeto" class="btn btn-secondary">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-resultado-objeto" class="modal" style="display:none; position:fixed; inset:0; z-index:2100; background:rgba(0,0,0,0.78); justify-content:center; align-items:center;">
+        <div style="width:min(920px,94vw); max-height:90vh; overflow:auto; background: rgba(12, 20, 36, 0.98); border: 1px solid rgba(255, 215, 0, 0.45); border-radius: 12px; padding: 16px;">
+            <h4 class="text-center">Carta mejorada</h4>
+            <div class="d-flex justify-content-center flex-wrap" style="gap:20px;">
+                <div>
+                    <h6 class="text-center">Antes</h6>
+                    <div id="resultado-carta-original"></div>
+                </div>
+                <div>
+                    <h6 class="text-center">Después</h6>
+                    <div id="resultado-carta-mejorada"></div>
+                </div>
+            </div>
+            <div class="text-center mt-3">
+                <button id="btn-cerrar-resultado-objeto" class="btn btn-primary">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-resultado-auto" class="modal" style="display:none; position:fixed; inset:0; z-index:2200; background:rgba(0,0,0,0.78); justify-content:center; align-items:center;">
+        <div style="width:min(1080px,95vw); max-height:90vh; overflow:auto; background: rgba(12, 20, 36, 0.98); border: 1px solid rgba(255, 215, 0, 0.45); border-radius: 12px; padding: 16px;">
+            <h4 class="text-center">Resultado de mejora automática</h4>
+            <div id="resultado-auto-resumen" class="alert alert-info" style="margin-top:10px;"></div>
+
+            <h5 class="mt-3">Cartas mejoradas</h5>
+            <div id="resultado-auto-mejoradas" class="d-flex flex-wrap" style="gap:18px;"></div>
+
+            <h5 class="mt-3">Cartas destruidas</h5>
+            <div id="resultado-auto-destruidas" class="d-flex flex-wrap" style="gap:10px;"></div>
+
+            <div class="text-center mt-3">
+                <button id="btn-cerrar-resultado-auto" class="btn btn-primary">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Script para inicializar Firebase -->
+    <script>
+    // Configuración de Firebase de tu proyecto
+    const firebaseConfig = {
+        apiKey: "AIzaSyBDx7E1BRInP2toeW-c_BLXsryQ_toPJRI",
+        authDomain: "dc-card-battle.firebaseapp.com",
+        projectId: "dc-card-battle",
+        storageBucket: "dc-card-battle.appspot.com",
+        messagingSenderId: "389571370658",
+        appId: "1:389571370658:web:eb9c69029ce677aab201fb"
+    };
+
+    // Inicializar Firebase
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+    </script>
+
+    <!-- Scripts -->
+     <script src="js/cartas.js"></script>
+    <script src="mejorarCartas.js"></script>
+    <!-- Bootstrap JS and dependencies -->
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+</body>
+</html>

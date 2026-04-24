@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vista Juego</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+    <!-- Custom Styles -->
+    <link href="css/mazos.css" rel="stylesheet">
+    <link href="css/scrollbar.css" rel="stylesheet">
+    <style>
+        body {
+            background: url('https://images2.alphacoders.com/262/262522.jpg') no-repeat center center fixed;
+            background-size: cover;
+            color: #ffffff;
+            font-family: 'Orbitron', sans-serif;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+
+        .menu-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 250px;
+            height: 100vh;
+            background-color: rgba(20, 20, 20, 0.7);
+            border-right: 2px solid rgba(0, 123, 255, 0.3);
+            box-shadow: 0 0 15px rgba(0, 123, 255, 0.5);
+            padding: 15px;
+            text-align: center;
+            z-index: 1000;
+        }
+
+        .btn-menu {
+            width: 100%;
+            margin: 10px 0;
+            background-color: rgba(0, 123, 255, 0.1);
+            border: 2px solid rgba(0, 123, 255, 0.3);
+            color: #007bff;
+            font-weight: bold;
+            text-shadow: 0 0 8px rgba(0, 123, 255, 0.8);
+            transition: all 0.3s ease;
+            font-size: 1rem;
+        }
+
+        .btn-menu:hover {
+            background-color: rgba(0, 123, 255, 0.2);
+            border-color: #007bff;
+            box-shadow: 0 0 15px rgba(0, 123, 255, 0.7), 0 0 25px rgba(0, 123, 255, 0.5);
+            color: #fff;
+        }
+        .btn-logout {
+            width: 100%;
+            margin: 10px 0;
+            background-color: rgba(255, 0, 0, 0.1);
+            border: 2px solid rgba(255, 0, 0, 0.3);
+            color: #ff0000;
+            font-weight: bold;
+            text-shadow: 0 0 8px rgba(255, 0, 0, 0.8);
+            transition: all 0.3s ease;
+            font-size: 1rem;
+        }
+        .btn-logout:hover {
+            background-color: rgba(201, 52, 52, 0.2);
+            border-color: #d31c1c;
+            box-shadow: 0 0 15px rgba(211, 28, 28, 0.7), 0 0 25px rgba(211, 28, 28, 0.5);
+            color: #fff;
+        }
+
+        .content-container {
+            margin-left: 250px; /* Deja espacio para el menú lateral */
+            padding: 20px;
+            height: 100vh; /* Ocupa toda la altura disponible de la pantalla */
+            overflow-y: auto; /* Permite el scroll si el contenido es grande */
+            box-sizing: border-box; /* Incluye padding y border en el tamaño del contenedor */
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="menu-container">
+        <!-- Botones del menú -->
+        <a href="vistaJuego.html" class="btn btn-menu">Jugar Partida</a>
+        <a href="mazos.html" class="btn btn-menu">Mazos</a>
+        <a href="crearMazos.html" class="btn btn-menu">Crear Mazos</a>
+        <a href="mejorarCartas.html" class="btn btn-menu">Mejorar Cartas</a>
+        <a href="coleccion.html" class="btn btn-menu">Colección</a>
+        <a href="tienda.html" class="btn btn-menu">Tienda</a>
+        <a href="desafios.html" class="btn btn-menu">Desafíos</a>
+        <a href="opciones.html" class="btn btn-menu">Opciones</a>
+        <button onclick="abrirModalLogout()" class="btn btn-logout">Cerrar Sesión</button>
+    </div>
+
+<!-- Contenedor principal de contenido -->
+<div class="content-container">
+    <h2>Vista de Juego</h2>
+    <p>Aquí va el contenido específico para jugar la partida...</p>
+</div>
+
+<script>
+    function logout() {
+        localStorage.removeItem('usuario');
+        window.location.href = '/login.html';
+    }
+</script>
+
+<script src="js/cartas.js"></script>
+<!-- Bootstrap JS and dependencies -->
+<script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+
+</body>
+</html>
