@@ -11,6 +11,8 @@
     <!-- Custom Styles -->
     <link href="css/mazos.css" rel="stylesheet">
     <link href="css/scrollbar.css" rel="stylesheet">
+    <link href="css/app-layout.css" rel="stylesheet">
+
     <style>
         body {
             background: url('https://images2.alphacoders.com/262/262522.jpg') no-repeat center center fixed;
@@ -19,14 +21,17 @@
             font-family: 'Orbitron', sans-serif;
             margin: 0;
             padding: 0;
-            overflow: hidden;
+            overflow-x: hidden;
+            overflow-y: auto;
+            min-height: 100vh;
+            min-height: 100dvh;
         }
 
         .menu-container {
             position: fixed;
             top: 0;
             left: 0;
-            width: 250px;
+            width: var(--dc-sidebar-w, 250px);
             height: 100vh;
             background-color: rgba(20, 20, 20, 0.7);
             border-right: 2px solid rgba(0, 123, 255, 0.3);
@@ -73,7 +78,7 @@
         }
 
         .content-container {
-            margin-left: 250px; /* Deja espacio para el menú lateral */
+            margin-left: var(--dc-sidebar-w, 250px); /* Deja espacio para el menú lateral */
             padding: 20px;
             height: 100vh; /* Ocupa toda la altura disponible de la pantalla */
             overflow-y: auto; /* Permite el scroll si el contenido es grande */
@@ -103,7 +108,6 @@
     <p>Aquí va el contenido específico para jugar la partida...</p>
 </div>
 
-<script src="js/scale.js"></script>
 <script>
     function logout() {
         localStorage.removeItem('usuario');
@@ -116,6 +120,7 @@
 <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
 <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+<script src="js/menu-mobile.js" defer></script>
 
 </body>
 </html>

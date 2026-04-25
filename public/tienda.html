@@ -9,6 +9,8 @@
     <link href="css/mazos.css" rel="stylesheet">
     <link href="css/salud.css" rel="stylesheet">
     <link href="css/scrollbar.css" rel="stylesheet">
+    <link href="css/app-layout.css" rel="stylesheet">
+
     <style>
         .tienda-panel {
             background: rgba(8, 18, 36, 0.78);
@@ -187,10 +189,10 @@
             display: none;
         }
 
-        @media (max-width: 768px) {
+        @media (max-width: 899px) {
             .tienda-grid-cartas {
-                grid-template-columns: repeat(auto-fill, minmax(160px, 160px));
-                gap: 10px;
+                grid-template-columns: repeat(auto-fill, minmax(clamp(132px, 42vw, 200px), 1fr));
+                gap: clamp(8px, 2vw, 12px);
             }
             .item-tienda {
                 padding: 8px;
@@ -256,9 +258,9 @@
         </div>
     </div>
 
-    <script src="js/scale.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.0/xlsx.full.min.js"></script>
     <script src="js/cartas.js"></script>
     <script src="tienda.js"></script>
+    <script src="js/menu-mobile.js" defer></script>
 </body>
 </html>

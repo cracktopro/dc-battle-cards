@@ -75,15 +75,15 @@
     }
 }
 
-@media (max-width: 768px), (min-resolution: 2dppx), (orientation: portrait) {
+@media (max-width: 899px) {
     .barra-salud-contenedor {
-        left: 4px;
-        right: 4px;
-        bottom: 27px;
-        height: 10px;
+        left: clamp(3px, 1vw, 6px);
+        right: clamp(3px, 1vw, 6px);
+        bottom: clamp(22px, 6vw, 30px);
+        height: clamp(9px, 1.8vw, 11px);
     }
 
     .salud-carta {
-        font-size: 0.5rem;
+        font-size: clamp(0.46rem, 2vw, 0.54rem);
     }
 }

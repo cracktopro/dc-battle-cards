@@ -6,7 +6,10 @@ body {
     font-family: 'Orbitron', sans-serif;
     margin: 0;
     padding: 0;
-    overflow: hidden;
+    overflow-x: hidden;
+    overflow-y: auto;
+    min-height: 100vh;
+    min-height: 100dvh;
 }
 
 .poder-mazo-container {
@@ -99,7 +102,7 @@ body {
     position: fixed;
     top: 0;
     left: 0;
-    width: 250px;
+    width: var(--dc-sidebar-w, 250px);
     height: 100vh;
     background-color: rgba(20, 20, 20, 0.7);
     border-right: 2px solid rgba(0, 123, 255, 0.3);
@@ -178,7 +181,7 @@ body {
 }
 
 .content-container {
-    margin-left: 250px;
+    margin-left: var(--dc-sidebar-w, 250px);
     padding: 20px;
     height: 100vh;
     overflow-y: auto;
@@ -234,10 +237,10 @@ body {
 /* Estilo para el contenedor de cartas */
 .contenedor-cartas {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 200px));
+    grid-template-columns: repeat(auto-fill, minmax(var(--dc-card-grid-min, clamp(150px, 12vw, 210px)), 1fr));
     justify-content: start;
-    gap: 20px;
-    padding: 20px;
+    gap: clamp(12px, 1.4vw, 20px);
+    padding: clamp(14px, 1.6vw, 22px);
 }
 /* Estilo para cada carta */
 .carta {
@@ -439,9 +442,9 @@ body {
 
 .modal-cambio-carta .lista-cartas-reemplazo {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(190px, 190px));
+    grid-template-columns: repeat(auto-fill, minmax(var(--dc-card-grid-min, clamp(150px, 12vw, 200px)), 1fr));
     justify-content: start;
-    gap: 14px;
+    gap: clamp(10px, 1.2vw, 14px);
     margin: 15px 0;
     max-height: 50vh;
     overflow-y: auto;
@@ -485,70 +488,35 @@ body {
     margin-top: 10px;
 }
 
-/* Detectar dispositivos de alta resolución */
-@media (max-width: 768px), (min-resolution: 2dppx), (orientation: portrait) {
-    .contenedor-cartas {
-        grid-template-columns: repeat(auto-fill, minmax(120px, 120px));
-        justify-content: start;
-        gap: 10px;
-    }
-
+/* Compactación en pantallas pequeñas (detalle tipográfico; layout principal en app-layout.css) */
+@media (max-width: 899px) {
     .carta {
-        aspect-ratio: 6.3 / 8.8;
         border-width: 2px;
     }
 
     .detalles-carta {
-        font-size: 0.6rem;
-        padding: 3px;
+        font-size: clamp(0.58rem, 2.4vw, 0.74rem);
+        padding: 3px 5px;
         min-height: 24px;
         gap: 4px;
     }
 
-
     .estrella {
-        width: 8px;
-        height: 8px;
-    }
-    .menu-container {
-        width: 150px; /* Reducir el ancho del menú en pantallas pequeñas */
-        padding: 10px;
+        width: clamp(8px, 2.4vw, 12px);
+        height: clamp(8px, 2.4vw, 12px);
     }
 
-    .btn-menu, .btn-logout {
-        font-size: 0.6rem; /* Reducir el tamaño de la fuente de los botones */
-        padding: 8px; /* Reducir el padding de los botones */
-        margin: 8px 0;
+    .form-control,
+    .d-inline-block {
+        min-height: 36px;
+        font-size: clamp(0.68rem, 2.4vw, 0.85rem);
     }
 
-    .content-container {
-        margin-left: 200px; /* Ajustar el margen para acomodar el menú más pequeño */
-        padding: 15px;
-    }
-    .faccion-toolbar {
-        align-items: flex-start;
-    }
-    .faccion-tab {
-        min-width: 110px;
-        font-size: 0.72rem;
-    }
-    .faccion-actual {
-        font-size: 0.75rem;
-        width: 100%;
-    }
-    .form-control, .d-inline-block{
-        height: 30px;
-        font-size: 10px;
-    }
-    .btn{
-        font-size: 10px;
-    }
-    .progreso-coleccion{
-        font-size: 18px;
+    .btn {
+        font-size: clamp(0.68rem, 2.4vw, 0.85rem);
     }
 
-    .modal-cambio-carta .lista-cartas-reemplazo {
-        grid-template-columns: repeat(auto-fill, minmax(120px, 120px));
-        gap: 10px;
+    .progreso-coleccion {
+        font-size: clamp(1rem, 4vw, 1.35rem);
     }
 }

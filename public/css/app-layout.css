@@ -1,0 +1,299 @@
+/**
+ * Layout responsivo (referencia de diseño ~1920×1080).
+ * Breakpoints: >=1200 (base), 900–1199 (tablet), <=899 (móvil).
+ * Sobrescribe solo espaciado / rejilla / contenedores; no redefine la identidad visual.
+ */
+
+:root {
+    --dc-design-w: 1920;
+    --dc-design-h: 1080;
+
+    --dc-sidebar-w: 250px;
+    --dc-content-pad-x: clamp(14px, 1.6vw, 24px);
+    --dc-content-pad-y: clamp(14px, 1.4vw, 22px);
+
+    --dc-board-menu-w: clamp(150px, 12vw, 190px);
+    --dc-board-rail-right: clamp(220px, 18vw, 280px);
+    --dc-card-grid-min: clamp(150px, 12vw, 210px);
+    --dc-modal-pad: clamp(14px, 2vw, 22px);
+    --dc-mobile-nav-h: 52px;
+}
+
+/* Tablet estrecha / portátil pequeño */
+@media (max-width: 1199px) {
+    :root {
+        --dc-sidebar-w: clamp(200px, 22vw, 240px);
+        --dc-board-menu-w: clamp(130px, 16vw, 170px);
+        --dc-board-rail-right: clamp(180px, 24vw, 240px);
+        --dc-card-grid-min: clamp(130px, 18vw, 190px);
+    }
+
+    .content-container {
+        margin-left: var(--dc-sidebar-w);
+        padding: var(--dc-content-pad-y) var(--dc-content-pad-x);
+    }
+
+    .tablero-container {
+        width: calc(100vw - var(--dc-board-menu-w) - var(--dc-board-rail-right));
+        margin-left: calc(var(--dc-board-menu-w) + 12px);
+        margin-right: var(--dc-board-rail-right);
+    }
+
+    .info-jugador {
+        width: min(240px, 28vw);
+    }
+
+    .contenedor-cartas {
+        gap: clamp(10px, 1.4vw, 18px);
+        padding: clamp(12px, 1.4vw, 18px);
+    }
+
+    .modal-cambio-carta .lista-cartas-reemplazo {
+        gap: clamp(10px, 1.2vw, 14px);
+    }
+}
+
+/* Escritorio: chrome móvil inexistente en el DOM o ignorado */
+@media (min-width: 900px) {
+    .dc-mobile-nav-bar,
+    .dc-nav-backdrop {
+        display: none !important;
+    }
+
+    body.dc-nav-open {
+        overflow: visible !important;
+    }
+}
+
+/* Móvil: barra fija + menú drawer */
+@media (max-width: 899px) {
+    :root {
+        --dc-sidebar-w: 100%;
+        --dc-board-menu-w: 0px;
+        --dc-board-rail-right: 0px;
+        --dc-card-grid-min: clamp(118px, 42vw, 168px);
+    }
+
+    body {
+        min-height: 100dvh;
+    }
+
+    body.dc-nav-open {
+        overflow: hidden;
+    }
+
+    /* —— Barra superior (insertada por js/menu-mobile.js) —— */
+    .dc-mobile-nav-bar {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: var(--dc-mobile-nav-h);
+        padding: 0 12px;
+        z-index: 2000;
+        box-sizing: border-box;
+        background: rgba(10, 16, 30, 0.94);
+        border-bottom: 1px solid rgba(0, 209, 255, 0.38);
+        box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
+        backdrop-filter: blur(8px);
+    }
+
+    .dc-mobile-nav-title {
+        font-family: "Orbitron", sans-serif;
+        font-size: clamp(0.72rem, 3.2vw, 0.95rem);
+        font-weight: 700;
+        color: #dff8ff;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        text-shadow: 0 0 10px rgba(0, 123, 255, 0.45);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .dc-nav-toggle {
+        flex: 0 0 auto;
+        width: 44px;
+        height: 44px;
+        margin: 0;
+        padding: 0;
+        border: 1px solid rgba(0, 209, 255, 0.45);
+        border-radius: 10px;
+        background: rgba(0, 80, 160, 0.25);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .dc-nav-toggle:hover {
+        background: rgba(0, 123, 255, 0.35);
+        box-shadow: 0 0 14px rgba(0, 209, 255, 0.35);
+    }
+
+    .dc-nav-toggle-bars,
+    .dc-nav-toggle-bars::before,
+    .dc-nav-toggle-bars::after {
+        display: block;
+        width: 20px;
+        height: 2px;
+        background: #9fd6ff;
+        border-radius: 1px;
+        box-shadow: 0 0 6px rgba(0, 209, 255, 0.5);
+    }
+
+    .dc-nav-toggle-bars {
+        position: relative;
+    }
+
+    .dc-nav-toggle-bars::before,
+    .dc-nav-toggle-bars::after {
+        content: "";
+        position: absolute;
+        left: 0;
+    }
+
+    .dc-nav-toggle-bars::before {
+        top: -7px;
+    }
+
+    .dc-nav-toggle-bars::after {
+        top: 7px;
+    }
+
+    body.dc-nav-open .dc-nav-toggle-bars {
+        background: transparent;
+        box-shadow: none;
+    }
+
+    body.dc-nav-open .dc-nav-toggle-bars::before {
+        top: 0;
+        transform: rotate(45deg);
+    }
+
+    body.dc-nav-open .dc-nav-toggle-bars::after {
+        top: 0;
+        transform: rotate(-45deg);
+    }
+
+    .dc-nav-backdrop {
+        display: block;
+        position: fixed;
+        top: var(--dc-mobile-nav-h);
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 1980;
+        background: rgba(0, 0, 0, 0.5);
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.22s ease, visibility 0.22s ease;
+        pointer-events: none;
+    }
+
+    body.dc-nav-open .dc-nav-backdrop {
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
+    }
+
+    /* —— Menú lateral (app + tablero): off-canvas —— */
+    body > .menu-container {
+        position: fixed !important;
+        top: var(--dc-mobile-nav-h) !important;
+        left: 0 !important;
+        width: min(300px, 88vw) !important;
+        height: calc(100dvh - var(--dc-mobile-nav-h)) !important;
+        max-height: none !important;
+        margin: 0 !important;
+        padding: 14px 12px !important;
+        box-sizing: border-box !important;
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 8px !important;
+        align-items: stretch !important;
+        overflow-x: hidden !important;
+        overflow-y: auto !important;
+        transform: translate3d(-105%, 0, 0);
+        transition: transform 0.28s cubic-bezier(0.22, 0.61, 0.36, 1);
+        z-index: 2050 !important;
+        text-align: center;
+        border-right: 1px solid rgba(0, 209, 255, 0.35) !important;
+        border-bottom: none !important;
+        background-color: rgba(20, 20, 20, 0.94) !important;
+        box-shadow: 8px 0 28px rgba(0, 0, 0, 0.45) !important;
+    }
+
+    body.dc-nav-open > .menu-container {
+        transform: translate3d(0, 0, 0);
+    }
+
+    body > .menu-container .btn-menu,
+    body > .menu-container .btn-logout {
+        margin: 0 !important;
+        width: 100% !important;
+        font-size: clamp(0.68rem, 2.8vw, 0.92rem) !important;
+        padding: clamp(8px, 2vw, 11px) 10px !important;
+    }
+
+    /* Contenido principal bajo la barra */
+    body > .content-container {
+        margin-left: 0 !important;
+        width: 100% !important;
+        height: auto !important;
+        min-height: 0;
+        padding-top: calc(var(--dc-mobile-nav-h) + var(--dc-content-pad-y)) !important;
+        padding-left: var(--dc-content-pad-x) !important;
+        padding-right: var(--dc-content-pad-x) !important;
+        padding-bottom: var(--dc-content-pad-y) !important;
+        box-sizing: border-box !important;
+    }
+
+    .contenedor-cartas {
+        grid-template-columns: repeat(auto-fill, minmax(var(--dc-card-grid-min), 1fr));
+        justify-content: stretch;
+    }
+
+    .modal-cambio-carta .lista-cartas-reemplazo {
+        grid-template-columns: repeat(auto-fill, minmax(var(--dc-card-grid-min), 1fr));
+        justify-content: stretch;
+    }
+
+    .modal-dc-content {
+        width: min(760px, calc(100vw - 2 * var(--dc-modal-pad)));
+        padding: var(--dc-modal-pad);
+    }
+
+    .form-control:not(.d-inline-block) {
+        width: min(520px, 100%) !important;
+    }
+
+    .faccion-toolbar {
+        align-items: flex-start;
+    }
+
+    .faccion-tab {
+        min-width: min(140px, 44vw);
+        font-size: clamp(0.68rem, 2.4vw, 0.82rem);
+    }
+
+    .faccion-actual {
+        width: 100%;
+        font-size: clamp(0.72rem, 2.6vw, 0.88rem);
+    }
+
+    /* Tablero: ancho completo, hueco para barra */
+    body > .tablero-container {
+        width: 100% !important;
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+        padding: calc(var(--dc-mobile-nav-h) + clamp(6px, 1.6vw, 12px)) clamp(6px, 1.6vw, 12px) clamp(6px, 1.6vw, 12px) !important;
+        height: auto !important;
+        min-height: calc(100dvh - var(--dc-mobile-nav-h));
+        box-sizing: border-box !important;
+    }
+}

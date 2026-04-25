@@ -5,14 +5,17 @@ body {
     margin: 0;
     padding: 0;
     color: #ffffff;
-    overflow: hidden; /* Evitar scroll */
+    overflow-x: hidden;
+    overflow-y: auto;
+    min-height: 100vh;
+    min-height: 100dvh;
 }
 
 .menu-container {
     position: absolute;
     top: 20px;
     left: 20px;
-    width: 150px;
+    width: var(--dc-board-menu-w, 150px);
     background-color: rgba(20, 20, 20, 0.8);
     padding: 15px;
     z-index: 1000;
@@ -24,9 +27,10 @@ body {
     justify-content: center;
     align-items: center;
     height: 100vh;
-    width: calc(100vw - 420px);
-    margin-left: 190px;
-    margin-right: 270px;
+    height: 100dvh;
+    width: calc(100vw - var(--dc-board-menu-w, 150px) - var(--dc-board-rail-right, 270px));
+    margin-left: calc(var(--dc-board-menu-w, 150px) + 20px);
+    margin-right: var(--dc-board-rail-right, 270px);
     padding: 12px clamp(8px, 2vw, 16px);
     box-sizing: border-box;
     overflow: hidden;
@@ -475,40 +479,37 @@ body {
     text-shadow: 0 0 10px rgba(0, 255, 0, 0.8), 0 0 20px rgba(0, 255, 0, 0.6); /* Efecto de luz */
 }
 
-/* Responsividad para pantallas más pequeñas */
-@media (max-width: 768px) {
+/* Tablet / móvil: un solo corte (anchuras del tablero también en app-layout.css) */
+@media (max-width: 899px) {
     .danio-flotante {
-        font-size: 1.5rem;
+        font-size: clamp(1.15rem, 4vw, 1.5rem);
     }
 
     .aviso-turno {
-        min-width: 220px;
-        font-size: 1.3rem;
-        padding: 14px 18px;
+        min-width: min(220px, 86vw);
+        font-size: clamp(1.05rem, 3.6vw, 1.3rem);
+        padding: clamp(12px, 2.4vw, 18px) clamp(14px, 3vw, 22px);
     }
 
     .btn-abandonar {
-        padding: 8px 15px;
-        font-size: 1rem;
+        padding: clamp(6px, 1.6vw, 10px) clamp(10px, 2.4vw, 18px);
+        font-size: clamp(0.9rem, 3vw, 1.05rem);
     }
 
     .turno-texto {
-        font-size: 1.2rem;
+        font-size: clamp(1rem, 3.2vw, 1.25rem);
     }
 
     .tablero-container {
-        width: calc(100vw - 120px);
-        margin-left: 120px;
-        margin-right: 0;
-        padding: 8px;
+        padding: clamp(6px, 1.6vw, 10px);
     }
 
     .info-jugador {
         position: static;
         width: 100%;
-        max-width: 360px;
+        max-width: min(360px, 92vw);
         margin: 0 auto 6px;
-        padding: 8px;
+        padding: clamp(6px, 1.6vw, 10px);
     }
 
     .jugador-oponente .info-jugador,
@@ -520,113 +521,46 @@ body {
     .jugador {
         gap: 6px;
     }
-}
 
-@media (max-width: 480px) {
-    .btn-abandonar {
-        padding: 6px 10px;
-        font-size: 0.9rem;
-    }
-
-    .turno-texto {
-        font-size: 1rem;
-    }
-
-    .tablero-container {
-        width: calc(100vw - 96px);
-        margin-left: 96px;
-        margin-right: 0;
-        padding: 6px;
-    }
-
-    .info-jugador {
-        max-width: 300px;
-        padding: 6px;
-    }
-}
-
-/* Responsividad: ajustar tamaño de las cartas y evitar overflow */
-@media (max-width: 768px) {
     .slot {
-        width: clamp(90px, 14vw, 128px);
+        width: clamp(74px, 16vw, 128px);
     }
 
     .carta-recompensa-slot {
-        width: clamp(82px, 14vw, 118px);
+        width: clamp(68px, 16vw, 118px);
         height: auto;
     }
 
     .info-jugador h2 {
-        font-size: 1.2rem; /* Reducir tamaño del texto en pantallas más pequeñas */
+        font-size: clamp(1rem, 3.2vw, 1.2rem);
     }
 
     .contador-mazo {
-        font-size: 0.8rem;
+        font-size: clamp(0.72rem, 2.6vw, 0.85rem);
         padding: 6px 10px;
     }
 
     .mazo-btn {
-        width: clamp(90px, 14vw, 128px);
+        width: clamp(74px, 16vw, 128px);
     }
 
     .menu-container {
-        width: 100px;
-        padding: 10px;
+        padding: clamp(8px, 2vw, 12px);
     }
 
     .detalles-carta {
-        font-size: 0.7rem; /* Reducimos el tamaño de texto en pantallas pequeñas */
-        min-height: 24px;
-        padding: 3px 4px;
-        gap: 4px;
-    }
-
-    .logs-container {
-        max-height: 24vh;
-    }
-}
-
-@media (max-width: 480px) {
-    .danio-flotante {
-        font-size: 1.2rem;
-    }
-
-    .aviso-turno {
-        min-width: 190px;
-        font-size: 1.05rem;
-        padding: 12px 14px;
-    }
-
-    .slot {
-        width: clamp(74px, 18vw, 96px);
-    }
-
-    .carta-recompensa-slot {
-        width: clamp(68px, 18vw, 90px);
-        height: auto;
-    }
-
-    .mazo-btn {
-        width: clamp(74px, 18vw, 96px);
-    }
-
-    .detalles-carta {
-        font-size: 0.6rem;
+        font-size: clamp(0.62rem, 2.6vw, 0.74rem);
         min-height: 22px;
         padding: 3px 4px;
         gap: 3px;
     }
 
-    .info-jugador h2 {
-        font-size: 1rem;
-    }
-
-    .contador-mazo {
-        font-size: 0.72rem;
+    .logs-container {
+        max-height: min(28vh, 220px);
     }
 
     .etiqueta-recompensa-bonus {
-        font-size: 0.58rem;
+        font-size: clamp(0.56rem, 2.2vw, 0.62rem);
         padding: 3px 7px;
     }
 }
@@ -838,19 +772,11 @@ body {
     box-shadow: 0 0 20px rgba(255, 255, 255, 0.4);
 }
 
-@media (max-width: 768px) {
+@media (max-width: 899px) {
     .ventana-contenido {
-        width: min(95vw, 700px);
-        max-height: 88vh;
-        padding: 14px 12px;
-    }
-}
-
-@media (max-width: 480px) {
-    .ventana-contenido {
-        width: 96vw;
-        max-height: 90vh;
-        padding: 12px 10px;
+        width: min(96vw, 700px);
+        max-height: min(90vh, 900px);
+        padding: clamp(12px, 2.4vw, 16px) clamp(12px, 2.8vw, 18px);
     }
 
     .texto-recompensa-estado,
@@ -858,6 +784,6 @@ body {
     .texto-recompensa-puntos,
     .texto-recompensa-error {
         padding: 8px 9px;
-        font-size: 0.82rem;
+        font-size: clamp(0.78rem, 2.6vw, 0.9rem);
     }
 }

@@ -8,10 +8,12 @@
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
     <link href="css/mazos.css" rel="stylesheet">
     <link href="css/scrollbar.css" rel="stylesheet">
+    <link href="css/app-layout.css" rel="stylesheet">
+
     <style>
         .desafios-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr));
             gap: 16px;
             padding: 10px 0 20px;
             align-items: stretch;
@@ -314,9 +316,9 @@
         </div>
     </div>
 
-    <script src="js/scale.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.0/xlsx.full.min.js"></script>
     <script src="js/cartas.js"></script>
     <script src="desafios.js"></script>
+    <script src="js/menu-mobile.js" defer></script>
 </body>
 </html>
