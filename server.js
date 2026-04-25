@@ -49,6 +49,32 @@ let usuariosConectados = [];
 let jugadoresEnPartida = [];
 // Guardar el jugador en partida
 let partidasActivas = {};
+function obtenerSaludMaxCarta(carta) {
+    if (!carta) {
+        return 0;
+    }
+
+    const saludMax = Number(carta.SaludMax ?? carta.saludMax);
+    if (Number.isFinite(saludMax) && saludMax > 0) {
+        return saludMax;
+    }
+
+    const salud = Number(carta.Salud ?? carta.salud);
+    if (Number.isFinite(salud) && salud > 0) {
+        return salud;
+    }
+
+    return Math.max(Number(carta.Poder || 0), 0);
+}
+
+function inicializarSaludCarta(carta) {
+    const saludMax = obtenerSaludMaxCarta(carta);
+    return {
+        ...carta,
+        SaludMax: saludMax,
+        Salud: saludMax
+    };
+}
 const CHAT_DOC_ID = 'global-chat-history';
 const CHAT_MAX_MENSAJES = 50;
 
@@ -304,16 +330,25 @@ io.on('connection', (socket) => {
             return;
         }
     
-        // Aplicar la fórmula de daño solo a la carta objetivo
-        const poderRestanteObjetivo = cartasObjetivo[slotObjetivo].Poder - cartasAtacante[slotAtacante].Poder;
-        console.log(`Poder restante de la carta objetivo: ${poderRestanteObjetivo}`);
+        // Aplicar daño sobre salud: el poder ofensivo no se modifica al recibir daño.
+        const saludObjetivoActual = Math.max(
+            0,
+            Math.min(
+                Number(cartasObjetivo[slotObjetivo].Salud ?? cartasObjetivo[slotObjetivo].salud ?? obtenerSaludMaxCarta(cartasObjetivo[slotObjetivo])),
+                obtenerSaludMaxCarta(cartasObjetivo[slotObjetivo])
+            )
+        );
+        const poderAtacante = Number(cartasAtacante[slotAtacante].Poder || 0);
+        const saludRestanteObjetivo = Math.max(saludObjetivoActual - poderAtacante, 0);
+        console.log(`Salud restante de la carta objetivo: ${saludRestanteObjetivo}`);
     
-        if (poderRestanteObjetivo <= 0) {
+        if (saludRestanteObjetivo <= 0) {
             console.log(`Eliminando la carta objetivo: ${cartasObjetivo[slotObjetivo].Nombre}`);
-            cartasObjetivo.splice(slotObjetivo, 1);  // Eliminar la carta si su poder es menor o igual a 0
+            cartasObjetivo.splice(slotObjetivo, 1);
         } else {
-            console.log(`Actualizando poder de la carta ${cartasObjetivo[slotObjetivo].Nombre} a ${poderRestanteObjetivo}`);
-            cartasObjetivo[slotObjetivo].Poder = poderRestanteObjetivo;  // Actualizar poder si sigue en juego
+            console.log(`Actualizando salud de la carta ${cartasObjetivo[slotObjetivo].Nombre} a ${saludRestanteObjetivo}`);
+            cartasObjetivo[slotObjetivo].SaludMax = obtenerSaludMaxCarta(cartasObjetivo[slotObjetivo]);
+            cartasObjetivo[slotObjetivo].Salud = saludRestanteObjetivo;
         }
     
         // Emitir eventos separados para el emisor y receptor
@@ -469,11 +504,13 @@ app.post('/register', async (req, res) => {
         const cartasVillanos = seleccionarCartasAleatorias([...villanos], 12);
 
         function inicializarCartas(cartas) {
-            return cartas.map(carta => ({
-                ...carta,
-                Nivel: 1,
-                Poder: parseInt(carta.Poder) || 0
-            }));
+            return cartas.map(carta =>
+                inicializarSaludCarta({
+                    ...carta,
+                    Nivel: 1,
+                    Poder: parseInt(carta.Poder) || 0
+                })
+            );
         }
 
         // Inicializar nivel y poder

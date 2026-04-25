@@ -321,17 +321,38 @@ body {
     bottom: 0;
     left: 0;
     width: 100%;
-    padding: 5px;
+    padding: 5px 6px;
     background-color: rgba(0, 0, 0, 0.7);
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 6px;
     color: #00d1ff;
-    font-size: 0.8rem;
+    font-size: 0.74rem;
+    min-height: 30px;
+    line-height: 1;
     text-shadow: 0 0 5px rgba(0, 209, 255, 0.7);
     border-top: 1px solid rgba(0, 123, 255, 0.5);
     box-shadow: 0 -2px 5px rgba(0, 123, 255, 0.3);
+    overflow: hidden;
+    white-space: nowrap;
 }
+
+.detalles-carta .nombre-carta {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.detalles-carta .poder-carta {
+    flex: 0 0 auto;
+    margin-left: 4px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
 
 .carta.nivel-legendaria .detalles-carta {
     color: #d5b5ff;
@@ -480,7 +501,10 @@ body {
     .detalles-carta {
         font-size: 0.6rem;
         padding: 3px;
+        min-height: 24px;
+        gap: 4px;
     }
+
 
     .estrella {
         width: 8px;

@@ -16,6 +16,54 @@ function obtenerValorDestruccion(nivel) {
     return nivelSeguro * 10;
 }
 
+function obtenerSaludMaxCarta(carta) {
+    if (!carta) {
+        return 0;
+    }
+
+    const saludMax = Number(carta.SaludMax);
+    if (Number.isFinite(saludMax) && saludMax > 0) {
+        return saludMax;
+    }
+
+    const salud = Number(carta.Salud);
+    if (Number.isFinite(salud) && salud > 0) {
+        return salud;
+    }
+
+    return Math.max(Number(carta.Poder || 0), 0);
+}
+
+function obtenerSaludActualCarta(carta) {
+    const saludMax = Math.max(obtenerSaludMaxCarta(carta), 0);
+    const salud = Number(carta?.Salud);
+    const saludValida = Number.isFinite(salud) ? salud : saludMax;
+    return Math.max(0, Math.min(saludValida, saludMax));
+}
+
+function crearBarraSaludElemento(carta) {
+    const saludActual = obtenerSaludActualCarta(carta);
+    const saludMax = Math.max(obtenerSaludMaxCarta(carta), 1);
+    const porcentajeSalud = Math.max(0, Math.min((saludActual / saludMax) * 100, 100));
+    const ratioSalud = porcentajeSalud / 100;
+
+    const barraSaludContenedor = document.createElement('div');
+    barraSaludContenedor.classList.add('barra-salud-contenedor');
+
+    const barraSaludRelleno = document.createElement('div');
+    barraSaludRelleno.classList.add('barra-salud-relleno');
+    barraSaludRelleno.style.width = `${porcentajeSalud}%`;
+    barraSaludRelleno.style.setProperty('--health-ratio', String(ratioSalud));
+
+    const saludSpan = document.createElement('span');
+    saludSpan.classList.add('salud-carta');
+    saludSpan.textContent = `${saludActual}/${saludMax}`;
+
+    barraSaludContenedor.appendChild(barraSaludRelleno);
+    barraSaludContenedor.appendChild(saludSpan);
+    return barraSaludContenedor;
+}
+
 function crearPoolCartasPorNombre(cartas) {
     const pool = new Map();
 
@@ -111,6 +159,7 @@ function crearElementoCartaSoloVisual(carta, destacarPoder = false) {
     }
 
     cartaDiv.appendChild(detallesDiv);
+    cartaDiv.appendChild(crearBarraSaludElemento(carta));
     cartaDiv.appendChild(estrellasDiv);
     return cartaDiv;
 }
@@ -373,6 +422,7 @@ function cargarCartas() {
             }
 
             cartaDiv.appendChild(detallesDiv);
+            cartaDiv.appendChild(crearBarraSaludElemento(carta));
             cartaDiv.appendChild(estrellasDiv);
             contenedorCartas.appendChild(cartaDiv);
         });
@@ -608,6 +658,7 @@ function cerrarModalResultadoObjeto() {
 function crearCartaMejoradaPorObjeto(cartaOriginal, tipo) {
     const original = { ...cartaOriginal };
     const mejorada = { ...cartaOriginal };
+    const saludBase = Number((mejorada.SaludMax ?? mejorada.Salud ?? mejorada.Poder) || 0);
 
     if (tipo === 'mejoraCarta') {
         const nivelInicial = Number(mejorada.Nivel || 1);
@@ -615,11 +666,15 @@ function crearCartaMejoradaPorObjeto(cartaOriginal, tipo) {
         const incrementoNiveles = Math.max(nivelFinal - nivelInicial, 0);
         mejorada.Nivel = nivelFinal;
         mejorada.Poder = Number(mejorada.Poder || 0) + (incrementoNiveles * 500);
+        mejorada.SaludMax = saludBase + (incrementoNiveles * 500);
+        mejorada.Salud = mejorada.SaludMax;
     } else {
         const nivelInicial = Number(mejorada.Nivel || 1);
         const incrementoNiveles = Math.max(6 - nivelInicial, 0);
         mejorada.Nivel = 6;
         mejorada.Poder = Number(mejorada.Poder || 0) + (incrementoNiveles * 500);
+        mejorada.SaludMax = saludBase + (incrementoNiveles * 500);
+        mejorada.Salud = mejorada.SaludMax;
     }
 
     return { original, mejorada };

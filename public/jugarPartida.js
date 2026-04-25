@@ -240,10 +240,14 @@ document.addEventListener('DOMContentLoaded', function () {
                 mazoOponente = mazoOponente.map(carta => {
                     const nivelBase = Number(carta.Nivel || 1);
                     const incrementoNiveles = Math.max(dificultadSeleccionada - nivelBase, 0);
+                    const saludBase = Number((carta.SaludMax ?? carta.saludMax ?? carta.Salud ?? carta.salud ?? carta.Poder) || 0);
+                    const saludEscalada = saludBase + (incrementoNiveles * 500);
                     return {
                         ...carta,
                         Nivel: dificultadSeleccionada,
-                        Poder: Number(carta.Poder || 0) + (incrementoNiveles * 500)
+                        Poder: Number(carta.Poder || 0) + (incrementoNiveles * 500),
+                        SaludMax: saludEscalada,
+                        Salud: saludEscalada
                     };
                 });
 

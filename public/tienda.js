@@ -113,12 +113,16 @@ function escalarPoderPorNivel(poderBase, nivel) {
 }
 
 function crearOfertaCarta(cartaBase, nivel) {
+    const saludBase = Number((cartaBase.SaludMax ?? cartaBase.Salud ?? cartaBase.Poder) || 0);
+    const saludEscalada = escalarPoderPorNivel(saludBase, nivel);
     return {
         id: `oferta-${normalizarNombreCarta(cartaBase.Nombre)}-${nivel}`,
         carta: {
             ...cartaBase,
             Nivel: nivel,
-            Poder: escalarPoderPorNivel(cartaBase.Poder, nivel)
+            Poder: escalarPoderPorNivel(cartaBase.Poder, nivel),
+            SaludMax: saludEscalada,
+            Salud: saludEscalada
         },
         nivel,
         precio: PRECIOS_CARTAS[nivel],
@@ -265,6 +269,54 @@ function crearDetallesCarta(carta) {
     return detallesDiv;
 }
 
+function obtenerSaludMaxCarta(carta) {
+    if (!carta) {
+        return 0;
+    }
+
+    const saludMax = Number(carta.SaludMax);
+    if (Number.isFinite(saludMax) && saludMax > 0) {
+        return saludMax;
+    }
+
+    const salud = Number(carta.Salud);
+    if (Number.isFinite(salud) && salud > 0) {
+        return salud;
+    }
+
+    return Math.max(Number(carta.Poder || 0), 0);
+}
+
+function obtenerSaludActualCarta(carta) {
+    const saludMax = Math.max(obtenerSaludMaxCarta(carta), 0);
+    const salud = Number(carta?.Salud);
+    const saludValida = Number.isFinite(salud) ? salud : saludMax;
+    return Math.max(0, Math.min(saludValida, saludMax));
+}
+
+function crearBarraSaludElemento(carta) {
+    const saludActual = obtenerSaludActualCarta(carta);
+    const saludMax = Math.max(obtenerSaludMaxCarta(carta), 1);
+    const porcentajeSalud = Math.max(0, Math.min((saludActual / saludMax) * 100, 100));
+    const ratioSalud = porcentajeSalud / 100;
+
+    const barraSaludContenedor = document.createElement('div');
+    barraSaludContenedor.classList.add('barra-salud-contenedor');
+
+    const barraSaludRelleno = document.createElement('div');
+    barraSaludRelleno.classList.add('barra-salud-relleno');
+    barraSaludRelleno.style.width = `${porcentajeSalud}%`;
+    barraSaludRelleno.style.setProperty('--health-ratio', String(ratioSalud));
+
+    const saludSpan = document.createElement('span');
+    saludSpan.classList.add('salud-carta');
+    saludSpan.textContent = `${saludActual}/${saludMax}`;
+
+    barraSaludContenedor.appendChild(barraSaludRelleno);
+    barraSaludContenedor.appendChild(saludSpan);
+    return barraSaludContenedor;
+}
+
 function renderizarCartasTienda() {
     const contenedor = document.getElementById('tienda-cartas');
     contenedor.innerHTML = '';
@@ -287,6 +339,7 @@ function renderizarCartasTienda() {
         preview.appendChild(badgeNivel);
         preview.appendChild(crearEstrellasNivel(oferta.nivel));
         preview.appendChild(crearDetallesCarta(oferta.carta));
+        preview.appendChild(crearBarraSaludElemento(oferta.carta));
 
         const precio = document.createElement('div');
         precio.className = 'precio-item';

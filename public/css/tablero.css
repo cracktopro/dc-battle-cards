@@ -24,7 +24,7 @@ body {
     justify-content: center;
     align-items: center;
     height: 100vh;
-    width: calc(100vw - 460px);
+    width: calc(100vw - 420px);
     margin-left: 190px;
     margin-right: 270px;
     padding: 12px clamp(8px, 2vw, 16px);
@@ -66,7 +66,7 @@ body {
     justify-content: center;
     align-items: center;
     width: 100%;
-    max-width: min(980px, 100%);
+    max-width: min(1120px, 100%);
     margin: 0 auto;
     padding: 4px;
 }
@@ -148,14 +148,14 @@ body {
 .slots-jugador {
     display: flex;
     justify-content: center;
-    gap: clamp(8px, 1.5vw, 20px);
+    gap: clamp(10px, 1.5vw, 22px);
     margin-top: 6px;
     flex-wrap: wrap;
-    width: min(900px, 100%);
+    width: min(1020px, 100%);
 }
 
 .slot {
-    width: clamp(94px, 10vw, 148px);
+    width: clamp(108px, 12vw, 168px);
     aspect-ratio: 7 / 10;
     height: auto;
     border: 2px solid rgba(0, 123, 255, 0.7);
@@ -227,12 +227,12 @@ body {
 }
 
 .danio-flotante {
-    position: absolute;
-    top: 50%;
-    left: 50%;
+    position: fixed;
+    left: 0;
+    top: 0;
     transform: translate(-50%, -50%);
     color: #ff4d4d;
-    font-size: 2rem;
+    font-size: 2.1rem;
     font-weight: 700;
     -webkit-text-stroke: 1px rgba(0, 0, 0, 0.85);
     text-shadow:
@@ -240,8 +240,16 @@ body {
         0 0 18px rgba(255, 120, 120, 0.6),
         1px 1px 0 rgba(0, 0, 0, 0.75);
     pointer-events: none;
-    z-index: 30;
-    animation: danioAscendente 1.25s ease-out forwards;
+    z-index: 3200;
+    animation: danioAscendente 1.18s cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+}
+
+.danio-flotante.impacto-oponente {
+    color: #ff6767;
+}
+
+.danio-flotante.impacto-jugador {
+    color: #ff9b53;
 }
 
 @keyframes cartaRobada {
@@ -303,19 +311,19 @@ body {
 @keyframes danioAscendente {
     0% {
         opacity: 0;
-        transform: translate(-50%, -20%) scale(0.55);
+        transform: translate(-50%, -34%) scale(0.62);
     }
-    20% {
+    18% {
         opacity: 1;
-        transform: translate(-50%, -45%) scale(1.2);
+        transform: translate(-50%, -56%) scale(1.18);
     }
-    72% {
+    70% {
         opacity: 1;
-        transform: translate(-50%, -90%) scale(1);
+        transform: translate(-50%, -108%) scale(1);
     }
     100% {
         opacity: 0;
-        transform: translate(-50%, -145%) scale(0.92);
+        transform: translate(-50%, -162%) scale(0.9);
     }
 }
 
@@ -344,17 +352,47 @@ body {
     left: 0;
     width: 100%;
     background-color: rgba(0, 0, 0, 0.7);
-    padding: 5px;
+    padding: 5px 6px;
     color: #00d1ff;
-    font-size: 0.9rem;
+    font-size: 0.8rem;
     display: flex;
     justify-content: space-between;
+    align-items: center;
+    gap: 6px;
+    min-height: 30px;
+    line-height: 1;
     box-sizing: border-box;
-    text-overflow: ellipsis;
     overflow: hidden;
+    white-space: nowrap;
     border-top-left-radius: 10px;
     border-top-right-radius: 10px;
 }
+
+.detalles-carta .nombre-carta {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: clip;
+    white-space: nowrap;
+    font-size: 0.78em;
+}
+
+.detalles-carta .nombre-carta.nombre-largo {
+    font-size: 0.68em;
+}
+
+.detalles-carta .nombre-carta.nombre-muy-largo {
+    font-size: 0.6em;
+    letter-spacing: -0.01em;
+}
+
+.detalles-carta .poder-carta {
+    flex: 0 0 auto;
+    margin-left: 4px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
 
 .carta.nivel-legendaria .detalles-carta {
     color: #d5b5ff;
@@ -363,7 +401,7 @@ body {
 
 /* Estilos para los botones del mazo */
 .mazo-btn {
-    width: clamp(94px, 10vw, 148px);
+    width: clamp(108px, 12vw, 168px);
     aspect-ratio: 7 / 10;
     height: auto;
     background-size: cover;
@@ -510,7 +548,7 @@ body {
 /* Responsividad: ajustar tamaño de las cartas y evitar overflow */
 @media (max-width: 768px) {
     .slot {
-        width: clamp(82px, 14vw, 118px);
+        width: clamp(90px, 14vw, 128px);
     }
 
     .carta-recompensa-slot {
@@ -528,7 +566,7 @@ body {
     }
 
     .mazo-btn {
-        width: clamp(82px, 14vw, 118px);
+        width: clamp(90px, 14vw, 128px);
     }
 
     .menu-container {
@@ -538,6 +576,9 @@ body {
 
     .detalles-carta {
         font-size: 0.7rem; /* Reducimos el tamaño de texto en pantallas pequeñas */
+        min-height: 24px;
+        padding: 3px 4px;
+        gap: 4px;
     }
 
     .logs-container {
@@ -557,7 +598,7 @@ body {
     }
 
     .slot {
-        width: clamp(68px, 18vw, 90px);
+        width: clamp(74px, 18vw, 96px);
     }
 
     .carta-recompensa-slot {
@@ -566,11 +607,14 @@ body {
     }
 
     .mazo-btn {
-        width: clamp(68px, 18vw, 90px);
+        width: clamp(74px, 18vw, 96px);
     }
 
     .detalles-carta {
         font-size: 0.6rem;
+        min-height: 22px;
+        padding: 3px 4px;
+        gap: 3px;
     }
 
     .info-jugador h2 {

@@ -109,11 +109,25 @@ async function obtenerMapaDatosCartasCatalogo() {
 
         mapaDatosCartasCatalogo.set(nombre, {
             faccion: normalizarFaccion(carta.faccion),
-            Afiliacion: String(carta.Afiliacion || carta.afiliacion || '').trim()
+            Afiliacion: String(carta.Afiliacion || carta.afiliacion || '').trim(),
+            nivelBase: Number(carta.Nivel || carta.nivel || 1),
+            saludBase: Number(carta.Salud ?? carta.salud ?? carta.Poder ?? 0)
         });
     });
 
     return mapaDatosCartasCatalogo;
+}
+
+function calcularSaludEscaladaDesdeCatalogo(carta, datosCatalogo) {
+    if (!carta || !datosCatalogo) {
+        return obtenerSaludMaxCarta(carta);
+    }
+
+    const nivelCarta = Math.max(1, Number(carta.Nivel || 1));
+    const nivelBaseCatalogo = Math.max(1, Number(datosCatalogo.nivelBase || 1));
+    const incrementoNiveles = Math.max(nivelCarta - nivelBaseCatalogo, 0);
+    const saludBase = Math.max(0, Number(datosCatalogo.saludBase || 0));
+    return saludBase + (incrementoNiveles * 500);
 }
 
 async function enriquecerCartasConDatosCatalogo(cartas) {
@@ -138,14 +152,18 @@ async function enriquecerCartasConDatosCatalogo(cartas) {
         const faccionFinal = faccionActual || datosCatalogo.faccion;
         const afiliacionFinal = afiliacionActual || datosCatalogo.Afiliacion || '';
 
-        if (faccionFinal === faccionActual && afiliacionFinal === afiliacionActual) {
-            return carta;
-        }
+        const saludEscalada = calcularSaludEscaladaDesdeCatalogo(carta, datosCatalogo);
+        const saludActual = Number(carta.Salud ?? carta.salud);
+        const saludNormalizada = Number.isFinite(saludActual)
+            ? Math.max(0, Math.min(saludActual, saludEscalada))
+            : saludEscalada;
 
         return {
             ...carta,
             faccion: faccionFinal,
-            Afiliacion: afiliacionFinal
+            Afiliacion: afiliacionFinal,
+            SaludMax: saludEscalada,
+            Salud: saludNormalizada
         };
     });
 }
@@ -177,9 +195,12 @@ async function construirEstadoDesafio(desafio) {
         const bossBase = mapaPorNombre.get(normalizarNombre(desafio.boss));
         if (bossBase) {
             const bossEscalado = escalarCartaSegunDificultad({ ...bossBase }, dificultadDesafio);
+            const saludBossBase = obtenerSaludMaxCarta(bossEscalado);
             bossPendiente = {
                 ...bossEscalado,
                 Poder: Number(bossEscalado.Poder || 0) * 10,
+                SaludMax: saludBossBase * 10,
+                Salud: saludBossBase * 10,
                 esBoss: true
             };
         }
@@ -216,7 +237,7 @@ function intentarDesplegarSiguienteGrupoDesafio() {
     }
 
     if (estadoDesafio.bossPendiente) {
-        cartasOponenteEnJuego = [null, estadoDesafio.bossPendiente, null];
+        cartasOponenteEnJuego = [null, crearCartaCombateDesdeMazo(estadoDesafio.bossPendiente), null];
         estadoDesafio.bossPendiente = null;
         renderizarTablero();
         escribirLog('El BOSS aparece en el campo de batalla.');
@@ -355,6 +376,47 @@ function obtenerPoderCartaFinal(carta) {
     return Number(carta.Poder || 0);
 }
 
+function obtenerSaludMaxCarta(carta) {
+    if (!carta) {
+        return 0;
+    }
+
+    const saludMax = Number(carta.SaludMax ?? carta.saludMax);
+    if (Number.isFinite(saludMax) && saludMax > 0) {
+        return saludMax;
+    }
+
+    const salud = Number(carta.Salud ?? carta.salud);
+    if (Number.isFinite(salud) && salud > 0) {
+        return salud;
+    }
+
+    return Math.max(Number(carta.Poder || 0), 0);
+}
+
+function obtenerSaludActualCarta(carta) {
+    if (!carta) {
+        return 0;
+    }
+
+    const saludMax = obtenerSaludMaxCarta(carta);
+    const salud = Number(carta.Salud ?? carta.salud);
+    const saludValida = Number.isFinite(salud) ? salud : saludMax;
+    return Math.max(0, Math.min(saludValida, saludMax));
+}
+
+function crearCartaCombateDesdeMazo(carta) {
+    if (!carta) {
+        return null;
+    }
+
+    const cartaCombate = { ...carta };
+    const saludMax = obtenerSaludMaxCarta(cartaCombate);
+    cartaCombate.SaludMax = saludMax;
+    cartaCombate.Salud = saludMax;
+    return cartaCombate;
+}
+
 function escribirLog(mensaje, clase = '') {
     const logsCombate = document.getElementById('logs-combate');
     const log = document.createElement('div');
@@ -396,14 +458,49 @@ function mostrarDanioFlotante(tipo, slotIndex, danio) {
         return;
     }
 
+    const slotRect = slot.getBoundingClientRect();
+    const centroX = slotRect.left + (slotRect.width / 2);
+    const centroY = slotRect.top + (slotRect.height * 0.46);
+
     const danioDiv = document.createElement('div');
     danioDiv.classList.add('danio-flotante');
+    danioDiv.classList.add(tipo === 'jugador' ? 'impacto-jugador' : 'impacto-oponente');
     danioDiv.textContent = `-${danio}`;
-    slot.appendChild(danioDiv);
+    danioDiv.style.left = `${centroX}px`;
+    danioDiv.style.top = `${centroY}px`;
+    document.body.appendChild(danioDiv);
 
     setTimeout(() => {
         danioDiv.remove();
-    }, 1100);
+    }, 1200);
+}
+
+async function animarBajadaSaludCarta(cartasObjetivo, slotObjetivo, saludObjetivoInicial, saludObjetivoFinal, tipoObjetivo) {
+    const carta = cartasObjetivo[slotObjetivo];
+    if (!carta) {
+        return;
+    }
+
+    const saludInicial = Math.max(0, Number(saludObjetivoInicial || 0));
+    const saludFinal = Math.max(0, Number(saludObjetivoFinal || 0));
+
+    const idSlotObjetivo = obtenerIdSlot(tipoObjetivo, slotObjetivo);
+
+    carta.SaludMax = obtenerSaludMaxCarta(carta);
+    carta.Salud = saludInicial;
+    renderizarTablero();
+    const slotTrasRender = document.getElementById(idSlotObjetivo);
+    const barraTrasRender = slotTrasRender?.querySelector('.barra-salud-contenedor');
+    barraTrasRender?.classList.add('recibiendo-danio');
+    await esperar(120);
+
+    carta.Salud = saludFinal;
+    renderizarTablero();
+    const slotFinal = document.getElementById(idSlotObjetivo);
+    const barraFinal = slotFinal?.querySelector('.barra-salud-contenedor');
+    barraFinal?.classList.add('recibiendo-danio');
+    await esperar(380);
+    barraFinal?.classList.remove('recibiendo-danio');
 }
 
 async function actualizarUsuarioFirebase(usuario, email) {
@@ -504,9 +601,12 @@ function escalarCartaSegunDificultad(carta, dificultad) {
     const nivelBase = Number(cartaEscalada.Nivel || 1);
     const dificultadObjetivo = Math.min(Math.max(dificultad, 1), 6);
     const incrementoNiveles = Math.max(dificultadObjetivo - nivelBase, 0);
+    const saludBase = obtenerSaludMaxCarta(cartaEscalada);
 
     cartaEscalada.Nivel = dificultadObjetivo;
     cartaEscalada.Poder = Number(cartaEscalada.Poder || 0) + (incrementoNiveles * 500);
+    cartaEscalada.SaludMax = saludBase + (incrementoNiveles * 500);
+    cartaEscalada.Salud = cartaEscalada.SaludMax;
 
     return cartaEscalada;
 }
@@ -914,6 +1014,12 @@ function crearCartaElemento(carta, tipo, slotIndex) {
     const nombreSpan = document.createElement('span');
     nombreSpan.classList.add('nombre-carta');
     nombreSpan.textContent = carta.Nombre;
+    const longitudNombre = String(carta?.Nombre || '').trim().length;
+    if (longitudNombre >= 24) {
+        nombreSpan.classList.add('nombre-muy-largo');
+    } else if (longitudNombre >= 18) {
+        nombreSpan.classList.add('nombre-largo');
+    }
 
     const poderSpan = document.createElement('span');
     poderSpan.classList.add('poder-carta');
@@ -924,6 +1030,26 @@ function crearCartaElemento(carta, tipo, slotIndex) {
 
     detallesDiv.appendChild(nombreSpan);
     detallesDiv.appendChild(poderSpan);
+
+    const saludActual = obtenerSaludActualCarta(carta);
+    const saludMax = Math.max(obtenerSaludMaxCarta(carta), 1);
+    const porcentajeSalud = Math.max(0, Math.min((saludActual / saludMax) * 100, 100));
+    const ratioSalud = porcentajeSalud / 100;
+
+    const barraSaludContenedor = document.createElement('div');
+    barraSaludContenedor.classList.add('barra-salud-contenedor');
+
+    const barraSaludRelleno = document.createElement('div');
+    barraSaludRelleno.classList.add('barra-salud-relleno');
+    barraSaludRelleno.style.width = `${porcentajeSalud}%`;
+    barraSaludRelleno.style.setProperty('--health-ratio', String(ratioSalud));
+
+    const saludSpan = document.createElement('span');
+    saludSpan.classList.add('salud-carta');
+    saludSpan.textContent = `${saludActual}/${saludMax}`;
+
+    barraSaludContenedor.appendChild(barraSaludRelleno);
+    barraSaludContenedor.appendChild(saludSpan);
 
     const estrellasDiv = document.createElement('div');
     estrellasDiv.classList.add('estrellas-carta');
@@ -940,6 +1066,7 @@ function crearCartaElemento(carta, tipo, slotIndex) {
     }
 
     cartaDiv.appendChild(detallesDiv);
+    cartaDiv.appendChild(barraSaludContenedor);
     cartaDiv.appendChild(estrellasDiv);
 
     return cartaDiv;
@@ -1042,7 +1169,7 @@ function limpiarDestacados() {
 async function rellenarSlotsVacios(mazo, cartasEnJuego, propietario) {
     for (let i = 0; i < cartasEnJuego.length; i++) {
         if (!cartasEnJuego[i] && mazo.length > 0) {
-            cartasEnJuego[i] = seleccionarCartasAleatorias(mazo, 1)[0];
+            cartasEnJuego[i] = crearCartaCombateDesdeMazo(seleccionarCartasAleatorias(mazo, 1)[0]);
             escribirLog(
                 `${propietario === 'jugador' ? 'Robas' : 'El BOT roba'} ${cartasEnJuego[i].Nombre} al slot ${i + 1}.`
             );
@@ -1108,10 +1235,10 @@ async function cargarCartasIniciales() {
     cartasOponenteEnJuego = [null, null, null];
     
     // Preparar cartas del mazo (sin ponerlas aún)
-    const inicialesJugador = seleccionarCartasAleatorias(mazoJugador, 3);
+    const inicialesJugador = seleccionarCartasAleatorias(mazoJugador, 3).map(crearCartaCombateDesdeMazo);
     const inicialesOponente = estadoDesafio.activo
-        ? (estadoDesafio.gruposPendientes.shift() || [])
-        : seleccionarCartasAleatorias(mazoOponente, 3);
+        ? (estadoDesafio.gruposPendientes.shift() || []).map(crearCartaCombateDesdeMazo)
+        : seleccionarCartasAleatorias(mazoOponente, 3).map(crearCartaCombateDesdeMazo);
 
     renderizarTablero(); 
     escribirLog("Iniciando partida... Desplegando unidades.");
@@ -1362,28 +1489,29 @@ function seleccionarCartaAtacante(slotIndex) {
     renderizarTablero();
 }
 
-function resolverAtaque(cartasAtacante, slotAtacante, cartasObjetivo, slotObjetivo, nombreAtacante, nombreObjetivo, tipoObjetivo, divisorDanioAtacante = 1) {
+async function resolverAtaque(cartasAtacante, slotAtacante, cartasObjetivo, slotObjetivo, nombreAtacante, nombreObjetivo, tipoObjetivo, divisorDanioAtacante = 1) {
     const { cartasConBonus: atacanteConBonus } = aplicarBonusAfiliaciones(cartasAtacante);
-    const { cartasConBonus: objetivoConBonus, bonusMaximo: bonusObjetivo } = aplicarBonusAfiliaciones(cartasObjetivo);
+    const { cartasConBonus: objetivoConBonus } = aplicarBonusAfiliaciones(cartasObjetivo);
     const poderAtacante = obtenerPoderCartaFinal(atacanteConBonus[slotAtacante]);
     const poderDanioAtacante = divisorDanioAtacante > 1
         ? Math.max(1, Math.floor(poderAtacante / divisorDanioAtacante))
         : poderAtacante;
-    const poderObjetivo = obtenerPoderCartaFinal(objetivoConBonus[slotObjetivo]);
-    const poderRestante = poderObjetivo - poderDanioAtacante;
-    const danioInfligido = Math.min(poderDanioAtacante, poderObjetivo);
+    const saludObjetivo = obtenerSaludActualCarta(objetivoConBonus[slotObjetivo]);
+    const saludRestante = Math.max(saludObjetivo - poderDanioAtacante, 0);
+    const danioInfligido = Math.min(poderDanioAtacante, saludObjetivo);
 
     mostrarDanioFlotante(tipoObjetivo, slotObjetivo, danioInfligido);
 
     escribirLog(`${nombreAtacante} golpea a ${nombreObjetivo} con ${poderDanioAtacante} de daño.`);
+    await animarBajadaSaludCarta(cartasObjetivo, slotObjetivo, saludObjetivo, saludRestante, tipoObjetivo);
 
-    if (poderRestante <= 0) {
+    if (saludRestante <= 0) {
         cartasObjetivo[slotObjetivo] = null;
         escribirLog(`${nombreObjetivo} es derrotada y sale del tablero.`);
     } else {
-        const poderBaseRestante = Math.max(poderRestante - bonusObjetivo, 0);
-        cartasObjetivo[slotObjetivo].Poder = poderBaseRestante;
-        escribirLog(`${nombreObjetivo} sobrevive con ${poderRestante} de poder.`);
+        cartasObjetivo[slotObjetivo].SaludMax = obtenerSaludMaxCarta(cartasObjetivo[slotObjetivo]);
+        cartasObjetivo[slotObjetivo].Salud = saludRestante;
+        escribirLog(`${nombreObjetivo} sobrevive con ${saludRestante} de salud.`);
     }
 }
 
@@ -1414,8 +1542,8 @@ function seleccionarCartaObjetivo(slotIndex) {
     cartaOponenteDestacada = slotIndex;
     renderizarTablero();
 
-    setTimeout(() => {
-        resolverAtaque(
+    setTimeout(async () => {
+        await resolverAtaque(
             cartasJugadorEnJuego,
             slotAtacante,
             cartasOponenteEnJuego,
@@ -1509,7 +1637,7 @@ async function ejecutarAtaqueBot(indiceSecuencia = 0, atacantes = null) {
             return;
         }
 
-        resolverAtaque(
+        await resolverAtaque(
             cartasOponenteEnJuego,
             slotAtacante,
             cartasJugadorEnJuego,

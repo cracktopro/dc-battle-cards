@@ -2,6 +2,7 @@ let mazoIndexSeleccionado = -1;
 let indiceCartaEnEdicion = -1;
 let cartaReemplazoSeleccionada = null;
 let mazoPendienteBorrado = -1;
+let mapaSaludCatalogo = null;
 
 document.addEventListener('DOMContentLoaded', async function () {
     configurarEventos();
@@ -21,8 +22,61 @@ function calcularPoderMazo(cartas) {
     return (cartas || []).reduce((total, carta) => total + Number(carta?.Poder || 0), 0);
 }
 
+function obtenerSaludMaxCarta(carta) {
+    if (!carta) {
+        return 0;
+    }
+
+    const saludMax = Number(carta.SaludMax ?? carta.saludMax);
+    if (Number.isFinite(saludMax) && saludMax > 0) {
+        return saludMax;
+    }
+
+    const salud = Number(carta.Salud ?? carta.salud);
+    if (Number.isFinite(salud) && salud > 0) {
+        return salud;
+    }
+
+    return Math.max(Number(carta.Poder || 0), 0);
+}
+
+function obtenerSaludActualCarta(carta) {
+    const saludMax = Math.max(obtenerSaludMaxCarta(carta), 0);
+    const salud = Number(carta?.Salud ?? carta?.salud);
+    const saludValida = Number.isFinite(salud) ? salud : saludMax;
+    return Math.max(0, Math.min(saludValida, saludMax));
+}
+
+function crearBarraSaludElemento(carta) {
+    const saludActual = obtenerSaludActualCarta(carta);
+    const saludMax = Math.max(obtenerSaludMaxCarta(carta), 1);
+    const porcentajeSalud = Math.max(0, Math.min((saludActual / saludMax) * 100, 100));
+    const ratioSalud = porcentajeSalud / 100;
+
+    const barraSaludContenedor = document.createElement('div');
+    barraSaludContenedor.classList.add('barra-salud-contenedor');
+
+    const barraSaludRelleno = document.createElement('div');
+    barraSaludRelleno.classList.add('barra-salud-relleno');
+    barraSaludRelleno.style.width = `${porcentajeSalud}%`;
+    barraSaludRelleno.style.setProperty('--health-ratio', String(ratioSalud));
+
+    const saludSpan = document.createElement('span');
+    saludSpan.classList.add('salud-carta');
+    saludSpan.textContent = `${saludActual}/${saludMax}`;
+
+    barraSaludContenedor.appendChild(barraSaludRelleno);
+    barraSaludContenedor.appendChild(saludSpan);
+    return barraSaludContenedor;
+}
+
 async function inicializarVistaMazos() {
     await sincronizarLocalStorage();
+    try {
+        await enriquecerSaludDesdeCatalogo();
+    } catch (error) {
+        console.warn('No se pudo enriquecer la salud de las cartas desde el catálogo:', error);
+    }
     const usuario = JSON.parse(localStorage.getItem('usuario'));
     const tieneMazos = Boolean(usuario?.mazos?.length);
 
@@ -35,6 +89,77 @@ async function inicializarVistaMazos() {
     bloquearGestionMazos(false);
     configurarSelectorMazo();
     cargarCartasDelMazo();
+}
+
+async function obtenerMapaSaludCatalogo() {
+    if (mapaSaludCatalogo) {
+        return mapaSaludCatalogo;
+    }
+
+    const response = await fetch('resources/cartas.xlsx');
+    if (!response.ok) {
+        throw new Error('No se pudo cargar el catálogo de cartas para salud.');
+    }
+
+    const data = await response.arrayBuffer();
+    const workbook = XLSX.read(data, { type: 'array' });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const cartasExcel = XLSX.utils.sheet_to_json(sheet);
+
+    mapaSaludCatalogo = new Map();
+    cartasExcel.forEach(carta => {
+        const nombre = String(carta?.Nombre || '').trim().toLowerCase();
+        if (!nombre) {
+            return;
+        }
+        mapaSaludCatalogo.set(nombre, {
+            nivelBase: Number(carta.Nivel || carta.nivel || 1),
+            saludBase: Number(carta.Salud ?? carta.salud ?? carta.Poder ?? 0)
+        });
+    });
+
+    return mapaSaludCatalogo;
+}
+
+function calcularSaludEscalada(carta, datosCatalogo) {
+    if (!datosCatalogo) {
+        return obtenerSaludMaxCarta(carta);
+    }
+
+    const nivelCarta = Math.max(1, Number(carta?.Nivel || 1));
+    const nivelBase = Math.max(1, Number(datosCatalogo.nivelBase || 1));
+    const incrementoNiveles = Math.max(nivelCarta - nivelBase, 0);
+    return Math.max(0, Number(datosCatalogo.saludBase || 0)) + (incrementoNiveles * 500);
+}
+
+async function enriquecerSaludDesdeCatalogo() {
+    const usuario = JSON.parse(localStorage.getItem('usuario'));
+    if (!usuario || !Array.isArray(usuario.cartas) || !Array.isArray(usuario.mazos)) {
+        return;
+    }
+
+    const mapaCatalogo = await obtenerMapaSaludCatalogo();
+    const normalizarCarta = (carta) => {
+        if (!carta) {
+            return carta;
+        }
+        const clave = String(carta?.Nombre || '').trim().toLowerCase();
+        const datos = mapaCatalogo.get(clave);
+        const saludEscalada = calcularSaludEscalada(carta, datos);
+        return {
+            ...carta,
+            SaludMax: saludEscalada,
+            Salud: saludEscalada
+        };
+    };
+
+    usuario.cartas = usuario.cartas.map(normalizarCarta);
+    usuario.mazos = usuario.mazos.map(mazo => ({
+        ...mazo,
+        Cartas: Array.isArray(mazo?.Cartas) ? mazo.Cartas.map(normalizarCarta) : []
+    }));
+
+    localStorage.setItem('usuario', JSON.stringify(usuario));
 }
 
 function bloquearGestionMazos(bloquear) {
@@ -199,6 +324,7 @@ function crearCartaMazoElemento(carta, indiceCarta) {
     }
 
     cartaDiv.appendChild(detallesDiv);
+    cartaDiv.appendChild(crearBarraSaludElemento(carta));
     cartaDiv.appendChild(estrellasDiv);
     cartaDiv.addEventListener('click', function () {
         abrirModalCambioCarta(indiceCarta);
@@ -293,6 +419,7 @@ function crearCartaReemplazoElemento(carta) {
     }
 
     item.appendChild(detallesDiv);
+    item.appendChild(crearBarraSaludElemento(carta));
     item.appendChild(estrellasDiv);
     return item;
 }
