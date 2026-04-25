@@ -24,7 +24,9 @@ const db = getFirestore(firebaseApp);
 
 // Inicializa la aplicación Express
 const app = express();
-const port = process.env.PORT || 3000;
+// Detrás del proxy de Render (IPs reales en req.ip, cookies secure si aplica)
+app.set('trust proxy', 1);
+const port = Number(process.env.PORT) || 3000;
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
@@ -600,7 +602,11 @@ app.post('/update-user', async (req, res) => {
     }
 });
 
-// Inicia el servidor
-server.listen(port, () => {
-    console.log(`Servidor corriendo en http://localhost:${port}`);
+// Inicia el servidor (0.0.0.0 para que Render y contenedores acepten tráfico externo)
+const listenHost = process.env.HOST || '0.0.0.0';
+server.listen(port, listenHost, () => {
+    const base =
+        process.env.RENDER_EXTERNAL_URL ||
+        (listenHost === '0.0.0.0' ? `http://localhost:${port}` : `http://${listenHost}:${port}`);
+    console.log(`Servidor escuchando en ${listenHost}:${port} — ${base}`);
 });

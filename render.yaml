@@ -1,0 +1,9 @@
+# Blueprint para Render: Web Service (Node) — https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: dc-battle-cards
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /
