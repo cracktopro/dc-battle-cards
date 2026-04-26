@@ -365,6 +365,10 @@ function renderizarCartasSeleccionDesafio() {
 
         cartaDiv.appendChild(estrellasDiv);
         cartaDiv.appendChild(detallesDiv);
+        const badgeHabilidad = window.crearBadgeHabilidadCarta ? window.crearBadgeHabilidadCarta(carta) : null;
+        if (badgeHabilidad) {
+            cartaDiv.appendChild(badgeHabilidad);
+        }
         cartaDiv.onclick = () => toggleSeleccionCartaDesafio(item.index);
 
         grid.appendChild(cartaDiv);
@@ -412,7 +416,12 @@ async function abrirModalSeleccionDesafio(desafio) {
     catalogo.forEach(carta => {
         mapaFaccionAfiliacion.set(normalizarNombre(carta.Nombre), {
             faccion: carta.faccion,
-            Afiliacion: carta.Afiliacion || ''
+            Afiliacion: carta.Afiliacion || '',
+            skill_name: String(carta.skill_name || '').trim(),
+            skill_info: String(carta.skill_info || '').trim(),
+            skill_class: String(carta.skill_class || '').trim().toLowerCase(),
+            skill_power: carta.skill_power ?? '',
+            skill_trigger: String(carta.skill_trigger || '').trim().toLowerCase()
         });
     });
 
@@ -424,7 +433,12 @@ async function abrirModalSeleccionDesafio(desafio) {
                 carta: {
                     ...carta,
                     faccion: carta.faccion || datos?.faccion || '',
-                    Afiliacion: carta.Afiliacion || datos?.Afiliacion || ''
+                    Afiliacion: carta.Afiliacion || datos?.Afiliacion || '',
+                    skill_name: String(carta.skill_name || '').trim() || datos?.skill_name || '',
+                    skill_info: String(carta.skill_info || '').trim() || datos?.skill_info || '',
+                    skill_class: String(carta.skill_class || '').trim().toLowerCase() || datos?.skill_class || '',
+                    skill_power: carta.skill_power ?? datos?.skill_power ?? '',
+                    skill_trigger: String(carta.skill_trigger || '').trim().toLowerCase() || datos?.skill_trigger || ''
                 }
             };
         })

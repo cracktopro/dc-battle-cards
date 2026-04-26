@@ -259,6 +259,10 @@ function crearCartaMiniAvatar(carta) {
 
     div.appendChild(estrellasDiv);
     div.appendChild(detallesDiv);
+    const badgeHabilidad = window.crearBadgeHabilidadCarta ? window.crearBadgeHabilidadCarta(carta) : null;
+    if (badgeHabilidad) {
+        div.appendChild(badgeHabilidad);
+    }
     div.addEventListener('click', () => {
         cartaAvatarSeleccionada = { ...carta };
         document.getElementById('personaje-seleccionado-label').textContent = carta.Nombre;

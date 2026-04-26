@@ -243,7 +243,12 @@ async function obtenerMapaDatosCartasCatalogo() {
                 faccion,
                 Afiliacion: afiliacion,
                 Imagen: carta.Imagen || carta.imagen || '',
-                imagen_final: carta.imagen_final || ''
+                imagen_final: carta.imagen_final || '',
+                skill_name: String(carta.skill_name || '').trim(),
+                skill_info: String(carta.skill_info || '').trim(),
+                skill_class: String(carta.skill_class || '').trim().toLowerCase(),
+                skill_power: carta.skill_power ?? '',
+                skill_trigger: String(carta.skill_trigger || '').trim().toLowerCase()
             });
         }
     });
@@ -264,6 +269,10 @@ async function enriquecerCartasConDatosCatalogo(usuario) {
         const afiliacionActual = String(carta?.Afiliacion || carta?.afiliacion || '').trim();
         const imagenActual = String(carta?.Imagen || carta?.imagen || '').trim();
         const imagenFinalActual = String(carta?.imagen_final || '').trim();
+        const skillNameActual = String(carta?.skill_name || '').trim();
+        const skillInfoActual = String(carta?.skill_info || '').trim();
+        const skillClassActual = String(carta?.skill_class || '').trim().toLowerCase();
+        const skillTriggerActual = String(carta?.skill_trigger || '').trim().toLowerCase();
 
         const datosCatalogo = mapaCatalogo.get(obtenerClaveCarta(carta.Nombre));
         if (!datosCatalogo) {
@@ -274,13 +283,26 @@ async function enriquecerCartasConDatosCatalogo(usuario) {
         const afiliacionFinal = afiliacionActual || datosCatalogo.Afiliacion || '';
         const imagenFinal = imagenActual || datosCatalogo.Imagen || '';
         const imagenFinalNivel6 = imagenFinalActual || datosCatalogo.imagen_final || '';
+        const fusionada = typeof window.fusionarSkillDesdeFilaCatalogo === 'function'
+            ? window.fusionarSkillDesdeFilaCatalogo(carta, datosCatalogo)
+            : carta;
+        const skillNameFinal = String(fusionada.skill_name || '').trim();
+        const skillInfoFinal = String(fusionada.skill_info || '').trim();
+        const skillClassFinal = String(fusionada.skill_class || '').trim().toLowerCase();
+        const skillTriggerFinal = String(fusionada.skill_trigger || '').trim().toLowerCase();
+        const skillPowerFinal = fusionada.skill_power;
 
         // 🔥 Detectar si hay cambios reales
         if (
             faccionFinal === faccionActual &&
             afiliacionFinal === afiliacionActual &&
             imagenFinal === imagenActual &&
-            imagenFinalNivel6 === imagenFinalActual
+            imagenFinalNivel6 === imagenFinalActual &&
+            skillNameFinal === skillNameActual &&
+            skillInfoFinal === skillInfoActual &&
+            skillClassFinal === skillClassActual &&
+            skillTriggerFinal === skillTriggerActual &&
+            String(skillPowerFinal ?? '') === String(carta.skill_power ?? '')
         ) {
             return carta;
         }
@@ -288,7 +310,7 @@ async function enriquecerCartasConDatosCatalogo(usuario) {
         huboCambios = true;
 
         return {
-            ...carta,
+            ...fusionada,
             faccion: faccionFinal,
             Afiliacion: afiliacionFinal,
             Imagen: imagenFinal,
@@ -455,6 +477,10 @@ async function cargarCartas() {
         }
 
         cartaDiv.appendChild(detallesDiv);
+        const badgeHabilidad = window.crearBadgeHabilidadCarta ? window.crearBadgeHabilidadCarta(carta) : null;
+        if (badgeHabilidad) {
+            cartaDiv.appendChild(badgeHabilidad);
+        }
         cartaDiv.appendChild(crearBarraSaludElemento(carta));
         cartaDiv.appendChild(estrellasDiv);
         cartaDiv.onclick = () => seleccionarCarta(cartaDiv);

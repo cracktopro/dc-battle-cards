@@ -419,6 +419,171 @@ body {
     box-shadow: 0 0 8px rgba(255, 109, 109, 0.22);
 }
 
+.badge-habilidad-carta {
+    position: absolute;
+    left: 6px;
+    right: 6px;
+    bottom: 50px;
+    z-index: 4;
+    padding: 2px 6px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 209, 64, 0.72);
+    background: rgba(255, 196, 0, 0.82);
+    color: #1a1200;
+    text-align: center;
+    font-size: 0.55rem;
+    font-weight: 700;
+    line-height: 1.15;
+    text-transform: none;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    box-shadow: 0 0 8px rgba(255, 204, 0, 0.42);
+    cursor: default;
+    pointer-events: auto;
+    transition:
+        transform 0.18s ease,
+        box-shadow 0.22s ease,
+        border-color 0.2s ease,
+        filter 0.2s ease;
+}
+
+.badge-habilidad-carta:hover {
+    transform: translateY(-1px) scale(1.02);
+    border-color: rgba(255, 236, 140, 0.95);
+    filter: saturate(1.15) brightness(1.06);
+    box-shadow:
+        0 0 0 1px rgba(255, 230, 120, 0.35),
+        0 0 14px rgba(255, 210, 64, 0.55),
+        0 0 26px rgba(255, 180, 0, 0.28),
+        inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+/* Colores por tipo de habilidad (skill_class) */
+.badge-habilidad-carta.badge-habilidad--buff,
+.badge-habilidad-carta.badge-habilidad--heal,
+.badge-habilidad-carta.badge-habilidad--heal-all {
+    border-color: rgba(100, 255, 160, 0.75);
+    background: linear-gradient(180deg, rgba(40, 120, 70, 0.92) 0%, rgba(18, 70, 42, 0.95) 100%);
+    color: #c8ffd8;
+    text-shadow: 0 0 8px rgba(64, 255, 140, 0.45);
+    box-shadow: 0 0 10px rgba(0, 200, 90, 0.35);
+}
+
+.badge-habilidad-carta.badge-habilidad--debuff,
+.badge-habilidad-carta.badge-habilidad--aoe,
+.badge-habilidad-carta.badge-habilidad--extra-attack {
+    border-color: rgba(255, 120, 120, 0.8);
+    background: linear-gradient(180deg, rgba(120, 36, 36, 0.94) 0%, rgba(60, 14, 14, 0.96) 100%);
+    color: #ffd4d4;
+    text-shadow: 0 0 8px rgba(255, 80, 80, 0.5);
+    box-shadow: 0 0 10px rgba(255, 60, 60, 0.3);
+}
+
+.badge-habilidad-carta.badge-habilidad--revive,
+.badge-habilidad-carta.badge-habilidad--heal-debuff,
+.badge-habilidad-carta.badge-habilidad--bonus-debuff {
+    border-color: rgba(200, 140, 255, 0.85);
+    background: linear-gradient(180deg, rgba(90, 40, 130, 0.94) 0%, rgba(40, 18, 72, 0.97) 100%);
+    color: #f0e4ff;
+    text-shadow: 0 0 8px rgba(200, 120, 255, 0.45);
+    box-shadow: 0 0 10px rgba(160, 80, 255, 0.32);
+}
+
+.badge-habilidad-carta.badge-habilidad--shield,
+.badge-habilidad-carta.badge-habilidad--tank {
+    border-color: rgba(100, 200, 255, 0.85);
+    background: linear-gradient(180deg, rgba(28, 72, 120, 0.94) 0%, rgba(12, 40, 78, 0.97) 100%);
+    color: #d8f6ff;
+    text-shadow: 0 0 8px rgba(80, 190, 255, 0.45);
+    box-shadow: 0 0 10px rgba(40, 150, 255, 0.32);
+}
+
+.badge-habilidad-carta.badge-habilidad--bonus-buff {
+    border-color: rgba(255, 209, 64, 0.72);
+    background: rgba(255, 196, 0, 0.82);
+    color: #1a1200;
+    text-shadow: none;
+    box-shadow: 0 0 8px rgba(255, 204, 0, 0.42);
+}
+
+/* Tooltip habilidad (estilo panel del juego, tipo WoW) */
+.tooltip-habilidad-carta-global {
+    position: fixed;
+    z-index: 10050;
+    max-width: min(360px, calc(100vw - 20px));
+    pointer-events: none;
+    font-family: 'Orbitron', sans-serif;
+    line-height: 1.4;
+}
+
+.tooltip-habilidad-carta-inner {
+    padding: 11px 14px 12px;
+    border-radius: 11px;
+    background: linear-gradient(165deg, rgba(14, 28, 52, 0.98) 0%, rgba(6, 14, 30, 0.99) 100%);
+    border: 1px solid rgba(0, 209, 255, 0.5);
+    box-shadow:
+        0 0 22px rgba(0, 120, 220, 0.45),
+        0 0 2px rgba(255, 255, 255, 0.08) inset,
+        0 12px 28px rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(10px);
+}
+
+.tooltip-habilidad-carta-nombre {
+    color: #ffd86a;
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: none;
+    text-shadow:
+        0 0 10px rgba(255, 200, 80, 0.35),
+        0 1px 0 rgba(0, 0, 0, 0.85);
+    margin: 0 0 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(0, 209, 255, 0.22);
+}
+
+.tooltip-habilidad-carta-desc {
+    margin: 0;
+    color: #d4ecff;
+    font-size: 0.72rem;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    white-space: pre-wrap;
+    word-break: break-word;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.75);
+}
+
+/* Barra de salud y badge de habilidad más anchos (Mazos, crear mazos, mejorar, modal cambio, tienda) */
+.contenedor-cartas .carta .barra-salud-contenedor,
+#contenedor-mejora-carta-objeto .carta .barra-salud-contenedor,
+#contenedor-mejora-especial-objeto .carta .barra-salud-contenedor,
+.modal-cambio-carta .carta .barra-salud-contenedor,
+.modal-cambio-carta .item-carta-reemplazo .barra-salud-contenedor {
+    left: 3px;
+    right: 3px;
+}
+
+.contenedor-cartas .carta .badge-habilidad-carta,
+#contenedor-mejora-carta-objeto .carta .badge-habilidad-carta,
+#contenedor-mejora-especial-objeto .carta .badge-habilidad-carta,
+.modal-cambio-carta .carta .badge-habilidad-carta,
+.modal-cambio-carta .item-carta-reemplazo .badge-habilidad-carta {
+    left: 3px;
+    right: 3px;
+}
+
+.preview-carta .barra-salud-contenedor {
+    left: 3px;
+    right: 3px;
+}
+
+.preview-carta .badge-habilidad-carta {
+    left: 3px;
+    right: 3px;
+}
+
 .modal-dc {
     position: fixed;
     inset: 0;
@@ -518,5 +683,30 @@ body {
 
     .progreso-coleccion {
         font-size: clamp(1rem, 4vw, 1.35rem);
+    }
+}
+
+/* Colección / modales en horizontal (móvil-tablet baja) */
+@media (orientation: landscape) and (max-height: 900px) and (max-width: 1200px) {
+    .contenedor-cartas {
+        gap: clamp(8px, 1.2vmin, 14px);
+        padding: clamp(8px, 1.2vmin, 16px);
+    }
+
+    .modal-dc-content {
+        max-height: min(88dvh, 560px);
+    }
+
+    .modal-cambio-carta .lista-cartas-reemplazo {
+        max-height: min(52dvh, 340px);
+    }
+
+    .faccion-tab {
+        min-width: min(120px, 26vmin);
+        font-size: clamp(0.62rem, 2vmin, 0.8rem);
+    }
+
+    .faccion-actual {
+        font-size: clamp(0.7rem, 2.2vmin, 0.88rem);
     }
 }

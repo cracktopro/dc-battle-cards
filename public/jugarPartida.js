@@ -441,7 +441,7 @@ function mapearEventoDesdeFila(fila, fallbackIndex) {
         mejora: Number(fila.mejora || 0),
         mejora_especial: Number(fila.mejora_especial || 0),
         cartaRecompensa: String(fila.cartas || fila.carta || '').trim(),
-        dificultadSeleccionada: 1
+        dificultadSeleccionada: null
     };
 }
 
@@ -554,14 +554,21 @@ async function renderizarEventosActivos() {
         dificultadLabel.textContent = 'Dificultad';
         const selectDificultad = document.createElement('select');
         selectDificultad.className = 'evento-dificultad-select';
+        const optionPlaceholder = document.createElement('option');
+        optionPlaceholder.value = '';
+        optionPlaceholder.textContent = 'Selecciona Dificultad';
+        selectDificultad.appendChild(optionPlaceholder);
         for (let d = 1; d <= 6; d++) {
             const option = document.createElement('option');
             option.value = String(d);
             option.textContent = `${'★'.repeat(d)}  Nivel ${d}`;
             selectDificultad.appendChild(option);
         }
-        selectDificultad.value = String(Number(evento.dificultadSeleccionada || 1));
-        selectDificultad.addEventListener('change', () => seleccionarDificultadEvento(evento.id, Number(selectDificultad.value)));
+        selectDificultad.value = evento.dificultadSeleccionada ? String(Number(evento.dificultadSeleccionada)) : '';
+        selectDificultad.addEventListener('change', () => {
+            const valor = selectDificultad.value;
+            seleccionarDificultadEvento(evento.id, valor ? Number(valor) : null);
+        });
         contenedorDificultad.appendChild(dificultadLabel);
         contenedorDificultad.appendChild(selectDificultad);
 
@@ -592,8 +599,37 @@ async function renderizarEventosActivos() {
 function seleccionarDificultadEvento(eventoId, dificultad) {
     const evento = eventosActivos.find(item => item.id === eventoId);
     if (evento) {
-        evento.dificultadSeleccionada = dificultad;
+        evento.dificultadSeleccionada = Number.isFinite(Number(dificultad)) && Number(dificultad) > 0
+            ? Number(dificultad)
+            : null;
     }
+}
+
+function mostrarModalSeleccionDificultadEvento() {
+    const modal = document.createElement('div');
+    modal.className = 'modal-dc';
+    modal.style.display = 'flex';
+    modal.innerHTML = `
+        <div class="modal-dc-content" style="max-width:520px;">
+            <h4 style="margin-top:0;">Selecciona una dificultad</h4>
+            <p style="margin-bottom:16px;">Debes elegir una dificultad antes de empezar el evento.</p>
+            <div class="modal-dc-actions">
+                <button type="button" class="btn btn-primary" id="cerrar-modal-dificultad-evento">Entendido</button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    const cerrar = () => {
+        modal.remove();
+    };
+    modal.querySelector('#cerrar-modal-dificultad-evento')?.addEventListener('click', cerrar);
+    modal.addEventListener('click', (event) => {
+        if (event.target === modal) {
+            cerrar();
+        }
+    });
 }
 
 function configurarModalEvento() {
@@ -635,7 +671,7 @@ function configurarModalEvento() {
 
 async function abrirModalSeleccionEvento(evento) {
     if (!evento?.dificultadSeleccionada) {
-        mostrarMensajeEventos('Selecciona una dificultad para el evento.', 'warning');
+        mostrarModalSeleccionDificultadEvento();
         return;
     }
 
@@ -670,7 +706,12 @@ async function abrirModalSeleccionEvento(evento) {
     catalogo.forEach(carta => {
         mapaFaccionAfiliacion.set(normalizarNombre(carta.Nombre), {
             faccion: carta.faccion,
-            Afiliacion: carta.Afiliacion || ''
+            Afiliacion: carta.Afiliacion || '',
+            skill_name: String(carta.skill_name || '').trim(),
+            skill_info: String(carta.skill_info || '').trim(),
+            skill_class: String(carta.skill_class || '').trim().toLowerCase(),
+            skill_power: carta.skill_power ?? '',
+            skill_trigger: String(carta.skill_trigger || '').trim().toLowerCase()
         });
     });
 
@@ -684,7 +725,12 @@ async function abrirModalSeleccionEvento(evento) {
                 carta: {
                     ...carta,
                     faccion: carta.faccion || datos?.faccion || '',
-                    Afiliacion: carta.Afiliacion || datos?.Afiliacion || ''
+                    Afiliacion: carta.Afiliacion || datos?.Afiliacion || '',
+                    skill_name: String(carta.skill_name || '').trim() || datos?.skill_name || '',
+                    skill_info: String(carta.skill_info || '').trim() || datos?.skill_info || '',
+                    skill_class: String(carta.skill_class || '').trim().toLowerCase() || datos?.skill_class || '',
+                    skill_power: carta.skill_power ?? datos?.skill_power ?? '',
+                    skill_trigger: String(carta.skill_trigger || '').trim().toLowerCase() || datos?.skill_trigger || ''
                 }
             };
         })
@@ -784,6 +830,10 @@ function renderizarCartasSeleccionEvento() {
 
         cartaDiv.appendChild(estrellasDiv);
         cartaDiv.appendChild(detallesDiv);
+        const badgeHabilidad = window.crearBadgeHabilidadCarta ? window.crearBadgeHabilidadCarta(carta) : null;
+        if (badgeHabilidad) {
+            cartaDiv.appendChild(badgeHabilidad);
+        }
         cartaDiv.onclick = () => toggleSeleccionCartaEvento(item.index);
         grid.appendChild(cartaDiv);
     });
@@ -835,22 +885,9 @@ async function confirmarSeleccionEvento() {
         puntos: Number(eventoPendiente.puntos || 0) * Number(dificultadEventoSeleccionada || 1),
         mejora: Number(eventoPendiente.mejora || 0),
         mejora_especial: Number(eventoPendiente.mejora_especial || 0),
-        carta_recompensa: eventoPendiente.cartaRecompensa || ''
+        carta_recompensa: eventoPendiente.cartaRecompensa || '',
+        rotacionClave: obtenerClaveRotacionEventos()
     };
-
-    const claveRotacion = obtenerClaveRotacionEventos();
-    usuario.eventosJugadosPorRotacion = (usuario.eventosJugadosPorRotacion && typeof usuario.eventosJugadosPorRotacion === 'object')
-        ? usuario.eventosJugadosPorRotacion
-        : {};
-    const jugadosActual = new Set(
-        (usuario.eventosJugadosPorRotacion[claveRotacion] || []).map(id => Number(id))
-    );
-    jugadosActual.add(Number(eventoPendiente.id));
-    usuario.eventosJugadosPorRotacion[claveRotacion] = Array.from(jugadosActual);
-
-    const email = localStorage.getItem('email');
-    await actualizarUsuarioFirebaseVista(usuario, email);
-    localStorage.setItem('usuario', JSON.stringify(usuario));
 
     localStorage.setItem('desafioActivo', JSON.stringify(eventoParaPartida));
     localStorage.setItem('dificultad', String(dificultadEventoSeleccionada));
@@ -859,22 +896,6 @@ async function confirmarSeleccionEvento() {
     localStorage.removeItem('mazoOponente');
     localStorage.removeItem('mazoOponenteBase');
     window.location.href = 'tablero.html';
-}
-
-async function actualizarUsuarioFirebaseVista(usuario, email) {
-    const response = await fetch('/update-user', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ usuario, email })
-    });
-
-    if (!response.ok) {
-        throw new Error('No se pudo guardar el progreso de eventos.');
-    }
-
-    return response.json();
 }
 
 function mezclarArray(array) {

@@ -114,7 +114,12 @@ async function obtenerMapaSaludCatalogo() {
         }
         mapaSaludCatalogo.set(nombre, {
             nivelBase: Number(carta.Nivel || carta.nivel || 1),
-            saludBase: Number(carta.Salud ?? carta.salud ?? carta.Poder ?? 0)
+            saludBase: Number(carta.Salud ?? carta.salud ?? carta.Poder ?? 0),
+            skill_name: String(carta.skill_name || '').trim(),
+            skill_info: String(carta.skill_info || '').trim(),
+            skill_class: String(carta.skill_class || '').trim().toLowerCase(),
+            skill_power: carta.skill_power ?? '',
+            skill_trigger: String(carta.skill_trigger || '').trim().toLowerCase()
         });
     });
 
@@ -146,11 +151,15 @@ async function enriquecerSaludDesdeCatalogo() {
         const clave = String(carta?.Nombre || '').trim().toLowerCase();
         const datos = mapaCatalogo.get(clave);
         const saludEscalada = calcularSaludEscalada(carta, datos);
-        return {
+        const base = {
             ...carta,
             SaludMax: saludEscalada,
             Salud: saludEscalada
         };
+        if (datos && typeof window.fusionarSkillDesdeFilaCatalogo === 'function') {
+            return window.fusionarSkillDesdeFilaCatalogo(base, datos);
+        }
+        return base;
     };
 
     usuario.cartas = usuario.cartas.map(normalizarCarta);
@@ -324,6 +333,10 @@ function crearCartaMazoElemento(carta, indiceCarta) {
     }
 
     cartaDiv.appendChild(detallesDiv);
+    const badgeHabilidad = window.crearBadgeHabilidadCarta ? window.crearBadgeHabilidadCarta(carta) : null;
+    if (badgeHabilidad) {
+        cartaDiv.appendChild(badgeHabilidad);
+    }
     cartaDiv.appendChild(crearBarraSaludElemento(carta));
     cartaDiv.appendChild(estrellasDiv);
     cartaDiv.addEventListener('click', function () {
@@ -419,6 +432,10 @@ function crearCartaReemplazoElemento(carta) {
     }
 
     item.appendChild(detallesDiv);
+    const badgeHabilidad = window.crearBadgeHabilidadCarta ? window.crearBadgeHabilidadCarta(carta) : null;
+    if (badgeHabilidad) {
+        item.appendChild(badgeHabilidad);
+    }
     item.appendChild(crearBarraSaludElemento(carta));
     item.appendChild(estrellasDiv);
     return item;

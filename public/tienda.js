@@ -113,12 +113,15 @@ function escalarPoderPorNivel(poderBase, nivel) {
 }
 
 function crearOfertaCarta(cartaBase, nivel) {
-    const saludBase = Number((cartaBase.SaludMax ?? cartaBase.Salud ?? cartaBase.Poder) || 0);
+    const srcCarta = typeof window.fusionarSkillDesdeFilaCatalogo === 'function'
+        ? window.fusionarSkillDesdeFilaCatalogo({ ...cartaBase }, cartaBase)
+        : { ...cartaBase };
+    const saludBase = Number((srcCarta.SaludMax ?? srcCarta.Salud ?? srcCarta.Poder) || 0);
     const saludEscalada = escalarPoderPorNivel(saludBase, nivel);
     return {
         id: `oferta-${normalizarNombreCarta(cartaBase.Nombre)}-${nivel}`,
         carta: {
-            ...cartaBase,
+            ...srcCarta,
             Nivel: nivel,
             Poder: escalarPoderPorNivel(cartaBase.Poder, nivel),
             SaludMax: saludEscalada,
@@ -339,6 +342,10 @@ function renderizarCartasTienda() {
         preview.appendChild(badgeNivel);
         preview.appendChild(crearEstrellasNivel(oferta.nivel));
         preview.appendChild(crearDetallesCarta(oferta.carta));
+        const badgeHabilidad = window.crearBadgeHabilidadCarta ? window.crearBadgeHabilidadCarta(oferta.carta) : null;
+        if (badgeHabilidad) {
+            preview.appendChild(badgeHabilidad);
+        }
         preview.appendChild(crearBarraSaludElemento(oferta.carta));
 
         const precio = document.createElement('div');

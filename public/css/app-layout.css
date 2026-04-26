@@ -297,3 +297,38 @@
         box-sizing: border-box !important;
     }
 }
+
+/* Móvil en horizontal: más aire útil en altura, rejilla por vmin */
+@media (max-width: 899px) and (orientation: landscape) {
+    :root {
+        --dc-mobile-nav-h: 44px;
+        --dc-card-grid-min: clamp(96px, 22vmin, 150px);
+        --dc-content-pad-y: clamp(4px, 1.2vmin, 10px);
+    }
+
+    body > .content-container {
+        padding-top: calc(var(--dc-mobile-nav-h) + var(--dc-content-pad-y)) !important;
+        padding-bottom: clamp(4px, 1vmin, 8px) !important;
+    }
+
+    body > .menu-container .logs-container {
+        max-height: min(36vmin, 160px);
+    }
+}
+
+/* Tablet en horizontal (altura limitada): compactar sin forzar modo móvil */
+@media (min-width: 900px) and (max-width: 1199px) and (orientation: landscape) and (max-height: 900px) {
+    :root {
+        --dc-card-grid-min: clamp(110px, 18vmin, 180px);
+    }
+
+    .content-container {
+        padding-top: clamp(8px, 1.4vmin, 14px);
+        padding-bottom: clamp(8px, 1.4vmin, 14px);
+    }
+
+    .tablero-container {
+        padding-top: clamp(6px, 1.2vmin, 12px);
+        padding-bottom: clamp(6px, 1.2vmin, 12px);
+    }
+}

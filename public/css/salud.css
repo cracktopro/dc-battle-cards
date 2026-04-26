@@ -30,6 +30,14 @@
     z-index: 3;
 }
 
+/* Dentro del bloque de salud del tablero la posición la fija .carta-salud-bloque (tablero.css) */
+.carta-salud-bloque .barra-salud-contenedor {
+    position: relative;
+    left: auto;
+    right: auto;
+    bottom: auto;
+}
+
 .barra-salud-relleno {
     position: absolute;
     top: 0;
@@ -41,6 +49,11 @@
         calc((var(--salud-lit-min) + ((var(--salud-lit-max) - var(--salud-lit-min)) * var(--health-ratio, 1))) * 1%)
     );
     transition: width 0.36s cubic-bezier(0.22, 0.8, 0.2, 1), background-color 0.3s ease, filter 0.25s ease;
+}
+
+.barra-salud-relleno.con-escudo {
+    background: linear-gradient(90deg, rgba(56, 168, 255, 0.98), rgba(107, 214, 255, 0.95));
+    box-shadow: 0 0 10px rgba(66, 176, 255, 0.55);
 }
 
 .salud-carta {
@@ -83,7 +96,23 @@
         height: clamp(9px, 1.8vw, 11px);
     }
 
+    .carta-salud-bloque .barra-salud-contenedor {
+        left: auto;
+        right: auto;
+        bottom: auto;
+    }
+
     .salud-carta {
         font-size: clamp(0.46rem, 2vw, 0.54rem);
+    }
+}
+
+@media (max-width: 899px) and (orientation: landscape) {
+    .barra-salud-contenedor {
+        height: clamp(8px, 2vmin, 11px);
+    }
+
+    .salud-carta {
+        font-size: clamp(0.44rem, 1.8vmin, 0.52rem);
     }
 }

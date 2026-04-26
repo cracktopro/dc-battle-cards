@@ -730,6 +730,27 @@ body {
     }
 }
 
+@media (max-width: 899px) and (orientation: landscape) {
+    .comunicacion-container {
+        flex-direction: row;
+        align-items: stretch;
+        gap: clamp(6px, 1.2vmin, 12px);
+    }
+
+    .chat-container,
+    .jugadores-conectados-container {
+        flex: 1 1 0;
+        min-width: 0;
+        width: auto;
+        height: min(62vmin, 52dvh) !important;
+        max-height: min(62vmin, 52dvh);
+    }
+
+    .panel {
+        max-height: min(42dvh, 280px);
+    }
+}
+
 /* Estilo del contenedor de cada jugador con el botón de invitar */
 .jugador-item {
     display: flex;

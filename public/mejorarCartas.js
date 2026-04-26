@@ -1,7 +1,65 @@
-document.addEventListener('DOMContentLoaded', function () {
+document.addEventListener('DOMContentLoaded', async function () {
+    try {
+        await enriquecerUsuarioSkillsDesdeCatalogoMejorar();
+    } catch (error) {
+        console.warn('No se pudieron fusionar habilidades desde el catálogo:', error);
+    }
     cargarCartas(); // Carga inicial de cartas para mejorar
     configurarEventos(); // Configurar eventos de la página
 });
+
+async function enriquecerUsuarioSkillsDesdeCatalogoMejorar() {
+    if (typeof XLSX === 'undefined' || typeof window.fusionarSkillDesdeFilaCatalogo !== 'function') {
+        return;
+    }
+
+    const raw = localStorage.getItem('usuario');
+    const usuario = raw ? JSON.parse(raw) : null;
+    if (!usuario || !Array.isArray(usuario.cartas) || usuario.cartas.length === 0) {
+        return;
+    }
+
+    const response = await fetch('resources/cartas.xlsx');
+    if (!response.ok) {
+        throw new Error('No se pudo cargar cartas.xlsx');
+    }
+
+    const data = await response.arrayBuffer();
+    const workbook = XLSX.read(data, { type: 'array' });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const filas = XLSX.utils.sheet_to_json(sheet);
+    const mapa = new Map();
+
+    filas.forEach(fila => {
+        const clave = String(fila?.Nombre || '').trim().toLowerCase();
+        if (clave) {
+            mapa.set(clave, fila);
+        }
+    });
+
+    let huboCambios = false;
+    usuario.cartas = usuario.cartas.map(carta => {
+        const clave = String(carta?.Nombre || '').trim().toLowerCase();
+        const fila = mapa.get(clave);
+        if (!fila) {
+            return carta;
+        }
+
+        const mezclada = window.fusionarSkillDesdeFilaCatalogo(carta, fila);
+        const distinto = ['skill_name', 'skill_info', 'skill_class', 'skill_trigger'].some(
+            k => String(mezclada[k] || '') !== String(carta[k] || '')
+        ) || String(mezclada.skill_power ?? '') !== String(carta.skill_power ?? '');
+
+        if (distinto) {
+            huboCambios = true;
+        }
+        return mezclada;
+    });
+
+    if (huboCambios) {
+        localStorage.setItem('usuario', JSON.stringify(usuario));
+    }
+}
 
 let mejoraObjetoPendiente = null;
 const ICONO_MEJORA = '/resources/icons/mejora.png';
@@ -159,6 +217,10 @@ function crearElementoCartaSoloVisual(carta, destacarPoder = false) {
     }
 
     cartaDiv.appendChild(detallesDiv);
+    const badgeHabilidad = window.crearBadgeHabilidadCarta ? window.crearBadgeHabilidadCarta(carta) : null;
+    if (badgeHabilidad) {
+        cartaDiv.appendChild(badgeHabilidad);
+    }
     cartaDiv.appendChild(crearBarraSaludElemento(carta));
     cartaDiv.appendChild(estrellasDiv);
     return cartaDiv;
@@ -422,6 +484,10 @@ function cargarCartas() {
             }
 
             cartaDiv.appendChild(detallesDiv);
+            const badgeHabilidad = window.crearBadgeHabilidadCarta ? window.crearBadgeHabilidadCarta(carta) : null;
+            if (badgeHabilidad) {
+                cartaDiv.appendChild(badgeHabilidad);
+            }
             cartaDiv.appendChild(crearBarraSaludElemento(carta));
             cartaDiv.appendChild(estrellasDiv);
             contenedorCartas.appendChild(cartaDiv);
