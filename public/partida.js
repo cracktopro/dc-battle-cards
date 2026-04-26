@@ -194,15 +194,11 @@ async function construirEstadoDesafio(desafio) {
     if (desafio.boss) {
         const bossBase = mapaPorNombre.get(normalizarNombre(desafio.boss));
         if (bossBase) {
-            const bossEscalado = escalarCartaSegunDificultad({ ...bossBase }, dificultadDesafio);
-            const saludBossBase = obtenerSaludMaxCarta(bossEscalado);
-            bossPendiente = {
-                ...bossEscalado,
-                Poder: Number(bossEscalado.Poder || 0) * 10,
-                SaludMax: saludBossBase * 10,
-                Salud: saludBossBase * 10,
-                esBoss: true
-            };
+            const faccionBoss = normalizarFaccion(bossBase.faccion) || mapaCatalogo.get(obtenerClaveCarta(bossBase.Nombre))?.faccion || 'V';
+            bossPendiente = escalarBossSegunDificultad({
+                ...bossBase,
+                faccion: faccionBoss
+            }, dificultadDesafio);
         }
     }
 
@@ -609,6 +605,24 @@ function escalarCartaSegunDificultad(carta, dificultad) {
     cartaEscalada.Salud = cartaEscalada.SaludMax;
 
     return cartaEscalada;
+}
+
+function escalarBossSegunDificultad(carta, dificultad) {
+    const cartaBoss = { ...carta };
+    const nivelBase = Number(cartaBoss.Nivel || 1);
+    const dificultadObjetivo = Math.min(Math.max(dificultad, 1), 6);
+    const incrementoNiveles = Math.max(dificultadObjetivo - nivelBase, 0);
+    const incrementoPorNivel = incrementoNiveles * 500;
+    const saludBase = obtenerSaludMaxCarta(cartaBoss);
+    const poderBase = Number(cartaBoss.Poder || 0);
+
+    cartaBoss.Nivel = dificultadObjetivo;
+    cartaBoss.Poder = Math.round((poderBase * 1.5) + incrementoPorNivel);
+    cartaBoss.SaludMax = Math.round((saludBase * 6) + incrementoPorNivel);
+    cartaBoss.Salud = cartaBoss.SaludMax;
+    cartaBoss.esBoss = true;
+
+    return cartaBoss;
 }
 
 function obtenerNivelPorProbabilidad(dificultad) {
