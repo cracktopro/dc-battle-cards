@@ -156,10 +156,14 @@ async function enriquecerSaludDesdeCatalogo() {
             SaludMax: saludEscalada,
             Salud: saludEscalada
         };
+        let resultado = base;
         if (datos && typeof window.fusionarSkillDesdeFilaCatalogo === 'function') {
-            return window.fusionarSkillDesdeFilaCatalogo(base, datos);
+            resultado = window.fusionarSkillDesdeFilaCatalogo(base, datos);
         }
-        return base;
+        if (typeof window.recalcularSkillPowerPorNivel === 'function') {
+            window.recalcularSkillPowerPorNivel(resultado, Number(resultado.Nivel || 1));
+        }
+        return resultado;
     };
 
     usuario.cartas = usuario.cartas.map(normalizarCarta);
@@ -337,6 +341,10 @@ function crearCartaMazoElemento(carta, indiceCarta) {
     if (badgeHabilidad) {
         cartaDiv.appendChild(badgeHabilidad);
     }
+    const badgeAfiliacion = window.crearBadgeAfiliacionCarta ? window.crearBadgeAfiliacionCarta(carta) : null;
+    if (badgeAfiliacion) {
+        cartaDiv.appendChild(badgeAfiliacion);
+    }
     cartaDiv.appendChild(crearBarraSaludElemento(carta));
     cartaDiv.appendChild(estrellasDiv);
     cartaDiv.addEventListener('click', function () {
@@ -435,6 +443,10 @@ function crearCartaReemplazoElemento(carta) {
     const badgeHabilidad = window.crearBadgeHabilidadCarta ? window.crearBadgeHabilidadCarta(carta) : null;
     if (badgeHabilidad) {
         item.appendChild(badgeHabilidad);
+    }
+    const badgeAfiliacion = window.crearBadgeAfiliacionCarta ? window.crearBadgeAfiliacionCarta(carta) : null;
+    if (badgeAfiliacion) {
+        item.appendChild(badgeAfiliacion);
     }
     item.appendChild(crearBarraSaludElemento(carta));
     item.appendChild(estrellasDiv);

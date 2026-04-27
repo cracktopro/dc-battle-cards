@@ -144,6 +144,58 @@ body {
     text-shadow: 0 0 8px rgba(0, 123, 255, 0.45);
 }
 
+.menu-user-stats {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 2px;
+    padding-top: 6px;
+    border-top: 1px solid rgba(0, 209, 255, 0.22);
+}
+
+.menu-user-stat-row {
+    width: 100%;
+    padding: 3px 8px;
+    border-radius: 999px;
+    border: 1px solid rgba(0, 209, 255, 0.28);
+    background: rgba(0, 36, 72, 0.5);
+    color: #d8f2ff;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-align: center;
+    text-shadow: 0 0 6px rgba(0, 140, 255, 0.35);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+.menu-user-stat-icon-wrap {
+    flex: 0 0 auto;
+    width: 18px;
+    height: 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.menu-user-stat-icon {
+    width: 18px;
+    height: 18px;
+    object-fit: contain;
+    filter: drop-shadow(0 0 5px rgba(255, 220, 90, 0.45));
+}
+
+.menu-user-stat-value {
+    flex: 0 1 auto;
+    min-width: 0;
+}
+
 .btn-menu {
     width: 100%;
     margin: 10px 0;
@@ -178,6 +230,19 @@ body {
     border-color: #d31c1c;
     box-shadow: 0 0 15px rgba(211, 28, 28, 0.7), 0 0 25px rgba(211, 28, 28, 0.5);
     color: #fff;
+}
+
+.menu-version-label {
+    margin-top: 8px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #eef8ff;
+    letter-spacing: 0.03em;
+    text-align: center;
+    text-shadow:
+        0 0 8px rgba(0, 174, 255, 0.65),
+        0 0 16px rgba(0, 123, 255, 0.45);
+    opacity: 0.96;
 }
 
 .content-container {
@@ -508,6 +573,61 @@ body {
     box-shadow: 0 0 8px rgba(255, 204, 0, 0.42);
 }
 
+.badge-afiliacion-carta {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    left: auto;
+    bottom: auto;
+    z-index: 8;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 223, 110, 0.95);
+    background: radial-gradient(circle at 30% 30%, rgba(255, 245, 170, 0.98) 0%, rgba(255, 214, 76, 0.95) 55%, rgba(205, 130, 20, 0.92) 100%);
+    color: #2a1700;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.68rem;
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: 0.02em;
+    text-shadow: 0 0 8px rgba(255, 220, 90, 0.45);
+    box-shadow:
+        0 0 8px rgba(255, 201, 46, 0.45),
+        0 0 14px rgba(255, 168, 24, 0.28),
+        inset 0 1px 0 rgba(255, 255, 255, 0.45);
+    pointer-events: auto;
+}
+
+.badge-afiliacion-inline {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.8em;
+    height: 1.35em;
+    padding: 0 0.36em;
+    margin-right: 0.28em;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 223, 110, 0.95);
+    background: radial-gradient(circle at 30% 30%, rgba(255, 245, 170, 0.98) 0%, rgba(255, 214, 76, 0.95) 55%, rgba(205, 130, 20, 0.92) 100%);
+    color: #2a1700;
+    font-size: 0.95em;
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: 0.03em;
+    text-shadow: 0 0 8px rgba(255, 220, 90, 0.45);
+    box-shadow:
+        0 0 8px rgba(255, 201, 46, 0.45),
+        0 0 14px rgba(255, 168, 24, 0.28),
+        inset 0 1px 0 rgba(255, 255, 255, 0.45);
+    vertical-align: middle;
+    cursor: default;
+    pointer-events: auto;
+}
+
 /* Tooltip habilidad (estilo panel del juego, tipo WoW) */
 .tooltip-habilidad-carta-global {
     position: fixed;
@@ -553,6 +673,43 @@ body {
     white-space: pre-wrap;
     word-break: break-word;
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.75);
+}
+
+.tooltip-skill-power {
+    font-weight: 800;
+    letter-spacing: 0.03em;
+    text-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
+}
+
+.tooltip-skill-power--buff,
+.tooltip-skill-power--heal,
+.tooltip-skill-power--heal-all {
+    color: #7dff9e;
+}
+
+.tooltip-skill-power--debuff,
+.tooltip-skill-power--aoe,
+.tooltip-skill-power--bonus-debuff,
+.tooltip-skill-power--extra-attack {
+    color: #ff8d8d;
+}
+
+.tooltip-skill-power--revive,
+.tooltip-skill-power--heal-debuff {
+    color: #d7a8ff;
+}
+
+.tooltip-skill-power--shield,
+.tooltip-skill-power--tank {
+    color: #95ddff;
+}
+
+.tooltip-skill-power--bonus-buff {
+    color: #ffe37d;
+}
+
+.tooltip-skill-power--default {
+    color: #f6f6f6;
 }
 
 /* Barra de salud y badge de habilidad más anchos (Mazos, crear mazos, mejorar, modal cambio, tienda) */
@@ -644,6 +801,32 @@ body {
 .item-carta-reemplazo.seleccionada {
     border-color: #ffd93b !important;
     box-shadow: 0 0 18px rgba(255, 217, 59, 0.8), 0 0 28px rgba(255, 217, 59, 0.55) !important;
+}
+
+/* Firefox: fallback de altura para evitar colapso de tarjetas en grid del modal. */
+@supports (-moz-appearance: none) {
+    .modal-cambio-carta .lista-cartas-reemplazo {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-start;
+        align-content: flex-start;
+        gap: clamp(14px, 1.8vw, 20px);
+        padding: 6px 4px 16px;
+        align-items: flex-start;
+    }
+
+    .modal-cambio-carta .item-carta-reemplazo {
+        flex: 0 0 var(--dc-card-grid-min, clamp(150px, 12vw, 200px));
+        width: var(--dc-card-grid-min, clamp(150px, 12vw, 200px));
+        max-width: 100%;
+        min-height: clamp(170px, 28vh, 260px);
+        margin: 0;
+        contain: paint;
+    }
+
+    .modal-cambio-carta .item-carta-reemplazo:hover {
+        transform: none;
+    }
 }
 
 .modal-dc-actions {

@@ -221,6 +221,10 @@ function crearElementoCartaSoloVisual(carta, destacarPoder = false) {
     if (badgeHabilidad) {
         cartaDiv.appendChild(badgeHabilidad);
     }
+    const badgeAfiliacion = window.crearBadgeAfiliacionCarta ? window.crearBadgeAfiliacionCarta(carta) : null;
+    if (badgeAfiliacion) {
+        cartaDiv.appendChild(badgeAfiliacion);
+    }
     cartaDiv.appendChild(crearBarraSaludElemento(carta));
     cartaDiv.appendChild(estrellasDiv);
     return cartaDiv;
@@ -367,6 +371,9 @@ function analizarMejoraAutomatica(cartas) {
             if (mejorasPosibles > 0) {
                 cartaBase.Nivel = nivelInicial + mejorasPosibles;
                 cartaBase.Poder = (cartaBase.Poder || 0) + (500 * mejorasPosibles);
+                if (typeof window.recalcularSkillPowerPorNivel === 'function') {
+                    window.recalcularSkillPowerPorNivel(cartaBase, cartaBase.Nivel);
+                }
                 duplicados = duplicados.slice(mejorasPosibles);
 
                 mejoras.push({
@@ -487,6 +494,10 @@ function cargarCartas() {
             const badgeHabilidad = window.crearBadgeHabilidadCarta ? window.crearBadgeHabilidadCarta(carta) : null;
             if (badgeHabilidad) {
                 cartaDiv.appendChild(badgeHabilidad);
+            }
+            const badgeAfiliacion = window.crearBadgeAfiliacionCarta ? window.crearBadgeAfiliacionCarta(carta) : null;
+            if (badgeAfiliacion) {
+                cartaDiv.appendChild(badgeAfiliacion);
             }
             cartaDiv.appendChild(crearBarraSaludElemento(carta));
             cartaDiv.appendChild(estrellasDiv);
@@ -741,6 +752,9 @@ function crearCartaMejoradaPorObjeto(cartaOriginal, tipo) {
         mejorada.Poder = Number(mejorada.Poder || 0) + (incrementoNiveles * 500);
         mejorada.SaludMax = saludBase + (incrementoNiveles * 500);
         mejorada.Salud = mejorada.SaludMax;
+    }
+    if (typeof window.recalcularSkillPowerPorNivel === 'function') {
+        window.recalcularSkillPowerPorNivel(mejorada, Number(mejorada.Nivel || 1));
     }
 
     return { original, mejorada };

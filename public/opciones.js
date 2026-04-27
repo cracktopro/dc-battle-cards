@@ -263,6 +263,10 @@ function crearCartaMiniAvatar(carta) {
     if (badgeHabilidad) {
         div.appendChild(badgeHabilidad);
     }
+    const badgeAfiliacion = window.crearBadgeAfiliacionCarta ? window.crearBadgeAfiliacionCarta(carta) : null;
+    if (badgeAfiliacion) {
+        div.appendChild(badgeAfiliacion);
+    }
     div.addEventListener('click', () => {
         cartaAvatarSeleccionada = { ...carta };
         document.getElementById('personaje-seleccionado-label').textContent = carta.Nombre;
@@ -355,11 +359,15 @@ function escalarCartaANivel(carta, nivelObjetivo) {
     const nivelActual = Number(carta.Nivel || 1);
     const poderActual = Number(carta.Poder || 0);
     const poderBaseNivel1 = Math.max(0, poderActual - ((nivelActual - 1) * 500));
-    return {
+    const cartaEscalada = {
         ...carta,
         Nivel: nivelObjetivo,
         Poder: poderBaseNivel1 + ((nivelObjetivo - 1) * 500)
     };
+    if (typeof window.recalcularSkillPowerPorNivel === 'function') {
+        window.recalcularSkillPowerPorNivel(cartaEscalada, nivelObjetivo);
+    }
+    return cartaEscalada;
 }
 
 async function adminMejorarTodasCartas() {

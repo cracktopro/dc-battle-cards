@@ -286,6 +286,9 @@ async function enriquecerCartasConDatosCatalogo(usuario) {
         const fusionada = typeof window.fusionarSkillDesdeFilaCatalogo === 'function'
             ? window.fusionarSkillDesdeFilaCatalogo(carta, datosCatalogo)
             : carta;
+        if (typeof window.recalcularSkillPowerPorNivel === 'function') {
+            window.recalcularSkillPowerPorNivel(fusionada, Number(fusionada.Nivel || carta.Nivel || 1));
+        }
         const skillNameFinal = String(fusionada.skill_name || '').trim();
         const skillInfoFinal = String(fusionada.skill_info || '').trim();
         const skillClassFinal = String(fusionada.skill_class || '').trim().toLowerCase();
@@ -388,14 +391,6 @@ function aplicarFiltroFaccion(usuario) {
     });
 }
 
-function crearInsigniaFaccion(carta) {
-    const faccion = normalizarFaccion(carta.faccion);
-    const insignia = document.createElement('div');
-    insignia.classList.add('faccion-carta', faccion === 'H' ? 'heroe' : 'villano');
-    insignia.textContent = faccion === 'H' ? 'Héroe' : 'Villano';
-    return insignia;
-}
-
 async function cargarCartas() {
     let usuario = JSON.parse(localStorage.getItem('usuario'));
 
@@ -448,8 +443,6 @@ async function cargarCartas() {
         cartaDiv.style.backgroundSize = 'cover';
         cartaDiv.style.backgroundPosition = 'center';
 
-        cartaDiv.appendChild(crearInsigniaFaccion(carta));
-
         const detallesDiv = document.createElement('div');
         detallesDiv.classList.add('detalles-carta');
 
@@ -480,6 +473,10 @@ async function cargarCartas() {
         const badgeHabilidad = window.crearBadgeHabilidadCarta ? window.crearBadgeHabilidadCarta(carta) : null;
         if (badgeHabilidad) {
             cartaDiv.appendChild(badgeHabilidad);
+        }
+        const badgeAfiliacion = window.crearBadgeAfiliacionCarta ? window.crearBadgeAfiliacionCarta(carta) : null;
+        if (badgeAfiliacion) {
+            cartaDiv.appendChild(badgeAfiliacion);
         }
         cartaDiv.appendChild(crearBarraSaludElemento(carta));
         cartaDiv.appendChild(estrellasDiv);

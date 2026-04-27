@@ -242,13 +242,17 @@ document.addEventListener('DOMContentLoaded', function () {
                     const incrementoNiveles = Math.max(dificultadSeleccionada - nivelBase, 0);
                     const saludBase = Number((carta.SaludMax ?? carta.saludMax ?? carta.Salud ?? carta.salud ?? carta.Poder) || 0);
                     const saludEscalada = saludBase + (incrementoNiveles * 500);
-                    return {
+                    const cartaEscalada = {
                         ...carta,
                         Nivel: dificultadSeleccionada,
                         Poder: Number(carta.Poder || 0) + (incrementoNiveles * 500),
                         SaludMax: saludEscalada,
                         Salud: saludEscalada
                     };
+                    if (typeof window.recalcularSkillPowerPorNivel === 'function') {
+                        window.recalcularSkillPowerPorNivel(cartaEscalada, dificultadSeleccionada);
+                    }
+                    return cartaEscalada;
                 });
 
                 // Guardar el mazo del oponente en localStorage con la misma estructura que el mazoJugador
@@ -834,6 +838,10 @@ function renderizarCartasSeleccionEvento() {
         if (badgeHabilidad) {
             cartaDiv.appendChild(badgeHabilidad);
         }
+        const badgeAfiliacion = window.crearBadgeAfiliacionCarta ? window.crearBadgeAfiliacionCarta(carta) : null;
+        if (badgeAfiliacion) {
+            cartaDiv.appendChild(badgeAfiliacion);
+        }
         cartaDiv.onclick = () => toggleSeleccionCartaEvento(item.index);
         grid.appendChild(cartaDiv);
     });
@@ -927,11 +935,15 @@ function escalarCartaANivel(carta, nivelObjetivo) {
     const nivelActual = Number(carta.Nivel || 1);
     const poderActual = Number(carta.Poder || 0);
     const poderBaseNivel1 = Math.max(0, poderActual - ((nivelActual - 1) * 500));
-    return {
+    const cartaEscalada = {
         ...carta,
         Nivel: nivelObjetivo,
         Poder: poderBaseNivel1 + ((nivelObjetivo - 1) * 500)
     };
+    if (typeof window.recalcularSkillPowerPorNivel === 'function') {
+        window.recalcularSkillPowerPorNivel(cartaEscalada, nivelObjetivo);
+    }
+    return cartaEscalada;
 }
 
 function generarMazoBotConSinergia(cartasDisponibles, dificultad) {

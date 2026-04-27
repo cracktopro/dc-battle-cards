@@ -1028,6 +1028,35 @@ body {
     right: 5px;
 }
 
+.tablero-container .carta .badge-afiliacion-carta-tablero {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    left: auto;
+    bottom: auto;
+    z-index: 8;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 223, 110, 0.95);
+    background: radial-gradient(circle at 30% 30%, rgba(255, 245, 170, 0.98) 0%, rgba(255, 214, 76, 0.95) 55%, rgba(205, 130, 20, 0.92) 100%);
+    color: #2a1700;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.68rem;
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: 0.02em;
+    text-shadow: 0 0 8px rgba(255, 220, 90, 0.45);
+    box-shadow:
+        0 0 8px rgba(255, 201, 46, 0.45),
+        0 0 14px rgba(255, 168, 24, 0.28),
+        inset 0 1px 0 rgba(255, 255, 255, 0.45);
+    pointer-events: auto;
+}
+
 .modal-habilidad-btn {
     font-family: 'Orbitron', sans-serif;
     font-size: 0.82rem;

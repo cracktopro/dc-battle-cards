@@ -63,9 +63,42 @@ async function cargarDesafiosDesdeExcel() {
     });
 }
 
-function estaDesbloqueado(desafio, completados) {
-    if (desafio.id === 0) return true;
-    return completados.includes(desafio.id - 1);
+function estaDesbloqueado(desafio, completadosSet, desafiosOrdenados) {
+    if (!Array.isArray(desafiosOrdenados) || desafiosOrdenados.length === 0) {
+        return true;
+    }
+
+    const indexActual = desafiosOrdenados.findIndex(item => Number(item.id) === Number(desafio.id));
+    if (indexActual <= 0) {
+        return true;
+    }
+
+    const idPrevio = Number(desafiosOrdenados[indexActual - 1].id);
+    return Number.isFinite(idPrevio) && completadosSet.has(idPrevio);
+}
+
+function construirProgresoSeguro(completadosRaw, desafiosOrdenados) {
+    const completadosSet = new Set(
+        (Array.isArray(completadosRaw) ? completadosRaw : [])
+            .map(id => Number(id))
+            .filter(Number.isFinite)
+    );
+    const progresoSeguro = new Set();
+    desafiosOrdenados.forEach((desafio, index) => {
+        const idActual = Number(desafio.id);
+        if (!Number.isFinite(idActual) || !completadosSet.has(idActual)) {
+            return;
+        }
+        if (index === 0) {
+            progresoSeguro.add(idActual);
+            return;
+        }
+        const idPrevio = Number(desafiosOrdenados[index - 1].id);
+        if (progresoSeguro.has(idPrevio)) {
+            progresoSeguro.add(idActual);
+        }
+    });
+    return progresoSeguro;
 }
 
 function crearEstrellas(cantidad) {
@@ -88,15 +121,28 @@ async function renderizarDesafios(desafios) {
     const grid = document.getElementById('desafios-grid');
     grid.innerHTML = '';
     const catalogo = await cargarCatalogoCartas();
+    const desafiosOrdenados = [...desafios]
+        .map(item => ({ ...item, id: Number(item.id) }))
+        .filter(item => Number.isFinite(item.id))
+        .sort((a, b) => a.id - b.id);
+    const idsDesafios = new Set(desafiosOrdenados.map(item => item.id));
     const mapaCatalogo = new Map(
         catalogo.map(carta => [normalizarNombre(carta.Nombre), carta])
     );
 
     desafios.forEach(desafio => {
         const usuario = JSON.parse(localStorage.getItem('usuario')) || {};
-        const completados = usuario.desafiosCompletados || [];
-        const completado = completados.includes(desafio.id);
-        const desbloqueado = estaDesbloqueado(desafio, completados);
+        const completadosPreferidos = Array.isArray(usuario.desafiosCompletadosV2)
+            ? usuario.desafiosCompletadosV2
+            : usuario.desafiosCompletados;
+        const completadosSet = construirProgresoSeguro(
+            (Array.isArray(completadosPreferidos) ? completadosPreferidos : [])
+                .map(id => Number(id))
+                .filter(id => Number.isFinite(id) && idsDesafios.has(id)),
+            desafiosOrdenados
+        );
+        const completado = completadosSet.has(Number(desafio.id));
+        const desbloqueado = estaDesbloqueado(desafio, completadosSet, desafiosOrdenados);
 
         const card = document.createElement('div');
         card.className = `desafio-card ${completado ? 'completado' : 'pendiente'}`;
@@ -368,6 +414,10 @@ function renderizarCartasSeleccionDesafio() {
         const badgeHabilidad = window.crearBadgeHabilidadCarta ? window.crearBadgeHabilidadCarta(carta) : null;
         if (badgeHabilidad) {
             cartaDiv.appendChild(badgeHabilidad);
+        }
+        const badgeAfiliacion = window.crearBadgeAfiliacionCarta ? window.crearBadgeAfiliacionCarta(carta) : null;
+        if (badgeAfiliacion) {
+            cartaDiv.appendChild(badgeAfiliacion);
         }
         cartaDiv.onclick = () => toggleSeleccionCartaDesafio(item.index);
 

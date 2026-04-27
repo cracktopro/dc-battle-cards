@@ -34,6 +34,7 @@ const ICONOS_OBJETO_POR_ID = {
     'obj-mejora-carta': '/resources/icons/mejora.png',
     'obj-mejora-especial': '/resources/icons/mejora_especial.png'
 };
+const ICONO_MONEDA = '/resources/icons/moneda.png';
 
 let usuarioActual = null;
 let emailActual = null;
@@ -230,7 +231,12 @@ async function prepararTiendaDiaria() {
 
 function actualizarPuntosUI() {
     const puntosDiv = document.getElementById('puntos-usuario');
-    puntosDiv.textContent = `Puntos: ${Number(usuarioActual.puntos || 0)}`;
+    puntosDiv.innerHTML = `
+        <span style="display:inline-flex;align-items:center;gap:8px;">
+            <img src="${ICONO_MONEDA}" alt="Moneda" style="width:28px;height:28px;object-fit:contain;">
+            <span>${Number(usuarioActual.puntos || 0)}</span>
+        </span>
+    `;
 }
 
 function actualizarFechaUI() {
@@ -346,11 +352,15 @@ function renderizarCartasTienda() {
         if (badgeHabilidad) {
             preview.appendChild(badgeHabilidad);
         }
+        const badgeAfiliacion = window.crearBadgeAfiliacionCarta ? window.crearBadgeAfiliacionCarta(oferta.carta) : null;
+        if (badgeAfiliacion) {
+            preview.appendChild(badgeAfiliacion);
+        }
         preview.appendChild(crearBarraSaludElemento(oferta.carta));
 
         const precio = document.createElement('div');
         precio.className = 'precio-item';
-        precio.textContent = `Precio: ${oferta.precio}`;
+        precio.innerHTML = `Precio: ${oferta.precio} <img src="${ICONO_MONEDA}" alt="Moneda" style="width:18px;height:18px;object-fit:contain;vertical-align:text-bottom;margin-left:4px;">`;
 
         const boton = document.createElement('button');
         boton.className = 'btn btn-primary';
@@ -397,7 +407,7 @@ function renderizarObjetosTienda() {
 
         const precio = document.createElement('div');
         precio.className = 'precio-item';
-        precio.textContent = `Precio: ${objeto.precio}`;
+        precio.innerHTML = `Precio: ${objeto.precio} <img src="${ICONO_MONEDA}" alt="Moneda" style="width:18px;height:18px;object-fit:contain;vertical-align:text-bottom;margin-left:4px;">`;
 
         const boton = document.createElement('button');
         boton.className = 'btn btn-primary';
@@ -575,7 +585,28 @@ function pedirConfirmacionCompra(nombre, precio) {
             return;
         }
 
-        texto.textContent = `¿Deseas comprar ${nombre} por ${precio} puntos?`;
+        texto.innerHTML = '';
+        const t1 = document.createTextNode('¿Deseas comprar ');
+        const nombreStrong = document.createElement('strong');
+        nombreStrong.textContent = String(nombre || '');
+        const t2 = document.createTextNode(' por ');
+        const precioStrong = document.createElement('strong');
+        precioStrong.textContent = String(precio || 0);
+        const moneda = document.createElement('img');
+        moneda.src = ICONO_MONEDA;
+        moneda.alt = 'Moneda';
+        moneda.style.width = '18px';
+        moneda.style.height = '18px';
+        moneda.style.objectFit = 'contain';
+        moneda.style.verticalAlign = 'text-bottom';
+        const t3 = document.createTextNode('?');
+        texto.appendChild(t1);
+        texto.appendChild(nombreStrong);
+        texto.appendChild(t2);
+        texto.appendChild(precioStrong);
+        texto.appendChild(document.createTextNode(' '));
+        texto.appendChild(moneda);
+        texto.appendChild(t3);
         modal.style.display = 'block';
 
         const limpiar = () => {

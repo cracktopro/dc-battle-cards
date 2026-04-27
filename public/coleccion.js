@@ -3,6 +3,7 @@ let todasLasCartasCatalogo = [];
 let nombresCartasConseguidas = new Set();
 let busquedaColeccion = '';
 let afiliacionFiltroActiva = 'todas';
+let ordenarPorPoderActivo = false;
 let mapaCatalogo = new Map();
 let mapaMejorVersionUsuario = new Map();
 
@@ -63,6 +64,7 @@ function configurarTabsColeccion() {
 function configurarFiltrosColeccion() {
     const inputBusqueda = document.getElementById('busqueda-coleccion');
     const selectorAfiliacion = document.getElementById('selector-afiliacion-coleccion');
+    const toggleOrdenPoder = document.getElementById('ordenar-poder-coleccion');
 
     inputBusqueda?.addEventListener('input', function () {
         busquedaColeccion = String(this.value || '').trim().toLowerCase();
@@ -71,6 +73,11 @@ function configurarFiltrosColeccion() {
 
     selectorAfiliacion?.addEventListener('change', function () {
         afiliacionFiltroActiva = normalizarAfiliacion(this.value || 'todas') || 'todas';
+        renderizarColeccion();
+    });
+
+    toggleOrdenPoder?.addEventListener('change', function () {
+        ordenarPorPoderActivo = Boolean(this.checked);
         renderizarColeccion();
     });
 }
@@ -256,10 +263,24 @@ function crearCartaColeccionElemento(carta, estaObtenida) {
     estadoDiv.textContent = estaObtenida ? 'Obtenida' : 'No conseguida';
 
     cartaDiv.appendChild(detallesDiv);
+    const badgeAfiliacion = window.crearBadgeAfiliacionCarta ? window.crearBadgeAfiliacionCarta(cartaVisual) : null;
+    if (badgeAfiliacion) {
+        cartaDiv.appendChild(badgeAfiliacion);
+    }
     cartaDiv.appendChild(estrellasDiv);
     cartaDiv.appendChild(estadoDiv);
 
     return cartaDiv;
+}
+
+function obtenerPoderVisualColeccion(carta) {
+    const claveCarta = obtenerClaveCarta(carta?.Nombre);
+    const estaObtenida = nombresCartasConseguidas.has(claveCarta);
+    const versionJugador = mapaMejorVersionUsuario.get(claveCarta);
+    const cartaVisual = estaObtenida && versionJugador
+        ? versionJugador
+        : carta;
+    return Number(cartaVisual?.Poder || 0);
 }
 
 function renderizarColeccion() {
@@ -281,7 +302,15 @@ function renderizarColeccion() {
             const afiliaciones = obtenerAfiliacionesCarta(carta).map(normalizarAfiliacion);
             return afiliaciones.includes(normalizarAfiliacion(afiliacionFiltroActiva));
         })
-        .sort((a, b) => String(a.Nombre || '').localeCompare(String(b.Nombre || '')));
+        .sort((a, b) => {
+            if (ordenarPorPoderActivo) {
+                const diffPoder = obtenerPoderVisualColeccion(b) - obtenerPoderVisualColeccion(a);
+                if (diffPoder !== 0) {
+                    return diffPoder;
+                }
+            }
+            return String(a.Nombre || '').localeCompare(String(b.Nombre || ''));
+        });
 
     cartasFiltradas.forEach(carta => {
         const estaObtenida = nombresCartasConseguidas.has(String(carta?.Nombre || '').toLowerCase());

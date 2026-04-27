@@ -24,6 +24,8 @@ let estadoDesafio = {
 };
 const ICONO_MEJORA = '/resources/icons/mejora.png';
 const ICONO_MEJORA_ESPECIAL = '/resources/icons/mejora_especial.png';
+const ICONO_MONEDA = '/resources/icons/moneda.png';
+const COOLDOWN_HABILIDAD_ACTIVA_TURNOS = 2;
 
 function obtenerNombreVisibleJugador() {
     const usuario = JSON.parse(localStorage.getItem('usuario') || '{}');
@@ -93,7 +95,8 @@ function obtenerMetaHabilidad(carta) {
     const trigger = triggerRaw === 'usar' ? 'usar' : (triggerRaw === 'auto' ? 'auto' : null);
     const nombre = String(carta.skill_name || '').trim();
     const info = String(carta.skill_info || '').trim();
-    const clase = String(carta.skill_class || '').trim().toLowerCase();
+    const claseRaw = String(carta.skill_class || '').trim().toLowerCase();
+    const clase = claseRaw === 'heall_all' ? 'heal_all' : claseRaw;
     return {
         tieneHabilidad: Boolean(trigger && nombre && clase),
         trigger,
@@ -105,25 +108,13 @@ function obtenerMetaHabilidad(carta) {
 }
 
 function obtenerValorNumericoSkillPower(carta, fallback = 0) {
-    const meta = obtenerMetaHabilidad(carta);
-    const bruto = meta.powerRaw;
-    if (typeof bruto === 'number' && Number.isFinite(bruto)) {
-        return bruto;
+    if (typeof window.obtenerSkillPowerNumericoCarta === 'function') {
+        return window.obtenerSkillPowerNumericoCarta(carta, {
+            fallback,
+            poder: obtenerPoderCartaFinal(carta),
+            salud: obtenerSaludActualCarta(carta)
+        });
     }
-    const texto = String(bruto ?? '').trim().toLowerCase();
-    if (!texto) {
-        return fallback;
-    }
-
-    const numeroDirecto = Number(texto.replace(',', '.'));
-    if (Number.isFinite(numeroDirecto)) {
-        return numeroDirecto;
-    }
-
-    if (texto.includes('poder') && texto.includes('/2')) {
-        return Math.max(1, Math.floor(obtenerPoderCartaFinal(carta) / 2));
-    }
-
     return fallback;
 }
 
@@ -242,7 +233,7 @@ async function enriquecerCartasConDatosCatalogo(cartas) {
         const saludEscalada = calcularSaludEscaladaDesdeCatalogo(carta, datosCatalogo);
         const saludNormalizada = saludEscalada;
 
-        return {
+        const cartaEnriquecida = {
             ...carta,
             faccion: faccionFinal,
             Afiliacion: afiliacionFinal,
@@ -255,10 +246,15 @@ async function enriquecerCartasConDatosCatalogo(cartas) {
             Salud: saludNormalizada,
             escudoActual: Math.max(0, Number(carta.escudoActual || 0)),
             poderModHabilidad: Number(carta.poderModHabilidad || 0),
-            habilidadUsadaPartida: Boolean(carta.habilidadUsadaPartida),
+            habilidadUsadaPartida: false,
+            habilidadCooldownRestante: Math.max(0, Number(carta.habilidadCooldownRestante || 0)),
             habilidadAutoAplicadaEnJuego: Boolean(carta.habilidadAutoAplicadaEnJuego),
             tankActiva: Boolean(carta.tankActiva)
         };
+        if (typeof window.recalcularSkillPowerPorNivel === 'function') {
+            window.recalcularSkillPowerPorNivel(cartaEnriquecida, Number(cartaEnriquecida.Nivel || 1));
+        }
+        return cartaEnriquecida;
     });
 }
 
@@ -611,7 +607,8 @@ function crearCartaCombateDesdeMazo(carta) {
         : saludMax;
     cartaCombate.escudoActual = Math.max(0, Number(cartaCombate.escudoActual || 0));
     cartaCombate.poderModHabilidad = Number(cartaCombate.poderModHabilidad || 0);
-    cartaCombate.habilidadUsadaPartida = Boolean(cartaCombate.habilidadUsadaPartida);
+    cartaCombate.habilidadUsadaPartida = false;
+    cartaCombate.habilidadCooldownRestante = Math.max(0, Number(cartaCombate.habilidadCooldownRestante || 0));
     cartaCombate.habilidadAutoAplicadaEnJuego = false;
     cartaCombate.tankActiva = Boolean(cartaCombate.tankActiva);
     return cartaCombate;
@@ -668,7 +665,7 @@ function resumirCartaDebug(carta, cartasEnemigasParaSaludEfectiva = null) {
         saludMax: obtenerSaludMaxCarta(carta),
         escudo: Number(carta.escudoActual || 0),
         skill: meta.tieneHabilidad ? `${meta.trigger}:${meta.clase}` : 'none',
-        usada: Boolean(carta.habilidadUsadaPartida),
+        cdHabilidad: Math.max(0, Number(carta.habilidadCooldownRestante || 0)),
         tank: Boolean(carta.tankActiva)
     };
     if (Array.isArray(cartasEnemigasParaSaludEfectiva)) {
@@ -891,6 +888,9 @@ function escalarCartaSegunDificultad(carta, dificultad) {
     cartaEscalada.Poder = Number(cartaEscalada.Poder || 0) + (incrementoNiveles * 500);
     cartaEscalada.SaludMax = saludBase + (incrementoNiveles * 500);
     cartaEscalada.Salud = cartaEscalada.SaludMax;
+    if (typeof window.recalcularSkillPowerPorNivel === 'function') {
+        window.recalcularSkillPowerPorNivel(cartaEscalada, dificultadObjetivo);
+    }
 
     return cartaEscalada;
 }
@@ -909,6 +909,9 @@ function escalarBossSegunDificultad(carta, dificultad) {
     cartaBoss.SaludMax = Math.round((saludBase * 8) + incrementoPorNivel);
     cartaBoss.Salud = cartaBoss.SaludMax;
     cartaBoss.esBoss = true;
+    if (typeof window.recalcularSkillPowerPorNivel === 'function') {
+        window.recalcularSkillPowerPorNivel(cartaBoss, dificultadObjetivo);
+    }
 
     return cartaBoss;
 }
@@ -1045,18 +1048,25 @@ async function otorgarRecompensasDesafio() {
 
     const recompensas = estadoDesafio.recompensas || { puntos: 0, mejora: 0, mejoraEspecial: 0 };
 
-    // ✅ Guardar desafío completado
+    // Guardar progreso: eventos y desafios se rastrean por separado para evitar cruces de IDs.
     usuario.desafiosCompletados = Array.isArray(usuario.desafiosCompletados)
-        ? usuario.desafiosCompletados
+        ? usuario.desafiosCompletados.map(id => Number(id)).filter(Number.isFinite)
+        : [];
+    usuario.desafiosCompletadosV2 = Array.isArray(usuario.desafiosCompletadosV2)
+        ? usuario.desafiosCompletadosV2.map(id => Number(id)).filter(Number.isFinite)
         : [];
 
-    const idDesafio = desafioActivo?.id;
+    const idDesafio = Number(desafioActivo?.id);
+    const esEvento = desafioActivo?.tipo === 'evento';
 
-    if (idDesafio !== undefined && !usuario.desafiosCompletados.includes(idDesafio)) {
+    if (!esEvento && Number.isFinite(idDesafio) && !usuario.desafiosCompletados.includes(idDesafio)) {
         usuario.desafiosCompletados.push(idDesafio);
     }
+    if (!esEvento && Number.isFinite(idDesafio) && !usuario.desafiosCompletadosV2.includes(idDesafio)) {
+        usuario.desafiosCompletadosV2.push(idDesafio);
+    }
 
-    if (desafioActivo?.tipo === 'evento') {
+    if (esEvento) {
         const claveRotacionEvento = String(desafioActivo?.rotacionClave || '').trim();
         if (claveRotacionEvento) {
             usuario.eventosJugadosPorRotacion = (usuario.eventosJugadosPorRotacion && typeof usuario.eventosJugadosPorRotacion === 'object')
@@ -1155,6 +1165,10 @@ function crearEtiquetaObjetoRecompensa(tipo, cantidad) {
     badge.appendChild(icono);
     badge.appendChild(texto);
     return badge;
+}
+
+function formatoPuntosConMoneda(valor) {
+    return `${Number(valor || 0)} <img src="${ICONO_MONEDA}" alt="Moneda" style="width:18px;height:18px;object-fit:contain;vertical-align:text-bottom;margin-left:4px;">`;
 }
 
 function seleccionarCartasAleatorias(mazo, cantidad) {
@@ -1394,6 +1408,26 @@ function aplicarHabilidadAutoSiCorresponde(carta, propietario) {
     escribirDebug('SKILL_AUTO_OK', { propietario, carta: carta.Nombre, clase: meta.clase, estado: snapshotTableroDebug() });
 }
 
+function reducirCooldownHabilidadesActivas(propietario) {
+    const aliados = obtenerSlotsAliados(propietario);
+    aliados.forEach(carta => {
+        if (!carta) {
+            return;
+        }
+        const meta = obtenerMetaHabilidad(carta);
+        if (!meta.tieneHabilidad || meta.trigger !== 'usar') {
+            return;
+        }
+        const cd = Math.max(0, Number(carta.habilidadCooldownRestante || 0));
+        carta.habilidadCooldownRestante = Math.max(0, cd - 1);
+    });
+}
+
+function sincronizarPasivasAutoEnMesa() {
+    cartasJugadorEnJuego.forEach(carta => aplicarHabilidadAutoSiCorresponde(carta, 'jugador'));
+    cartasOponenteEnJuego.forEach(carta => aplicarHabilidadAutoSiCorresponde(carta, 'oponente'));
+}
+
 function obtenerIndicesAliadosDisponibles(propietario) {
     return obtenerIndicesCartasDisponibles(obtenerSlotsAliados(propietario));
 }
@@ -1413,7 +1447,8 @@ function elegirAliadoMasHerido(propietario) {
 
 async function usarHabilidadActiva(carta, propietario, slotCarta) {
     const meta = obtenerMetaHabilidad(carta);
-    if (!meta.tieneHabilidad || meta.trigger !== 'usar' || carta.habilidadUsadaPartida) {
+    const cooldownActual = Math.max(0, Number(carta.habilidadCooldownRestante || 0));
+    if (!meta.tieneHabilidad || meta.trigger !== 'usar' || cooldownActual > 0) {
         return false;
     }
     escribirDebug('SKILL_USAR_INTENTO', { propietario, slot: slotCarta, carta: carta.Nombre, clase: meta.clase, skill: meta.nombre });
@@ -1612,7 +1647,7 @@ async function usarHabilidadActiva(carta, propietario, slotCarta) {
         return false;
     }
 
-    carta.habilidadUsadaPartida = true;
+    carta.habilidadCooldownRestante = COOLDOWN_HABILIDAD_ACTIVA_TURNOS;
     renderizarTablero();
     escribirDebug('SKILL_USAR_OK', { propietario, carta: carta.Nombre, clase: meta.clase, estado: snapshotTableroDebug() });
     return true;
@@ -1638,8 +1673,9 @@ async function manejarUsoHabilidadJugador(event, slotIndex) {
     if (!meta.tieneHabilidad || meta.trigger !== 'usar') {
         return;
     }
-    if (carta.habilidadUsadaPartida) {
-        escribirLog(`${carta.Nombre} ya usó su habilidad activa en esta partida.`);
+    const cooldownActual = Math.max(0, Number(carta.habilidadCooldownRestante || 0));
+    if (cooldownActual > 0) {
+        escribirLog(`${carta.Nombre} tiene la habilidad en cooldown (${cooldownActual} turno(s)).`);
         return;
     }
 
@@ -1832,6 +1868,10 @@ function crearCartaElemento(carta, tipo, slotIndex, opciones = {}) {
     if (badgeHabilidad) {
         cartaDiv.appendChild(badgeHabilidad);
     }
+    const badgeAfiliacion = window.crearBadgeAfiliacionCarta ? window.crearBadgeAfiliacionCarta(carta) : null;
+    if (badgeAfiliacion) {
+        cartaDiv.appendChild(badgeAfiliacion);
+    }
     if (carta?.tankActiva) {
         const tankBadge = document.createElement('div');
         tankBadge.className = 'badge-tank-carta';
@@ -1847,9 +1887,12 @@ function crearCartaElemento(carta, tipo, slotIndex, opciones = {}) {
         const botonHabilidad = document.createElement('button');
         botonHabilidad.type = 'button';
         botonHabilidad.className = 'btn-habilidad-uso';
-        botonHabilidad.textContent = carta.habilidadUsadaPartida ? 'Habilidad usada' : 'Usar Habilidad';
+        const cooldownActual = Math.max(0, Number(carta.habilidadCooldownRestante || 0));
+        botonHabilidad.textContent = cooldownActual > 0
+            ? `Cooldown: ${cooldownActual} ${cooldownActual === 1 ? 'turno' : 'turnos'}`
+            : 'Usar Habilidad';
         botonHabilidad.disabled = Boolean(
-            carta.habilidadUsadaPartida
+            cooldownActual > 0
             || partidaFinalizada
             || turnoActual !== 'jugador'
             || cartasQueYaAtacaron.includes(slotIndex)
@@ -1948,6 +1991,10 @@ function actualizarIndicadoresAfiliacionesActivas() {
 }
 
 function renderizarTablero() {
+    // Garantiza que cualquier carta recién entrada en mesa active su pasiva AUTO
+    // antes de recalcular poder/vida efectiva y pintar el tablero.
+    sincronizarPasivasAutoEnMesa();
+
     const { cartasConBonus: cartasJugadorConBonus } = aplicarBonusAfiliaciones(cartasJugadorEnJuego, cartasOponenteEnJuego);
     const { cartasConBonus: cartasOponenteConBonus } = aplicarBonusAfiliaciones(cartasOponenteEnJuego, cartasJugadorEnJuego);
 
@@ -2143,7 +2190,7 @@ async function mostrarVentanaFinPartida(ganador) {
             const recompensaDesafio = await otorgarRecompensasDesafio();
             const resumenDesafio = document.createElement('p');
             resumenDesafio.classList.add('texto-recompensa-resumen');
-            resumenDesafio.textContent = `Recompensas del desafío: ${recompensaDesafio.puntosGanados} puntos.`;
+            resumenDesafio.innerHTML = `Recompensas del desafío: ${formatoPuntosConMoneda(recompensaDesafio.puntosGanados)}.`;
             recompensasContainer.appendChild(resumenDesafio);
 
             const filaObjetos = document.createElement('div');
@@ -2174,7 +2221,7 @@ async function mostrarVentanaFinPartida(ganador) {
             const recompensa = await otorgarRecompensasVictoria();
             const resumen = document.createElement('p');
             resumen.classList.add('texto-recompensa-resumen');
-            resumen.textContent = `Recompensas: ${recompensa.puntosGanados} puntos y ${recompensa.cartasGanadas.length} cartas nuevas.`;
+            resumen.innerHTML = `Recompensas: ${formatoPuntosConMoneda(recompensa.puntosGanados)} y ${recompensa.cartasGanadas.length} cartas nuevas.`;
             recompensasContainer.appendChild(resumen);
 
             const rejillaRecompensas = document.createElement('div');
@@ -2189,7 +2236,7 @@ async function mostrarVentanaFinPartida(ganador) {
         const totalPuntos = Number(usuarioActualizado?.puntos || 0);
         const puntosTotales = document.createElement('p');
         puntosTotales.classList.add('texto-recompensa-puntos');
-        puntosTotales.textContent = `Puntos totales: ${totalPuntos}.`;
+        puntosTotales.innerHTML = `Puntos totales: ${formatoPuntosConMoneda(totalPuntos)}.`;
         recompensasContainer.appendChild(puntosTotales);
 
         escribirLog('Victoria guardada correctamente. Las recompensas se han añadido a tu usuario.');
@@ -2495,7 +2542,11 @@ async function ejecutarAtaqueBot(indiceSecuencia = 0, atacantes = null) {
     }
 
     const metaHabilidadAtacante = obtenerMetaHabilidad(cartaAtacante);
-    if (metaHabilidadAtacante.tieneHabilidad && metaHabilidadAtacante.trigger === 'usar' && !cartaAtacante.habilidadUsadaPartida) {
+    if (
+        metaHabilidadAtacante.tieneHabilidad
+        && metaHabilidadAtacante.trigger === 'usar'
+        && Math.max(0, Number(cartaAtacante.habilidadCooldownRestante || 0)) <= 0
+    ) {
         await usarHabilidadActiva(cartaAtacante, 'oponente', slotAtacante);
     }
 
@@ -2559,6 +2610,7 @@ async function iniciarTurnoJugador() {
     turnoActual = 'jugador';
     atacanteSeleccionado = null;
     cartasQueYaAtacaron = [];
+    reducirCooldownHabilidadesActivas('jugador');
 
     actualizarTextoTurno('Tu turno');
     mostrarAvisoTurno('Es tu turno');
@@ -2595,6 +2647,7 @@ async function iniciarTurnoOponente() {
     atacanteSeleccionado = null;
     cartasQueYaAtacaron = [];
     limpiarDestacados();
+    reducirCooldownHabilidadesActivas('oponente');
 
     actualizarTextoTurno('Turno del BOT');
     mostrarAvisoTurno('Turno del BOT');
