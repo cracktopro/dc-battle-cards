@@ -443,6 +443,167 @@ body {
     display: none;
 }
 
+/* Mejorar cartas: grupo de duplicados (una carta + badge) */
+.carta-grupo-duplicados-wrap {
+    position: relative;
+    width: 100%;
+}
+
+.carta-grupo-duplicados-wrap .carta {
+    width: 100%;
+}
+
+.carta-duplicados-badge {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 12;
+    min-width: 44px;
+    height: 44px;
+    padding: 0 10px;
+    border-radius: 999px;
+    border: 2px solid rgba(255, 223, 110, 0.95);
+    background: radial-gradient(circle at 30% 30%, rgba(255, 245, 170, 0.98) 0%, rgba(255, 214, 76, 0.95) 55%, rgba(205, 130, 20, 0.92) 100%);
+    color: #2a1700;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.15rem;
+    font-weight: 900;
+    line-height: 1;
+    letter-spacing: 0.02em;
+    text-shadow: 0 0 8px rgba(255, 220, 90, 0.45);
+    box-shadow:
+        0 0 10px rgba(255, 201, 46, 0.55),
+        0 0 18px rgba(255, 168, 24, 0.35),
+        inset 0 1px 0 rgba(255, 255, 255, 0.45);
+    pointer-events: none;
+}
+
+.carta-grupo-duplicados-wrap--clicable .carta {
+    cursor: pointer;
+    box-shadow:
+        0 0 12px rgba(255, 215, 0, 0.55),
+        0 0 22px rgba(255, 200, 0, 0.38),
+        0 0 10px rgba(0, 123, 255, 0.25);
+    border-color: rgba(255, 215, 0, 0.75);
+}
+
+.carta-grupo-duplicados-wrap--clicable .carta:hover {
+    box-shadow:
+        0 0 18px rgba(255, 230, 120, 0.85),
+        0 0 28px rgba(255, 200, 0, 0.5),
+        0 0 14px rgba(0, 123, 255, 0.35);
+    border-color: rgba(255, 236, 140, 0.95);
+}
+
+/* Modal combinar duplicados (mejorarCartas) */
+.modal-combinar-duplicados {
+    position: fixed;
+    inset: 0;
+    z-index: 2050;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 12px;
+    background: rgba(0, 0, 0, 0.78);
+}
+
+.modal-combinar-duplicados-inner {
+    width: min(960px, 96vw);
+    max-height: 92vh;
+    overflow: auto;
+    background: rgba(8, 18, 36, 0.98);
+    border: 1px solid rgba(0, 209, 255, 0.38);
+    border-radius: 14px;
+    box-shadow: 0 0 22px rgba(0, 123, 255, 0.32);
+    padding: 18px 20px 20px;
+}
+
+.modal-combinar-duplicados-titulo {
+    margin: 0 0 8px;
+    color: #dff8ff;
+    font-size: 1.15rem;
+    font-weight: 800;
+    text-align: center;
+    text-shadow: 0 0 10px rgba(0, 123, 255, 0.45);
+}
+
+.modal-combinar-duplicados-desc {
+    margin: 0 0 16px;
+    color: #b8e4ff;
+    font-size: 0.9rem;
+    text-align: center;
+}
+
+.modal-combinar-duplicados-seccion {
+    margin-bottom: 16px;
+}
+
+.modal-combinar-duplicados-label {
+    color: #ffd700;
+    font-size: 0.82rem;
+    font-weight: 700;
+    margin-bottom: 8px;
+    letter-spacing: 0.02em;
+}
+
+.modal-combinar-duplicados-keeper {
+    display: flex;
+    justify-content: center;
+}
+
+.modal-combinar-duplicados-lista {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    justify-content: center;
+}
+
+.modal-combinar-duplicados-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 10px;
+    border-radius: 12px;
+    border: 1px solid rgba(0, 209, 255, 0.28);
+    background: rgba(0, 36, 72, 0.45);
+    cursor: pointer;
+    transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.modal-combinar-duplicados-item:hover {
+    border-color: rgba(255, 215, 0, 0.55);
+    box-shadow: 0 0 12px rgba(255, 215, 0, 0.25);
+}
+
+.modal-combinar-duplicados-item.seleccionada {
+    border-color: rgba(255, 215, 0, 0.9);
+    box-shadow: 0 0 14px rgba(255, 215, 0, 0.45);
+}
+
+.modal-combinar-duplicados-item .carta {
+    width: 180px;
+}
+
+.modal-combinar-duplicados-item-hint {
+    font-size: 0.72rem;
+    color: #9ad4ff;
+    text-align: center;
+    max-width: 200px;
+}
+
+.modal-combinar-duplicados-acciones {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    margin-top: 8px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(0, 209, 255, 0.25);
+}
+
 .faccion-carta {
     position: absolute;
     top: 8px;

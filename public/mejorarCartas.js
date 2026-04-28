@@ -62,6 +62,8 @@ async function enriquecerUsuarioSkillsDesdeCatalogoMejorar() {
 }
 
 let mejoraObjetoPendiente = null;
+let combinacionDuplicadosGrupo = null;
+const seleccionIndicesCombinacion = new Set();
 const ICONO_MEJORA = '/resources/icons/mejora.png';
 const ICONO_MEJORA_ESPECIAL = '/resources/icons/mejora_especial.png';
 
@@ -122,6 +124,233 @@ function crearBarraSaludElemento(carta) {
     return barraSaludContenedor;
 }
 
+function construirGruposMejoraClasica(usuario) {
+    const mapa = new Map();
+    (usuario.cartas || []).forEach((carta, index) => {
+        const nombre = String(carta.Nombre || '').trim();
+        if (!nombre) {
+            return;
+        }
+        if (!mapa.has(nombre)) {
+            mapa.set(nombre, []);
+        }
+        mapa.get(nombre).push({ index, carta: { ...carta } });
+    });
+
+    const grupos = [];
+    mapa.forEach((items, nombre) => {
+        items.sort((a, b) => {
+            const diffNivel = Number(b.carta.Nivel || 1) - Number(a.carta.Nivel || 1);
+            if (diffNivel !== 0) {
+                return diffNivel;
+            }
+            const diffPoder = Number(b.carta.Poder || 0) - Number(a.carta.Poder || 0);
+            if (diffPoder !== 0) {
+                return diffPoder;
+            }
+            return a.index - b.index;
+        });
+        const best = items[0];
+        grupos.push({
+            nombre,
+            total: items.length,
+            keeperIndex: best.index,
+            keeperCarta: best.carta,
+            sacrificables: items.slice(1).map(x => ({ index: x.index, carta: x.carta })),
+            todos: items.map(x => ({ index: x.index, carta: x.carta }))
+        });
+    });
+    grupos.sort((a, b) => a.nombre.localeCompare(b.nombre));
+    return grupos;
+}
+
+function grupoVisibleEnVistaClasica(grupo) {
+    const n = Math.max(1, Number(grupo.keeperCarta.Nivel || 1));
+    if (n >= 6) {
+        return false;
+    }
+    if (grupo.total === 1 && n === 5) {
+        return false;
+    }
+    return true;
+}
+
+function grupoEsClicableCombinar(grupo) {
+    const n = Math.max(1, Number(grupo.keeperCarta.Nivel || 1));
+    return grupo.total > 1 && n < 5;
+}
+
+function ordenarIndicesParaConsumo(usuario, indices) {
+    return [...indices].sort((a, b) => {
+        const ca = usuario.cartas[a];
+        const cb = usuario.cartas[b];
+        const na = Number(ca.Nivel || 1) - Number(cb.Nivel || 1);
+        if (na !== 0) {
+            return na;
+        }
+        const pa = Number(ca.Poder || 0) - Number(cb.Poder || 0);
+        if (pa !== 0) {
+            return pa;
+        }
+        return a - b;
+    });
+}
+
+/**
+ * Devuelve { nuevasCartas, cartaAntes, cartaMejorada } o null si no aplica.
+ */
+function calcularFusionDesdeSeleccion(usuario, keeperIndex, seleccionIndices) {
+    const setSel = new Set(seleccionIndices);
+    setSel.delete(keeperIndex);
+    if (setSel.size === 0) {
+        return null;
+    }
+    const nivelIni = Math.max(1, Number(usuario.cartas[keeperIndex].Nivel || 1));
+    if (nivelIni >= 5) {
+        return null;
+    }
+    const ordenados = ordenarIndicesParaConsumo(usuario, Array.from(setSel));
+    const n = Math.min(ordenados.length, 5 - nivelIni);
+    if (n <= 0) {
+        return null;
+    }
+    const consumir = ordenados.slice(0, n);
+    const cartaAntes = { ...usuario.cartas[keeperIndex] };
+    const cartaMejorada = { ...usuario.cartas[keeperIndex] };
+    cartaMejorada.Nivel = nivelIni + n;
+    cartaMejorada.Poder = Number(cartaMejorada.Poder || 0) + (500 * n);
+    if (typeof window.recalcularSkillPowerPorNivel === 'function') {
+        window.recalcularSkillPowerPorNivel(cartaMejorada, cartaMejorada.Nivel);
+    }
+    const consumirSet = new Set(consumir);
+    const nuevasCartas = [];
+    for (let i = 0; i < usuario.cartas.length; i++) {
+        if (consumirSet.has(i)) {
+            continue;
+        }
+        if (i === keeperIndex) {
+            nuevasCartas.push(cartaMejorada);
+        } else {
+            nuevasCartas.push(usuario.cartas[i]);
+        }
+    }
+    return { nuevasCartas, cartaAntes, cartaMejorada };
+}
+
+function cerrarModalCombinarDuplicados() {
+    const modal = document.getElementById('modal-combinar-duplicados');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+    combinacionDuplicadosGrupo = null;
+    seleccionIndicesCombinacion.clear();
+}
+
+function actualizarBotonAceptarCombinacion() {
+    const btn = document.getElementById('btn-combinar-duplicados-aceptar');
+    if (btn) {
+        btn.disabled = seleccionIndicesCombinacion.size === 0;
+    }
+}
+
+function renderListaSeleccionCombinacion(usuario) {
+    const lista = document.getElementById('combinar-duplicados-lista');
+    if (!lista || !combinacionDuplicadosGrupo) {
+        return;
+    }
+    lista.innerHTML = '';
+    combinacionDuplicadosGrupo.sacrificables.forEach(({ index, carta }) => {
+        const item = document.createElement('div');
+        item.className = `modal-combinar-duplicados-item${seleccionIndicesCombinacion.has(index) ? ' seleccionada' : ''}`;
+        item.dataset.index = String(index);
+        const mini = crearElementoCartaSoloVisual(carta, false, 168);
+        const hint = document.createElement('div');
+        hint.className = 'modal-combinar-duplicados-item-hint';
+        hint.textContent = `Copia · Nivel ${Number(carta.Nivel || 1)} · índice ${index}`;
+        item.appendChild(mini);
+        item.appendChild(hint);
+        item.addEventListener('click', () => {
+            if (seleccionIndicesCombinacion.has(index)) {
+                seleccionIndicesCombinacion.delete(index);
+            } else {
+                seleccionIndicesCombinacion.add(index);
+            }
+            renderListaSeleccionCombinacion(usuario);
+            actualizarBotonAceptarCombinacion();
+        });
+        lista.appendChild(item);
+    });
+}
+
+function abrirModalCombinarDuplicados(grupo) {
+    if (!grupoEsClicableCombinar(grupo)) {
+        return;
+    }
+    const usuario = JSON.parse(localStorage.getItem('usuario'));
+    if (!usuario?.cartas) {
+        return;
+    }
+    combinacionDuplicadosGrupo = grupo;
+    seleccionIndicesCombinacion.clear();
+
+    const modal = document.getElementById('modal-combinar-duplicados');
+    const desc = document.getElementById('combinar-duplicados-descripcion');
+    const keeperWrap = document.getElementById('combinar-duplicados-keeper');
+    if (!modal || !desc || !keeperWrap) {
+        return;
+    }
+
+    const nivelK = Number(grupo.keeperCarta.Nivel || 1);
+    const maxSubidas = Math.max(0, 5 - nivelK);
+    desc.textContent = `Tienes ${grupo.total} copias de «${grupo.nombre}». Puedes subir hasta ${maxSubidas} nivel(es) fusionando copias (se consumen las que elijas, priorizando las de menor nivel).`;
+
+    keeperWrap.innerHTML = '';
+    keeperWrap.appendChild(crearElementoCartaSoloVisual(grupo.keeperCarta, false, 200));
+
+    renderListaSeleccionCombinacion(usuario);
+    actualizarBotonAceptarCombinacion();
+    modal.style.display = 'flex';
+}
+
+async function confirmarCombinacionDuplicados() {
+    if (!combinacionDuplicadosGrupo || seleccionIndicesCombinacion.size === 0) {
+        return;
+    }
+    const usuario = JSON.parse(localStorage.getItem('usuario'));
+    const email = localStorage.getItem('email');
+    if (!usuario?.cartas || !email) {
+        mostrarMensaje('No se pudo validar la sesión.', 'danger');
+        cerrarModalCombinarDuplicados();
+        return;
+    }
+
+    const resultado = calcularFusionDesdeSeleccion(
+        usuario,
+        combinacionDuplicadosGrupo.keeperIndex,
+        Array.from(seleccionIndicesCombinacion)
+    );
+    if (!resultado) {
+        mostrarMensaje('No se puede aplicar esta combinación.', 'warning');
+        return;
+    }
+
+    usuario.cartas = resultado.nuevasCartas;
+    sincronizarMazosConColeccion(usuario);
+
+    try {
+        await actualizarUsuarioFirebase(usuario, email);
+        localStorage.setItem('usuario', JSON.stringify(usuario));
+        const { cartaAntes, cartaMejorada } = resultado;
+        cerrarModalCombinarDuplicados();
+        cargarCartas();
+        mostrarResultadoMejoraObjeto(cartaAntes, cartaMejorada);
+        mostrarMensaje('Fusión de duplicados aplicada correctamente.', 'success');
+    } catch (error) {
+        console.error('Error al fusionar duplicados:', error);
+        mostrarMensaje('Error al guardar la fusión.', 'danger');
+    }
+}
+
 function crearPoolCartasPorNombre(cartas) {
     const pool = new Map();
 
@@ -173,13 +402,15 @@ function normalizarObjetosUsuario(usuario) {
     usuario.objetos = objetosBase;
 }
 
-function crearElementoCartaSoloVisual(carta, destacarPoder = false) {
+function crearElementoCartaSoloVisual(carta, destacarPoder = false, anchoCartaPx = 210) {
     const cartaDiv = document.createElement('div');
     cartaDiv.classList.add('carta');
     if (esCartaLegendaria(carta)) {
         cartaDiv.classList.add('nivel-legendaria');
     }
-    cartaDiv.style.width = '210px';
+    if (Number.isFinite(anchoCartaPx) && anchoCartaPx > 0) {
+        cartaDiv.style.width = `${anchoCartaPx}px`;
+    }
 
     const imagenUrl = obtenerImagenCarta(carta);
     cartaDiv.style.backgroundImage = `url(${imagenUrl})`;
@@ -428,42 +659,27 @@ function cargarCartas() {
         const contenedorCartas = document.getElementById('contenedor-cartas');
         contenedorCartas.innerHTML = ''; // Limpiar el contenedor antes de agregar nuevas cartas
 
-        // Ordenar las cartas por nombre para localizar duplicados rápido.
-        const cartasOrdenadas = usuario.cartas.map((carta, index) => ({ ...carta, originalIndex: index }))
-                                              .sort((a, b) => {
-                                                  const comparacionNombre = a.Nombre.localeCompare(b.Nombre);
-                                                  if (comparacionNombre !== 0) {
-                                                      return comparacionNombre;
-                                                  }
-
-                                                  const comparacionNivel = (b.Nivel || 1) - (a.Nivel || 1);
-                                                  if (comparacionNivel !== 0) {
-                                                      return comparacionNivel;
-                                                  }
-
-                                                  return (b.Poder || 0) - (a.Poder || 0);
-                                              });
-        console.log('Cartas ordenadas por nombre:', cartasOrdenadas);
-
-        cartasOrdenadas
-            .filter(carta => Number(carta.Nivel || 1) < 5)
-            .forEach((carta, index) => {
-            console.log(`Generando carta ${index}:`, carta);
+        const grupos = construirGruposMejoraClasica(usuario);
+        grupos.filter(grupoVisibleEnVistaClasica).forEach(grupo => {
+            const carta = grupo.keeperCarta;
+            const wrap = document.createElement('div');
+            wrap.className = 'carta-grupo-duplicados-wrap';
+            if (grupoEsClicableCombinar(grupo)) {
+                wrap.classList.add('carta-grupo-duplicados-wrap--clicable');
+            }
 
             const cartaDiv = document.createElement('div');
             cartaDiv.classList.add('carta');
             if (esCartaLegendaria(carta)) {
                 cartaDiv.classList.add('nivel-legendaria');
             }
-            cartaDiv.dataset.id = carta.originalIndex; // Mantener el índice original del array para referencia
+            cartaDiv.dataset.keeperIndex = String(grupo.keeperIndex);
 
-            // Verifica si hay una imagen válida; si no, usa una imagen de respaldo
             const imagenUrl = obtenerImagenCarta(carta);
             cartaDiv.style.backgroundImage = `url(${imagenUrl})`;
             cartaDiv.style.backgroundSize = 'cover';
             cartaDiv.style.backgroundPosition = 'center';
 
-            // Crear el contenedor de detalles (nombre y poder)
             const detallesDiv = document.createElement('div');
             detallesDiv.classList.add('detalles-carta');
 
@@ -501,7 +717,22 @@ function cargarCartas() {
             }
             cartaDiv.appendChild(crearBarraSaludElemento(carta));
             cartaDiv.appendChild(estrellasDiv);
-            contenedorCartas.appendChild(cartaDiv);
+
+            wrap.appendChild(cartaDiv);
+
+            if (grupo.total > 1) {
+                const badgeDup = document.createElement('div');
+                badgeDup.className = 'carta-duplicados-badge';
+                badgeDup.textContent = String(grupo.total);
+                badgeDup.title = `${grupo.total} copias en colección`;
+                wrap.appendChild(badgeDup);
+            }
+
+            if (grupoEsClicableCombinar(grupo)) {
+                wrap.addEventListener('click', () => abrirModalCombinarDuplicados(grupo));
+            }
+
+            contenedorCartas.appendChild(wrap);
         });
         renderizarSeccionMejorasObjetos(usuario);
     } else {
@@ -532,6 +763,23 @@ function configurarEventos() {
     const btnCerrarResultadoAuto = document.getElementById('btn-cerrar-resultado-auto');
     if (btnCerrarResultadoAuto) {
         btnCerrarResultadoAuto.onclick = cerrarModalResultadoAuto;
+    }
+
+    const btnCombinarAceptar = document.getElementById('btn-combinar-duplicados-aceptar');
+    const btnCombinarCancelar = document.getElementById('btn-combinar-duplicados-cancelar');
+    const modalCombinar = document.getElementById('modal-combinar-duplicados');
+    if (btnCombinarAceptar) {
+        btnCombinarAceptar.onclick = () => void confirmarCombinacionDuplicados();
+    }
+    if (btnCombinarCancelar) {
+        btnCombinarCancelar.onclick = cerrarModalCombinarDuplicados;
+    }
+    if (modalCombinar) {
+        modalCombinar.addEventListener('click', (event) => {
+            if (event.target === modalCombinar) {
+                cerrarModalCombinarDuplicados();
+            }
+        });
     }
 
     const tabClasica = document.getElementById('tab-mejora-clasica');

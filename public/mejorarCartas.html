@@ -74,6 +74,25 @@
         </div>
     </div>
 
+    <div id="modal-combinar-duplicados" class="modal-combinar-duplicados" style="display:none;">
+        <div class="modal-combinar-duplicados-inner">
+            <h4 class="modal-combinar-duplicados-titulo">¿Combinar cartas duplicadas?</h4>
+            <p id="combinar-duplicados-descripcion" class="modal-combinar-duplicados-desc"></p>
+            <div class="modal-combinar-duplicados-seccion">
+                <div class="modal-combinar-duplicados-label">Carta principal (no se consume)</div>
+                <div id="combinar-duplicados-keeper" class="modal-combinar-duplicados-keeper"></div>
+            </div>
+            <div class="modal-combinar-duplicados-seccion">
+                <div class="modal-combinar-duplicados-label">Selecciona las copias a fusionar (al menos una para aceptar)</div>
+                <div id="combinar-duplicados-lista" class="modal-combinar-duplicados-lista"></div>
+            </div>
+            <div class="modal-combinar-duplicados-acciones">
+                <button id="btn-combinar-duplicados-aceptar" type="button" class="btn btn-primary" disabled>Aceptar</button>
+                <button id="btn-combinar-duplicados-cancelar" type="button" class="btn btn-secondary">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
     <div id="modal-confirmacion-objeto" class="modal" style="display:none; position:fixed; inset:0; z-index:2000; background:rgba(0,0,0,0.72); justify-content:center; align-items:center;">
         <div style="width:min(520px,92vw); background: rgba(12, 20, 36, 0.96); border: 1px solid rgba(0, 209, 255, 0.35); border-radius: 12px; padding: 18px; text-align:center;">
             <h4>Confirmar mejora</h4>
