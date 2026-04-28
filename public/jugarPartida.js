@@ -250,7 +250,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         Salud: saludEscalada
                     };
                     if (typeof window.recalcularSkillPowerPorNivel === 'function') {
-                        window.recalcularSkillPowerPorNivel(cartaEscalada, dificultadSeleccionada);
+                        window.recalcularSkillPowerPorNivel(cartaEscalada, dificultadSeleccionada, { rawEsBase: true });
                     }
                     return cartaEscalada;
                 });
@@ -953,7 +953,7 @@ function escalarCartaANivel(carta, nivelObjetivo) {
         Poder: poderBaseNivel1 + ((nivelObjetivo - 1) * 500)
     };
     if (typeof window.recalcularSkillPowerPorNivel === 'function') {
-        window.recalcularSkillPowerPorNivel(cartaEscalada, nivelObjetivo);
+        window.recalcularSkillPowerPorNivel(cartaEscalada, nivelObjetivo, { rawEsBase: true });
     }
     return cartaEscalada;
 }

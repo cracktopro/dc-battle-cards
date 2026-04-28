@@ -229,6 +229,7 @@ async function enriquecerCartasConDatosCatalogo(cartas) {
         const skillClass = String(carta.skill_class || '').trim().toLowerCase() || datosCatalogo.skill_class || '';
         const skillTrigger = String(carta.skill_trigger || '').trim().toLowerCase() || datosCatalogo.skill_trigger || '';
         const skillPower = carta.skill_power ?? datosCatalogo.skill_power ?? '';
+        const usaSkillPowerCatalogo = (carta.skill_power === undefined || carta.skill_power === null || String(carta.skill_power).trim() === '');
 
         const saludEscalada = calcularSaludEscaladaDesdeCatalogo(carta, datosCatalogo);
         const saludNormalizada = saludEscalada;
@@ -252,7 +253,11 @@ async function enriquecerCartasConDatosCatalogo(cartas) {
             tankActiva: Boolean(carta.tankActiva)
         };
         if (typeof window.recalcularSkillPowerPorNivel === 'function') {
-            window.recalcularSkillPowerPorNivel(cartaEnriquecida, Number(cartaEnriquecida.Nivel || 1));
+            window.recalcularSkillPowerPorNivel(
+                cartaEnriquecida,
+                Number(cartaEnriquecida.Nivel || 1),
+                { rawEsBase: usaSkillPowerCatalogo }
+            );
         }
         return cartaEnriquecida;
     });
@@ -889,7 +894,7 @@ function escalarCartaSegunDificultad(carta, dificultad) {
     cartaEscalada.SaludMax = saludBase + (incrementoNiveles * 500);
     cartaEscalada.Salud = cartaEscalada.SaludMax;
     if (typeof window.recalcularSkillPowerPorNivel === 'function') {
-        window.recalcularSkillPowerPorNivel(cartaEscalada, dificultadObjetivo);
+        window.recalcularSkillPowerPorNivel(cartaEscalada, dificultadObjetivo, { rawEsBase: true });
     }
 
     return cartaEscalada;
@@ -906,11 +911,12 @@ function escalarBossSegunDificultad(carta, dificultad) {
 
     cartaBoss.Nivel = dificultadObjetivo;
     cartaBoss.Poder = Math.round(poderBase + incrementoPorNivel);
-    cartaBoss.SaludMax = Math.round((saludBase * 8) + incrementoPorNivel);
+    const saludBossActual = Math.round((saludBase * 8) + incrementoPorNivel);
+    cartaBoss.SaludMax = Math.round(saludBossActual * 1.75);
     cartaBoss.Salud = cartaBoss.SaludMax;
     cartaBoss.esBoss = true;
     if (typeof window.recalcularSkillPowerPorNivel === 'function') {
-        window.recalcularSkillPowerPorNivel(cartaBoss, dificultadObjetivo);
+        window.recalcularSkillPowerPorNivel(cartaBoss, dificultadObjetivo, { rawEsBase: true });
     }
 
     return cartaBoss;
