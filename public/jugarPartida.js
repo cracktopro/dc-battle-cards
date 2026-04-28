@@ -721,7 +721,7 @@ async function abrirModalSeleccionEvento(evento) {
 
     eventoPendiente = evento;
     dificultadEventoSeleccionada = evento.dificultadSeleccionada;
-    usuarioCartasEvento = usuario.cartas
+    const itemsEnriquecidos = usuario.cartas
         .map((carta, index) => {
             const datos = mapaFaccionAfiliacion.get(normalizarNombre(carta.Nombre));
             return {
@@ -739,6 +739,18 @@ async function abrirModalSeleccionEvento(evento) {
             };
         })
         .sort((a, b) => Number(b.carta.Poder || 0) - Number(a.carta.Poder || 0));
+
+    usuarioCartasEvento = typeof window.deduplicarItemsCartasUsuarioMejorNivel === 'function'
+        ? window.deduplicarItemsCartasUsuarioMejorNivel(itemsEnriquecidos)
+        : itemsEnriquecidos;
+
+    if (usuarioCartasEvento.length < 6) {
+        mostrarMensajeEventos(
+            'Necesitas al menos 6 cartas distintas por nombre en tu colección (se usa la de mayor nivel de cada una).',
+            'warning'
+        );
+        return;
+    }
 
     faccionEventoActiva = 'H';
     afiliacionEventoActiva = 'todas';

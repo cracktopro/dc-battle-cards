@@ -33,6 +33,40 @@ function obtenerNivelCartaSeguro(carta) {
     return Math.max(1, Number(carta?.Nivel || 1));
 }
 
+/**
+ * Lista de { index, carta } (index en usuario.cartas). Deja una entrada por nombre de carta:
+ * la de mayor nivel; si empatan, conserva la de menor índice en la colección.
+ */
+function deduplicarItemsCartasUsuarioMejorNivel(items) {
+    if (!Array.isArray(items) || items.length === 0) {
+        return [];
+    }
+    const mejorPorClave = new Map();
+    items.forEach(item => {
+        if (!item || typeof item.index !== 'number' || !item.carta) {
+            return;
+        }
+        const clave = String(item.carta.Nombre || '').trim().toLowerCase();
+        if (!clave) {
+            return;
+        }
+        const nivel = obtenerNivelCartaSeguro(item.carta);
+        const prev = mejorPorClave.get(clave);
+        if (!prev) {
+            mejorPorClave.set(clave, item);
+            return;
+        }
+        const nivelPrev = obtenerNivelCartaSeguro(prev.carta);
+        if (nivel > nivelPrev || (nivel === nivelPrev && item.index < prev.index)) {
+            mejorPorClave.set(clave, item);
+        }
+    });
+    return Array.from(mejorPorClave.values())
+        .sort((a, b) => Number(b.carta.Poder || 0) - Number(a.carta.Poder || 0));
+}
+
+window.deduplicarItemsCartasUsuarioMejorNivel = deduplicarItemsCartasUsuarioMejorNivel;
+
 function parsearNumeroSeguro(valor) {
     if (typeof valor === 'number' && Number.isFinite(valor)) {
         return valor;
