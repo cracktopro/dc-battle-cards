@@ -5,14 +5,24 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" type="image/png" href="/favicon.png">
     <title>DC Battle Cards</title>
-    <link rel="stylesheet" href="css/style.css">
     <link href="css/app-layout.css" rel="stylesheet">
-
 </head>
 <body>
-    <h1>Bienvenido a DC Battle Cards</h1>
-    <canvas id="gameCanvas"></canvas>
-    <script src="js/cartas.js"></script>
-    <script src="js/script.js"></script>
+    <script>
+        (function redirigirEntrada() {
+            try {
+                const usuarioRaw = localStorage.getItem('usuario');
+                const email = String(localStorage.getItem('email') || '').trim();
+                const usuario = usuarioRaw ? JSON.parse(usuarioRaw) : null;
+                const sesionValida = Boolean(
+                    (usuario && typeof usuario === 'object' && Object.keys(usuario).length > 0)
+                    || email
+                );
+                window.location.replace(sesionValida ? '/vistaJuego.html' : '/login.html');
+            } catch (_error) {
+                window.location.replace('/login.html');
+            }
+        })();
+    </script>
 </body>
 </html>
