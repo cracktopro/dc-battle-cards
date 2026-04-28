@@ -791,6 +791,12 @@ function normalizarMenuLateral() {
     }
 }
 
+function actualizarPanelPerfilTiempoReal() {
+    normalizarMenuLateral();
+}
+
+window.actualizarPanelPerfilTiempoReal = actualizarPanelPerfilTiempoReal;
+
 function asegurarModalLogout() {
     if (document.getElementById('logout-confirm-modal')) {
         return;
@@ -847,4 +853,8 @@ document.addEventListener('DOMContentLoaded', () => {
     normalizarMenuLateral();
     asegurarModalLogout();
     void migrarSkillsUsuarioDesdeCatalogo();
+});
+
+window.addEventListener('dc:usuario-actualizado', () => {
+    actualizarPanelPerfilTiempoReal();
 });

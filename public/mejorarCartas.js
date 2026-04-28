@@ -58,6 +58,7 @@ async function enriquecerUsuarioSkillsDesdeCatalogoMejorar() {
 
     if (huboCambios) {
         localStorage.setItem('usuario', JSON.stringify(usuario));
+        refrescarPanelPerfilLateral();
     }
 }
 
@@ -66,6 +67,13 @@ let combinacionDuplicadosGrupo = null;
 const seleccionIndicesCombinacion = new Set();
 const ICONO_MEJORA = '/resources/icons/mejora.png';
 const ICONO_MEJORA_ESPECIAL = '/resources/icons/mejora_especial.png';
+
+function refrescarPanelPerfilLateral() {
+    if (typeof window.actualizarPanelPerfilTiempoReal === 'function') {
+        window.actualizarPanelPerfilTiempoReal();
+    }
+    window.dispatchEvent(new Event('dc:usuario-actualizado'));
+}
 
 function esCartaLegendaria(carta) {
     return Number(carta?.Nivel || 1) >= 6;
@@ -340,6 +348,7 @@ async function confirmarCombinacionDuplicados() {
     try {
         await actualizarUsuarioFirebase(usuario, email);
         localStorage.setItem('usuario', JSON.stringify(usuario));
+        refrescarPanelPerfilLateral();
         const { cartaAntes, cartaMejorada } = resultado;
         cerrarModalCombinarDuplicados();
         cargarCartas();
@@ -1063,6 +1072,7 @@ async function confirmarMejoraConObjeto() {
     try {
         await actualizarUsuarioFirebase(usuario, email);
         localStorage.setItem('usuario', JSON.stringify(usuario));
+        refrescarPanelPerfilLateral();
         cerrarModalConfirmacionObjeto();
         cargarCartas();
         mostrarResultadoMejoraObjeto(original, mejorada);
@@ -1102,6 +1112,7 @@ async function mejorarDuplicadosAutomaticamente() {
     try {
         await actualizarUsuarioFirebase(usuario, email);
         localStorage.setItem('usuario', JSON.stringify(usuario));
+        refrescarPanelPerfilLateral();
         cargarCartas();
         mostrarResultadoMejoraAutomatica(analisis);
 

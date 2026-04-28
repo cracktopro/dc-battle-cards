@@ -545,6 +545,10 @@ async function comprarObjeto(indexObjeto) {
 async function persistirUsuario() {
     await actualizarUsuarioFirebase(usuarioActual, emailActual);
     localStorage.setItem('usuario', JSON.stringify(usuarioActual));
+    if (typeof window.actualizarPanelPerfilTiempoReal === 'function') {
+        window.actualizarPanelPerfilTiempoReal();
+    }
+    window.dispatchEvent(new Event('dc:usuario-actualizado'));
 }
 
 async function actualizarUsuarioFirebase(usuario, email) {
