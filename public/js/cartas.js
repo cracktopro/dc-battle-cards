@@ -221,7 +221,7 @@ function construirInfoTooltipHabilidadHtml(carta, meta = {}, opciones = {}) {
     return htmlSeguro;
 }
 
-function recalcularSkillPowerPorNivel(carta, nivelObjetivo = null) {
+function recalcularSkillPowerPorNivel(carta, nivelObjetivo = null, opciones = {}) {
     if (!carta || typeof carta !== 'object') {
         return carta;
     }
@@ -240,8 +240,11 @@ function recalcularSkillPowerPorNivel(carta, nivelObjetivo = null) {
 
     const nivelActual = obtenerNivelCartaSeguro(carta);
     const nivelFinal = Math.max(1, Number(nivelObjetivo || nivelActual));
-    const baseNivel1 = Math.max(0, valorActual - ((nivelActual - 1) * 500));
-    const escalado = baseNivel1 + ((nivelFinal - 1) * 500);
+    const rawEsBase = Boolean(opciones?.rawEsBase);
+    const baseNivel1 = rawEsBase
+        ? Math.max(0, valorActual)
+        : Math.max(0, valorActual / Math.max(1, nivelActual));
+    const escalado = baseNivel1 * nivelFinal;
     carta.skill_power = Math.max(0, Math.round(escalado));
     return carta;
 }
@@ -541,7 +544,7 @@ window.fusionarSkillDesdeFilaCatalogo = fusionarSkillDesdeFilaCatalogo;
 window.extraerSkillRowDeCartaExcel = extraerSkillRowDeCartaExcel;
 
 let _migracionSkillsUsuarioEnCurso = false;
-const VERSION_MIGRACION_SKILLS_USUARIO = 2;
+const VERSION_MIGRACION_SKILLS_USUARIO = 3;
 
 function skillFilaSerializada(carta) {
     return JSON.stringify({
@@ -587,7 +590,11 @@ function aplicarMigracionSkillsAColeccion(cartasUsuario, mapaCatalogo) {
         const antes = skillFilaSerializada(carta);
         const despuesCarta = forzarSkillDesdeFilaCatalogo(carta, fila);
         if (typeof window.recalcularSkillPowerPorNivel === 'function') {
-            window.recalcularSkillPowerPorNivel(despuesCarta, Number(despuesCarta?.Nivel || 1));
+            window.recalcularSkillPowerPorNivel(
+                despuesCarta,
+                Number(despuesCarta?.Nivel || 1),
+                { rawEsBase: true }
+            );
         }
         const despues = skillFilaSerializada(despuesCarta);
         if (antes !== despues) {
@@ -768,7 +775,7 @@ function normalizarMenuLateral() {
         });
     }
 
-    const versionLabelTexto = 'Version: Beta-1.0.0-27.04.26';
+    const versionLabelTexto = 'Version: Beta-1.0.1-28.04.26';
     let versionLabel = menu.querySelector('#menu-version-label');
     if (!versionLabel) {
         versionLabel = document.createElement('div');

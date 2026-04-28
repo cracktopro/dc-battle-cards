@@ -1,5 +1,14 @@
 # Changelog
 
+## Beta-1.0.1-28.04.26
+
+- Vista `mejorarCartas`: agrupacion de duplicados por nombre mostrando una sola carta base, badge central con cantidad de copias y resaltado visual para combinaciones disponibles.
+- Nuevo modal de combinacion manual de duplicados con seleccion parcial (permitiendo elegir cuantas copias fusionar), validacion de minimo una seleccion y reutilizacion del modal de resultado antes/despues.
+- Ajuste de escalado para `skill_power` en clases `buff`, `debuff`, `heal`, `shield`, `heal_all` y `bonus_buff`: ahora se calcula como `base * nivel`.
+- Actualizacion de migracion de skills de usuario para recalcular `skill_power` con la nueva formula y aplicar los cambios en coleccion/mazos.
+- Actualizacion de recursos de datos (`cartas.xlsx` y `eventos.xlsx`) a la ultima revision.
+- Etiqueta de version del menu lateral actualizada a `Version: Beta-1.0.1-28.04.26`.
+
 ## Beta-1.0.0-27.04.26
 
 - Ajustes responsive para uso horizontal en movil y tablet, incluyendo layout del tablero y vistas asociadas.
