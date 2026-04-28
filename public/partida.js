@@ -243,6 +243,9 @@ async function enriquecerCartasConDatosCatalogo(cartas) {
             skill_class: skillClass,
             skill_power: skillPower,
             skill_trigger: skillTrigger,
+            Imagen: datosCatalogo.Imagen || carta.Imagen || carta.imagen || '',
+            imagen: datosCatalogo.Imagen || carta.imagen || carta.Imagen || '',
+            imagen_final: datosCatalogo.imagen_final || carta.imagen_final || carta.Imagen_final || '',
             SaludMax: saludEscalada,
             Salud: saludNormalizada,
             escudoActual: Math.max(0, Number(carta.escudoActual || 0)),
@@ -620,6 +623,10 @@ function crearCartaCombateDesdeMazo(carta) {
     cartaCombate.poderModHabilidad = Number(cartaCombate.poderModHabilidad || 0);
     cartaCombate.habilidadUsadaPartida = false;
     cartaCombate.habilidadCooldownRestante = Math.max(0, Number(cartaCombate.habilidadCooldownRestante || 0));
+    cartaCombate.stunRestante = Math.max(0, Number(cartaCombate.stunRestante || 0));
+    cartaCombate.stunSkillName = String(cartaCombate.stunSkillName || '').trim();
+    cartaCombate.efectosDot = Array.isArray(cartaCombate.efectosDot) ? cartaCombate.efectosDot : [];
+    cartaCombate.lifeStealActiva = Boolean(cartaCombate.lifeStealActiva);
     cartaCombate.habilidadAutoAplicadaEnJuego = false;
     cartaCombate.tankActiva = Boolean(cartaCombate.tankActiva);
     return cartaCombate;
@@ -1435,6 +1442,95 @@ function reducirCooldownHabilidadesActivas(propietario) {
     });
 }
 
+function cartaEstaAturdida(carta) {
+    return Math.max(0, Number(carta?.stunRestante || 0)) > 0;
+}
+
+function aplicarEfectosInicioTurno(propietario) {
+    const aliados = obtenerSlotsAliados(propietario);
+    let huboCambios = false;
+
+    aliados.forEach((carta, index) => {
+        if (!carta) {
+            return;
+        }
+
+        const stunActual = Math.max(0, Number(carta.stunRestante || 0));
+        if (stunActual > 0) {
+            escribirLog(`${carta.Nombre} está aturdida (${stunActual} turno(s)) y no puede actuar.`);
+        }
+
+        const dots = Array.isArray(carta.efectosDot) ? carta.efectosDot : [];
+        if (dots.length === 0) {
+            carta.efectosDot = [];
+            return;
+        }
+
+        let saludActual = obtenerSaludActualCarta(carta);
+        let escudoActual = Math.max(0, Number(carta.escudoActual || 0));
+        let danoTotalTurno = 0;
+
+        dots.forEach(dot => {
+            const danoTick = Math.max(0, Number(dot?.danoPorTurno || 0));
+            if (danoTick <= 0) {
+                return;
+            }
+            let danoRestante = danoTick;
+            if (escudoActual > 0) {
+                const absorbido = Math.min(escudoActual, danoRestante);
+                escudoActual -= absorbido;
+                danoRestante -= absorbido;
+            }
+            if (danoRestante > 0) {
+                saludActual = Math.max(0, saludActual - danoRestante);
+            }
+            danoTotalTurno += danoTick;
+        });
+
+        carta.efectosDot = dots
+            .map(dot => ({
+                danoPorTurno: Math.max(0, Number(dot?.danoPorTurno || 0)),
+                turnosRestantes: Math.max(0, Number(dot?.turnosRestantes || 0) - 1),
+                skillName: String(dot?.skillName || '').trim()
+            }))
+            .filter(dot => dot.turnosRestantes > 0 && dot.danoPorTurno > 0);
+
+        carta.escudoActual = escudoActual;
+        carta.Salud = saludActual;
+        huboCambios = true;
+
+        if (danoTotalTurno > 0) {
+            mostrarValorFlotante(propietario, index, danoTotalTurno, 'danio');
+            escribirLog(`${carta.Nombre} sufre ${danoTotalTurno} de daño por sangrado.`);
+        }
+
+        if ((saludActual + escudoActual) <= 0) {
+            registrarCartaDerrotada(carta, propietario);
+            aliados[index] = null;
+            escribirLog(`${carta.Nombre} cae derrotada por sangrado.`);
+        }
+    });
+
+    return huboCambios;
+}
+
+function consumirStunFinTurno(propietario) {
+    const aliados = obtenerSlotsAliados(propietario);
+    aliados.forEach(carta => {
+        if (!carta) {
+            return;
+        }
+        const stunActual = Math.max(0, Number(carta.stunRestante || 0));
+        if (stunActual > 0) {
+            carta.stunRestante = Math.max(0, stunActual - 1);
+            if (carta.stunRestante === 0) {
+                carta.stunSkillName = '';
+                escribirLog(`${carta.Nombre} deja de estar aturdida.`);
+            }
+        }
+    });
+}
+
 function sincronizarPasivasAutoEnMesa() {
     cartasJugadorEnJuego.forEach(carta => aplicarHabilidadAutoSiCorresponde(carta, 'jugador'));
     cartasOponenteEnJuego.forEach(carta => aplicarHabilidadAutoSiCorresponde(carta, 'oponente'));
@@ -1608,6 +1704,75 @@ async function usarHabilidadActiva(carta, propietario, slotCarta) {
         carta.Salud = Math.min(carta.SaludMax, obtenerSaludActualCarta(carta) + saludMaxAnterior);
         carta.poderModHabilidad = Number(carta.poderModHabilidad || 0) - Math.floor(Number(carta.Poder || 0) * 0.5);
         escribirLog(`${carta.Nombre} activa ${meta.nombre}: modo tanque activo.`);
+    } else if (meta.clase === 'stun') {
+        const turnosStun = Math.max(1, Math.floor(valor || 1));
+        let idx = null;
+        if (propietario === 'jugador') {
+            const tankActivo = obtenerIndiceTankActivo(enemigos);
+            const indicesElegibles = tankActivo !== null
+                ? [tankActivo]
+                : obtenerIndicesCartasDisponibles(enemigos);
+            const { cartasConBonus: enemigosConBonusStun } = aplicarBonusAfiliaciones(enemigos, aliados);
+            const disponibles = indicesElegibles.map(index => ({
+                index,
+                carta: enemigosConBonusStun[index]
+            }));
+            idx = await abrirModalSeleccionHabilidad({
+                titulo: `Objetivo para aturdir con ${carta.Nombre}`,
+                cartas: disponibles,
+                textoConfirmar: 'Aturdir',
+                textoCancelar: 'Cancelar',
+                tipoCartaTablero: 'oponente',
+                enemigosParaSalud: aliados
+            });
+        } else {
+            const tankActivo = obtenerIndiceTankActivo(enemigos);
+            idx = tankActivo !== null ? tankActivo : elegirObjetivoBot();
+        }
+        if (idx === null || idx === undefined || !enemigos[idx]) return false;
+        const objetivo = enemigos[idx];
+        const stunPrevio = Math.max(0, Number(objetivo.stunRestante || 0));
+        if (turnosStun >= stunPrevio) {
+            objetivo.stunSkillName = String(meta.nombre || '').trim();
+        }
+        objetivo.stunRestante = Math.max(stunPrevio, turnosStun);
+        escribirLog(`${carta.Nombre} usa ${meta.nombre} y aturde a ${objetivo.Nombre} durante ${turnosStun} turno(s).`);
+        if (propietario === 'oponente') {
+            mostrarAvisoHabilidad(`"${carta.Nombre}" aturde a "${objetivo.Nombre}"`);
+        }
+    } else if (meta.clase === 'dot') {
+        const danoDot = Math.max(1, Math.floor(valor || 1));
+        let idx = null;
+        if (propietario === 'jugador') {
+            const tankActivo = obtenerIndiceTankActivo(enemigos);
+            const indicesElegibles = tankActivo !== null
+                ? [tankActivo]
+                : obtenerIndicesCartasDisponibles(enemigos);
+            const { cartasConBonus: enemigosConBonusDot } = aplicarBonusAfiliaciones(enemigos, aliados);
+            const disponibles = indicesElegibles.map(index => ({
+                index,
+                carta: enemigosConBonusDot[index]
+            }));
+            idx = await abrirModalSeleccionHabilidad({
+                titulo: `Objetivo para sangrado de ${carta.Nombre}`,
+                cartas: disponibles,
+                textoConfirmar: 'Aplicar DOT',
+                textoCancelar: 'Cancelar',
+                tipoCartaTablero: 'oponente',
+                enemigosParaSalud: aliados
+            });
+        } else {
+            const tankActivo = obtenerIndiceTankActivo(enemigos);
+            idx = tankActivo !== null ? tankActivo : elegirObjetivoBot();
+        }
+        if (idx === null || idx === undefined || !enemigos[idx]) return false;
+        const objetivo = enemigos[idx];
+        objetivo.efectosDot = Array.isArray(objetivo.efectosDot) ? objetivo.efectosDot : [];
+        objetivo.efectosDot.push({ danoPorTurno: danoDot, turnosRestantes: 3, skillName: String(meta.nombre || '').trim() });
+        escribirLog(`${carta.Nombre} aplica sangrado a ${objetivo.Nombre}: ${danoDot} de daño por 3 turnos.`);
+    } else if (meta.clase === 'life_steal') {
+        carta.lifeStealActiva = true;
+        escribirLog(`${carta.Nombre} activa ${meta.nombre}: robo de vida habilitado.`);
     } else if (meta.clase === 'extra_attack') {
         mostrarAvisoHabilidad(`${carta.Nombre} va a realizar un ataque adicional`);
         let idx = (() => {
@@ -1681,6 +1846,10 @@ async function manejarUsoHabilidadJugador(event, slotIndex) {
     if (!carta) {
         return;
     }
+    if (cartaEstaAturdida(carta)) {
+        escribirLog(`${carta.Nombre} está aturdida y no puede usar habilidades este turno.`);
+        return;
+    }
     const meta = obtenerMetaHabilidad(carta);
     if (!meta.tieneHabilidad || meta.trigger !== 'usar') {
         return;
@@ -1749,7 +1918,7 @@ function crearCartaElemento(carta, tipo, slotIndex, opciones = {}) {
             cartaDiv.addEventListener('click', () => seleccionarCartaAtacante(slotIndex));
         }
 
-        if (tipo === 'jugador' && cartasQueYaAtacaron.includes(slotIndex)) {
+        if (tipo === 'jugador' && (cartasQueYaAtacaron.includes(slotIndex) || cartaEstaAturdida(carta))) {
             cartaDiv.classList.add('carta-agotada');
         }
 
@@ -1859,6 +2028,22 @@ function crearCartaElemento(carta, tipo, slotIndex, opciones = {}) {
         marcadorDebuff.textContent = `-${Math.round((1 - factorDebuffHeal) * 100)}%`;
         saludStack.appendChild(marcadorDebuff);
     }
+    if (Math.max(0, Number(carta?.stunRestante || 0)) > 0) {
+        const stunChip = document.createElement('span');
+        stunChip.className = 'estado-stun';
+        const skillName = String(carta?.stunSkillName || '').trim() || 'Stun';
+        stunChip.textContent = `Incapacitado: ${skillName}`;
+        saludStack.appendChild(stunChip);
+    }
+    const dotsActivos = (Array.isArray(carta?.efectosDot) ? carta.efectosDot : [])
+        .filter(dot => Math.max(0, Number(dot?.turnosRestantes || 0)) > 0 && Math.max(0, Number(dot?.danoPorTurno || 0)) > 0);
+    if (dotsActivos.length > 0) {
+        const dotChip = document.createElement('span');
+        dotChip.className = 'estado-dot';
+        const skillName = String(dotsActivos[0]?.skillName || '').trim() || 'DoT';
+        dotChip.textContent = `DoT: ${skillName}`;
+        saludStack.appendChild(dotChip);
+    }
     saludStack.appendChild(barraSaludContenedor);
 
     const estrellasDiv = document.createElement('div');
@@ -1905,6 +2090,7 @@ function crearCartaElemento(carta, tipo, slotIndex, opciones = {}) {
             : 'Usar Habilidad';
         botonHabilidad.disabled = Boolean(
             cooldownActual > 0
+            || cartaEstaAturdida(carta)
             || partidaFinalizada
             || turnoActual !== 'jugador'
             || cartasQueYaAtacaron.includes(slotIndex)
@@ -2302,6 +2488,7 @@ function finalizarTurnoJugador() {
 
     atacanteSeleccionado = null;
     cartasQueYaAtacaron = [];
+    consumirStunFinTurno('jugador');
     limpiarDestacados();
     renderizarTablero();
     escribirLog('Tu turno ha terminado.');
@@ -2320,6 +2507,7 @@ function finalizarTurnoOponente() {
         return;
     }
 
+    consumirStunFinTurno('oponente');
     limpiarDestacados();
     renderizarTablero();
     escribirLog('El turno del BOT ha terminado.');
@@ -2339,6 +2527,11 @@ async function seleccionarCartaAtacante(slotIndex) {
     }
 
     if (!cartasJugadorEnJuego[slotIndex]) {
+        return;
+    }
+
+    if (cartaEstaAturdida(cartasJugadorEnJuego[slotIndex])) {
+        escribirLog(`${cartasJugadorEnJuego[slotIndex].Nombre} está aturdida y no puede atacar este turno.`);
         return;
     }
 
@@ -2363,6 +2556,8 @@ async function resolverAtaque(cartasAtacante, slotAtacante, cartasObjetivo, slot
     const propietarioAtacante = cartasAtacante === cartasJugadorEnJuego ? 'jugador' : 'oponente';
     const cartasEnemigasObjetivo = propietarioAtacante === 'jugador' ? cartasJugadorEnJuego : cartasOponenteEnJuego;
     const { cartasConBonus: objetivoConBonus } = aplicarBonusAfiliaciones(cartasObjetivo, cartasAtacante);
+    const cartaAtacanteBase = cartasAtacante[slotAtacante];
+    const metaAtacante = obtenerMetaHabilidad(cartaAtacanteBase);
     const poderAtacante = obtenerPoderCartaFinal(atacanteConBonus[slotAtacante]);
     const poderDanioAtacante = Math.max(
         1,
@@ -2421,6 +2616,34 @@ async function resolverAtaque(cartasAtacante, slotAtacante, cartasObjetivo, slot
         cartasObjetivo[slotObjetivo].Salud = saludRestanteBase;
         cartasObjetivo[slotObjetivo].escudoActual = escudoRestante;
         escribirLog(`${nombreObjetivo} sobrevive con ${estadoDespuesTotal} de vida total.`);
+
+        if (metaAtacante.tieneHabilidad && metaAtacante.trigger === 'auto' && metaAtacante.clase === 'dot' && danioInfligido > 0) {
+            const danoDot = Math.max(1, Math.floor(obtenerValorNumericoSkillPower(cartaAtacanteBase, 1)));
+            const objetivo = cartasObjetivo[slotObjetivo];
+            objetivo.efectosDot = Array.isArray(objetivo.efectosDot) ? objetivo.efectosDot : [];
+            objetivo.efectosDot.push({ danoPorTurno: danoDot, turnosRestantes: 3, skillName: String(metaAtacante.nombre || '').trim() });
+            escribirLog(`${nombreAtacante} aplica sangrado a ${nombreObjetivo}: ${danoDot} de daño por 3 turnos.`);
+        }
+    }
+
+    const lifeStealActivo = (
+        metaAtacante.tieneHabilidad
+        && metaAtacante.clase === 'life_steal'
+        && (metaAtacante.trigger === 'auto' || Boolean(cartaAtacanteBase?.lifeStealActiva))
+    );
+    if (lifeStealActivo && danioInfligido > 0) {
+        const valorRobo = Math.max(1, Math.floor(obtenerValorNumericoSkillPower(cartaAtacanteBase, 1)));
+        const atacanteReal = cartasAtacante[slotAtacante];
+        if (atacanteReal) {
+            const saludAntes = obtenerSaludActualCarta(atacanteReal);
+            const saludMax = obtenerSaludMaxCarta(atacanteReal);
+            atacanteReal.Salud = Math.min(saludMax, saludAntes + valorRobo);
+            const curado = Math.max(0, atacanteReal.Salud - saludAntes);
+            if (curado > 0) {
+                mostrarValorFlotante(propietarioAtacante, slotAtacante, curado, 'cura');
+                escribirLog(`${nombreAtacante} roba vida y recupera ${curado} de salud.`);
+            }
+        }
     }
 }
 
@@ -2431,7 +2654,7 @@ function quedanAtaquesJugadorDisponibles() {
     }
 
     return obtenerIndicesCartasDisponibles(cartasJugadorEnJuego)
-        .some(index => !cartasQueYaAtacaron.includes(index));
+        .some(index => !cartasQueYaAtacaron.includes(index) && !cartaEstaAturdida(cartasJugadorEnJuego[index]));
 }
 
 function seleccionarCartaObjetivo(slotIndex) {
@@ -2553,6 +2776,13 @@ async function ejecutarAtaqueBot(indiceSecuencia = 0, atacantes = null) {
         return;
     }
 
+    if (cartaEstaAturdida(cartaAtacante)) {
+        escribirLog(`${cartaAtacante.Nombre} está aturdida y pierde su acción.`);
+        await esperar(350);
+        await ejecutarAtaqueBot(indiceSecuencia + 1, atacantesDisponibles);
+        return;
+    }
+
     const metaHabilidadAtacante = obtenerMetaHabilidad(cartaAtacante);
     if (
         metaHabilidadAtacante.tieneHabilidad
@@ -2623,10 +2853,18 @@ async function iniciarTurnoJugador() {
     atacanteSeleccionado = null;
     cartasQueYaAtacaron = [];
     reducirCooldownHabilidadesActivas('jugador');
+    const huboEstados = aplicarEfectosInicioTurno('jugador');
 
     actualizarTextoTurno('Tu turno');
     mostrarAvisoTurno('Es tu turno');
     escribirLog('Comienza tu turno.');
+
+    if (huboEstados) {
+        renderizarTablero();
+        if (verificarFinDePartida()) {
+            return;
+        }
+    }
 
     await rellenarSlotsVacios(mazoJugador, cartasJugadorEnJuego, 'jugador');
     renderizarTablero();
@@ -2660,10 +2898,18 @@ async function iniciarTurnoOponente() {
     cartasQueYaAtacaron = [];
     limpiarDestacados();
     reducirCooldownHabilidadesActivas('oponente');
+    const huboEstados = aplicarEfectosInicioTurno('oponente');
 
     actualizarTextoTurno('Turno del BOT');
     mostrarAvisoTurno('Turno del BOT');
     escribirLog('Comienza el turno del BOT.');
+
+    if (huboEstados) {
+        renderizarTablero();
+        if (verificarFinDePartida()) {
+            return;
+        }
+    }
 
     await rellenarSlotsVacios(mazoOponente, cartasOponenteEnJuego, 'oponente');
     renderizarTablero();

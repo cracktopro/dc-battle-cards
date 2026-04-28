@@ -1,12 +1,40 @@
 // public/js/cartas.js
+let _mapaImagenesCatalogoPorNombre = null;
+
+function obtenerClaveCartaImagen(nombreCarta) {
+    return String(nombreCarta || '').trim().toLowerCase();
+}
+
+function registrarImagenesCatalogoEnMemoria(cartasExcel = []) {
+    const mapa = new Map();
+    (Array.isArray(cartasExcel) ? cartasExcel : []).forEach(carta => {
+        const clave = obtenerClaveCartaImagen(carta?.Nombre);
+        if (!clave || mapa.has(clave)) {
+            return;
+        }
+        mapa.set(clave, {
+            Imagen: String(carta?.Imagen || carta?.imagen || '').trim(),
+            imagen_final: String(carta?.imagen_final || carta?.Imagen_final || '').trim()
+        });
+    });
+    _mapaImagenesCatalogoPorNombre = mapa;
+}
+
+function resolverImagenesCartaDesdeCatalogo(carta) {
+    const clave = obtenerClaveCartaImagen(carta?.Nombre);
+    if (!clave || !_mapaImagenesCatalogoPorNombre?.has(clave)) {
+        return null;
+    }
+    return _mapaImagenesCatalogoPorNombre.get(clave) || null;
+}
 
 function obtenerImagenCarta(carta) {
     if (!carta) return 'img/default-image.jpg';
 
     const nivel = Number(carta.Nivel || 1);
-
-    const imagenBase = carta.Imagen || carta.imagen;
-    const imagenFinal = carta.imagen_final || carta.Imagen_final || carta.imagenFinal;
+    const imagenesCatalogo = resolverImagenesCartaDesdeCatalogo(carta);
+    const imagenBase = (imagenesCatalogo?.Imagen || String(carta.Imagen || carta.imagen || '').trim());
+    const imagenFinal = (imagenesCatalogo?.imagen_final || String(carta.imagen_final || carta.Imagen_final || carta.imagenFinal || '').trim());
 
     if (nivel === 6 && imagenFinal && String(imagenFinal).trim() !== '') {
         return imagenFinal;
@@ -26,7 +54,13 @@ const SKILL_CLASSES_ESCALABLES = new Set(['buff', 'debuff', 'heal', 'shield', 'h
 
 function normalizarClaseSkill(carta) {
     const claseRaw = String(carta?.skill_class || '').trim().toLowerCase();
-    return claseRaw === 'heall_all' ? 'heal_all' : claseRaw;
+    if (claseRaw === 'heall_all') {
+        return 'heal_all';
+    }
+    if (claseRaw === 'life-steal' || claseRaw === 'lifesteal') {
+        return 'life_steal';
+    }
+    return claseRaw;
 }
 
 function obtenerNivelCartaSeguro(carta) {
@@ -112,7 +146,7 @@ function obtenerMetaHabilidadCarta(carta) {
     const nombre = normalizarTextoHabilidad(carta?.skill_name);
     const info = normalizarTextoHabilidad(carta?.skill_info);
     const claseRaw = normalizarTextoHabilidad(carta?.skill_class).toLowerCase();
-    const clase = claseRaw === 'heall_all' ? 'heal_all' : claseRaw;
+    const clase = normalizarClaseSkill({ skill_class: claseRaw });
     const powerRaw = carta?.skill_power;
     const tieneHabilidad = Boolean(trigger && nombre && clase);
     return {
@@ -261,7 +295,10 @@ const CLASE_BADGE_POR_SKILL = {
     bonus_debuff: 'badge-habilidad--bonus-debuff',
     tank: 'badge-habilidad--tank',
     heal_debuff: 'badge-habilidad--heal-debuff',
-    extra_attack: 'badge-habilidad--extra-attack'
+    extra_attack: 'badge-habilidad--extra-attack',
+    stun: 'badge-habilidad--stun',
+    life_steal: 'badge-habilidad--life-steal',
+    dot: 'badge-habilidad--dot'
 };
 
 const CLASE_COLOR_SKILL_POWER_TOOLTIP = {
@@ -276,7 +313,10 @@ const CLASE_COLOR_SKILL_POWER_TOOLTIP = {
     bonus_debuff: 'tooltip-skill-power--bonus-debuff',
     tank: 'tooltip-skill-power--tank',
     heal_debuff: 'tooltip-skill-power--heal-debuff',
-    extra_attack: 'tooltip-skill-power--extra-attack'
+    extra_attack: 'tooltip-skill-power--extra-attack',
+    stun: 'tooltip-skill-power--stun',
+    life_steal: 'tooltip-skill-power--life-steal',
+    dot: 'tooltip-skill-power--dot'
 };
 
 let tooltipHabilidadGlobalEl = null;
@@ -506,7 +546,10 @@ function fusionarSkillDesdeFilaCatalogo(carta, filaCatalogo) {
             || String(filaCatalogo.skill_class || '').trim().toLowerCase(),
         skill_power: carta.skill_power ?? filaCatalogo.skill_power ?? '',
         skill_trigger: String(carta.skill_trigger || '').trim().toLowerCase()
-            || String(filaCatalogo.skill_trigger || '').trim().toLowerCase()
+            || String(filaCatalogo.skill_trigger || '').trim().toLowerCase(),
+        Imagen: String(filaCatalogo.Imagen || filaCatalogo.imagen || '').trim() || String(carta.Imagen || carta.imagen || '').trim(),
+        imagen: String(filaCatalogo.Imagen || filaCatalogo.imagen || '').trim() || String(carta.imagen || carta.Imagen || '').trim(),
+        imagen_final: String(filaCatalogo.imagen_final || filaCatalogo.Imagen_final || '').trim() || String(carta.imagen_final || carta.Imagen_final || '').trim()
     };
 }
 
@@ -523,7 +566,10 @@ function forzarSkillDesdeFilaCatalogo(carta, filaCatalogo) {
         skill_info: String(filaCatalogo.skill_info || '').trim(),
         skill_class: String(filaCatalogo.skill_class || '').trim().toLowerCase(),
         skill_power: filaCatalogo.skill_power ?? '',
-        skill_trigger: String(filaCatalogo.skill_trigger || '').trim().toLowerCase()
+        skill_trigger: String(filaCatalogo.skill_trigger || '').trim().toLowerCase(),
+        Imagen: String(filaCatalogo.Imagen || filaCatalogo.imagen || '').trim(),
+        imagen: String(filaCatalogo.Imagen || filaCatalogo.imagen || '').trim(),
+        imagen_final: String(filaCatalogo.imagen_final || filaCatalogo.Imagen_final || '').trim()
     };
 }
 
@@ -544,7 +590,48 @@ window.fusionarSkillDesdeFilaCatalogo = fusionarSkillDesdeFilaCatalogo;
 window.extraerSkillRowDeCartaExcel = extraerSkillRowDeCartaExcel;
 
 let _migracionSkillsUsuarioEnCurso = false;
-const VERSION_MIGRACION_SKILLS_USUARIO = 3;
+const VERSION_MIGRACION_SKILLS_USUARIO = 4;
+
+function hashTextoSimple(texto) {
+    let hash = 5381;
+    const entrada = String(texto || '');
+    for (let i = 0; i < entrada.length; i++) {
+        hash = ((hash << 5) + hash) + entrada.charCodeAt(i);
+        hash = hash >>> 0;
+    }
+    return hash.toString(16);
+}
+
+function construirFirmaCatalogoSkills(cartasExcel = []) {
+    const filas = (Array.isArray(cartasExcel) ? cartasExcel : [])
+        .map(carta => ({
+            nombre: String(carta?.Nombre || '').trim().toLowerCase(),
+            skill_name: String(carta?.skill_name || '').trim(),
+            skill_info: String(carta?.skill_info || '').trim(),
+            skill_class: String(carta?.skill_class || '').trim().toLowerCase(),
+            skill_power: String(carta?.skill_power ?? '').trim(),
+            skill_trigger: String(carta?.skill_trigger || '').trim().toLowerCase(),
+            imagen: String(carta?.Imagen || carta?.imagen || '').trim(),
+            imagen_final: String(carta?.imagen_final || carta?.Imagen_final || '').trim()
+        }))
+        .filter(fila => Boolean(fila.nombre))
+        .sort((a, b) => a.nombre.localeCompare(b.nombre));
+
+    const textoFirma = filas
+        .map(fila => [
+            fila.nombre,
+            fila.skill_name,
+            fila.skill_info,
+            fila.skill_class,
+            fila.skill_power,
+            fila.skill_trigger,
+            fila.imagen,
+            fila.imagen_final
+        ].join('||'))
+        .join('\n');
+
+    return `skills-v1-${hashTextoSimple(textoFirma)}`;
+}
 
 function skillFilaSerializada(carta) {
     return JSON.stringify({
@@ -552,7 +639,9 @@ function skillFilaSerializada(carta) {
         skill_info: String(carta?.skill_info || '').trim(),
         skill_class: String(carta?.skill_class || '').trim().toLowerCase(),
         skill_power: carta?.skill_power ?? '',
-        skill_trigger: String(carta?.skill_trigger || '').trim().toLowerCase()
+        skill_trigger: String(carta?.skill_trigger || '').trim().toLowerCase(),
+        Imagen: String(carta?.Imagen || carta?.imagen || '').trim(),
+        imagen_final: String(carta?.imagen_final || carta?.Imagen_final || '').trim()
     });
 }
 
@@ -576,7 +665,9 @@ async function cargarCatalogoCartasExcelParaMigracion() {
     const data = await response.arrayBuffer();
     const workbook = XLSX.read(data, { type: 'array' });
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    return XLSX.utils.sheet_to_json(sheet, { defval: '' });
+    const cartasExcel = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+    registrarImagenesCatalogoEnMemoria(cartasExcel);
+    return cartasExcel;
 }
 
 function aplicarMigracionSkillsAColeccion(cartasUsuario, mapaCatalogo) {
@@ -646,12 +737,17 @@ async function migrarSkillsUsuarioDesdeCatalogo() {
             return;
         }
 
+        const cartasExcel = await cargarCatalogoCartasExcelParaMigracion();
         const versionActual = Number(usuario?.versionMigracionSkills || 0);
-        if (versionActual >= VERSION_MIGRACION_SKILLS_USUARIO) {
+        const firmaCatalogoActual = String(usuario?.firmaCatalogoSkills || '');
+        const firmaCatalogoNueva = construirFirmaCatalogoSkills(cartasExcel);
+        const requiereMigracionPorVersion = versionActual < VERSION_MIGRACION_SKILLS_USUARIO;
+        const requiereMigracionPorCatalogo = firmaCatalogoActual !== firmaCatalogoNueva;
+
+        if (!requiereMigracionPorVersion && !requiereMigracionPorCatalogo) {
             return;
         }
 
-        const cartasExcel = await cargarCatalogoCartasExcelParaMigracion();
         const mapaCatalogo = construirMapaCatalogoPorNombre(cartasExcel);
         const { cartasActualizadas, huboCambios: cambiosColeccion } = aplicarMigracionSkillsAColeccion(usuario.cartas, mapaCatalogo);
         const { mazosActualizados, huboCambios: cambiosMazos } = aplicarMigracionSkillsAMazos(usuario.mazos, mapaCatalogo);
@@ -659,10 +755,11 @@ async function migrarSkillsUsuarioDesdeCatalogo() {
         usuario.cartas = cartasActualizadas;
         usuario.mazos = mazosActualizados;
         usuario.versionMigracionSkills = VERSION_MIGRACION_SKILLS_USUARIO;
+        usuario.firmaCatalogoSkills = firmaCatalogoNueva;
 
         localStorage.setItem('usuario', JSON.stringify(usuario));
 
-        if (cambiosColeccion || cambiosMazos) {
+        if (cambiosColeccion || cambiosMazos || requiereMigracionPorVersion || requiereMigracionPorCatalogo) {
             await persistirMigracionSkillsUsuario(usuario, email);
         }
     } catch (error) {
@@ -775,7 +872,7 @@ function normalizarMenuLateral() {
         });
     }
 
-    const versionLabelTexto = 'Version: Beta-1.0.2-28.04.26';
+    const versionLabelTexto = 'Version: Beta-1.0.3-29.04.26';
     let versionLabel = menu.querySelector('#menu-version-label');
     if (!versionLabel) {
         versionLabel = document.createElement('div');

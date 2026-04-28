@@ -455,7 +455,7 @@ body {
 }
 
 .modificador-poder.mod-debuff {
-    color: #ff6868;
+    color: #b28bff;
 }
 
 .modificador-poder.mod-bonus-buff {
@@ -501,6 +501,24 @@ body {
     color: #f0e0ff;
     border: 1px solid rgba(200, 140, 255, 0.75);
     box-shadow: 0 0 10px rgba(160, 80, 255, 0.35);
+    pointer-events: auto;
+}
+
+.carta-salud-bloque .estado-stun,
+.carta-salud-bloque .estado-dot {
+    position: static;
+    align-self: flex-end;
+    flex-shrink: 0;
+    z-index: 4;
+    padding: 1px 6px;
+    border-radius: 999px;
+    font-size: 0.5rem;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    background: rgba(150, 88, 20, 0.62);
+    color: #ffe7c8;
+    border: 1px solid rgba(255, 186, 90, 0.85);
+    box-shadow: 0 0 10px rgba(255, 145, 60, 0.35);
     pointer-events: auto;
 }
 

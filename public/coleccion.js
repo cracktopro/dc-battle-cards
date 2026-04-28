@@ -217,6 +217,11 @@ function crearCartaColeccionElemento(carta, estaObtenida) {
     const cartaVisual = estaObtenida && versionJugador
         ? { ...carta, ...versionJugador }
         : carta;
+    // En colección, la imagen debe seguir siempre el catálogo (Excel),
+    // aunque el usuario tenga una copia persistida con URL anterior.
+    cartaVisual.Imagen = carta.Imagen || carta.imagen || '';
+    cartaVisual.imagen = carta.imagen || carta.Imagen || '';
+    cartaVisual.imagen_final = carta.imagen_final || carta.Imagen_final || '';
 
     const cartaDiv = document.createElement('div');
     cartaDiv.classList.add('carta', 'carta-coleccion');

@@ -801,7 +801,14 @@ body {
     box-shadow: 0 0 10px rgba(0, 200, 90, 0.35);
 }
 
-.badge-habilidad-carta.badge-habilidad--debuff,
+.badge-habilidad-carta.badge-habilidad--debuff {
+    border-color: rgba(200, 140, 255, 0.85);
+    background: linear-gradient(180deg, rgba(90, 40, 130, 0.94) 0%, rgba(40, 18, 72, 0.97) 100%);
+    color: #f0e4ff;
+    text-shadow: 0 0 8px rgba(200, 120, 255, 0.45);
+    box-shadow: 0 0 10px rgba(160, 80, 255, 0.32);
+}
+
 .badge-habilidad-carta.badge-habilidad--aoe,
 .badge-habilidad-carta.badge-habilidad--extra-attack {
     border-color: rgba(255, 120, 120, 0.8);
@@ -809,6 +816,23 @@ body {
     color: #ffd4d4;
     text-shadow: 0 0 8px rgba(255, 80, 80, 0.5);
     box-shadow: 0 0 10px rgba(255, 60, 60, 0.3);
+}
+
+.badge-habilidad-carta.badge-habilidad--stun,
+.badge-habilidad-carta.badge-habilidad--dot {
+    border-color: rgba(255, 190, 90, 0.85);
+    background: linear-gradient(180deg, rgba(150, 88, 20, 0.94) 0%, rgba(88, 46, 10, 0.96) 100%);
+    color: #ffe7c8;
+    text-shadow: 0 0 8px rgba(255, 170, 80, 0.48);
+    box-shadow: 0 0 10px rgba(255, 145, 60, 0.35);
+}
+
+.badge-habilidad-carta.badge-habilidad--life-steal {
+    border-color: rgba(100, 255, 160, 0.75);
+    background: linear-gradient(180deg, rgba(40, 120, 70, 0.92) 0%, rgba(18, 70, 42, 0.95) 100%);
+    color: #c8ffd8;
+    text-shadow: 0 0 8px rgba(64, 255, 140, 0.45);
+    box-shadow: 0 0 10px rgba(0, 200, 90, 0.35);
 }
 
 .badge-habilidad-carta.badge-habilidad--revive,
@@ -953,15 +977,24 @@ body {
 }
 
 .tooltip-skill-power--debuff,
-.tooltip-skill-power--aoe,
 .tooltip-skill-power--bonus-debuff,
+.tooltip-skill-power--revive,
+.tooltip-skill-power--heal-debuff {
+    color: #d7a8ff;
+}
+
+.tooltip-skill-power--aoe,
 .tooltip-skill-power--extra-attack {
     color: #ff8d8d;
 }
 
-.tooltip-skill-power--revive,
-.tooltip-skill-power--heal-debuff {
-    color: #d7a8ff;
+.tooltip-skill-power--stun,
+.tooltip-skill-power--dot {
+    color: #ffbe7a;
+}
+
+.tooltip-skill-power--life-steal {
+    color: #7dff9e;
 }
 
 .tooltip-skill-power--shield,

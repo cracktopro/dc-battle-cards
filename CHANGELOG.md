@@ -1,5 +1,18 @@
 # Changelog
 
+## Beta-1.0.3-29.04.26
+
+- Sincronización robusta de catálogo: al cambiar `cartas.xlsx`, las cartas de usuario actualizan automáticamente habilidades e imágenes usando firma de catálogo para forzar migración cuando haya cambios.
+- Corrección de carga de imágenes en todas las vistas (incluida colección), priorizando datos actuales del catálogo para evitar rutas obsoletas persistidas en cuentas antiguas.
+- Nuevas `skill_class` añadidas e integradas para jugador, BOT y BOSS: `stun`, `life_steal` y `dot`.
+- `stun`: bloquea ataques y uso de habilidades; la carta afectada queda no seleccionable con el mismo efecto visual de carta agotada.
+- `dot`: aplica sangrado durante 3 turnos y permanece activo aunque la carta que lo aplicó sea eliminada.
+- `life_steal`: recuperación de salud al infligir daño, aplicada en los flujos de combate correspondientes.
+- Nuevos indicadores de estado sobre la barra de salud en combate: `Incapacitado: skill_name` y `DoT: skill_name` en color naranja.
+- Ajuste visual de estilos: `debuff` pasa a morado (badge e interpolación `@skill_power`) para unificar la paleta.
+- Actualización de recursos del catálogo con nuevas cartas de héroe y villano en `cartas.xlsx`, además de ajustes en `eventos.xlsx` y nuevos assets en `resources/icons`.
+- Etiqueta de versión del menú lateral actualizada a `Version: Beta-1.0.3-29.04.26`.
+
 ## Beta-1.0.2-28.04.26
 
 - Eventos: las recompensas de puntos dejan de escalar por dificultad y pasan a usar el valor fijo definido en `eventos.xlsx`.

@@ -281,8 +281,8 @@ async function enriquecerCartasConDatosCatalogo(usuario) {
 
         const faccionFinal = faccionActual || datosCatalogo.faccion;
         const afiliacionFinal = afiliacionActual || datosCatalogo.Afiliacion || '';
-        const imagenFinal = imagenActual || datosCatalogo.Imagen || '';
-        const imagenFinalNivel6 = imagenFinalActual || datosCatalogo.imagen_final || '';
+        const imagenFinal = datosCatalogo.Imagen || imagenActual || '';
+        const imagenFinalNivel6 = datosCatalogo.imagen_final || imagenFinalActual || '';
         const fusionada = typeof window.fusionarSkillDesdeFilaCatalogo === 'function'
             ? window.fusionarSkillDesdeFilaCatalogo(carta, datosCatalogo)
             : carta;
