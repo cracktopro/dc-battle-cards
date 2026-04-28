@@ -24,6 +24,7 @@ const OBJETIVO_SINERGIA_POR_DIFICULTAD = {
 };
 const ICONO_MEJORA = '/resources/icons/mejora.png';
 const ICONO_MEJORA_ESPECIAL = '/resources/icons/mejora_especial.png';
+const ICONO_MONEDA = '/resources/icons/moneda.png';
 
 function obtenerNombreVisibleUsuario() {
     const usuario = JSON.parse(localStorage.getItem('usuario') || '{}');
@@ -533,21 +534,24 @@ async function renderizarEventosActivos() {
             recompensas.appendChild(mini);
         }
 
-        const meta = document.createElement('div');
-        meta.className = 'evento-recompensas-meta';
-        meta.textContent = `Puntos base: ${evento.puntos}`;
-        recompensas.appendChild(meta);
+        const puntosEvento = Math.max(0, Number(evento.puntos || 0));
+        const metaPuntos = document.createElement('div');
+        metaPuntos.className = 'evento-recompensa-tag';
+        metaPuntos.innerHTML = `<img src="${ICONO_MONEDA}" alt="Moneda" style="width:28px;height:28px;object-fit:contain;"> <span>${puntosEvento}</span>`;
+        recompensas.appendChild(metaPuntos);
 
-        if (Number(evento.mejora || 0) === 1) {
+        const cantidadMejoras = Math.max(0, Number(evento.mejora || 0));
+        if (cantidadMejoras > 0) {
             const tagMejora = document.createElement('div');
             tagMejora.className = 'evento-recompensa-tag';
-            tagMejora.innerHTML = `<img src="${ICONO_MEJORA}" alt="Mejora" style="width:28px;height:28px;object-fit:contain;"> <span>Otorga mejora</span>`;
+            tagMejora.innerHTML = `<img src="${ICONO_MEJORA}" alt="Mejora" style="width:28px;height:28px;object-fit:contain;"> <span>x${cantidadMejoras}</span>`;
             recompensas.appendChild(tagMejora);
         }
-        if (Number(evento.mejora_especial || 0) === 1) {
+        const cantidadEspeciales = Math.max(0, Number(evento.mejora_especial || 0));
+        if (cantidadEspeciales > 0) {
             const tagEspecial = document.createElement('div');
             tagEspecial.className = 'evento-recompensa-tag';
-            tagEspecial.innerHTML = `<img src="${ICONO_MEJORA_ESPECIAL}" alt="Mejora especial" style="width:28px;height:28px;object-fit:contain;"> <span>Otorga mejora especial</span>`;
+            tagEspecial.innerHTML = `<img src="${ICONO_MEJORA_ESPECIAL}" alt="Mejora especial" style="width:28px;height:28px;object-fit:contain;"> <span>x${cantidadEspeciales}</span>`;
             recompensas.appendChild(tagEspecial);
         }
 
@@ -902,7 +906,7 @@ async function confirmarSeleccionEvento() {
         dificultad: dificultadEventoSeleccionada,
         enemigos: eventoPendiente.enemigos || [],
         boss: eventoPendiente.boss || null,
-        puntos: Number(eventoPendiente.puntos || 0) * Number(dificultadEventoSeleccionada || 1),
+        puntos: Number(eventoPendiente.puntos || 0),
         mejora: Number(eventoPendiente.mejora || 0),
         mejora_especial: Number(eventoPendiente.mejora_especial || 0),
         carta_recompensa: eventoPendiente.cartaRecompensa || '',

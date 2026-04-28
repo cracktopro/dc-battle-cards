@@ -450,6 +450,12 @@ function aplicarBonusAfiliaciones(cartas, cartasEnemigas = []) {
             return {
                 ...carta,
                 poderBaseAfiliacion: poderBaseConHabilidad,
+                poderModHabilidadVisual: modHabilidad,
+                bonusAfiliacionBase: 0,
+                bonusBuffAplicado: 0,
+                bonusBuffSoloUiAfiliacion: 0,
+                bonusEsperadoAfiliacion: 0,
+                bonusCanceladoAfiliacion: 0,
                 bonusAfiliacion: 0,
                 poderFinalAfiliacion: poderBaseConHabilidad
             };
@@ -2560,7 +2566,7 @@ async function ejecutarAtaqueBot(indiceSecuencia = 0, atacantes = null) {
     const objetivosAtaque = esBossAtacante
         ? elegirObjetivosBotAleatorios(2)
         : [elegirObjetivoBot()];
-    const multiplicadorDanio = esBossAtacante ? 0.75 : 1;
+    const multiplicadorDanio = 1;
 
     for (let ataqueActual = 0; ataqueActual < objetivosAtaque.length; ataqueActual++) {
         const slotObjetivo = objetivosAtaque[ataqueActual];
