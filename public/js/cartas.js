@@ -872,7 +872,7 @@ function normalizarMenuLateral() {
         });
     }
 
-    const versionLabelTexto = 'Version: Beta-1.0.3-29.04.26';
+    const versionLabelTexto = 'Version: Beta-1.0.4-29.04.26';
     let versionLabel = menu.querySelector('#menu-version-label');
     if (!versionLabel) {
         versionLabel = document.createElement('div');

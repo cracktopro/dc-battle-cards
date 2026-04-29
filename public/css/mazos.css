@@ -791,7 +791,6 @@ body {
 }
 
 /* Colores por tipo de habilidad (skill_class) */
-.badge-habilidad-carta.badge-habilidad--buff,
 .badge-habilidad-carta.badge-habilidad--heal,
 .badge-habilidad-carta.badge-habilidad--heal-all {
     border-color: rgba(100, 255, 160, 0.75);
@@ -855,6 +854,14 @@ body {
 }
 
 .badge-habilidad-carta.badge-habilidad--bonus-buff {
+    border-color: rgba(255, 209, 64, 0.72);
+    background: rgba(255, 196, 0, 0.82);
+    color: #1a1200;
+    text-shadow: none;
+    box-shadow: 0 0 8px rgba(255, 204, 0, 0.42);
+}
+
+.badge-habilidad-carta.badge-habilidad--buff {
     border-color: rgba(255, 209, 64, 0.72);
     background: rgba(255, 196, 0, 0.82);
     color: #1a1200;
@@ -970,7 +977,6 @@ body {
     text-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
 }
 
-.tooltip-skill-power--buff,
 .tooltip-skill-power--heal,
 .tooltip-skill-power--heal-all {
     color: #7dff9e;
@@ -1003,6 +1009,10 @@ body {
 }
 
 .tooltip-skill-power--bonus-buff {
+    color: #ffe37d;
+}
+
+.tooltip-skill-power--buff {
     color: #ffe37d;
 }
 

@@ -1706,12 +1706,18 @@ async function usarHabilidadActiva(carta, propietario, slotCarta) {
         escribirLog(`${carta.Nombre} activa ${meta.nombre}: modo tanque activo.`);
     } else if (meta.clase === 'stun') {
         const turnosStun = Math.max(1, Math.floor(valor || 1));
+        const filtrarObjetivosNoBoss = (indices = []) => indices.filter(index => enemigos[index] && !esCartaBoss(enemigos[index]));
         let idx = null;
         if (propietario === 'jugador') {
             const tankActivo = obtenerIndiceTankActivo(enemigos);
-            const indicesElegibles = tankActivo !== null
+            const indicesElegiblesBase = tankActivo !== null
                 ? [tankActivo]
                 : obtenerIndicesCartasDisponibles(enemigos);
+            const indicesElegibles = filtrarObjetivosNoBoss(indicesElegiblesBase);
+            if (indicesElegibles.length === 0) {
+                escribirLog(`${carta.Nombre} intenta usar ${meta.nombre}, pero no afecta a objetivos BOSS.`);
+                return false;
+            }
             const { cartasConBonus: enemigosConBonusStun } = aplicarBonusAfiliaciones(enemigos, aliados);
             const disponibles = indicesElegibles.map(index => ({
                 index,
@@ -1727,10 +1733,19 @@ async function usarHabilidadActiva(carta, propietario, slotCarta) {
             });
         } else {
             const tankActivo = obtenerIndiceTankActivo(enemigos);
-            idx = tankActivo !== null ? tankActivo : elegirObjetivoBot();
+            if (tankActivo !== null && !esCartaBoss(enemigos[tankActivo])) {
+                idx = tankActivo;
+            } else {
+                const objetivosNoBoss = filtrarObjetivosNoBoss(obtenerIndicesCartasDisponibles(enemigos));
+                idx = objetivosNoBoss.length > 0 ? objetivosNoBoss[Math.floor(Math.random() * objetivosNoBoss.length)] : null;
+            }
         }
         if (idx === null || idx === undefined || !enemigos[idx]) return false;
         const objetivo = enemigos[idx];
+        if (esCartaBoss(objetivo)) {
+            escribirLog(`${carta.Nombre} intenta usar ${meta.nombre}, pero ${objetivo.Nombre} es BOSS e inmune al aturdimiento.`);
+            return false;
+        }
         const stunPrevio = Math.max(0, Number(objetivo.stunRestante || 0));
         if (turnosStun >= stunPrevio) {
             objetivo.stunSkillName = String(meta.nombre || '').trim();

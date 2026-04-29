@@ -1,5 +1,13 @@
 # Changelog
 
+## Beta-1.0.4-29.04.26
+
+- Se aplican habilidades a TODAS las cartas del catálogo actualizado (`cartas.xlsx`), asegurando consistencia global para jugador, BOT y BOSS.
+- Ajuste de color unificado para `buff`: ahora usa el mismo amarillo que `bonus_buff` en badges, tooltip de `@skill_power` y modificadores de poder en tablero.
+- Ajuste de regla de combate para `stun`: no afecta a cartas BOSS bajo ninguna circunstancia (inmunidad total).
+- Limpieza de recursos: eliminación de `public/resources/icons/red_arrow.jpg` del repositorio.
+- Etiqueta de versión del menú lateral actualizada a `Version: Beta-1.0.4-29.04.26`.
+
 ## Beta-1.0.3-29.04.26
 
 - Sincronización robusta de catálogo: al cambiar `cartas.xlsx`, las cartas de usuario actualizan automáticamente habilidades e imágenes usando firma de catálogo para forzar migración cuando haya cambios.
