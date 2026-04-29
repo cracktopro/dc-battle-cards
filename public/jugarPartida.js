@@ -311,6 +311,45 @@ function obtenerAfiliacionesCarta(carta) {
         .map(normalizarAfiliacion);
 }
 
+function obtenerSaludMaxCarta(carta) {
+    const saludMax = Number(carta?.SaludMax ?? carta?.salud_max ?? carta?.saludMax ?? carta?.Salud);
+    if (Number.isFinite(saludMax) && saludMax > 0) {
+        return saludMax;
+    }
+    const poder = Number(carta?.Poder ?? carta?.poder ?? 0);
+    return Math.max(1, poder);
+}
+
+function obtenerSaludActualCarta(carta) {
+    const saludMax = Math.max(obtenerSaludMaxCarta(carta), 1);
+    const salud = Number(carta?.Salud ?? carta?.salud);
+    const saludValida = Number.isFinite(salud) ? salud : saludMax;
+    return Math.max(0, Math.min(saludValida, saludMax));
+}
+
+function crearBarraSaludElemento(carta) {
+    const saludActual = obtenerSaludActualCarta(carta);
+    const saludMax = Math.max(obtenerSaludMaxCarta(carta), 1);
+    const porcentajeSalud = Math.max(0, Math.min((saludActual / saludMax) * 100, 100));
+    const ratioSalud = porcentajeSalud / 100;
+
+    const barraSaludContenedor = document.createElement('div');
+    barraSaludContenedor.classList.add('barra-salud-contenedor');
+
+    const barraSaludRelleno = document.createElement('div');
+    barraSaludRelleno.classList.add('barra-salud-relleno');
+    barraSaludRelleno.style.width = `${porcentajeSalud}%`;
+    barraSaludRelleno.style.setProperty('--health-ratio', String(ratioSalud));
+
+    const saludSpan = document.createElement('span');
+    saludSpan.classList.add('salud-carta');
+    saludSpan.textContent = `${saludActual}/${saludMax}`;
+
+    barraSaludContenedor.appendChild(barraSaludRelleno);
+    barraSaludContenedor.appendChild(saludSpan);
+    return barraSaludContenedor;
+}
+
 async function obtenerCatalogoCartas() {
     if (catalogoCartasCache) {
         return catalogoCartasCache;
@@ -858,6 +897,7 @@ function renderizarCartasSeleccionEvento() {
         if (badgeAfiliacion) {
             cartaDiv.appendChild(badgeAfiliacion);
         }
+        cartaDiv.appendChild(crearBarraSaludElemento(carta));
         cartaDiv.onclick = () => toggleSeleccionCartaEvento(item.index);
         grid.appendChild(cartaDiv);
     });

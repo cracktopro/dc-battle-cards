@@ -20,6 +20,8 @@ let usuarioCartasSeleccion = [];
 let seleccionCartasDesafio = new Set();
 let faccionFiltroActiva = 'H';
 let afiliacionFiltroActiva = 'todas';
+let nivelDesafioActivo = 1;
+let desafiosCache = [];
 const ICONO_MEJORA = '/resources/icons/mejora.png';
 const ICONO_MEJORA_ESPECIAL = '/resources/icons/mejora_especial.png';
 
@@ -63,42 +65,92 @@ async function cargarDesafiosDesdeExcel() {
     });
 }
 
-function estaDesbloqueado(desafio, completadosSet, desafiosOrdenados) {
-    if (!Array.isArray(desafiosOrdenados) || desafiosOrdenados.length === 0) {
-        return true;
-    }
-
-    const indexActual = desafiosOrdenados.findIndex(item => Number(item.id) === Number(desafio.id));
-    if (indexActual <= 0) {
-        return true;
-    }
-
-    const idPrevio = Number(desafiosOrdenados[indexActual - 1].id);
-    return Number.isFinite(idPrevio) && completadosSet.has(idPrevio);
+function obtenerCompletadosDesafiosSet(idsDesafios = new Set()) {
+    const usuario = JSON.parse(localStorage.getItem('usuario')) || {};
+    const completadosPreferidos = Array.isArray(usuario.desafiosCompletadosV2)
+        ? usuario.desafiosCompletadosV2
+        : usuario.desafiosCompletados;
+    return new Set(
+        (Array.isArray(completadosPreferidos) ? completadosPreferidos : [])
+            .map(id => Number(id))
+            .filter(id => Number.isFinite(id) && (idsDesafios.size === 0 || idsDesafios.has(id)))
+    );
 }
 
-function construirProgresoSeguro(completadosRaw, desafiosOrdenados) {
-    const completadosSet = new Set(
-        (Array.isArray(completadosRaw) ? completadosRaw : [])
-            .map(id => Number(id))
-            .filter(Number.isFinite)
-    );
-    const progresoSeguro = new Set();
-    desafiosOrdenados.forEach((desafio, index) => {
-        const idActual = Number(desafio.id);
-        if (!Number.isFinite(idActual) || !completadosSet.has(idActual)) {
-            return;
-        }
-        if (index === 0) {
-            progresoSeguro.add(idActual);
-            return;
-        }
-        const idPrevio = Number(desafiosOrdenados[index - 1].id);
-        if (progresoSeguro.has(idPrevio)) {
-            progresoSeguro.add(idActual);
-        }
+function agruparDesafiosPorNivel(desafios = []) {
+    const mapa = new Map();
+    for (let nivel = 1; nivel <= 6; nivel++) {
+        mapa.set(nivel, []);
+    }
+    desafios.forEach(desafio => {
+        const nivel = Math.min(Math.max(Number(desafio?.dificultad || 1), 1), 6);
+        mapa.get(nivel).push(desafio);
     });
-    return progresoSeguro;
+    for (let nivel = 1; nivel <= 6; nivel++) {
+        mapa.set(
+            nivel,
+            (mapa.get(nivel) || []).sort((a, b) => Number(a.id || 0) - Number(b.id || 0))
+        );
+    }
+    return mapa;
+}
+
+function construirEstadoDesbloqueoPorNivel(mapaDesafiosNivel, completadosSet) {
+    const desbloqueado = new Map();
+    desbloqueado.set(1, true);
+    for (let nivel = 2; nivel <= 6; nivel++) {
+        const desafiosPrevios = mapaDesafiosNivel.get(nivel - 1) || [];
+        const nivelPrevioCompletado = desafiosPrevios.length > 0
+            && desafiosPrevios.every(desafio => completadosSet.has(Number(desafio.id)));
+        desbloqueado.set(nivel, nivelPrevioCompletado);
+    }
+    return desbloqueado;
+}
+
+function primerNivelDisponible(desbloqueadoPorNivel) {
+    for (let nivel = 1; nivel <= 6; nivel++) {
+        if (desbloqueadoPorNivel.get(nivel)) {
+            return nivel;
+        }
+    }
+    return 1;
+}
+
+function renderizarTabsNivelesDesafio(mapaDesafiosNivel, desbloqueadoPorNivel, completadosSet) {
+    const tabs = document.getElementById('desafios-nivel-tabs');
+    if (!tabs) {
+        return;
+    }
+
+    tabs.innerHTML = '';
+    for (let nivel = 1; nivel <= 6; nivel++) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn faccion-tab desafio-nivel-tab';
+        const desbloqueado = Boolean(desbloqueadoPorNivel.get(nivel));
+        const desafiosNivel = mapaDesafiosNivel.get(nivel) || [];
+        const completado = desafiosNivel.length > 0 && desafiosNivel.every(d => completadosSet.has(Number(d.id)));
+
+        if (desbloqueado) {
+            btn.innerHTML = `Nivel ${nivel} <img src="https://i.ibb.co/zZt4R3x/star-level.png" alt="star" style="width:14px;height:14px;object-fit:contain;">`;
+            btn.classList.toggle('active', nivelDesafioActivo === nivel);
+            btn.onclick = () => {
+                nivelDesafioActivo = nivel;
+                renderizarDesafiosGlobal();
+            };
+            if (completado) {
+                btn.title = 'Nivel completado';
+            }
+        } else {
+            btn.innerHTML = `Bloqueado <span class="candado">🔒</span>`;
+            btn.classList.add('tab-bloqueada');
+            btn.onclick = () => {
+                mostrarMensaje(`Completa todos los desafíos del nivel ${nivel - 1} para desbloquear este nivel.`, 'warning');
+            };
+        }
+
+        tabs.appendChild(btn);
+    }
 }
 
 function crearEstrellas(cantidad) {
@@ -118,37 +170,44 @@ function crearEstrellas(cantidad) {
 }
 
 async function renderizarDesafios(desafios) {
+    desafiosCache = Array.isArray(desafios) ? desafios : [];
+    await renderizarDesafiosGlobal();
+}
+
+async function renderizarDesafiosGlobal() {
     const grid = document.getElementById('desafios-grid');
     grid.innerHTML = '';
     const catalogo = await cargarCatalogoCartas();
-    const desafiosOrdenados = [...desafios]
+    const desafiosOrdenados = [...desafiosCache]
         .map(item => ({ ...item, id: Number(item.id) }))
         .filter(item => Number.isFinite(item.id))
         .sort((a, b) => a.id - b.id);
     const idsDesafios = new Set(desafiosOrdenados.map(item => item.id));
+    const completadosSet = obtenerCompletadosDesafiosSet(idsDesafios);
+    const desafiosPorNivel = agruparDesafiosPorNivel(desafiosOrdenados);
+    const desbloqueadoPorNivel = construirEstadoDesbloqueoPorNivel(desafiosPorNivel, completadosSet);
+    if (!desbloqueadoPorNivel.get(nivelDesafioActivo)) {
+        nivelDesafioActivo = primerNivelDisponible(desbloqueadoPorNivel);
+    }
+    renderizarTabsNivelesDesafio(desafiosPorNivel, desbloqueadoPorNivel, completadosSet);
+    const desafiosVisibles = desafiosPorNivel.get(nivelDesafioActivo) || [];
     const mapaCatalogo = new Map(
         catalogo.map(carta => [normalizarNombre(carta.Nombre), carta])
     );
 
-    desafios.forEach(desafio => {
-        const usuario = JSON.parse(localStorage.getItem('usuario')) || {};
-        const completadosPreferidos = Array.isArray(usuario.desafiosCompletadosV2)
-            ? usuario.desafiosCompletadosV2
-            : usuario.desafiosCompletados;
-        const completadosSet = construirProgresoSeguro(
-            (Array.isArray(completadosPreferidos) ? completadosPreferidos : [])
-                .map(id => Number(id))
-                .filter(id => Number.isFinite(id) && idsDesafios.has(id)),
-            desafiosOrdenados
-        );
+    if (desafiosVisibles.length === 0) {
+        const vacio = document.createElement('div');
+        vacio.className = 'desafio-meta';
+        vacio.textContent = `No hay desafíos disponibles para el nivel ${nivelDesafioActivo}.`;
+        grid.appendChild(vacio);
+        return;
+    }
+
+    desafiosVisibles.forEach(desafio => {
         const completado = completadosSet.has(Number(desafio.id));
-        const desbloqueado = estaDesbloqueado(desafio, completadosSet, desafiosOrdenados);
 
         const card = document.createElement('div');
         card.className = `desafio-card ${completado ? 'completado' : 'pendiente'}`;
-        if (!desbloqueado) {
-            card.style.opacity = '0.6';
-        }
 
         const nombre = document.createElement('div');
         nombre.className = 'desafio-nombre';
@@ -213,24 +272,16 @@ async function renderizarDesafios(desafios) {
         }
 
         const boton = document.createElement('button');
-
-        if (!desbloqueado) {
-            boton.className = 'btn btn-secondary mt-2';
-            boton.textContent = 'Bloqueado 🔒';
-            boton.disabled = true;
-        } else {
-            boton.className = `btn mt-2 ${completado ? 'btn-success' : 'btn-primary'}`;
-            boton.textContent = completado ? 'Volver a jugar' : 'Jugar';
-
-            boton.onclick = async () => {
-                try {
-                    await abrirModalSeleccionDesafio(desafio);
-                } catch (error) {
-                    console.error('No se pudo abrir el selector del desafío:', error);
-                    mostrarMensaje('No se pudo abrir la selección de cartas.', 'danger');
-                }
-            };
-        }
+        boton.className = `btn mt-2 ${completado ? 'btn-success' : 'btn-primary'}`;
+        boton.textContent = completado ? 'Volver a jugar' : 'Jugar';
+        boton.onclick = async () => {
+            try {
+                await abrirModalSeleccionDesafio(desafio);
+            } catch (error) {
+                console.error('No se pudo abrir el selector del desafío:', error);
+                mostrarMensaje('No se pudo abrir la selección de cartas.', 'danger');
+            }
+        };
 
         const bloqueInferior = document.createElement('div');
         bloqueInferior.className = 'desafio-bottom';
@@ -285,6 +336,45 @@ function obtenerAfiliacionesCarta(carta) {
     }
 
     return raw.split(';').map(v => v.trim()).filter(Boolean);
+}
+
+function obtenerSaludMaxCarta(carta) {
+    const saludMax = Number(carta?.SaludMax ?? carta?.salud_max ?? carta?.saludMax ?? carta?.Salud);
+    if (Number.isFinite(saludMax) && saludMax > 0) {
+        return saludMax;
+    }
+    const poder = Number(carta?.Poder ?? carta?.poder ?? 0);
+    return Math.max(1, poder);
+}
+
+function obtenerSaludActualCarta(carta) {
+    const saludMax = Math.max(obtenerSaludMaxCarta(carta), 1);
+    const salud = Number(carta?.Salud ?? carta?.salud);
+    const saludValida = Number.isFinite(salud) ? salud : saludMax;
+    return Math.max(0, Math.min(saludValida, saludMax));
+}
+
+function crearBarraSaludElemento(carta) {
+    const saludActual = obtenerSaludActualCarta(carta);
+    const saludMax = Math.max(obtenerSaludMaxCarta(carta), 1);
+    const porcentajeSalud = Math.max(0, Math.min((saludActual / saludMax) * 100, 100));
+    const ratioSalud = porcentajeSalud / 100;
+
+    const barraSaludContenedor = document.createElement('div');
+    barraSaludContenedor.classList.add('barra-salud-contenedor');
+
+    const barraSaludRelleno = document.createElement('div');
+    barraSaludRelleno.classList.add('barra-salud-relleno');
+    barraSaludRelleno.style.width = `${porcentajeSalud}%`;
+    barraSaludRelleno.style.setProperty('--health-ratio', String(ratioSalud));
+
+    const saludSpan = document.createElement('span');
+    saludSpan.classList.add('salud-carta');
+    saludSpan.textContent = `${saludActual}/${saludMax}`;
+
+    barraSaludContenedor.appendChild(barraSaludRelleno);
+    barraSaludContenedor.appendChild(saludSpan);
+    return barraSaludContenedor;
 }
 
 function configurarModalSeleccion() {
@@ -419,6 +509,7 @@ function renderizarCartasSeleccionDesafio() {
         if (badgeAfiliacion) {
             cartaDiv.appendChild(badgeAfiliacion);
         }
+        cartaDiv.appendChild(crearBarraSaludElemento(carta));
         cartaDiv.onclick = () => toggleSeleccionCartaDesafio(item.index);
 
         grid.appendChild(cartaDiv);

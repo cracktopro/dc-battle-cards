@@ -1,5 +1,9 @@
 body {
-    background: url('https://i.ibb.co/HDqCpmjb/Prueba.png') no-repeat center center fixed;
+    background-color: #020711;
+    background-image: url('/resources/hud/tablero_background.png');
+    background-repeat: no-repeat;
+    background-position: center center;
+    background-attachment: fixed;
     background-size: cover;
     font-family: 'Orbitron', sans-serif;
     margin: 0;
@@ -11,16 +15,6 @@ body {
     min-height: 100dvh;
 }
 
-.menu-container {
-    position: absolute;
-    top: 20px;
-    left: 20px;
-    width: var(--dc-board-menu-w, 150px);
-    background-color: rgba(20, 20, 20, 0.8);
-    padding: 15px;
-    z-index: 1000;
-}
-
 .tablero-container {
     display: flex;
     flex-direction: column;
@@ -28,8 +22,8 @@ body {
     align-items: center;
     height: 100vh;
     height: 100dvh;
-    width: calc(100vw - var(--dc-board-menu-w, 150px) - var(--dc-board-rail-right, 270px));
-    margin-left: calc(var(--dc-board-menu-w, 150px) + 20px);
+    width: calc(100vw - var(--dc-board-rail-right, 270px));
+    margin-left: 0;
     margin-right: var(--dc-board-rail-right, 270px);
     padding: 12px clamp(8px, 2vw, 16px);
     box-sizing: border-box;
@@ -71,13 +65,13 @@ body {
     justify-content: center;
     align-items: center;
     width: 100%;
-    max-width: min(1120px, 100%);
+    max-width: min(1360px, 100%);
     margin: 0 auto;
     padding: 4px;
 }
 
 .jugador h2 {
-    font-size: 1.5rem;
+    font-size: 1.05rem;
     color: #ffffff;
     text-align: left;
 }
@@ -85,7 +79,7 @@ body {
 .info-jugador {
     position: fixed;
     right: 18px;
-    width: 240px;
+    width: 250px;
     padding: 12px 10px;
     border-radius: 14px;
     background: rgba(8, 20, 40, 0.86);
@@ -115,6 +109,41 @@ body {
     color: #dff8ff;
     font-size: 0.95rem;
     white-space: nowrap;
+}
+
+.turno-indicador {
+    font-size: 1.38rem;
+    line-height: 1.1;
+    font-weight: 900;
+    letter-spacing: 0.03em;
+    color: #ffd54a;
+    text-align: center;
+    text-shadow:
+        0 0 10px rgba(255, 213, 74, 0.72),
+        0 0 22px rgba(255, 170, 20, 0.5);
+    margin-bottom: 4px;
+    opacity: 0.56;
+    transition: opacity 0.24s ease, transform 0.24s ease;
+}
+
+.turno-indicador.activo {
+    opacity: 1;
+    transform: scale(1.03);
+}
+
+.panel-identidad-jugador {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.panel-jugador-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid rgba(0, 209, 255, 0.72);
+    box-shadow: 0 0 10px rgba(0, 209, 255, 0.34);
 }
 
 .bonus-activo-tablero {
@@ -155,12 +184,20 @@ body {
 }
 
 .jugador-oponente, .jugador-propio {
-    max-width: min(1180px, 100%);
+    max-width: min(1360px, 100%);
     width: 100%;
     display: flex;
     flex-direction: column;
     align-items: center;
     margin: 8px auto;
+    position: relative;
+    left: 0;
+}
+
+.jugador-oponente .slots-jugador,
+.jugador-propio .slots-jugador {
+    position: relative;
+    left: 44px;
 }
 
 /* Ajustes para las cartas */
@@ -170,11 +207,11 @@ body {
     gap: clamp(10px, 1.5vw, 22px);
     margin-top: 6px;
     flex-wrap: wrap;
-    width: min(1020px, 100%);
+    width: min(1280px, 100%);
 }
 
 .slot {
-    width: clamp(108px, 12vw, 168px);
+    width: clamp(132px, 15vw, 210px);
     aspect-ratio: 7 / 10;
     height: auto;
     border: 2px solid rgba(0, 123, 255, 0.7);
@@ -472,7 +509,7 @@ body {
     left: 5px;
     right: 5px;
     bottom: 34px;
-    z-index: 3;
+    z-index: 6;
     display: flex;
     flex-direction: column;
     align-items: stretch;
@@ -520,6 +557,11 @@ body {
     border: 1px solid rgba(255, 186, 90, 0.85);
     box-shadow: 0 0 10px rgba(255, 145, 60, 0.35);
     pointer-events: auto;
+    display: inline-flex;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .barra-salud-contenedor.barra-salud--debuff-salud {
@@ -586,7 +628,7 @@ body {
 
 /* Estilos para los botones del mazo */
 .mazo-btn {
-    width: clamp(108px, 12vw, 168px);
+    width: clamp(132px, 15vw, 210px);
     aspect-ratio: 7 / 10;
     height: auto;
     background-size: cover;
@@ -650,16 +692,6 @@ body {
     background-color: #e60000; /* Color al hacer hover */
 }
 
-/* Estilos para el texto del turno */
-.turno-texto {
-    font-size: 1.5rem;
-    color: #00ff00; /* Verde llamativo para estilo de videojuego */
-    text-align: center;
-    font-family: 'Orbitron', sans-serif;
-    margin-bottom: 10px;
-    text-shadow: 0 0 10px rgba(0, 255, 0, 0.8), 0 0 20px rgba(0, 255, 0, 0.6); /* Efecto de luz */
-}
-
 /* Tablet / móvil: un solo corte (anchuras del tablero también en app-layout.css) */
 @media (max-width: 899px) {
     .danio-flotante {
@@ -675,10 +707,6 @@ body {
     .btn-abandonar {
         padding: clamp(6px, 1.6vw, 10px) clamp(10px, 2.4vw, 18px);
         font-size: clamp(0.9rem, 3vw, 1.05rem);
-    }
-
-    .turno-texto {
-        font-size: clamp(1rem, 3.2vw, 1.25rem);
     }
 
     .tablero-container {

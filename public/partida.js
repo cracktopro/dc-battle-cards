@@ -10,7 +10,9 @@ let recompensasProcesadas = false;
 let temporizadorAvisoTurno = null;
 let cementerioJugador = [];
 let cementerioOponente = [];
-const DEBUG_COMBATE_ACTIVO = true;
+const DEBUG_COMBATE_ACTIVO = false;
+const MENSAJE_SALIDA_PARTIDA = 'Hay una partida en curso. ¿Seguro que quieres abandonar esta vista?';
+let proteccionSalidaActiva = true;
 
 let cartasJugadorEnJuego = [null, null, null];
 let cartasOponenteEnJuego = [null, null, null];
@@ -34,17 +36,27 @@ function obtenerNombreVisibleJugador() {
     return nickname || (email ? email.split('@')[0] : 'Jugador');
 }
 
+function obtenerAvatarVisibleJugador() {
+    const usuario = JSON.parse(localStorage.getItem('usuario') || '{}');
+    const avatar = String(usuario?.avatar || '').trim();
+    return avatar || 'https://i.ibb.co/QJvLStm/zzz-Carta-Back.png';
+}
+
 function configurarNombresTablero() {
     const nombreJugadorEl = document.getElementById('nombre-jugador');
     const nombreOponenteEl = document.getElementById('nombre-oponente');
     const nombreJugador = obtenerNombreVisibleJugador();
-    const nombreOponente = String(localStorage.getItem('nombreOponente') || '').trim() || 'BOT';
+    const nombreOponente = 'BOT';
+    const avatarJugadorEl = document.getElementById('panel-jugador-avatar');
 
     if (nombreJugadorEl) {
         nombreJugadorEl.textContent = nombreJugador;
     }
     if (nombreOponenteEl) {
         nombreOponenteEl.textContent = nombreOponente;
+    }
+    if (avatarJugadorEl) {
+        avatarJugadorEl.src = obtenerAvatarVisibleJugador();
     }
 }
 
@@ -229,6 +241,7 @@ async function enriquecerCartasConDatosCatalogo(cartas) {
         const skillClass = String(carta.skill_class || '').trim().toLowerCase() || datosCatalogo.skill_class || '';
         const skillTrigger = String(carta.skill_trigger || '').trim().toLowerCase() || datosCatalogo.skill_trigger || '';
         const skillPower = carta.skill_power ?? datosCatalogo.skill_power ?? '';
+        const skillPowerBaseCatalogo = datosCatalogo.skill_power ?? '';
         const usaSkillPowerCatalogo = (carta.skill_power === undefined || carta.skill_power === null || String(carta.skill_power).trim() === '');
 
         const saludEscalada = calcularSaludEscaladaDesdeCatalogo(carta, datosCatalogo);
@@ -242,6 +255,7 @@ async function enriquecerCartasConDatosCatalogo(cartas) {
             skill_info: skillInfo,
             skill_class: skillClass,
             skill_power: skillPower,
+            skill_power_base: skillPowerBaseCatalogo,
             skill_trigger: skillTrigger,
             Imagen: datosCatalogo.Imagen || carta.Imagen || carta.imagen || '',
             imagen: datosCatalogo.Imagen || carta.imagen || carta.Imagen || '',
@@ -634,6 +648,10 @@ function crearCartaCombateDesdeMazo(carta) {
 
 function escribirLog(mensaje, clase = '') {
     const logsCombate = document.getElementById('logs-combate');
+    if (!logsCombate) {
+        escribirDebug('LOG', { mensaje, clase, renderizado: false });
+        return;
+    }
     const log = document.createElement('div');
     log.textContent = mensaje;
 
@@ -1203,10 +1221,21 @@ function seleccionarCartasAleatorias(mazo, cantidad) {
 }
 
 function actualizarTextoTurno(texto) {
-    document.getElementById('turno-texto').textContent = texto;
+    const nombreJugador = obtenerNombreVisibleJugador();
+    const nombreOponente = 'BOT';
+    const turnoJugadorEl = document.getElementById('turno-jugador-label');
+    const turnoOponenteEl = document.getElementById('turno-oponente-label');
+    if (turnoJugadorEl) {
+        turnoJugadorEl.textContent = `Turno de ${nombreJugador}`;
+        turnoJugadorEl.classList.toggle('activo', turnoActual === 'jugador');
+    }
+    if (turnoOponenteEl) {
+        turnoOponenteEl.textContent = `Turno de ${nombreOponente}`;
+        turnoOponenteEl.classList.toggle('activo', turnoActual === 'oponente');
+    }
 }
 
-function mostrarAvisoTurno(texto) {
+function mostrarAvisoTurno(texto, duracionMs = 1400) {
     const avisoTurno = document.getElementById('aviso-turno');
 
     if (!avisoTurno) {
@@ -1220,13 +1249,29 @@ function mostrarAvisoTurno(texto) {
         clearTimeout(temporizadorAvisoTurno);
     }
 
+    const duracionFinal = Math.max(300, Number(duracionMs || 1400));
     temporizadorAvisoTurno = setTimeout(() => {
         avisoTurno.classList.remove('visible');
-    }, 1400);
+    }, duracionFinal);
 }
 
-function mostrarAvisoHabilidad(texto) {
-    mostrarAvisoTurno(texto);
+function mostrarAvisoHabilidad(texto, duracionMs = PAUSA_AVISO_HABILIDAD_MS) {
+    mostrarAvisoTurno(texto, duracionMs);
+}
+
+const PAUSA_AVISO_HABILIDAD_MS = 2300;
+
+function construirMensajeUsoHabilidadActiva(nombreCarta, nombreHabilidad, objetivoTexto) {
+    const carta = String(nombreCarta || 'Carta').trim();
+    const habilidad = String(nombreHabilidad || 'Habilidad').trim();
+    const objetivo = String(objetivoTexto || carta).trim();
+    return `${carta} utiliza su habilidad ${habilidad} en ${objetivo}`;
+}
+
+async function anunciarUsoHabilidadActiva(carta, meta, objetivoTexto) {
+    const mensaje = construirMensajeUsoHabilidadActiva(carta?.Nombre, meta?.nombre, objetivoTexto);
+    mostrarAvisoHabilidad(mensaje, PAUSA_AVISO_HABILIDAD_MS);
+    await esperar(PAUSA_AVISO_HABILIDAD_MS);
 }
 
 function obtenerCartaBonusDebuffActiva(cartas = []) {
@@ -1380,8 +1425,12 @@ function actualizarContadoresMazo() {
     const contadorJugador = document.getElementById('contador-mazo-jugador');
     const contadorOponente = document.getElementById('contador-mazo-oponente');
 
-    botonMazoJugador.textContent = `Mazo (${mazoJugador.length})`;
-    botonMazoOponente.textContent = `Mazo BOT (${mazoOponente.length})`;
+    if (botonMazoJugador) {
+        botonMazoJugador.textContent = '';
+    }
+    if (botonMazoOponente) {
+        botonMazoOponente.textContent = '';
+    }
 
     if (contadorJugador) {
         contadorJugador.textContent = `Cartas en mazo: ${mazoJugador.length}`;
@@ -1559,6 +1608,10 @@ async function usarHabilidadActiva(carta, propietario, slotCarta) {
     if (!meta.tieneHabilidad || meta.trigger !== 'usar' || cooldownActual > 0) {
         return false;
     }
+    if (meta.clase === 'tank' && Boolean(carta.habilidadUsadaPartida)) {
+        escribirLog(`${carta.Nombre} ya usó ${meta.nombre} en esta partida. Solo puede volver a usarla si es revivida.`);
+        return false;
+    }
     escribirDebug('SKILL_USAR_INTENTO', { propietario, slot: slotCarta, carta: carta.Nombre, clase: meta.clase, skill: meta.nombre });
 
     const valor = Math.max(0, Number(obtenerValorNumericoSkillPower(carta, 0)));
@@ -1591,10 +1644,7 @@ async function usarHabilidadActiva(carta, propietario, slotCarta) {
         objetivo.Salud = Math.min(saludMax, saludAntes + Math.floor(valor));
         const curado = Math.max(0, objetivo.Salud - saludAntes);
         if (curado <= 0) return false;
-        mostrarAvisoHabilidad(`Curando a "${objetivo.Nombre}"`);
-        if (propietario === 'oponente') {
-            mostrarAvisoHabilidad(`"${carta.Nombre}" utiliza la habilidad "${meta.nombre}" en "${objetivo.Nombre}"`);
-        }
+        await anunciarUsoHabilidadActiva(carta, meta, objetivo.Nombre);
         mostrarValorFlotante(propietario, idx, curado, 'cura');
         escribirLog(`${carta.Nombre} usa ${meta.nombre} y cura ${curado} a ${objetivo.Nombre}.`);
     } else if (meta.clase === 'revive') {
@@ -1620,10 +1670,16 @@ async function usarHabilidadActiva(carta, propietario, slotCarta) {
         if (indiceCementerio === null || indiceCementerio === undefined) return false;
         const cartaRevive = cementerio.splice(indiceCementerio, 1)[0];
         if (!cartaRevive) return false;
-        mazo.push({ ...cartaRevive, Salud: obtenerSaludMaxCarta(cartaRevive), escudoActual: 0, habilidadAutoAplicadaEnJuego: false });
-        if (propietario === 'oponente') {
-            mostrarAvisoHabilidad(`"${carta.Nombre}" utiliza la habilidad "${meta.nombre}" en "${cartaRevive.Nombre}"`);
-        }
+        await anunciarUsoHabilidadActiva(carta, meta, cartaRevive.Nombre);
+        mazo.push({
+            ...cartaRevive,
+            Salud: obtenerSaludMaxCarta(cartaRevive),
+            escudoActual: 0,
+            habilidadAutoAplicadaEnJuego: false,
+            habilidadCooldownRestante: 0,
+            habilidadUsadaPartida: false,
+            tankActiva: false
+        });
         escribirLog(`${carta.Nombre} usa ${meta.nombre} y revive a ${cartaRevive.Nombre} al mazo.`);
     } else if (meta.clase === 'shield') {
         if (valor <= 0) return false;
@@ -1645,22 +1701,17 @@ async function usarHabilidadActiva(carta, propietario, slotCarta) {
             : elegirAliadoMasHerido(propietario);
         if (idx === null || idx === undefined || !aliados[idx]) return false;
         const objetivo = aliados[idx];
+        await anunciarUsoHabilidadActiva(carta, meta, objetivo.Nombre);
         objetivo.escudoActual = Math.max(0, Number(objetivo.escudoActual || 0)) + Math.floor(valor);
-        if (propietario === 'oponente') {
-            mostrarAvisoHabilidad(`"${carta.Nombre}" utiliza la habilidad "${meta.nombre}" en "${objetivo.Nombre}"`);
-        }
         escribirLog(`${carta.Nombre} usa ${meta.nombre}: escudo +${Math.floor(valor)} para ${objetivo.Nombre}.`);
     } else if (meta.clase === 'aoe') {
-        mostrarAvisoHabilidad(`${carta.Nombre} va a realizar un ataque multiple`);
-        if (propietario === 'oponente') {
-            mostrarAvisoHabilidad(`"${carta.Nombre}" utiliza la habilidad "${meta.nombre}" en "todo el equipo rival"`);
-        }
         const { cartasConBonus: aliadosConBonusAoe } = aplicarBonusAfiliaciones(aliados, enemigos);
         const cartaAoeConBonus = aliadosConBonusAoe[slotCarta] || carta;
         const poderFuenteAoe = obtenerPoderCartaFinal(cartaAoeConBonus);
         const danioAoe = Math.max(1, Math.floor(valor || (poderFuenteAoe / 2)));
         const objetivos = obtenerIndicesCartasDisponibles(enemigos);
         if (objetivos.length === 0) return false;
+        await anunciarUsoHabilidadActiva(carta, meta, 'todo el equipo rival');
         for (const idx of objetivos) {
             await resolverAtaque(
                 aliados,
@@ -1675,11 +1726,8 @@ async function usarHabilidadActiva(carta, propietario, slotCarta) {
         }
         escribirLog(`${carta.Nombre} desata ${meta.nombre} e impacta a todo el equipo enemigo.`);
     } else if (meta.clase === 'heal_all') {
-        mostrarAvisoHabilidad(`${carta.Nombre} va a realizar un ataque multiple`);
-        if (propietario === 'oponente') {
-            mostrarAvisoHabilidad(`"${carta.Nombre}" utiliza la habilidad "${meta.nombre}" en "todo su equipo"`);
-        }
         if (valor <= 0) return false;
+        await anunciarUsoHabilidadActiva(carta, meta, 'todo su equipo');
         aliados.forEach(objetivo => {
             if (!objetivo) return;
             const idxObjetivo = aliados.indexOf(objetivo);
@@ -1694,11 +1742,9 @@ async function usarHabilidadActiva(carta, propietario, slotCarta) {
         escribirLog(`${carta.Nombre} usa ${meta.nombre}: cura grupal +${Math.floor(valor)}.`);
     } else if (meta.clase === 'tank') {
         if (carta.tankActiva) return false;
-        mostrarAvisoHabilidad(`${carta.Nombre} cambia a modo Tank`);
-        if (propietario === 'oponente') {
-            mostrarAvisoHabilidad(`"${carta.Nombre}" utiliza la habilidad "${meta.nombre}" en "${carta.Nombre}"`);
-        }
+        await anunciarUsoHabilidadActiva(carta, meta, carta.Nombre);
         carta.tankActiva = true;
+        carta.habilidadUsadaPartida = true;
         const saludMaxAnterior = obtenerSaludMaxCarta(carta);
         carta.SaludMax = Math.max(1, saludMaxAnterior * 2);
         carta.Salud = Math.min(carta.SaludMax, obtenerSaludActualCarta(carta) + saludMaxAnterior);
@@ -1746,15 +1792,13 @@ async function usarHabilidadActiva(carta, propietario, slotCarta) {
             escribirLog(`${carta.Nombre} intenta usar ${meta.nombre}, pero ${objetivo.Nombre} es BOSS e inmune al aturdimiento.`);
             return false;
         }
+        await anunciarUsoHabilidadActiva(carta, meta, objetivo.Nombre);
         const stunPrevio = Math.max(0, Number(objetivo.stunRestante || 0));
         if (turnosStun >= stunPrevio) {
             objetivo.stunSkillName = String(meta.nombre || '').trim();
         }
         objetivo.stunRestante = Math.max(stunPrevio, turnosStun);
         escribirLog(`${carta.Nombre} usa ${meta.nombre} y aturde a ${objetivo.Nombre} durante ${turnosStun} turno(s).`);
-        if (propietario === 'oponente') {
-            mostrarAvisoHabilidad(`"${carta.Nombre}" aturde a "${objetivo.Nombre}"`);
-        }
     } else if (meta.clase === 'dot') {
         const danoDot = Math.max(1, Math.floor(valor || 1));
         let idx = null;
@@ -1782,14 +1826,15 @@ async function usarHabilidadActiva(carta, propietario, slotCarta) {
         }
         if (idx === null || idx === undefined || !enemigos[idx]) return false;
         const objetivo = enemigos[idx];
+        await anunciarUsoHabilidadActiva(carta, meta, objetivo.Nombre);
         objetivo.efectosDot = Array.isArray(objetivo.efectosDot) ? objetivo.efectosDot : [];
         objetivo.efectosDot.push({ danoPorTurno: danoDot, turnosRestantes: 3, skillName: String(meta.nombre || '').trim() });
         escribirLog(`${carta.Nombre} aplica sangrado a ${objetivo.Nombre}: ${danoDot} de daño por 3 turnos.`);
     } else if (meta.clase === 'life_steal') {
+        await anunciarUsoHabilidadActiva(carta, meta, carta.Nombre);
         carta.lifeStealActiva = true;
         escribirLog(`${carta.Nombre} activa ${meta.nombre}: robo de vida habilitado.`);
     } else if (meta.clase === 'extra_attack') {
-        mostrarAvisoHabilidad(`${carta.Nombre} va a realizar un ataque adicional`);
         let idx = (() => {
             const indices = obtenerIndicesCartasDisponibles(enemigos);
             if (indices.length === 0) return null;
@@ -1821,9 +1866,7 @@ async function usarHabilidadActiva(carta, propietario, slotCarta) {
         }
         if (idx === null) return false;
         const objetivo = enemigos[idx];
-        if (propietario === 'oponente') {
-            mostrarAvisoHabilidad(`"${carta.Nombre}" utiliza la habilidad "${meta.nombre}" en "${objetivo.Nombre}"`);
-        }
+        await anunciarUsoHabilidadActiva(carta, meta, objetivo.Nombre);
         await resolverAtaque(
             aliados,
             slotCarta,
@@ -2081,7 +2124,7 @@ function crearCartaElemento(carta, tipo, slotIndex, opciones = {}) {
         cartaDiv.appendChild(badgeHabilidad);
     }
     const badgeAfiliacion = window.crearBadgeAfiliacionCarta ? window.crearBadgeAfiliacionCarta(carta) : null;
-    if (badgeAfiliacion) {
+    if (badgeAfiliacion && !carta?.tankActiva) {
         cartaDiv.appendChild(badgeAfiliacion);
     }
     if (carta?.tankActiva) {
@@ -2372,7 +2415,7 @@ async function mostrarVentanaFinPartida(ganador) {
     ventanaEmergente.style.display = 'flex';
     botonReiniciar.onclick = reiniciarPartida;
     botonVolverMenu.onclick = volverAlMenu;
-    botonVolverMenu.textContent = esEventoActivo ? 'Terminar Evento' : 'Volver al menú';
+    botonVolverMenu.textContent = esEventoActivo ? 'Terminar Evento' : (estadoDesafio.activo ? 'Terminar Desafío' : 'Volver al menú');
 
     if (ganador !== 'jugador') {
         return;
@@ -2948,12 +2991,30 @@ async function iniciarTurnoOponente() {
     ejecutarAtaqueBot();
 }
 
-function sacarCarta() {
-    escribirLog('Las cartas se roban automaticamente al inicio de cada turno.');
+function abandonarPartida() {
+    if (!window.confirm(MENSAJE_SALIDA_PARTIDA)) {
+        return;
+    }
+    abandonarVistaConLimpieza();
 }
 
-function abandonarPartida() {
-    window.location.href = 'vistaJuego.html';
+function limpiarEstadoPartidaEnCurso() {
+    partidaFinalizada = true;
+    atacanteSeleccionado = null;
+    cartasQueYaAtacaron = [];
+    localStorage.removeItem('mazoJugador');
+    localStorage.removeItem('mazoJugadorBase');
+    localStorage.removeItem('mazoOponente');
+    localStorage.removeItem('mazoOponenteBase');
+    localStorage.removeItem('desafioActivo');
+    localStorage.removeItem('partidaRecompensada');
+}
+
+function abandonarVistaConLimpieza() {
+    proteccionSalidaActiva = false;
+    sessionStorage.removeItem('dc_tablero_abandonado');
+    limpiarEstadoPartidaEnCurso();
+    window.location.replace('vistaJuego.html');
 }
 
 function reiniciarPartida() {
@@ -2973,10 +3034,38 @@ function reiniciarPartida() {
 }
 
 function volverAlMenu() {
+    const esEventoActivo = Boolean(estadoDesafio.activo && desafioActivo?.tipo === 'evento');
+    const esDesafioActivo = Boolean(estadoDesafio.activo && !esEventoActivo);
+    if (esDesafioActivo) {
+        window.location.href = 'desafios.html';
+        return;
+    }
     window.location.href = 'vistaJuego.html';
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    if (sessionStorage.getItem('dc_tablero_abandonado') === '1') {
+        sessionStorage.removeItem('dc_tablero_abandonado');
+        window.location.replace('vistaJuego.html');
+        return;
+    }
+
+    window.addEventListener('beforeunload', (event) => {
+        if (!proteccionSalidaActiva || partidaFinalizada) {
+            return;
+        }
+        event.preventDefault();
+        event.returnValue = MENSAJE_SALIDA_PARTIDA;
+    });
+
+    window.addEventListener('pagehide', () => {
+        if (!proteccionSalidaActiva || partidaFinalizada) {
+            return;
+        }
+        sessionStorage.setItem('dc_tablero_abandonado', '1');
+        limpiarEstadoPartidaEnCurso();
+    });
+
     asegurarPanelDebug();
     configurarNombresTablero();
     cargarCartasIniciales();

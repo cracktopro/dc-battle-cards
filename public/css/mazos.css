@@ -304,19 +304,17 @@ body {
     padding: 0 14px 14px;
     overflow: auto;
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(var(--dc-card-grid-min, clamp(130px, 18vw, 170px)), 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(154px, 154px));
     grid-auto-rows: max-content;
-    gap: clamp(10px, 1.4vw, 12px);
-    justify-content: stretch;
+    gap: 11px;
+    justify-content: start;
     align-items: start;
 }
 
 .carta-mini {
     position: relative;
     width: 100%;
-    aspect-ratio: 160 / 224;
-    height: auto;
-    max-height: min(320px, 52vh);
+    height: 216px;
     border: 2px solid rgba(36, 156, 255, 0.7);
     border-radius: 10px;
     overflow: hidden;

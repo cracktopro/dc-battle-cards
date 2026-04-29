@@ -1,5 +1,17 @@
 # Changelog
 
+## Beta-1.0.5-29.04.26
+
+- Combate (`tank`): la habilidad `tank` ahora solo puede usarse una vez por partida; si la carta es revivida, vuelve a estar disponible.
+- Combate (`revive`): al revivir una carta se resetea su cooldown de habilidad activa (`habilidadCooldownRestante = 0`) y se limpia su estado de uso de habilidad.
+- Vista `tablero`: rediseño de HUD para layout limpio (sin logs/panel lateral antiguo), nuevos indicadores de turno en amarillo, panel de jugador con avatar y ajustes de fondo/centrado para la nueva estética.
+- Navegación segura en `tablero`: confirmación al abandonar/recargar partida en curso y redirección coherente al salir.
+- `tablero`: correcciones de estabilidad tras limpieza de HUD (evita error cuando no existe contenedor de logs).
+- Vista `desafios`: organización por pestañas de nivel (1 a 6) con bloqueo progresivo por nivel completado y estado visual con candado.
+- Modales de selección (eventos y desafíos): barras de salud visibles y tamaño de carta unificado en ambos modales.
+- Recompensas de desafío en `tablero`: botón de cierre final ajustado para volver a `desafios.html` y mantener coherencia de navegación.
+- Etiqueta de versión del menú lateral actualizada a `Version: Beta-1.0.5-29.04.26`.
+
 ## Beta-1.0.4-29.04.26
 
 - Se aplican habilidades a TODAS las cartas del catálogo actualizado (`cartas.xlsx`), asegurando consistencia global para jugador, BOT y BOSS.

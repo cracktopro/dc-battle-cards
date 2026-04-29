@@ -275,10 +275,16 @@ function recalcularSkillPowerPorNivel(carta, nivelObjetivo = null, opciones = {}
     const nivelActual = obtenerNivelCartaSeguro(carta);
     const nivelFinal = Math.max(1, Number(nivelObjetivo || nivelActual));
     const rawEsBase = Boolean(opciones?.rawEsBase);
+    const basePersistida = parsearNumeroSeguro(carta.skill_power_base);
     const baseNivel1 = rawEsBase
-        ? Math.max(0, valorActual)
-        : Math.max(0, valorActual / Math.max(1, nivelActual));
+        ? (basePersistida !== null
+            ? Math.max(0, basePersistida)
+            : Math.max(0, valorActual))
+        : (basePersistida !== null
+            ? Math.max(0, basePersistida)
+            : Math.max(0, valorActual / Math.max(1, nivelActual)));
     const escalado = baseNivel1 * nivelFinal;
+    carta.skill_power_base = Math.max(0, Math.round(baseNivel1));
     carta.skill_power = Math.max(0, Math.round(escalado));
     return carta;
 }
@@ -545,6 +551,7 @@ function fusionarSkillDesdeFilaCatalogo(carta, filaCatalogo) {
         skill_class: String(carta.skill_class || '').trim().toLowerCase()
             || String(filaCatalogo.skill_class || '').trim().toLowerCase(),
         skill_power: carta.skill_power ?? filaCatalogo.skill_power ?? '',
+        skill_power_base: carta.skill_power_base ?? filaCatalogo.skill_power ?? '',
         skill_trigger: String(carta.skill_trigger || '').trim().toLowerCase()
             || String(filaCatalogo.skill_trigger || '').trim().toLowerCase(),
         Imagen: String(filaCatalogo.Imagen || filaCatalogo.imagen || '').trim() || String(carta.Imagen || carta.imagen || '').trim(),
@@ -566,6 +573,7 @@ function forzarSkillDesdeFilaCatalogo(carta, filaCatalogo) {
         skill_info: String(filaCatalogo.skill_info || '').trim(),
         skill_class: String(filaCatalogo.skill_class || '').trim().toLowerCase(),
         skill_power: filaCatalogo.skill_power ?? '',
+        skill_power_base: filaCatalogo.skill_power ?? '',
         skill_trigger: String(filaCatalogo.skill_trigger || '').trim().toLowerCase(),
         Imagen: String(filaCatalogo.Imagen || filaCatalogo.imagen || '').trim(),
         imagen: String(filaCatalogo.Imagen || filaCatalogo.imagen || '').trim(),
@@ -582,6 +590,7 @@ function extraerSkillRowDeCartaExcel(carta) {
         skill_info: String(carta.skill_info || '').trim(),
         skill_class: String(carta.skill_class || '').trim().toLowerCase(),
         skill_power: carta.skill_power ?? '',
+        skill_power_base: carta.skill_power ?? '',
         skill_trigger: String(carta.skill_trigger || '').trim().toLowerCase()
     };
 }
@@ -590,7 +599,7 @@ window.fusionarSkillDesdeFilaCatalogo = fusionarSkillDesdeFilaCatalogo;
 window.extraerSkillRowDeCartaExcel = extraerSkillRowDeCartaExcel;
 
 let _migracionSkillsUsuarioEnCurso = false;
-const VERSION_MIGRACION_SKILLS_USUARIO = 4;
+const VERSION_MIGRACION_SKILLS_USUARIO = 5;
 
 function hashTextoSimple(texto) {
     let hash = 5381;
@@ -610,6 +619,7 @@ function construirFirmaCatalogoSkills(cartasExcel = []) {
             skill_info: String(carta?.skill_info || '').trim(),
             skill_class: String(carta?.skill_class || '').trim().toLowerCase(),
             skill_power: String(carta?.skill_power ?? '').trim(),
+            skill_power_base: String(carta?.skill_power ?? '').trim(),
             skill_trigger: String(carta?.skill_trigger || '').trim().toLowerCase(),
             imagen: String(carta?.Imagen || carta?.imagen || '').trim(),
             imagen_final: String(carta?.imagen_final || carta?.Imagen_final || '').trim()
@@ -624,13 +634,14 @@ function construirFirmaCatalogoSkills(cartasExcel = []) {
             fila.skill_info,
             fila.skill_class,
             fila.skill_power,
+            fila.skill_power_base,
             fila.skill_trigger,
             fila.imagen,
             fila.imagen_final
         ].join('||'))
         .join('\n');
 
-    return `skills-v1-${hashTextoSimple(textoFirma)}`;
+    return `skills-v2-${hashTextoSimple(textoFirma)}`;
 }
 
 function skillFilaSerializada(carta) {
@@ -639,6 +650,7 @@ function skillFilaSerializada(carta) {
         skill_info: String(carta?.skill_info || '').trim(),
         skill_class: String(carta?.skill_class || '').trim().toLowerCase(),
         skill_power: carta?.skill_power ?? '',
+        skill_power_base: carta?.skill_power_base ?? '',
         skill_trigger: String(carta?.skill_trigger || '').trim().toLowerCase(),
         Imagen: String(carta?.Imagen || carta?.imagen || '').trim(),
         imagen_final: String(carta?.imagen_final || carta?.Imagen_final || '').trim()
@@ -872,7 +884,7 @@ function normalizarMenuLateral() {
         });
     }
 
-    const versionLabelTexto = 'Version: Beta-1.0.4-29.04.26';
+    const versionLabelTexto = 'Version: Beta-1.0.5-29.04.26';
     let versionLabel = menu.querySelector('#menu-version-label');
     if (!versionLabel) {
         versionLabel = document.createElement('div');
