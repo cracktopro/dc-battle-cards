@@ -1125,8 +1125,17 @@ async function otorgarRecompensasDesafio() {
     usuario.objetos.mejoraEspecial = Number(usuario.objetos.mejoraEspecial || 0) + Number(recompensas.mejoraEspecial || 0);
 
     const cartasGanadas = [];
+    const cartasRecompensaDesafio = Array.isArray(desafioActivo?.cartas)
+        ? desafioActivo.cartas.map(nombre => String(nombre || '').trim()).filter(Boolean)
+        : String(desafioActivo?.cartas || '')
+            .split(/[;,|]/)
+            .map(nombre => String(nombre || '').trim())
+            .filter(Boolean);
+    const requiereCatalogoCartas = Boolean(desafioActivo?.tipo === 'evento' && desafioActivo?.carta_recompensa)
+        || (desafioActivo?.tipo !== 'evento' && cartasRecompensaDesafio.length > 0);
+    const cartasDisponibles = requiereCatalogoCartas ? await obtenerCartasDisponibles() : [];
+
     if (desafioActivo?.tipo === 'evento' && desafioActivo?.carta_recompensa) {
-        const cartasDisponibles = await obtenerCartasDisponibles();
         const cartaEvento = cartasDisponibles.find(
             carta => normalizarNombre(carta?.Nombre) === normalizarNombre(desafioActivo.carta_recompensa)
         );
@@ -1138,6 +1147,22 @@ async function otorgarRecompensasDesafio() {
                 tipoRecompensa: 'evento'
             });
         }
+    }
+    if (desafioActivo?.tipo !== 'evento' && cartasRecompensaDesafio.length > 0) {
+        const dificultadDesafio = Math.min(Math.max(Number(desafioActivo?.dificultad || 1), 1), 6);
+        const nombresUnicos = Array.from(new Set(cartasRecompensaDesafio.map(normalizarNombre)));
+        nombresUnicos.forEach(nombreNormalizado => {
+            const cartaBase = cartasDisponibles.find(
+                carta => normalizarNombre(carta?.Nombre) === nombreNormalizado
+            );
+            if (!cartaBase) {
+                return;
+            }
+            cartasGanadas.push({
+                ...escalarCartaSegunDificultad(cartaBase, dificultadDesafio),
+                tipoRecompensa: 'desafio'
+            });
+        });
     }
 
     if (cartasGanadas.length > 0) {

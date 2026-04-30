@@ -5,6 +5,7 @@ let faccionAvatarActiva = 'H';
 let afiliacionAvatarActiva = 'todas';
 let busquedaAvatar = '';
 let cartaAvatarSeleccionada = null;
+const COLOR_PRINCIPAL_DEFAULT = { r: 0, g: 123, b: 255 };
 
 document.addEventListener('DOMContentLoaded', async () => {
     usuarioActual = JSON.parse(localStorage.getItem('usuario'));
@@ -19,6 +20,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         configurarEventos();
         await cargarCatalogoCartas();
         renderizarPerfil();
+        renderizarColorPrincipalUI();
         renderizarPanelAdmin();
     } catch (error) {
         console.error(error);
@@ -134,6 +136,11 @@ function configurarEventos() {
     document.getElementById('admin-sumar-puntos-btn')?.addEventListener('click', adminSumarPuntos);
     document.getElementById('admin-obtener-cartas-btn')?.addEventListener('click', adminObtenerTodasCartas);
     document.getElementById('admin-mejorar-cartas-btn')?.addEventListener('click', adminMejorarTodasCartas);
+
+    document.getElementById('color-principal-input')?.addEventListener('input', actualizarPreviewColorPrincipal);
+    document.getElementById('color-principal-input')?.addEventListener('change', actualizarPreviewColorPrincipal);
+    document.getElementById('guardar-color-principal-btn')?.addEventListener('click', guardarColorPrincipal);
+    document.getElementById('restablecer-color-principal-btn')?.addEventListener('click', restablecerColorPrincipal);
 }
 
 async function cargarCatalogoCartas() {
@@ -162,6 +169,100 @@ function renderizarPanelAdmin() {
     const adminPanel = document.getElementById('admin-panel');
     if (!adminPanel) return;
     adminPanel.style.display = emailActual === 'lorenzopablo93@gmail.com' ? 'flex' : 'none';
+}
+
+function normalizarCanalRgb(valor, fallback = 0) {
+    const numero = Number.parseInt(String(valor ?? ''), 10);
+    if (!Number.isFinite(numero)) {
+        return Math.min(255, Math.max(0, Number.parseInt(String(fallback ?? 0), 10) || 0));
+    }
+    return Math.min(255, Math.max(0, numero));
+}
+
+function obtenerColorPrincipalUsuario() {
+    const color = usuarioActual?.preferencias?.colorPrincipal;
+    if (!color || typeof color !== 'object') {
+        return { ...COLOR_PRINCIPAL_DEFAULT };
+    }
+    return {
+        r: normalizarCanalRgb(color.r, COLOR_PRINCIPAL_DEFAULT.r),
+        g: normalizarCanalRgb(color.g, COLOR_PRINCIPAL_DEFAULT.g),
+        b: normalizarCanalRgb(color.b, COLOR_PRINCIPAL_DEFAULT.b)
+    };
+}
+
+function renderizarColorPrincipalUI() {
+    const color = obtenerColorPrincipalUsuario();
+    const colorInput = document.getElementById('color-principal-input');
+    if (colorInput) {
+        colorInput.value = rgbAHex(color.r, color.g, color.b);
+    }
+    actualizarPreviewColorPrincipal();
+}
+
+function rgbAHex(r, g, b) {
+    const canalAHex = (canal) => normalizarCanalRgb(canal).toString(16).padStart(2, '0');
+    return `#${canalAHex(r)}${canalAHex(g)}${canalAHex(b)}`;
+}
+
+function hexAColor(hex) {
+    const match = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(String(hex || '').trim());
+    if (!match) {
+        return { ...COLOR_PRINCIPAL_DEFAULT };
+    }
+    return {
+        r: normalizarCanalRgb(Number.parseInt(match[1], 16), COLOR_PRINCIPAL_DEFAULT.r),
+        g: normalizarCanalRgb(Number.parseInt(match[2], 16), COLOR_PRINCIPAL_DEFAULT.g),
+        b: normalizarCanalRgb(Number.parseInt(match[3], 16), COLOR_PRINCIPAL_DEFAULT.b)
+    };
+}
+
+function obtenerColorDesdeInputs() {
+    const colorInput = document.getElementById('color-principal-input');
+    return hexAColor(colorInput?.value || '');
+}
+
+function aplicarColorPrincipalEnVista(color) {
+    if (typeof window.aplicarColorPrincipalUsuario === 'function') {
+        window.aplicarColorPrincipalUsuario(color);
+    }
+}
+
+function actualizarPreviewColorPrincipal() {
+    const color = obtenerColorDesdeInputs();
+    const preview = document.getElementById('color-principal-preview');
+    const texto = document.getElementById('color-principal-rgb-texto');
+    const valorRgb = `rgb(${color.r}, ${color.g}, ${color.b})`;
+    if (preview) {
+        preview.style.background = valorRgb;
+        preview.style.boxShadow = `0 0 16px rgba(${color.r}, ${color.g}, ${color.b}, 0.55)`;
+    }
+    if (texto) {
+        texto.textContent = valorRgb;
+    }
+    aplicarColorPrincipalEnVista(color);
+}
+
+async function guardarColorPrincipal() {
+    const color = obtenerColorDesdeInputs();
+    usuarioActual.preferencias = (usuarioActual.preferencias && typeof usuarioActual.preferencias === 'object')
+        ? usuarioActual.preferencias
+        : {};
+    usuarioActual.preferencias.colorPrincipal = color;
+    aplicarColorPrincipalEnVista(color);
+    await persistirUsuario('Color principal actualizado correctamente.');
+}
+
+async function restablecerColorPrincipal() {
+    const color = { ...COLOR_PRINCIPAL_DEFAULT };
+    const colorInput = document.getElementById('color-principal-input');
+    if (colorInput) colorInput.value = rgbAHex(color.r, color.g, color.b);
+    usuarioActual.preferencias = (usuarioActual.preferencias && typeof usuarioActual.preferencias === 'object')
+        ? usuarioActual.preferencias
+        : {};
+    usuarioActual.preferencias.colorPrincipal = color;
+    actualizarPreviewColorPrincipal();
+    await persistirUsuario('Color principal restablecido al valor por defecto.');
 }
 
 async function guardarPerfil() {
@@ -391,6 +492,7 @@ async function persistirUsuario(mensajeExito, tipo = 'success') {
         }
 
         localStorage.setItem('usuario', JSON.stringify(usuarioActual));
+        window.dispatchEvent(new Event('dc:usuario-actualizado'));
         mostrarMensaje(mensajeExito, tipo);
     } catch (error) {
         console.error(error);

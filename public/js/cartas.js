@@ -806,6 +806,50 @@ function obtenerResumenInventarioSesion() {
     return { puntos, mejoras, mejorasEspeciales };
 }
 
+const DC_COLOR_ACENTO_DEFAULT = { r: 0, g: 123, b: 255 };
+
+function normalizarCanalColorAcento(valor, fallback = 0) {
+    const numero = Number.parseInt(String(valor ?? ''), 10);
+    if (!Number.isFinite(numero)) {
+        return Math.min(255, Math.max(0, Number.parseInt(String(fallback ?? 0), 10) || 0));
+    }
+    return Math.min(255, Math.max(0, numero));
+}
+
+function obtenerColorPrincipalUsuarioSesion() {
+    const usuario = JSON.parse(localStorage.getItem('usuario') || '{}');
+    const color = usuario?.preferencias?.colorPrincipal;
+    if (!color || typeof color !== 'object') {
+        return { ...DC_COLOR_ACENTO_DEFAULT };
+    }
+    return {
+        r: normalizarCanalColorAcento(color.r, DC_COLOR_ACENTO_DEFAULT.r),
+        g: normalizarCanalColorAcento(color.g, DC_COLOR_ACENTO_DEFAULT.g),
+        b: normalizarCanalColorAcento(color.b, DC_COLOR_ACENTO_DEFAULT.b)
+    };
+}
+
+function aplicarColorPrincipalUsuario(colorRaw) {
+    const color = {
+        r: normalizarCanalColorAcento(colorRaw?.r, DC_COLOR_ACENTO_DEFAULT.r),
+        g: normalizarCanalColorAcento(colorRaw?.g, DC_COLOR_ACENTO_DEFAULT.g),
+        b: normalizarCanalColorAcento(colorRaw?.b, DC_COLOR_ACENTO_DEFAULT.b)
+    };
+    const root = document.documentElement;
+    if (!root) {
+        return;
+    }
+    root.style.setProperty('--dc-accent-user-rgb', `${color.r}, ${color.g}, ${color.b}`);
+    root.style.setProperty('--dc-accent-user', `rgb(${color.r}, ${color.g}, ${color.b})`);
+}
+
+function aplicarColorPrincipalDesdeSesion() {
+    aplicarColorPrincipalUsuario(obtenerColorPrincipalUsuarioSesion());
+}
+
+window.aplicarColorPrincipalUsuario = aplicarColorPrincipalUsuario;
+window.aplicarColorPrincipalDesdeSesion = aplicarColorPrincipalDesdeSesion;
+
 function construirFilaStatMenu({ icono, alt, valor, titulo }) {
     return `
         <span class="menu-user-stat-icon-wrap" title="${titulo}">
@@ -884,7 +928,7 @@ function normalizarMenuLateral() {
         });
     }
 
-    const versionLabelTexto = 'Version: Beta-1.0.5-29.04.26';
+    const versionLabelTexto = 'Version: Beta-1.0.6-30.04.26';
     let versionLabel = menu.querySelector('#menu-version-label');
     if (!versionLabel) {
         versionLabel = document.createElement('div');
@@ -959,11 +1003,13 @@ window.cerrarModalLogout = cerrarModalLogout;
 window.confirmarLogoutSistema = confirmarLogoutSistema;
 
 document.addEventListener('DOMContentLoaded', () => {
+    aplicarColorPrincipalDesdeSesion();
     normalizarMenuLateral();
     asegurarModalLogout();
     void migrarSkillsUsuarioDesdeCatalogo();
 });
 
 window.addEventListener('dc:usuario-actualizado', () => {
+    aplicarColorPrincipalDesdeSesion();
     actualizarPanelPerfilTiempoReal();
 });

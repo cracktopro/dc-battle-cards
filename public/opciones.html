@@ -20,10 +20,14 @@
         }
 
         .opcion-panel {
-            background: rgba(8, 18, 36, 0.86);
-            border: 1px solid rgba(0, 209, 255, 0.35);
+            background: linear-gradient(
+                140deg,
+                rgba(8, 18, 36, 0.9),
+                rgba(var(--dc-accent-user-rgb, 0, 123, 255), 0.14)
+            );
+            border: 1px solid rgba(var(--dc-accent-user-rgb, 0, 123, 255), 0.35);
             border-radius: 14px;
-            box-shadow: 0 0 16px rgba(0, 123, 255, 0.28);
+            box-shadow: 0 0 16px rgba(var(--dc-accent-user-rgb, 0, 123, 255), 0.28);
             padding: 14px;
             display: flex;
             flex-direction: column;
@@ -66,10 +70,10 @@
             width: 130px;
             aspect-ratio: 6.3 / 8.8;
             border-radius: 10px;
-            border: 2px solid rgba(0, 123, 255, 0.55);
+            border: 2px solid rgba(var(--dc-accent-user-rgb, 0, 123, 255), 0.55);
             background-size: cover;
             background-position: center;
-            box-shadow: 0 0 12px rgba(0, 123, 255, 0.32);
+            box-shadow: 0 0 12px rgba(var(--dc-accent-user-rgb, 0, 123, 255), 0.32);
         }
 
         .admin-badge {
@@ -80,6 +84,39 @@
             width: fit-content;
             padding: 3px 8px;
             background: rgba(255, 215, 0, 0.1);
+        }
+
+        .color-principal-preview-wrap {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .color-principal-preview {
+            width: 52px;
+            height: 52px;
+            border-radius: 10px;
+            border: 2px solid rgba(255, 255, 255, 0.22);
+            box-shadow: 0 0 12px rgba(0, 0, 0, 0.28);
+            background: rgb(0, 123, 255);
+        }
+
+        .color-principal-rgb-texto {
+            color: #dff8ff;
+            font-size: 0.9rem;
+            margin: 0;
+        }
+
+        .color-principal-input {
+            width: min(220px, 100%);
+            height: 48px;
+            border-radius: 10px;
+            border: 1px solid rgba(var(--dc-accent-user-rgb, 0, 123, 255), 0.55);
+            background: transparent;
+            box-shadow: 0 0 12px rgba(var(--dc-accent-user-rgb, 0, 123, 255), 0.25);
+            padding: 4px;
+            cursor: pointer;
         }
 
         .modal-seleccion-personaje {
@@ -98,9 +135,9 @@
             max-height: 92vh;
             overflow: hidden;
             background: rgba(8, 18, 36, 0.96);
-            border: 1px solid rgba(0, 209, 255, 0.36);
+            border: 1px solid rgba(var(--dc-accent-user-rgb, 0, 123, 255), 0.36);
             border-radius: 14px;
-            box-shadow: 0 0 20px rgba(0, 123, 255, 0.28);
+            box-shadow: 0 0 20px rgba(var(--dc-accent-user-rgb, 0, 123, 255), 0.28);
             display: flex;
             flex-direction: column;
         }
@@ -122,11 +159,11 @@
             position: relative;
             width: 100%;
             height: 224px;
-            border: 2px solid rgba(36, 156, 255, 0.7);
+            border: 2px solid rgba(var(--dc-accent-user-rgb, 0, 123, 255), 0.7);
             border-radius: 10px;
             overflow: hidden;
             cursor: pointer;
-            box-shadow: 0 0 10px rgba(0, 123, 255, 0.25);
+            box-shadow: 0 0 10px rgba(var(--dc-accent-user-rgb, 0, 123, 255), 0.25);
             background-size: cover;
             background-position: center;
         }
@@ -200,6 +237,20 @@
                 <h4>Cuenta</h4>
                 <p style="color:#ffd4d4; margin:0;">ADVERTENCIA: Se perderá todo el progreso obtenido con su cuenta y no será recuperable.</p>
                 <button id="abrir-reset-btn" class="btn btn-danger" type="button">Reiniciar progreso de la cuenta</button>
+            </section>
+
+            <section class="opcion-panel">
+                <h4>Color principal de la interfaz</h4>
+                <p style="margin:0; color:#b8ecff;">Personaliza el acento global (bordes, brillos y resaltados no críticos).</p>
+                <input id="color-principal-input" class="color-principal-input" type="color" value="#007bff" aria-label="Selector de color principal">
+                <div class="color-principal-preview-wrap">
+                    <div id="color-principal-preview" class="color-principal-preview"></div>
+                    <p id="color-principal-rgb-texto" class="color-principal-rgb-texto">rgb(0, 123, 255)</p>
+                </div>
+                <div class="d-flex" style="gap:8px; flex-wrap:wrap;">
+                    <button id="guardar-color-principal-btn" class="btn btn-primary" type="button">Guardar color principal</button>
+                    <button id="restablecer-color-principal-btn" class="btn btn-secondary" type="button">Restablecer por defecto</button>
+                </div>
             </section>
 
             <section id="admin-panel" class="opcion-panel" style="display:none;">

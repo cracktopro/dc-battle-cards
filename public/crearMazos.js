@@ -492,6 +492,7 @@ function actualizarSeleccionUI(usuario) {
     const faccionSeleccionada = obtenerFaccionSeleccionActual(usuario);
     const formulario = document.getElementById('formulario-mazo');
     const botonGuardar = document.getElementById('guardar-mazo');
+    const botonDeseleccionarTodo = document.getElementById('btn-deseleccionar-todo');
     actualizarSelectorAfiliacion(usuario);
 
     document.querySelectorAll('#contenedor-cartas .carta').forEach(cartaDiv => {
@@ -524,12 +525,16 @@ function actualizarSeleccionUI(usuario) {
     if (botonGuardar) {
         botonGuardar.disabled = cartasSeleccionadas.size !== 12;
     }
+    if (botonDeseleccionarTodo) {
+        botonDeseleccionarTodo.disabled = cartasSeleccionadas.size === 0;
+    }
     actualizarIndicadorFaccion(usuario);
     actualizarPestanas();
     aplicarFiltroFaccion(usuario);
 
     const poderTotal = calcularPoderTotalMazo(usuario);
     const label = document.getElementById('poder-total-mazo');
+    const contadorCartas = document.getElementById('contador-cartas-mazo');
 
     if (label) {
         label.textContent = poderTotal;
@@ -552,6 +557,13 @@ function actualizarSeleccionUI(usuario) {
         } else {
             label.classList.add('poder-legendario');
         }
+    }
+
+    if (contadorCartas) {
+        const seleccionadas = cartasSeleccionadas.size;
+        contadorCartas.textContent = `${seleccionadas}/12`;
+        contadorCartas.classList.toggle('cartas-completas', seleccionadas === 12);
+        contadorCartas.classList.toggle('cartas-incompletas', seleccionadas < 12);
     }
 
 }
@@ -595,6 +607,15 @@ function seleccionarCarta(cartaDiv) {
     actualizarSeleccionUI(usuario);
 }
 
+function deseleccionarTodasLasCartas() {
+    const usuario = JSON.parse(localStorage.getItem('usuario'));
+    if (!usuario || cartasSeleccionadas.size === 0) {
+        return;
+    }
+    cartasSeleccionadas.clear();
+    actualizarSeleccionUI(usuario);
+}
+
 function cambiarVistaFaccion(faccion) {
     const usuario = JSON.parse(localStorage.getItem('usuario'));
     const faccionNormalizada = normalizarFaccion(faccion);
@@ -616,6 +637,10 @@ function cambiarVistaFaccion(faccion) {
 
 function configurarEventos() {
     document.getElementById('guardar-mazo').onclick = guardarMazo;
+    const btnDeseleccionarTodo = document.getElementById('btn-deseleccionar-todo');
+    if (btnDeseleccionarTodo) {
+        btnDeseleccionarTodo.onclick = deseleccionarTodasLasCartas;
+    }
 
     document.querySelectorAll('.faccion-tab').forEach(tab => {
         tab.addEventListener('click', () => cambiarVistaFaccion(tab.dataset.faccion));

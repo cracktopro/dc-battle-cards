@@ -352,10 +352,6 @@ function renderizarCartasTienda() {
         if (badgeHabilidad) {
             preview.appendChild(badgeHabilidad);
         }
-        const badgeAfiliacion = window.crearBadgeAfiliacionCarta ? window.crearBadgeAfiliacionCarta(oferta.carta) : null;
-        if (badgeAfiliacion) {
-            preview.appendChild(badgeAfiliacion);
-        }
         preview.appendChild(crearBarraSaludElemento(oferta.carta));
 
         const precio = document.createElement('div');

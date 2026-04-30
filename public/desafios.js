@@ -20,6 +20,8 @@ let usuarioCartasSeleccion = [];
 let seleccionCartasDesafio = new Set();
 let faccionFiltroActiva = 'H';
 let afiliacionFiltroActiva = 'todas';
+let faccionCaminoActiva = 'H';
+let faccionFijadaModalDesafio = null;
 let nivelDesafioActivo = 1;
 let desafiosCache = [];
 const ICONO_MEJORA = '/resources/icons/mejora.png';
@@ -27,6 +29,11 @@ const ICONO_MEJORA_ESPECIAL = '/resources/icons/mejora_especial.png';
 
 function normalizarNombre(nombre) {
     return String(nombre || '').trim().toLowerCase();
+}
+
+function normalizarFaccionCamino(valor) {
+    const faccion = String(valor || '').trim().toUpperCase();
+    return faccion === 'V' ? 'V' : 'H';
 }
 
 async function cargarDesafiosDesdeExcel() {
@@ -48,6 +55,10 @@ async function cargarDesafiosDesdeExcel() {
                 enemigos.push(nombreEnemigo);
             }
         }
+        const cartasRecompensa = String(fila.cartas || '')
+            .split(/[;,|]/)
+            .map(nombre => String(nombre || '').trim())
+            .filter(Boolean);
 
         const boss = String(fila.boss || '').trim();
 
@@ -56,11 +67,13 @@ async function cargarDesafiosDesdeExcel() {
             nombre: String(fila.nombre || `Desafío ${fila.ID_desafio ?? ''}`).trim(),
             descripcion: String(fila.Descripción || fila.descripcion || '').trim(),
             dificultad: Math.min(Math.max(Number(fila.dificultad || 1), 1), 6),
+            faccion: normalizarFaccionCamino(fila.faccion),
             enemigos,
             boss: boss || null,
             mejora: Number(fila.mejora || 0),
             mejora_especial: Number(fila.mejora_especial || 0),
-            puntos: Number(fila.puntos || 0)
+            puntos: Number(fila.puntos || 0),
+            cartas: cartasRecompensa
         };
     });
 }
@@ -100,11 +113,18 @@ function construirEstadoDesbloqueoPorNivel(mapaDesafiosNivel, completadosSet) {
     desbloqueado.set(1, true);
     for (let nivel = 2; nivel <= 6; nivel++) {
         const desafiosPrevios = mapaDesafiosNivel.get(nivel - 1) || [];
-        const nivelPrevioCompletado = desafiosPrevios.length > 0
-            && desafiosPrevios.every(desafio => completadosSet.has(Number(desafio.id)));
+        const nivelPrevioCompletado = desafiosPrevios.length === 0
+            || desafiosPrevios.every(desafio => completadosSet.has(Number(desafio.id)));
         desbloqueado.set(nivel, nivelPrevioCompletado);
     }
     return desbloqueado;
+}
+
+function filtrarDesafiosPorFaccion(desafios = [], faccion = 'H') {
+    const faccionObjetivo = normalizarFaccionCamino(faccion);
+    return (Array.isArray(desafios) ? desafios : []).filter(
+        desafio => normalizarFaccionCamino(desafio?.faccion) === faccionObjetivo
+    );
 }
 
 function primerNivelDisponible(desbloqueadoPorNivel) {
@@ -114,6 +134,33 @@ function primerNivelDisponible(desbloqueadoPorNivel) {
         }
     }
     return 1;
+}
+
+function renderizarTabsCaminoDesafio() {
+    const tabs = document.getElementById('desafios-camino-tabs');
+    if (!tabs) return;
+    tabs.innerHTML = '';
+    const contenedor = document.querySelector('.content-container');
+    if (contenedor) {
+        contenedor.classList.toggle('camino-villano-activo', faccionCaminoActiva === 'V');
+    }
+
+    [
+        { id: 'H', label: 'Camino del Héroe' },
+        { id: 'V', label: 'Camino del Villano' }
+    ].forEach(camino => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn faccion-tab desafio-nivel-tab';
+        btn.textContent = camino.label;
+        btn.classList.toggle('active', faccionCaminoActiva === camino.id);
+        btn.onclick = () => {
+            faccionCaminoActiva = camino.id;
+            nivelDesafioActivo = 1;
+            renderizarDesafiosGlobal();
+        };
+        tabs.appendChild(btn);
+    });
 }
 
 function renderizarTabsNivelesDesafio(mapaDesafiosNivel, desbloqueadoPorNivel, completadosSet) {
@@ -145,7 +192,7 @@ function renderizarTabsNivelesDesafio(mapaDesafiosNivel, desbloqueadoPorNivel, c
             btn.innerHTML = `Bloqueado <span class="candado">🔒</span>`;
             btn.classList.add('tab-bloqueada');
             btn.onclick = () => {
-                mostrarMensaje(`Completa todos los desafíos del nivel ${nivel - 1} para desbloquear este nivel.`, 'warning');
+                mostrarMensaje(`Completa todos los desafíos del nivel ${nivel - 1} del ${faccionCaminoActiva === 'H' ? 'Camino del Héroe' : 'Camino del Villano'} para desbloquear este nivel.`, 'warning');
             };
         }
 
@@ -184,7 +231,10 @@ async function renderizarDesafiosGlobal() {
         .sort((a, b) => a.id - b.id);
     const idsDesafios = new Set(desafiosOrdenados.map(item => item.id));
     const completadosSet = obtenerCompletadosDesafiosSet(idsDesafios);
-    const desafiosPorNivel = agruparDesafiosPorNivel(desafiosOrdenados);
+    renderizarTabsCaminoDesafio();
+
+    const desafiosPorFaccion = filtrarDesafiosPorFaccion(desafiosOrdenados, faccionCaminoActiva);
+    const desafiosPorNivel = agruparDesafiosPorNivel(desafiosPorFaccion);
     const desbloqueadoPorNivel = construirEstadoDesbloqueoPorNivel(desafiosPorNivel, completadosSet);
     if (!desbloqueadoPorNivel.get(nivelDesafioActivo)) {
         nivelDesafioActivo = primerNivelDisponible(desbloqueadoPorNivel);
@@ -198,7 +248,7 @@ async function renderizarDesafiosGlobal() {
     if (desafiosVisibles.length === 0) {
         const vacio = document.createElement('div');
         vacio.className = 'desafio-meta';
-        vacio.textContent = `No hay desafíos disponibles para el nivel ${nivelDesafioActivo}.`;
+        vacio.textContent = `No hay desafíos disponibles para el nivel ${nivelDesafioActivo} en el ${faccionCaminoActiva === 'H' ? 'Camino del Héroe' : 'Camino del Villano'}.`;
         grid.appendChild(vacio);
         return;
     }
@@ -252,6 +302,21 @@ async function renderizarDesafiosGlobal() {
 
         const recompensas = document.createElement('div');
         recompensas.className = 'desafio-recompensas';
+        const cartasRecompensa = Array.isArray(desafio.cartas)
+            ? desafio.cartas.map(nombre => String(nombre || '').trim()).filter(Boolean)
+            : [];
+        cartasRecompensa.forEach(nombreCarta => {
+            const cartaRecompensaCatalogo = mapaCatalogo.get(normalizarNombre(nombreCarta)) || { Nombre: nombreCarta, Nivel: 1 };
+            const mini = document.createElement('div');
+            mini.className = 'desafio-recompensa-card';
+            mini.style.backgroundImage = `url(${obtenerImagenCarta(cartaRecompensaCatalogo)})`;
+            const nombreMini = document.createElement('div');
+            nombreMini.className = 'desafio-enemigo-nombre';
+            nombreMini.textContent = cartaRecompensaCatalogo.Nombre || nombreCarta;
+            mini.appendChild(nombreMini);
+            recompensas.appendChild(mini);
+        });
+
         const meta = document.createElement('div');
         meta.className = 'desafio-recompensas-meta';
         meta.textContent = `Puntos: ${desafio.puntos}`;
@@ -393,6 +458,7 @@ function configurarModalSeleccion() {
     };
 
     btnH.onclick = () => {
+        if (faccionFijadaModalDesafio && faccionFijadaModalDesafio !== 'H') return;
         faccionFiltroActiva = 'H';
         afiliacionFiltroActiva = 'todas';
         actualizarBotonesFaccion();
@@ -401,6 +467,7 @@ function configurarModalSeleccion() {
     };
 
     btnV.onclick = () => {
+        if (faccionFijadaModalDesafio && faccionFijadaModalDesafio !== 'V') return;
         faccionFiltroActiva = 'V';
         afiliacionFiltroActiva = 'todas';
         actualizarBotonesFaccion();
@@ -533,6 +600,7 @@ function toggleSeleccionCartaDesafio(indexCarta) {
 
 async function abrirModalSeleccionDesafio(desafio) {
     desafioPendiente = desafio;
+    faccionFijadaModalDesafio = normalizarFaccionCamino(desafio?.faccion || 'H');
    
     const email = localStorage.getItem('email');
 
@@ -597,11 +665,29 @@ async function abrirModalSeleccionDesafio(desafio) {
         return;
     }
 
-    faccionFiltroActiva = 'H';
+    faccionFiltroActiva = faccionFijadaModalDesafio;
     afiliacionFiltroActiva = 'todas';
     seleccionCartasDesafio.clear();
+    const tabsFaccion = document.getElementById('filtro-faccion-tabs-desafio');
+    if (tabsFaccion) {
+        tabsFaccion.style.display = 'none';
+    }
     actualizarBotonesFaccion();
     renderizarFiltroAfiliacion();
+    const disponiblesPorFaccion = usuarioCartasSeleccion.filter(
+        item => normalizarFaccion(item.carta.faccion) === faccionFiltroActiva
+    );
+    if (disponiblesPorFaccion.length < 6) {
+        if (tabsFaccion) {
+            tabsFaccion.style.display = '';
+        }
+        faccionFijadaModalDesafio = null;
+        mostrarMensaje(
+            `Necesitas al menos 6 cartas ${faccionFiltroActiva === 'H' ? 'de héroe' : 'de villano'} para este desafío.`,
+            'warning'
+        );
+        return;
+    }
     renderizarCartasSeleccionDesafio();
     actualizarEstadoSeleccion();
 
@@ -610,7 +696,12 @@ async function abrirModalSeleccionDesafio(desafio) {
 
 function cerrarModalSeleccionDesafio() {
     document.getElementById('modal-seleccion-desafio').style.display = 'none';
+    const tabsFaccion = document.getElementById('filtro-faccion-tabs-desafio');
+    if (tabsFaccion) {
+        tabsFaccion.style.display = '';
+    }
     desafioPendiente = null;
+    faccionFijadaModalDesafio = null;
     seleccionCartasDesafio.clear();
 }
 

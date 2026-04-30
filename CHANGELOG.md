@@ -1,5 +1,17 @@
 # Changelog
 
+## Beta-1.0.6-30.04.26
+
+- Opciones: nuevo selector visual de color principal (`input type="color"`) con vista previa en tiempo real y persistencia en cuenta (`preferencias.colorPrincipal`).
+- Theming global: el color personalizado ahora se aplica automáticamente entre vistas usando variables CSS (`--dc-accent-user-rgb`, `--dc-accent-user`) y refresco en caliente al actualizar usuario.
+- Centro de Operaciones: paneles, bordes, botones principales, modales, tarjetas de evento y metadatos secundarios actualizados para respetar el acento de color del jugador.
+- Desafíos: fondos de `desafio-card`, textos/meta y botón `Jugar` (solo estado no completado) adaptados al color dinámico, manteniendo intacto `Volver a jugar`.
+- Eventos/Tienda/Perfil lateral: botón `Empezar Evento` (solo estado activo), paneles y botones de compra en tienda, además de los 3 bloques de estadísticas del perfil lateral, ahora siguen el color principal configurado.
+- UX visual adicional: scrollbar global y selects con gradiente dinámico unificados con el color elegido por el jugador.
+- Vista `desafios`: consolidación de Camino del Héroe/Villano con filtrado por facción, bloqueo progresivo por nivel y recompensas de cartas visibles en tarjetas de desafío.
+- Recompensas de desafío en combate: soporte de entrega de cartas desde columna `cartas` en `desafios.xlsx`, escaladas al nivel de dificultad del desafío.
+- Etiqueta de versión del menú lateral actualizada a `Version: Beta-1.0.6-30.04.26`.
+
 ## Beta-1.0.5-29.04.26
 
 - Combate (`tank`): la habilidad `tank` ahora solo puede usarse una vez por partida; si la carta es revivida, vuelve a estar disponible.
