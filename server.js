@@ -60,6 +60,15 @@ app.get('/api/pvp-debug/:sessionId', (req, res) => {
     });
 });
 
+app.get('/healthz', (_req, res) => {
+    const sesionesActivas = Array.from(sesionesPvpActivas.values()).filter(s => s && !s.finalizada).length;
+    return res.status(200).json({
+        ok: true,
+        ts: Date.now(),
+        sesionesPvpActivas: sesionesActivas
+    });
+});
+
 // Lista para usuarios conectados
 let usuariosConectados = [];
 // Lista de jugadores en partida
@@ -84,6 +93,15 @@ const pvpDesconexionesPendientes = new Map(); // `${sessionId}::${email}` -> tim
 const PVP_DEBUG_ENABLED = String(process.env.PVP_DEBUG || 'false').trim().toLowerCase() === 'true';
 const MAX_PVP_DEBUG_EVENTS = 500;
 const trazasPvpPorSesion = new Map(); // sessionId -> eventos[]
+const RENDER_KEEPALIVE_URL = String(
+    process.env.RENDER_EXTERNAL_URL
+    || process.env.PUBLIC_BASE_URL
+    || process.env.APP_BASE_URL
+    || ''
+).trim().replace(/\/+$/, '');
+const RENDER_KEEPALIVE_INTERVAL_MS = 4 * 60 * 1000;
+const RENDER_KEEPALIVE_TIMEOUT_MS = 8000;
+let renderKeepAliveTimer = null;
 
 function registrarTrazaPvp(sessionId, eventType, payload = {}) {
     if (!PVP_DEBUG_ENABLED) return;
@@ -99,6 +117,55 @@ function registrarTrazaPvp(sessionId, eventType, payload = {}) {
         lista.splice(0, lista.length - MAX_PVP_DEBUG_EVENTS);
     }
     trazasPvpPorSesion.set(sid, lista);
+}
+
+function contarSesionesPvpEnCurso() {
+    let total = 0;
+    for (const sesion of sesionesPvpActivas.values()) {
+        if (sesion && !sesion.finalizada) {
+            total += 1;
+        }
+    }
+    return total;
+}
+
+async function enviarPingKeepAliveRender() {
+    if (!RENDER_KEEPALIVE_URL || typeof fetch !== 'function') {
+        return;
+    }
+    if (contarSesionesPvpEnCurso() <= 0) {
+        return;
+    }
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), RENDER_KEEPALIVE_TIMEOUT_MS);
+    try {
+        await fetch(`${RENDER_KEEPALIVE_URL}/healthz?src=pvp_keepalive`, {
+            method: 'GET',
+            signal: controller.signal
+        });
+    } catch (_error) {
+        // Keepalive best-effort: no afecta al flujo de partida.
+    } finally {
+        clearTimeout(timeoutId);
+    }
+}
+
+function actualizarSupervisorKeepAliveRender() {
+    const haySesionesActivas = contarSesionesPvpEnCurso() > 0;
+    if (!haySesionesActivas || !RENDER_KEEPALIVE_URL) {
+        if (renderKeepAliveTimer) {
+            clearInterval(renderKeepAliveTimer);
+            renderKeepAliveTimer = null;
+        }
+        return;
+    }
+    if (renderKeepAliveTimer) {
+        return;
+    }
+    renderKeepAliveTimer = setInterval(() => {
+        void enviarPingKeepAliveRender();
+    }, RENDER_KEEPALIVE_INTERVAL_MS);
+    void enviarPingKeepAliveRender();
 }
 
 function obtenerClaveDesconexionPvp(sessionId, email) {
@@ -322,12 +389,13 @@ function obtenerSnapshotLobby(partyId) {
     const emails = [party.leaderEmail, party.memberEmail];
     const jugadores = emails.map(email => {
         const user = obtenerUsuarioConectadoPorEmail(email);
-        const estado = lobby.jugadores[email] || { mazoIndex: null, listo: false };
+        const estado = lobby.jugadores[email] || { mazoIndex: null, mazoNombre: null, listo: false };
         return {
             email,
             nombre: user?.nombre || email.split('@')[0],
             avatar: user?.avatar || '',
             mazoIndex: Number.isInteger(estado.mazoIndex) ? estado.mazoIndex : null,
+            mazoNombre: String(estado?.mazoNombre || '').trim() || null,
             listo: Boolean(estado.listo)
         };
     });
@@ -339,6 +407,26 @@ function obtenerSnapshotLobby(partyId) {
         ambosListos,
         countdown: Number.isInteger(lobby.countdown) ? lobby.countdown : null
     };
+}
+
+function resolverMazoSeleccionado(datosUsuario, seleccion = {}) {
+    const mazos = Array.isArray(datosUsuario?.mazos) ? datosUsuario.mazos : [];
+    if (!mazos.length) return null;
+    const idx = Number(seleccion?.mazoIndex);
+    const nombreEsperado = String(seleccion?.mazoNombre || '').trim().toLowerCase();
+    const porIndice = Number.isInteger(idx) && idx >= 0 && idx < mazos.length ? mazos[idx] : null;
+    if (porIndice && Array.isArray(porIndice?.Cartas)) {
+        if (!nombreEsperado) return porIndice.Cartas;
+        const nombreIndice = String(porIndice?.Nombre || '').trim().toLowerCase();
+        if (nombreIndice === nombreEsperado) return porIndice.Cartas;
+    }
+    if (nombreEsperado) {
+        const porNombre = mazos.find(m => String(m?.Nombre || '').trim().toLowerCase() === nombreEsperado);
+        if (porNombre && Array.isArray(porNombre?.Cartas)) {
+            return porNombre.Cartas;
+        }
+    }
+    return null;
 }
 
 function emitirSnapshotLobby(partyId) {
@@ -433,15 +521,148 @@ function obtenerPoderCartaServidor(carta) {
     return Math.max(0, Number(carta?.Poder || 0));
 }
 
-function obtenerValorSkillServidor(carta, fallback = 0) {
-    const raw = carta?.skill_power;
-    if (typeof raw === 'number' && Number.isFinite(raw)) {
-        return raw;
+function normalizarClaseSkillServidor(carta) {
+    return String(carta?.skill_class || '').trim().toLowerCase();
+}
+
+function cartaCuentaComoActivaEnMesaServidor(carta) {
+    if (!carta) return false;
+    const salud = obtenerSaludCartaServidor(carta);
+    const escudo = Math.max(0, Number(carta?.escudoActual || 0));
+    return (salud + escudo) > 0;
+}
+
+function normalizarAfiliacionServidor(afiliacion) {
+    return String(afiliacion || '').trim().toLowerCase();
+}
+
+function obtenerAfiliacionesCartaServidor(carta) {
+    const raw = String(carta?.Afiliacion || carta?.afiliacion || '').trim();
+    if (!raw) return [];
+    return raw.split(';').map(x => x.trim()).filter(Boolean);
+}
+
+function parsearNumeroSeguroServidor(valor) {
+    if (typeof valor === 'number' && Number.isFinite(valor)) {
+        return valor;
     }
-    const txt = String(raw ?? '').trim();
-    if (!txt) return fallback;
-    const n = Number(txt.replace(',', '.'));
-    return Number.isFinite(n) ? n : fallback;
+    const texto = String(valor ?? '').trim().replace(',', '.');
+    if (!texto) return null;
+    const num = Number(texto);
+    return Number.isFinite(num) ? num : null;
+}
+
+function evaluarFormulaSkillPowerServidor(formulaRaw, contexto = {}) {
+    const formula = String(formulaRaw || '').trim().toLowerCase();
+    if (!formula) return null;
+    const formulaSegura = formula
+        .replace(/saludenemigo/g, String(Number(contexto.saludEnemigo || 0)))
+        .replace(/\bsalud\b/g, String(Number(contexto.salud || 0)))
+        .replace(/\bpoder\b/g, String(Number(contexto.poder || 0)))
+        .replace(/,/g, '.')
+        .replace(/\s+/g, '');
+    if (!/^[0-9+\-*/().]+$/.test(formulaSegura)) {
+        return null;
+    }
+    try {
+        // eslint-disable-next-line no-new-func
+        const resultado = Function(`"use strict"; return (${formulaSegura});`)();
+        const numero = Number(resultado);
+        return Number.isFinite(numero) ? numero : null;
+    } catch (_error) {
+        return null;
+    }
+}
+
+function calcularBonusAfiliacionesServidor(cartas = []) {
+    const conteoAfiliaciones = new Map();
+    (Array.isArray(cartas) ? cartas : [])
+        .filter(carta => Boolean(carta) && !Boolean(carta?.esBoss) && cartaCuentaComoActivaEnMesaServidor(carta))
+        .forEach(carta => {
+            const afiliaciones = new Set(
+                obtenerAfiliacionesCartaServidor(carta).map(normalizarAfiliacionServidor).filter(Boolean)
+            );
+            afiliaciones.forEach(af => {
+                conteoAfiliaciones.set(af, (conteoAfiliaciones.get(af) || 0) + 1);
+            });
+        });
+    let principal = null;
+    conteoAfiliaciones.forEach((cantidad, afiliacion) => {
+        let bonus = 0;
+        if (cantidad >= 3) bonus = 1000;
+        else if (cantidad >= 2) bonus = 500;
+        if (!bonus) return;
+        if (!principal || bonus > principal.bonus || (bonus === principal.bonus && cantidad > principal.cantidad)) {
+            principal = { afiliacion, bonus, cantidad };
+        }
+    });
+    return principal;
+}
+
+function obtenerValorSkillServidor(carta, fallback = 0, contexto = {}) {
+    const clase = normalizarClaseSkillServidor(carta);
+    const poder = Math.max(0, Number(contexto?.poder ?? carta?.Poder ?? 0));
+    const salud = Math.max(0, Number(contexto?.salud ?? carta?.Salud ?? carta?.SaludMax ?? poder));
+    const saludEnemigo = Math.max(0, Number(contexto?.saludEnemigo ?? 0));
+    if (clase === 'revive') return 1;
+    if (clase === 'aoe') return Math.max(1, Math.floor(poder / 2));
+    if (clase === 'tank') return Math.max(0, Math.round(salud * 2));
+    if (clase === 'heal_debuff') {
+        if (saludEnemigo > 0) return Math.max(1, Math.floor(saludEnemigo * 0.75));
+        return fallback;
+    }
+    if (clase === 'extra_attack') return Math.max(1, Math.floor(poder));
+    if (clase === 'bonus_debuff') return fallback;
+
+    const raw = carta?.skill_power;
+    const numeroDirecto = parsearNumeroSeguroServidor(raw);
+    if (numeroDirecto !== null) return numeroDirecto;
+    const formula = evaluarFormulaSkillPowerServidor(raw, { poder, salud, saludEnemigo });
+    if (formula !== null) return formula;
+    return Number(fallback || 0);
+}
+
+function obtenerPoderCartaConBonosServidor(carta, mesaAliada = [], mesaEnemiga = []) {
+    if (!carta) return 0;
+    const poderBase = obtenerPoderCartaServidor(carta);
+    const debuffGlobal = (Array.isArray(mesaEnemiga) ? mesaEnemiga : []).reduce((total, c) => {
+        if (!c || !cartaCuentaComoActivaEnMesaServidor(c)) return total;
+        const clase = normalizarClaseSkillServidor(c);
+        const trigger = String(c?.skill_trigger || '').trim().toLowerCase();
+        if (trigger === 'auto' && clase === 'debuff') {
+            return total + Math.max(0, Number(obtenerValorSkillServidor(c, 0, { poder: obtenerPoderCartaServidor(c), salud: obtenerSaludCartaServidor(c) })));
+        }
+        return total;
+    }, 0);
+    const pasivaBuff = (Array.isArray(mesaAliada) ? mesaAliada : []).reduce((total, c) => {
+        if (!c || !cartaCuentaComoActivaEnMesaServidor(c)) return total;
+        const clase = normalizarClaseSkillServidor(c);
+        const trigger = String(c?.skill_trigger || '').trim().toLowerCase();
+        if (trigger === 'auto' && (clase === 'buff' || clase === 'bonus_buff')) {
+            return total + Math.max(0, Number(obtenerValorSkillServidor(c, 0, { poder: obtenerPoderCartaServidor(c), salud: obtenerSaludCartaServidor(c) })));
+        }
+        return total;
+    }, 0);
+    const poderConPasivas = poderBase + pasivaBuff - debuffGlobal;
+    if (Boolean(carta?.esBoss)) {
+        return Math.max(0, poderConPasivas);
+    }
+    const principal = calcularBonusAfiliacionesServidor(mesaAliada);
+    if (!principal?.afiliacion) {
+        return Math.max(0, poderConPasivas);
+    }
+    const anulaBonus = (Array.isArray(mesaEnemiga) ? mesaEnemiga : []).some(c => {
+        if (!c || !cartaCuentaComoActivaEnMesaServidor(c)) return false;
+        const clase = normalizarClaseSkillServidor(c);
+        const trigger = String(c?.skill_trigger || '').trim().toLowerCase();
+        return trigger === 'auto' && clase === 'bonus_debuff';
+    });
+    const afiliacionesCarta = new Set(
+        obtenerAfiliacionesCartaServidor(carta).map(normalizarAfiliacionServidor).filter(Boolean)
+    );
+    const recibeBonus = afiliacionesCarta.has(principal.afiliacion);
+    const bonus = recibeBonus && !anulaBonus ? Number(principal.bonus || 0) : 0;
+    return Math.max(0, poderConPasivas + bonus);
 }
 
 function obtenerSaludCartaServidor(carta) {
@@ -463,12 +684,12 @@ function aplicarAtaqueCanonicoSnapshot(snapshot, ladoActor, slotAtacante, slotOb
     if (!atacante || !objetivo) {
         return { ok: false, reason: 'carta_invalida' };
     }
-    const poderDanioAtacante = obtenerPoderCartaServidor(atacante);
+    const poderDanioAtacante = Math.max(1, Math.round(obtenerPoderCartaConBonosServidor(atacante, mesaActor, mesaObjetivo)));
     const claseSkill = String(atacante?.skill_class || '').trim().toLowerCase();
     const triggerSkill = String(atacante?.skill_trigger || '').trim().toLowerCase();
     const usaDotAuto = triggerSkill === 'auto' && claseSkill === 'dot';
     const usaLifeSteal = claseSkill === 'life_steal' && (triggerSkill === 'auto' || Boolean(atacante?.lifeStealActiva));
-    let danio = obtenerPoderCartaServidor(atacante);
+    let danio = poderDanioAtacante;
     let escudo = Math.max(0, Number(objetivo.escudoActual || 0));
     if (escudo > 0 && danio > 0) {
         const absorbido = Math.min(escudo, danio);
@@ -533,7 +754,11 @@ function aplicarHabilidadCanonicaSnapshot(snapshot, ladoActor, slotAtacante, slo
         return { ok: false, reason: 'aturdida' };
     }
     const clase = String(atacante?.skill_class || '').trim().toLowerCase();
-    const valorSkill = Math.max(0, Number(obtenerValorSkillServidor(atacante, 0)));
+    const poderAtacanteConBonos = Math.max(0, Number(obtenerPoderCartaConBonosServidor(atacante, mesaActor, mesaObjetivo)));
+    const valorSkill = Math.max(0, Number(obtenerValorSkillServidor(atacante, 0, {
+        poder: poderAtacanteConBonos,
+        salud: obtenerSaludCartaServidor(atacante)
+    })));
     if (clase === 'tank') {
         const yaHayTank = (Array.isArray(mesaActor) ? mesaActor : []).some((carta, idx) => idx !== slotAtacante && Boolean(carta?.tankActiva));
         if (yaHayTank) return { ok: false, reason: 'tank_ya_activo' };
@@ -587,7 +812,7 @@ function aplicarHabilidadCanonicaSnapshot(snapshot, ladoActor, slotAtacante, slo
             ? Array(objetivosVivos.length).fill(tankIdx)
             : objetivosVivos;
         if (objetivos.length === 0) return { ok: false, reason: 'objetivo_invalido' };
-        const poderFuente = Math.max(1, obtenerPoderCartaServidor(atacante));
+        const poderFuente = Math.max(1, poderAtacanteConBonos);
         const danioAoe = Math.max(1, Math.floor(valorSkill || (poderFuente / 2)));
         for (let i = 0; i < objetivos.length; i++) {
             const idx = objetivos[i];
@@ -1131,8 +1356,8 @@ io.on('connection', (socket) => {
         lobbiesMultijugador.set(partyId, {
             partyId,
             jugadores: {
-                [emails[0]]: { mazoIndex: null, listo: false },
-                [emails[1]]: { mazoIndex: null, listo: false }
+                [emails[0]]: { mazoIndex: null, mazoNombre: null, listo: false },
+                [emails[1]]: { mazoIndex: null, mazoNombre: null, listo: false }
             },
             countdown: null,
             countdownTimer: null
@@ -1148,7 +1373,7 @@ io.on('connection', (socket) => {
         io.to(socket.id).emit('multiplayer:lobby:estado', obtenerSnapshotLobby(partyId));
     });
 
-    socket.on('multiplayer:lobby:actualizarMazo', ({ mazoIndex }) => {
+    socket.on('multiplayer:lobby:actualizarMazo', ({ mazoIndex, mazoNombre }) => {
         const usuario = obtenerUsuarioConectadoPorSocketId(socket.id);
         if (!usuario) return;
         const partyId = indiceGrupoPorEmail.get(usuario.email);
@@ -1158,6 +1383,7 @@ io.on('connection', (socket) => {
         if (!estadoJugador) return;
         const idx = Number(mazoIndex);
         estadoJugador.mazoIndex = Number.isInteger(idx) && idx >= 0 ? idx : null;
+        estadoJugador.mazoNombre = String(mazoNombre || '').trim() || null;
         estadoJugador.listo = false;
         if (lobby.countdownTimer) {
             clearInterval(lobby.countdownTimer);
@@ -1218,14 +1444,8 @@ io.on('connection', (socket) => {
                 ]);
                 const jugadorA = finalSnapshot.jugadores.find(j => normalizarTexto(j.email) === normalizarTexto(emailA));
                 const jugadorB = finalSnapshot.jugadores.find(j => normalizarTexto(j.email) === normalizarTexto(emailB));
-                const idxMazoA = Number(jugadorA?.mazoIndex);
-                const idxMazoB = Number(jugadorB?.mazoIndex);
-                const mazoA = Array.isArray(datosA?.mazos) && datosA.mazos[idxMazoA]?.Cartas
-                    ? datosA.mazos[idxMazoA].Cartas
-                    : null;
-                const mazoB = Array.isArray(datosB?.mazos) && datosB.mazos[idxMazoB]?.Cartas
-                    ? datosB.mazos[idxMazoB].Cartas
-                    : null;
+                const mazoA = resolverMazoSeleccionado(datosA, jugadorA);
+                const mazoB = resolverMazoSeleccionado(datosB, jugadorB);
                 if (!Array.isArray(mazoA) || !Array.isArray(mazoB) || mazoA.length < 6 || mazoB.length < 6) {
                     emitirAGrupo(partyId, 'grupo:notificacion', {
                         tipo: 'error',
@@ -2229,4 +2449,15 @@ server.listen(port, listenHost, () => {
         process.env.RENDER_EXTERNAL_URL ||
         (listenHost === '0.0.0.0' ? `http://localhost:${port}` : `http://${listenHost}:${port}`);
     console.log(`Servidor escuchando en ${listenHost}:${port} — ${base}`);
+    if (RENDER_KEEPALIVE_URL) {
+        console.log(`Keepalive Render habilitado para sesiones PvP activas -> ${RENDER_KEEPALIVE_URL}/healthz`);
+    } else {
+        console.log('Keepalive Render desactivado: define RENDER_EXTERNAL_URL para activarlo.');
+    }
 });
+
+setInterval(() => {
+    actualizarSupervisorKeepAliveRender();
+}, 30000);
+
+actualizarSupervisorKeepAliveRender();

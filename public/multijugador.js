@@ -288,8 +288,10 @@ function iniciarSesionPvp(payload = {}) {
     localStorage.removeItem('desafioActivo');
     localStorage.removeItem('dificultad');
     const oponente = payload?.oponente || {};
+    const nombreOponente = String(oponente?.nombre || '').trim()
+        || (String(oponente?.email || '').split('@')[0] || 'Oponente');
     localStorage.setItem('emailOponente', String(oponente?.email || ''));
-    localStorage.setItem('nombreOponente', String(oponente?.nombre || 'Oponente'));
+    localStorage.setItem('nombreOponente', nombreOponente);
     localStorage.setItem('avatarOponente', String(oponente?.avatar || ''));
     window.location.href = 'tablero.html';
 }

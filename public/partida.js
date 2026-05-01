@@ -29,7 +29,19 @@ const ICONO_MEJORA_ESPECIAL = '/resources/icons/mejora_especial.png';
 const ICONO_MONEDA = '/resources/icons/moneda.png';
 const COOLDOWN_HABILIDAD_ACTIVA_TURNOS = 2;
 const PVP_SESSION_ID = String(localStorage.getItem('partidaPvpSessionId') || '').trim();
-const ES_MODO_PVP = String(localStorage.getItem('partidaModo') || '').trim().toLowerCase() === 'pvp' || Boolean(PVP_SESSION_ID);
+const HAY_DESAFIO_ACTIVO_STORAGE = (() => {
+    try {
+        const raw = localStorage.getItem('desafioActivo');
+        return Boolean(raw && raw !== 'null' && raw !== 'undefined');
+    } catch (_error) {
+        return false;
+    }
+})();
+const ES_MODO_PVP = !HAY_DESAFIO_ACTIVO_STORAGE
+    && (
+        String(localStorage.getItem('partidaModo') || '').trim().toLowerCase() === 'pvp'
+        || Boolean(PVP_SESSION_ID)
+    );
 const EMAIL_SESION_ACTUAL = String(localStorage.getItem('email') || '').trim().toLowerCase();
 const ROL_PVP = String(localStorage.getItem('partidaPvpRol') || 'A').trim().toUpperCase() === 'B' ? 'B' : 'A';
 const PVP_DEBUG_UI = String(localStorage.getItem('pvpDebugUI') || 'false').trim().toLowerCase() === 'true';
@@ -575,8 +587,15 @@ function aplicarSnapshotCanonicoPvp(snapshot = {}) {
                 : [];
             accionesExtraPvpLocal = Math.max(0, Number(snapshot?.accionesExtraA || 0));
             accionesExtraOponentePvp = Math.max(0, Number(snapshot?.accionesExtraB || 0));
-            atacanteSeleccionado = Number.isInteger(snapshot?.atacanteSeleccionadoA) ? snapshot.atacanteSeleccionadoA : null;
-            atacanteSeleccionadoOponentePvp = Number.isInteger(snapshot?.atacanteSeleccionadoB) ? snapshot.atacanteSeleccionadoB : null;
+            // En PvP la selección visual del atacante se sincroniza por evento en tiempo real
+            // (`multiplayer:pvp:seleccionAtacante`). Evitamos restaurar índices enteros
+            // desde snapshot porque pueden llegar desfasados y resaltar cartas incorrectas.
+            if (snapshot?.atacanteSeleccionadoA === null) {
+                atacanteSeleccionado = null;
+            }
+            if (snapshot?.atacanteSeleccionadoB === null) {
+                atacanteSeleccionadoOponentePvp = null;
+            }
             turnoActual = snapshot?.turno === 'A' ? 'jugador' : 'oponente';
         } else {
             mazoJugador = Array.isArray(snapshot?.mazoB) ? clonarJsonSeguro(snapshot.mazoB, []) : mazoJugador;
@@ -591,8 +610,15 @@ function aplicarSnapshotCanonicoPvp(snapshot = {}) {
                 : [];
             accionesExtraPvpLocal = Math.max(0, Number(snapshot?.accionesExtraB || 0));
             accionesExtraOponentePvp = Math.max(0, Number(snapshot?.accionesExtraA || 0));
-            atacanteSeleccionado = Number.isInteger(snapshot?.atacanteSeleccionadoB) ? snapshot.atacanteSeleccionadoB : null;
-            atacanteSeleccionadoOponentePvp = Number.isInteger(snapshot?.atacanteSeleccionadoA) ? snapshot.atacanteSeleccionadoA : null;
+            // En PvP la selección visual del atacante se sincroniza por evento en tiempo real
+            // (`multiplayer:pvp:seleccionAtacante`). Evitamos restaurar índices enteros
+            // desde snapshot porque pueden llegar desfasados y resaltar cartas incorrectas.
+            if (snapshot?.atacanteSeleccionadoB === null) {
+                atacanteSeleccionado = null;
+            }
+            if (snapshot?.atacanteSeleccionadoA === null) {
+                atacanteSeleccionadoOponentePvp = null;
+            }
             turnoActual = snapshot?.turno === 'B' ? 'jugador' : 'oponente';
         }
         renderizarTablero();
@@ -640,7 +666,6 @@ function notificarResultadoPvp(ganadorClaveLocal, motivo = 'fin_partida') {
 }
 
 function obtenerNombreVisibleOponente() {
-    if (!ES_MODO_PVP) return 'BOT';
     const nombre = String(localStorage.getItem('nombreOponente') || '').trim();
     if (nombre) return nombre;
     try {
@@ -652,6 +677,7 @@ function obtenerNombreVisibleOponente() {
     } catch (_) {
         // noop
     }
+    if (!ES_MODO_PVP) return 'BOT';
     return 'Jugador rival';
 }
 
@@ -682,6 +708,8 @@ function intentarInicializarSocketPvp() {
         if (partidaFinalizada) {
             return;
         }
+        configurarNombresTablero();
+        actualizarTextoTurno();
         if (pvpEstadoProcesando) {
             pvpTurnoSocketPendiente = payload;
             return;
@@ -734,6 +762,13 @@ function intentarInicializarSocketPvp() {
             pvpUltimaAccionRecibidaTs = Date.now();
             if (actorEmailNorm !== EMAIL_SESION_ACTUAL) {
                 atacanteSeleccionadoOponentePvp = null;
+                if (tipoAccion === 'ataque') {
+                    const slotAtk = Number(accion?.slotAtacante);
+                    const slotObj = Number(accion?.slotObjetivo);
+                    cartaOponenteDestacada = Number.isInteger(slotAtk) ? slotAtk : null;
+                    cartaJugadorDestacada = Number.isInteger(slotObj) ? slotObj : null;
+                    renderizarTablero();
+                }
             }
         }
         if (tipoAccion === 'habilidad') {
@@ -880,6 +915,10 @@ function intentarInicializarSocketPvp() {
         }
         ultimoEventoPvp = `resync:${payload?.reason || 'unknown'}`;
         actualizarLineaDebugPvp(`Resync requerido: ${payload?.reason || 'unknown'}`);
+        const reason = String(payload?.reason || '').trim();
+        if (reason) {
+            escribirLog(`Sincronización requerida (${reason}). Reintentando estado oficial...`);
+        }
         socketPvp.emit('multiplayer:pvp:estado:solicitar', { sessionId: PVP_SESSION_ID });
     });
 
@@ -3102,9 +3141,27 @@ async function manejarUsoHabilidadJugador(event, slotIndex) {
                 return;
             }
         }
-        const objetivoTexto = meta.clase === 'revive'
-            ? 'una carta del cementerio'
-            : (meta.clase === 'aoe' ? 'todo el equipo rival' : (meta.clase === 'heal_all' ? 'todo tu equipo' : null));
+        const objetivoTexto = (() => {
+            if (meta.clase === 'revive') {
+                return 'una carta del cementerio';
+            }
+            if (meta.clase === 'aoe') {
+                return 'todo el equipo rival';
+            }
+            if (meta.clase === 'heal_all') {
+                return 'todo tu equipo';
+            }
+            if (!Number.isInteger(slotObjetivoPvp)) {
+                return null;
+            }
+            if (meta.clase === 'heal' || meta.clase === 'shield') {
+                return String(cartasJugadorEnJuego[slotObjetivoPvp]?.Nombre || '').trim() || null;
+            }
+            if (meta.clase === 'stun' || meta.clase === 'dot') {
+                return String(cartasOponenteEnJuego[slotObjetivoPvp]?.Nombre || '').trim() || null;
+            }
+            return null;
+        })();
         atacanteSeleccionado = null;
         trazaAccionPvp('emit_habilidad', `${meta.clase} slot=${slotIndex}`);
         socketPvp.emit('multiplayer:pvp:accion', {

@@ -343,7 +343,12 @@ window.solicitarEstadoLobbyMultijugador = function solicitarEstadoLobbyMultijuga
 };
 
 window.actualizarMazoLobbyMultijugador = function actualizarMazoLobbyMultijugador(mazoIndex) {
-    socket.emit('multiplayer:lobby:actualizarMazo', { mazoIndex });
+    const usuario = JSON.parse(localStorage.getItem('usuario') || '{}');
+    const idx = Number(mazoIndex);
+    const mazoNombre = (Number.isInteger(idx) && idx >= 0 && Array.isArray(usuario?.mazos))
+        ? String(usuario.mazos[idx]?.Nombre || '').trim()
+        : '';
+    socket.emit('multiplayer:lobby:actualizarMazo', { mazoIndex, mazoNombre });
 };
 
 window.toggleListoLobbyMultijugador = function toggleListoLobbyMultijugador(listo) {

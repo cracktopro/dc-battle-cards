@@ -955,6 +955,18 @@ function cerrarModalSeleccionEvento() {
     seleccionCartasEvento = new Set();
 }
 
+function limpiarEstadoPvpAntesDePartidaVsBot() {
+    localStorage.removeItem('partidaModo');
+    localStorage.removeItem('partidaPvpSessionId');
+    localStorage.removeItem('partidaPvpRol');
+    localStorage.removeItem('partidaPvpPrimerTurno');
+    localStorage.removeItem('partidaPvpInicialesJugadorIdx');
+    localStorage.removeItem('partidaPvpInicialesOponenteIdx');
+    localStorage.removeItem('emailOponente');
+    localStorage.removeItem('nombreOponente');
+    localStorage.removeItem('avatarOponente');
+}
+
 async function confirmarSeleccionEvento() {
     if (!eventoPendiente || seleccionCartasEvento.size !== 6 || !dificultadEventoSeleccionada) {
         return;
@@ -983,6 +995,7 @@ async function confirmarSeleccionEvento() {
     localStorage.setItem('mazoJugadorBase', JSON.stringify({ Cartas: cartasSeleccionadas }));
     localStorage.removeItem('mazoOponente');
     localStorage.removeItem('mazoOponenteBase');
+    limpiarEstadoPvpAntesDePartidaVsBot();
     window.location.href = 'tablero.html';
 }
 
