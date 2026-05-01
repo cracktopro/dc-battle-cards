@@ -1,5 +1,16 @@
 # Changelog
 
+## Beta-1.0.7-01.05.26
+
+- PvP online: mejoras de sincronizacion de turnos/revisiones para reducir solapamientos visuales entre ultima accion, cambio de turno y refresco de estado.
+- PvP online: ajustes de timing y cola de estados para animaciones de ataque/habilidad mas estables, incluyendo dano, bajas y entrada de cartas desde mazo.
+- PvP online: correcciones de UI en combate (opacidad de cartas usadas al cerrar turno, resaltado remoto de carta atacante seleccionada y mejoras en avisos de habilidad).
+- Habilidades: correcciones de animacion y aplicacion visual para `aoe`, `extra_attack` y `heal_all` en combate sincronizado.
+- Grupos/multijugador: nuevo modal de confirmacion al abandonar grupo (menu lateral y vista multijugador) con texto `¿Quieres abandonar el grupo?` y acciones `Aceptar | Cancelar`.
+- Centro de Operaciones: robustez en estado de `invitacion en curso` para evitar botones atascados por expiraciones o estado local desfasado.
+- Menu lateral: actualizacion de icono de `Dejar grupo` con SVG y color dinamico segun RGB configurado por jugador.
+- Etiqueta de version del menu lateral actualizada a `Version: Beta-1.0.7-01.05.26`.
+
 ## Beta-1.0.6-30.04.26
 
 - Opciones: nuevo selector visual de color principal (`input type="color"`) con vista previa en tiempo real y persistencia en cuenta (`preferencias.colorPrincipal`).

@@ -35,7 +35,10 @@
     <div class="jugador jugador-oponente">
         <div class="info-jugador">
             <div id="turno-oponente-label" class="turno-indicador">Turno de BOT</div>
-            <h2 id="nombre-oponente">Oponente</h2>
+            <div class="panel-identidad-jugador">
+                <img id="panel-oponente-avatar" class="panel-jugador-avatar" alt="Avatar oponente">
+                <h2 id="nombre-oponente">Oponente</h2>
+            </div>
             <div id="contador-mazo-oponente" class="contador-mazo"></div>
         </div>
         <div class="slots-jugador" id="slots-oponente">
@@ -74,6 +77,16 @@
         <div class="modal-habilidad-acciones">
             <button type="button" id="modal-habilidad-confirmar" class="modal-habilidad-btn modal-habilidad-btn-primary">Confirmar</button>
             <button type="button" id="modal-habilidad-cancelar" class="modal-habilidad-btn modal-habilidad-btn-secondary">Cancelar</button>
+        </div>
+    </div>
+</div>
+<div id="modal-abandonar-partida" class="ventana-emergente" style="display:none;">
+    <div class="ventana-contenido">
+        <h2>Abandonar partida</h2>
+        <p id="modal-abandonar-mensaje">Hay una partida en curso. ¿Seguro que quieres abandonar esta vista?</p>
+        <div class="acciones-fin-partida">
+            <button type="button" id="modal-abandonar-confirmar">Abandonar</button>
+            <button type="button" id="modal-abandonar-cancelar">Cancelar</button>
         </div>
     </div>
 </div>

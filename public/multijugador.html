@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <title>Multijugador</title>
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+    <link href="css/mazos.css" rel="stylesheet">
+    <link href="css/jugarPartida.css" rel="stylesheet">
+    <link href="css/scrollbar.css" rel="stylesheet">
+    <link href="css/app-layout.css" rel="stylesheet">
+    <style>
+        .multi-layout {
+            display: grid;
+            grid-template-columns: 1.5fr 1fr;
+            gap: 14px;
+        }
+        .multi-panel {
+            background: rgba(8, 18, 36, 0.86);
+            border: 1px solid rgba(var(--dc-accent-user-rgb, 0, 123, 255), 0.38);
+            border-radius: 14px;
+            box-shadow: 0 0 16px rgba(var(--dc-accent-user-rgb, 0, 123, 255), 0.25);
+            padding: 14px;
+        }
+        .multi-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .multi-countdown {
+            font-size: 1.2rem;
+            font-weight: 800;
+            color: #ffd700;
+            text-shadow: 0 0 12px rgba(255, 215, 0, 0.6);
+            min-height: 28px;
+        }
+        .multi-player-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            border: 1px solid rgba(var(--dc-accent-user-rgb, 0, 123, 255), 0.26);
+            border-radius: 10px;
+            padding: 8px;
+            background: rgba(10, 22, 44, 0.65);
+        }
+        .multi-player-avatar {
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 1px solid rgba(var(--dc-accent-user-rgb, 0, 123, 255), 0.6);
+        }
+        .multi-player-state {
+            margin-left: auto;
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+        .multi-player-state.listo {
+            color: #7cff9e;
+        }
+        .multi-player-state.no-listo {
+            color: #ffd76f;
+        }
+        .multi-modal-panel {
+            max-width: 560px;
+        }
+        .multi-leave-icon {
+            width: 16px;
+            height: 16px;
+            vertical-align: text-bottom;
+            margin-right: 6px;
+            color: rgb(var(--dc-accent-user-rgb, 0, 123, 255));
+            filter: drop-shadow(0 0 6px rgba(var(--dc-accent-user-rgb, 0, 123, 255), 0.45));
+        }
+        .multi-leave-icon path {
+            fill: currentColor;
+        }
+        @media (max-width: 980px) {
+            .multi-layout {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="menu-container">
+        <a href="vistaJuego.html" class="btn btn-menu">Jugar Partida</a>
+        <a href="mazos.html" class="btn btn-menu">Mazos</a>
+        <a href="crearMazos.html" class="btn btn-menu">Crear Mazos</a>
+        <a href="mejorarCartas.html" class="btn btn-menu">Mejorar Cartas</a>
+        <a href="coleccion.html" class="btn btn-menu">Colección</a>
+        <a href="tienda.html" class="btn btn-menu">Tienda</a>
+        <a href="desafios.html" class="btn btn-menu">Desafíos</a>
+        <a href="opciones.html" class="btn btn-menu">Opciones</a>
+        <button onclick="abrirModalLogout()" class="btn btn-logout">Cerrar Sesión</button>
+    </div>
+
+    <div class="content-container">
+        <h2>Multijugador</h2>
+        <div id="mensaje-multi" class="alert alert-warning" style="display:none;"></div>
+        <div class="multi-layout">
+            <section class="multi-panel">
+                <h4 style="margin-bottom:10px;">Chat de grupo</h4>
+                <div class="chat-container" style="height:min(460px,56vh) !important;">
+                    <div id="multi-chat-mensajes" class="chat-mensajes"></div>
+                    <div class="chat-input-container">
+                        <input type="text" id="multi-chat-input" class="form-control" placeholder="Mensaje para tu grupo...">
+                        <button id="multi-chat-enviar" class="btn btn-success">Enviar</button>
+                    </div>
+                </div>
+            </section>
+            <section class="multi-panel multi-actions">
+                <h4 style="margin-bottom:6px;">Preparación de partida</h4>
+                <button id="multi-abrir-lobby-btn" class="btn btn-primary">Jugar partida Multijugador</button>
+                <button id="multi-abandonar-grupo-btn" class="btn btn-secondary">
+                    <svg class="multi-leave-icon" viewBox="0 0 600 600" aria-hidden="true" focusable="false">
+                        <path d="M130 0C58.672245 0 0 58.672245 0 130V470C0 541.32776 58.672245 600 130 600H301.57812C367.83331 600 423.13643 549.36696 430.67188 485H349.43555C343.32179 505.66026 324.7036 520 301.57812 520H130C101.60826 520 80 498.39174 80 470V130C80 101.60826 101.60826 80 130 80H301.57812C324.7036 80 343.32179 94.339739 349.43555 115H430.67188C423.13642 50.633038 367.83331 0 301.57812 0H130Z"></path>
+                        <path d="M476.86328 179.99911A40 40 0 0 0 448.57812 191.71395A40 40 0 0 0 448.57812 248.28427L460.29297 259.99911H163.72656A40 40 0 0 0 123.72656 299.99911A40 40 0 0 0 163.72656 339.99911H460.29297L448.57812 351.71395A40 40 0 0 0 448.57812 408.28427A40 40 0 0 0 505.14844 408.28427L577.93945 335.49325A40 40 0 0 0 600 299.99911A40 40 0 0 0 577.5293 264.09481L505.14844 191.71395A40 40 0 0 0 476.86328 179.99911Z"></path>
+                    </svg>
+                    Dejar Grupo
+                </button>
+                <label for="multi-select-mazo" style="margin-top:4px;">Selecciona tu mazo</label>
+                <select id="multi-select-mazo" class="form-control"></select>
+                <div class="d-flex" style="gap:8px; flex-wrap:wrap;">
+                    <button id="multi-listo-btn" class="btn btn-primary" disabled>Listo</button>
+                </div>
+                <p id="multi-lobby-info" style="margin:0; color:#dff8ff;"></p>
+                <div id="multi-countdown" class="multi-countdown"></div>
+                <div id="multi-jugadores-estado" style="display:flex;flex-direction:column;gap:8px;"></div>
+            </section>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="js/cartas.js"></script>
+    <script src="cliente.js"></script>
+    <script src="multijugador.js"></script>
+    <script src="js/menu-mobile.js" defer></script>
+</body>
+</html>

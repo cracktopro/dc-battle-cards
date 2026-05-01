@@ -28,6 +28,876 @@ const ICONO_MEJORA = '/resources/icons/mejora.png';
 const ICONO_MEJORA_ESPECIAL = '/resources/icons/mejora_especial.png';
 const ICONO_MONEDA = '/resources/icons/moneda.png';
 const COOLDOWN_HABILIDAD_ACTIVA_TURNOS = 2;
+const PVP_SESSION_ID = String(localStorage.getItem('partidaPvpSessionId') || '').trim();
+const ES_MODO_PVP = String(localStorage.getItem('partidaModo') || '').trim().toLowerCase() === 'pvp' || Boolean(PVP_SESSION_ID);
+const EMAIL_SESION_ACTUAL = String(localStorage.getItem('email') || '').trim().toLowerCase();
+const ROL_PVP = String(localStorage.getItem('partidaPvpRol') || 'A').trim().toUpperCase() === 'B' ? 'B' : 'A';
+const PVP_DEBUG_UI = String(localStorage.getItem('pvpDebugUI') || 'false').trim().toLowerCase() === 'true';
+let socketPvp = null;
+let esMiTurnoPvp = false;
+let resultadoPvpEmitido = false;
+let aplicandoSnapshotPvp = false;
+let revisionPvpLocal = 0;
+let ultimoEventoPvp = '';
+let pvpDespliegueTableroListo = !ES_MODO_PVP;
+let pvpTurnoPendienteDesdeSocket = null;
+let pvpUltimoTurnEmailSocket = '';
+let pvpUltimoTurnEmailSocketTs = 0;
+let cartasYaActuaronOponentePvp = [];
+let atacanteSeleccionadoOponentePvp = null;
+let accionesExtraPvpLocal = 0;
+let accionesExtraOponentePvp = 0;
+let pvpPendienteEmitirFinTurno = false;
+let pvpFinTurnoFallbackTimer = null;
+let pvpFinTurnoDelayTimer = null;
+let pvpTurnoJugadorYaPreparado = false;
+let pvpUltimaAccionRecibidaTs = 0;
+let pvpRetrasoHabilidadHastaTs = 0;
+let pvpEstadoProcesando = false;
+let pvpTurnoSocketPendiente = null;
+let pvpEstadoPayloadPendiente = null;
+let pvpTurnoAplicacionTimer = null;
+let pvpAvisoHabilidadTimer = null;
+let pvpUltimaAccionPayload = null;
+let pvpMantenerOpacidadFinTurno = false;
+const pvpAccionesPorRevision = new Map();
+const pvpRevisionWaiters = [];
+const PVP_RETARDO_CAMBIO_TURNO_MS = 900;
+const PVP_RETARDO_ROBO_TRAS_BAJA_MS = 700;
+const PVP_RETARDO_EFECTO_HABILIDAD_MS = 3200;
+const PVP_RETARDO_MENSAJE_HABILIDAD_MS = 500;
+const PVP_RETARDO_PRE_IMPACTO_ATAQUE_MS = 700;
+const PVP_RETARDO_POST_IMPACTO_ATAQUE_MS = 700;
+const PVP_RETARDO_POST_BAJA_MS = 700;
+
+function despacharWaitersRevisionPvp() {
+    const rev = Number(revisionPvpLocal || 0);
+    for (let i = pvpRevisionWaiters.length - 1; i >= 0; i -= 1) {
+        const w = pvpRevisionWaiters[i];
+        if (rev > w.desde) {
+            w.resolve(rev);
+            pvpRevisionWaiters.splice(i, 1);
+        }
+    }
+}
+
+function esperarRevisionPvpMayorQue(revisionInicial, timeoutMs = 5000) {
+    return new Promise((resolve, reject) => {
+        const desde = Number(revisionInicial || 0);
+        if (Number(revisionPvpLocal) > desde) {
+            resolve(Number(revisionPvpLocal));
+            return;
+        }
+        const obj = { desde, resolve, reject };
+        const to = setTimeout(() => {
+            const idx = pvpRevisionWaiters.indexOf(obj);
+            if (idx !== -1) {
+                pvpRevisionWaiters.splice(idx, 1);
+            }
+            reject(new Error('pvp_revision_timeout'));
+        }, timeoutMs);
+        obj.cancel = () => {
+            clearTimeout(to);
+            const idx = pvpRevisionWaiters.indexOf(obj);
+            if (idx !== -1) {
+                pvpRevisionWaiters.splice(idx, 1);
+            }
+        };
+        pvpRevisionWaiters.push(obj);
+    });
+}
+
+function refrescarEtiquetasTurnoPvpDesdeEmail(turnEmailRaw) {
+    const turnEmail = String(turnEmailRaw || '').trim().toLowerCase();
+    if (!turnEmail) {
+        return;
+    }
+    const esMio = turnEmail === EMAIL_SESION_ACTUAL;
+    if (esMio) {
+        actualizarTextoTurno('Tu turno');
+    } else {
+        actualizarTextoTurno(`Turno de ${obtenerNombreVisibleOponente()}`);
+        mostrarAvisoTurno(`Turno de ${obtenerNombreVisibleOponente()}`);
+    }
+}
+
+async function animarDaniosTrasSnapshotPvp(prevJ, prevO) {
+    if (!ES_MODO_PVP || partidaFinalizada) {
+        return;
+    }
+    const pulsoBarra = async (tipo, slotIndex) => {
+        const idSlot = obtenerIdSlot(tipo, slotIndex);
+        const slot = document.getElementById(idSlot);
+        const barra = slot?.querySelector('.barra-salud-contenedor');
+        if (!barra) return;
+        barra.classList.add('recibiendo-danio');
+        await esperar(260);
+        barra.classList.remove('recibiendo-danio');
+    };
+    for (let i = 0; i < 3; i += 1) {
+        const antes = prevO[i];
+        const desp = cartasOponenteEnJuego[i];
+        if (!antes) {
+            continue;
+        }
+        if (!desp) {
+            const salAnt = obtenerSaludActualCarta(antes);
+            const danioFinal = Math.max(1, salAnt);
+            cartasOponenteEnJuego[i] = {
+                ...antes,
+                SaludMax: obtenerSaludMaxCarta(antes),
+                Salud: salAnt,
+                escudoActual: 0
+            };
+            renderizarTablero();
+            mostrarValorFlotante('oponente', i, danioFinal, 'danio');
+            await animarBajadaSaludCarta(cartasOponenteEnJuego, i, salAnt, 0, 'oponente');
+            cartasOponenteEnJuego[i] = null;
+            renderizarTablero();
+            continue;
+        }
+        const salAnt = obtenerSaludActualCarta(antes);
+        const salPost = obtenerSaludActualCarta(desp);
+        if (salAnt > salPost) {
+            const d = salAnt - salPost;
+            mostrarValorFlotante('oponente', i, d, 'danio');
+            await pulsoBarra('oponente', i);
+        } else if (salPost > salAnt) {
+            mostrarValorFlotante('oponente', i, salPost - salAnt, 'cura');
+        }
+    }
+    for (let i = 0; i < 3; i += 1) {
+        const antes = prevJ[i];
+        const desp = cartasJugadorEnJuego[i];
+        if (!antes) {
+            continue;
+        }
+        if (!desp) {
+            const salAnt = obtenerSaludActualCarta(antes);
+            const danioFinal = Math.max(1, salAnt);
+            cartasJugadorEnJuego[i] = {
+                ...antes,
+                SaludMax: obtenerSaludMaxCarta(antes),
+                Salud: salAnt,
+                escudoActual: 0
+            };
+            renderizarTablero();
+            mostrarValorFlotante('jugador', i, danioFinal, 'danio');
+            await animarBajadaSaludCarta(cartasJugadorEnJuego, i, salAnt, 0, 'jugador');
+            cartasJugadorEnJuego[i] = null;
+            renderizarTablero();
+            continue;
+        }
+        const salAnt = obtenerSaludActualCarta(antes);
+        const salPost = obtenerSaludActualCarta(desp);
+        if (salAnt > salPost) {
+            const d = salAnt - salPost;
+            mostrarValorFlotante('jugador', i, d, 'danio');
+            await pulsoBarra('jugador', i);
+        } else if (salPost > salAnt) {
+            mostrarValorFlotante('jugador', i, salPost - salAnt, 'cura');
+        }
+    }
+}
+
+function actualizarLineaDebugPvp(msg) {
+    if (!PVP_DEBUG_UI) return;
+    const el = document.getElementById('pvp-debug-line');
+    if (el) {
+        el.textContent = msg;
+    }
+    const log = document.getElementById('pvp-debug-log');
+    if (log) {
+        const stamp = new Date().toISOString().slice(11, 23);
+        log.value += `${stamp} ${msg}\n`;
+        log.scrollTop = log.scrollHeight;
+    }
+}
+
+function trazaAccionPvp(etapa, detalle = '') {
+    if (!PVP_DEBUG_UI) return;
+    const rev = Number(revisionPvpLocal || 0);
+    const sufijo = detalle ? ` | ${detalle}` : '';
+    actualizarLineaDebugPvp(`[ACCION:${etapa}] rev=${rev}${sufijo}`);
+}
+
+function describirAccionPvpEnLog(accion = {}, actorEmailRaw = '') {
+    const tipo = String(accion?.tipo || '').trim();
+    if (!tipo) return;
+    const actorEmail = String(actorEmailRaw || '').trim().toLowerCase();
+    const actor = actorEmail && actorEmail === EMAIL_SESION_ACTUAL ? 'Tú' : obtenerNombreVisibleOponente();
+    if (tipo === 'habilidad') {
+        const skill = String(accion?.debugSkillName || 'habilidad').trim();
+        const caster = String(accion?.debugCasterName || actor).trim();
+        const target = String(accion?.debugTargetName || '').trim();
+        const detalle = target ? ` sobre ${target}` : '';
+        escribirLog(`${caster} utiliza ${skill}${detalle}.`);
+        return;
+    }
+    if (tipo === 'ataque') {
+        escribirLog(`Acción de ataque recibida (${actor}). Sincronizando estado...`);
+    }
+}
+
+function procesarTurnoPvpSocket(payload = {}) {
+    if (!ES_MODO_PVP || partidaFinalizada) {
+        return;
+    }
+    const turnEmail = String(payload?.turnEmail || '').trim().toLowerCase();
+    esMiTurnoPvp = Boolean(turnEmail && turnEmail === EMAIL_SESION_ACTUAL);
+    ultimoEventoPvp = `turno:${turnEmail || '-'}`;
+    actualizarLineaDebugPvp(`Turno -> ${turnEmail || '-'}`);
+    if (esMiTurnoPvp) {
+        pvpMantenerOpacidadFinTurno = false;
+        iniciarTurnoJugador();
+        return;
+    }
+    pvpMantenerOpacidadFinTurno = false;
+    pvpTurnoJugadorYaPreparado = false;
+    turnoActual = 'oponente';
+    escribirLog(`Esperando la jugada de ${obtenerNombreVisibleOponente()}...`);
+    renderizarTablero();
+}
+
+function encolarOProcesarTurnoPvp(payload = {}) {
+    if (!ES_MODO_PVP) {
+        return;
+    }
+    if (pvpTurnoAplicacionTimer) {
+        clearTimeout(pvpTurnoAplicacionTimer);
+        pvpTurnoAplicacionTimer = null;
+    }
+    if (!pvpDespliegueTableroListo) {
+        pvpTurnoPendienteDesdeSocket = payload;
+        return;
+    }
+    const turnEmail = String(payload?.turnEmail || '').trim().toLowerCase();
+    refrescarEtiquetasTurnoPvpDesdeEmail(turnEmail);
+    const now = Date.now();
+    const esMio = Boolean(turnEmail && turnEmail === EMAIL_SESION_ACTUAL);
+    if (
+        turnEmail
+        && pvpUltimoTurnEmailSocket === turnEmail
+        && now - pvpUltimoTurnEmailSocketTs < 900
+    ) {
+        if (esMio && turnoActual === 'jugador' && esMiTurnoPvp && pvpTurnoJugadorYaPreparado) {
+            return;
+        }
+        if (!esMio && turnoActual === 'oponente' && !esMiTurnoPvp) {
+            return;
+        }
+    }
+    const msDesdeUltimaAccion = now - Number(pvpUltimaAccionRecibidaTs || 0);
+    const retardoAplicacion = pvpUltimaAccionRecibidaTs > 0
+        ? Math.max(0, PVP_RETARDO_CAMBIO_TURNO_MS - msDesdeUltimaAccion)
+        : 0;
+    const aplicarTurno = () => {
+        pvpUltimoTurnEmailSocket = turnEmail;
+        pvpUltimoTurnEmailSocketTs = Date.now();
+        procesarTurnoPvpSocket(payload);
+    };
+    if (retardoAplicacion > 0) {
+        pvpTurnoAplicacionTimer = setTimeout(() => {
+            pvpTurnoAplicacionTimer = null;
+            aplicarTurno();
+        }, retardoAplicacion);
+        return;
+    }
+    aplicarTurno();
+}
+
+async function animarEntradasMazoPvp(prevJ, prevO, proxJ, proxO) {
+    const tareas = [];
+    for (let i = 0; i < 3; i += 1) {
+        if (!prevJ[i] && proxJ[i]) {
+            tareas.push({ tipo: 'jugador', slot: i });
+        }
+    }
+    for (let i = 0; i < 3; i += 1) {
+        if (!prevO[i] && proxO[i]) {
+            tareas.push({ tipo: 'oponente', slot: i });
+        }
+    }
+    for (let i = 0; i < tareas.length; i += 1) {
+        const t = tareas[i];
+        const idSlot = obtenerIdSlot(t.tipo, t.slot);
+        const slotEl = document.getElementById(idSlot);
+        const cartaEl = slotEl?.querySelector('.carta');
+        cartaEl?.classList.add('carta-entrada');
+        await esperar(250);
+    }
+}
+
+function obtenerLadosDesdeSnapshotPvp(snapshot = {}) {
+    const jugador = ROL_PVP === 'A'
+        ? (Array.isArray(snapshot?.cartasEnJuegoA) ? snapshot.cartasEnJuegoA : [])
+        : (Array.isArray(snapshot?.cartasEnJuegoB) ? snapshot.cartasEnJuegoB : []);
+    const oponente = ROL_PVP === 'A'
+        ? (Array.isArray(snapshot?.cartasEnJuegoB) ? snapshot.cartasEnJuegoB : [])
+        : (Array.isArray(snapshot?.cartasEnJuegoA) ? snapshot.cartasEnJuegoA : []);
+    return { jugador, oponente };
+}
+
+function emitirSeleccionAtacantePvp(slotAtacante = null) {
+    if (!ES_MODO_PVP || !socketPvp || !PVP_SESSION_ID) {
+        return;
+    }
+    socketPvp.emit('multiplayer:pvp:seleccionAtacante', {
+        sessionId: PVP_SESSION_ID,
+        slotAtacante: Number.isInteger(slotAtacante) ? slotAtacante : null
+    });
+}
+
+async function animarImpactoAtaquePvpConSnapshot(prevJ, prevO, proxJ, proxO, accion = {}, actorEmailRaw = '') {
+    const slotObjetivo = Number(accion?.slotObjetivo);
+    if (!Number.isInteger(slotObjetivo) || slotObjetivo < 0 || slotObjetivo > 2) {
+        return;
+    }
+    const actorEmail = String(actorEmailRaw || '').trim().toLowerCase();
+    const atacaYo = Boolean(actorEmail && actorEmail === EMAIL_SESION_ACTUAL);
+    const tipoObjetivo = atacaYo ? 'oponente' : 'jugador';
+    const prevArr = tipoObjetivo === 'oponente' ? prevO : prevJ;
+    const proxArr = tipoObjetivo === 'oponente' ? proxO : proxJ;
+    const liveArr = tipoObjetivo === 'oponente' ? cartasOponenteEnJuego : cartasJugadorEnJuego;
+    const cartaAntes = prevArr[slotObjetivo];
+    if (!cartaAntes) {
+        return;
+    }
+    const saludAntes = Math.max(0, Number(obtenerSaludActualCarta(cartaAntes) || 0));
+    const cartaDespues = proxArr[slotObjetivo] || null;
+    const saludDespues = cartaDespues ? Math.max(0, Number(obtenerSaludActualCarta(cartaDespues) || 0)) : 0;
+    if (saludAntes <= saludDespues) {
+        return;
+    }
+    await esperar(PVP_RETARDO_PRE_IMPACTO_ATAQUE_MS);
+    const danio = Math.max(1, saludAntes - saludDespues);
+    mostrarValorFlotante(tipoObjetivo, slotObjetivo, danio, 'danio');
+    await animarBajadaSaludCarta(liveArr, slotObjetivo, saludAntes, saludDespues, tipoObjetivo);
+    await esperar(PVP_RETARDO_POST_IMPACTO_ATAQUE_MS);
+    if (!cartaDespues) {
+        liveArr[slotObjetivo] = null;
+        renderizarTablero();
+        await esperar(PVP_RETARDO_POST_BAJA_MS);
+    }
+}
+
+async function animarCambiosHabilidadPvp(prevJ, prevO, proxJ, proxO, accion = {}, actorEmailRaw = '') {
+    const clase = String(accion?.debugSkillClass || '').trim().toLowerCase();
+    const actorEmail = String(actorEmailRaw || '').trim().toLowerCase();
+    const usaYo = Boolean(actorEmail && actorEmail === EMAIL_SESION_ACTUAL);
+    if (clase === 'heal_all') {
+        const tipoAliado = usaYo ? 'jugador' : 'oponente';
+        const arrAntes = usaYo ? prevJ : prevO;
+        const arrDespues = usaYo ? proxJ : proxO;
+        for (let i = 0; i < 3; i += 1) {
+            const antes = arrAntes[i];
+            const despues = arrDespues[i];
+            if (!antes || !despues) continue;
+            const salAntes = obtenerSaludActualCarta(antes);
+            const salDespues = obtenerSaludActualCarta(despues);
+            if (salDespues > salAntes) {
+                mostrarValorFlotante(tipoAliado, i, salDespues - salAntes, 'cura');
+                await esperar(500);
+            }
+        }
+        return;
+    }
+    if (clase !== 'aoe') {
+        return;
+    }
+    const tipoObjetivo = usaYo ? 'oponente' : 'jugador';
+    const arrAntes = usaYo ? prevO : prevJ;
+    const arrDespues = usaYo ? proxO : proxJ;
+    const arrLive = tipoObjetivo === 'oponente' ? cartasOponenteEnJuego : cartasJugadorEnJuego;
+    const indicesImpactados = [0, 1, 2].filter(i => {
+        const antes = arrAntes[i];
+        if (!antes) return false;
+        const salAnt = obtenerSaludActualCarta(antes);
+        const despues = arrDespues[i];
+        const salPost = despues ? obtenerSaludActualCarta(despues) : 0;
+        return salAnt > salPost;
+    });
+    if (indicesImpactados.length === 0) {
+        return;
+    }
+    indicesImpactados.forEach(idx => {
+        const antes = arrAntes[idx];
+        const salAnt = obtenerSaludActualCarta(antes);
+        if (!arrLive[idx]) {
+            arrLive[idx] = {
+                ...antes,
+                SaludMax: obtenerSaludMaxCarta(antes),
+                Salud: salAnt
+            };
+        } else {
+            arrLive[idx].SaludMax = obtenerSaludMaxCarta(arrLive[idx]);
+            arrLive[idx].Salud = salAnt;
+        }
+    });
+    renderizarTablero();
+    indicesImpactados.forEach(idx => {
+        const antes = arrAntes[idx];
+        const despues = arrDespues[idx];
+        const salAnt = obtenerSaludActualCarta(antes);
+        const salPost = despues ? obtenerSaludActualCarta(despues) : 0;
+        const dano = Math.max(1, salAnt - salPost);
+        mostrarValorFlotante(tipoObjetivo, idx, dano, 'danio');
+        const idSlot = obtenerIdSlot(tipoObjetivo, idx);
+        const slotEl = document.getElementById(idSlot);
+        const barra = slotEl?.querySelector('.barra-salud-contenedor');
+        barra?.classList.add('recibiendo-danio');
+    });
+    await esperar(140);
+    indicesImpactados.forEach(idx => {
+        const despues = arrDespues[idx];
+        const salPost = despues ? obtenerSaludActualCarta(despues) : 0;
+        if (arrLive[idx]) {
+            arrLive[idx].Salud = salPost;
+        }
+    });
+    renderizarTablero();
+    await esperar(620);
+    indicesImpactados.forEach(idx => {
+        const idSlot = obtenerIdSlot(tipoObjetivo, idx);
+        const slotEl = document.getElementById(idSlot);
+        const barra = slotEl?.querySelector('.barra-salud-contenedor');
+        barra?.classList.remove('recibiendo-danio');
+    });
+    indicesImpactados.forEach(idx => {
+        if (!arrDespues[idx]) {
+            arrLive[idx] = null;
+        }
+    });
+    renderizarTablero();
+    await esperar(500);
+}
+
+function completarFinTurnoPvpConRevision(revisionOficial) {
+    if (!pvpPendienteEmitirFinTurno || !ES_MODO_PVP || !socketPvp || !PVP_SESSION_ID || partidaFinalizada) {
+        return;
+    }
+    if (pvpFinTurnoDelayTimer) {
+        return;
+    }
+    if (pvpFinTurnoFallbackTimer) {
+        clearTimeout(pvpFinTurnoFallbackTimer);
+        pvpFinTurnoFallbackTimer = null;
+    }
+    pvpFinTurnoDelayTimer = setTimeout(() => {
+        pvpFinTurnoDelayTimer = null;
+        if (!pvpPendienteEmitirFinTurno || !ES_MODO_PVP || !socketPvp || !PVP_SESSION_ID || partidaFinalizada) {
+            return;
+        }
+        pvpPendienteEmitirFinTurno = false;
+        const rev = Number.isInteger(Number(revisionOficial)) ? Number(revisionOficial) : Number(revisionPvpLocal || 0);
+        trazaAccionPvp('emit_fin_turno', `expectedRevision=${rev}`);
+        socketPvp.emit('multiplayer:pvp:finTurno', {
+            sessionId: PVP_SESSION_ID,
+            expectedRevision: rev
+        });
+    }, PVP_RETARDO_CAMBIO_TURNO_MS);
+}
+
+function programarFinTurnoPvpCuandoLlegueEstadoOficial() {
+    if (!ES_MODO_PVP || !socketPvp || !PVP_SESSION_ID) {
+        return;
+    }
+    pvpPendienteEmitirFinTurno = true;
+    trazaAccionPvp('fin_turno_pendiente', 'esperando estado oficial');
+    if (pvpFinTurnoFallbackTimer) {
+        clearTimeout(pvpFinTurnoFallbackTimer);
+    }
+    pvpFinTurnoFallbackTimer = setTimeout(() => {
+        pvpFinTurnoFallbackTimer = null;
+        if (!pvpPendienteEmitirFinTurno) {
+            return;
+        }
+        completarFinTurnoPvpConRevision(revisionPvpLocal);
+    }, 900);
+}
+
+function clonarJsonSeguro(valor, fallback) {
+    try {
+        return JSON.parse(JSON.stringify(valor));
+    } catch (error) {
+        return fallback;
+    }
+}
+
+function construirSnapshotCanonicoPvp() {
+    if (ROL_PVP === 'A') {
+        return {
+            turno: turnoActual === 'jugador' ? 'A' : 'B',
+            mazoA: clonarJsonSeguro(mazoJugador, []),
+            mazoB: clonarJsonSeguro(mazoOponente, []),
+            cartasEnJuegoA: clonarJsonSeguro(cartasJugadorEnJuego, [null, null, null]),
+            cartasEnJuegoB: clonarJsonSeguro(cartasOponenteEnJuego, [null, null, null]),
+            cementerioA: clonarJsonSeguro(cementerioJugador, []),
+            cementerioB: clonarJsonSeguro(cementerioOponente, []),
+            cartasYaActuaronA: clonarJsonSeguro(cartasQueYaAtacaron, []),
+            cartasYaActuaronB: clonarJsonSeguro(cartasYaActuaronOponentePvp, []),
+            accionesExtraA: Math.max(0, Number(accionesExtraPvpLocal || 0)),
+            accionesExtraB: Math.max(0, Number(accionesExtraOponentePvp || 0)),
+            atacanteSeleccionadoA: atacanteSeleccionado,
+            atacanteSeleccionadoB: atacanteSeleccionadoOponentePvp
+        };
+    }
+    return {
+        turno: turnoActual === 'jugador' ? 'B' : 'A',
+        mazoA: clonarJsonSeguro(mazoOponente, []),
+        mazoB: clonarJsonSeguro(mazoJugador, []),
+        cartasEnJuegoA: clonarJsonSeguro(cartasOponenteEnJuego, [null, null, null]),
+        cartasEnJuegoB: clonarJsonSeguro(cartasJugadorEnJuego, [null, null, null]),
+        cementerioA: clonarJsonSeguro(cementerioOponente, []),
+        cementerioB: clonarJsonSeguro(cementerioJugador, []),
+        cartasYaActuaronA: clonarJsonSeguro(cartasYaActuaronOponentePvp, []),
+        cartasYaActuaronB: clonarJsonSeguro(cartasQueYaAtacaron, []),
+        accionesExtraA: Math.max(0, Number(accionesExtraOponentePvp || 0)),
+        accionesExtraB: Math.max(0, Number(accionesExtraPvpLocal || 0)),
+        atacanteSeleccionadoA: atacanteSeleccionadoOponentePvp,
+        atacanteSeleccionadoB: atacanteSeleccionado
+    };
+}
+
+function aplicarSnapshotCanonicoPvp(snapshot = {}) {
+    aplicandoSnapshotPvp = true;
+    try {
+        if (ROL_PVP === 'A') {
+            mazoJugador = Array.isArray(snapshot?.mazoA) ? clonarJsonSeguro(snapshot.mazoA, []) : mazoJugador;
+            mazoOponente = Array.isArray(snapshot?.mazoB) ? clonarJsonSeguro(snapshot.mazoB, []) : mazoOponente;
+            cartasJugadorEnJuego = Array.isArray(snapshot?.cartasEnJuegoA) ? clonarJsonSeguro(snapshot.cartasEnJuegoA, [null, null, null]) : cartasJugadorEnJuego;
+            cartasOponenteEnJuego = Array.isArray(snapshot?.cartasEnJuegoB) ? clonarJsonSeguro(snapshot.cartasEnJuegoB, [null, null, null]) : cartasOponenteEnJuego;
+            cementerioJugador = Array.isArray(snapshot?.cementerioA) ? clonarJsonSeguro(snapshot.cementerioA, []) : cementerioJugador;
+            cementerioOponente = Array.isArray(snapshot?.cementerioB) ? clonarJsonSeguro(snapshot.cementerioB, []) : cementerioOponente;
+            cartasQueYaAtacaron = Array.isArray(snapshot?.cartasYaActuaronA) ? clonarJsonSeguro(snapshot.cartasYaActuaronA, []) : cartasQueYaAtacaron;
+            cartasYaActuaronOponentePvp = Array.isArray(snapshot?.cartasYaActuaronB)
+                ? clonarJsonSeguro(snapshot.cartasYaActuaronB, [])
+                : [];
+            accionesExtraPvpLocal = Math.max(0, Number(snapshot?.accionesExtraA || 0));
+            accionesExtraOponentePvp = Math.max(0, Number(snapshot?.accionesExtraB || 0));
+            atacanteSeleccionado = Number.isInteger(snapshot?.atacanteSeleccionadoA) ? snapshot.atacanteSeleccionadoA : null;
+            atacanteSeleccionadoOponentePvp = Number.isInteger(snapshot?.atacanteSeleccionadoB) ? snapshot.atacanteSeleccionadoB : null;
+            turnoActual = snapshot?.turno === 'A' ? 'jugador' : 'oponente';
+        } else {
+            mazoJugador = Array.isArray(snapshot?.mazoB) ? clonarJsonSeguro(snapshot.mazoB, []) : mazoJugador;
+            mazoOponente = Array.isArray(snapshot?.mazoA) ? clonarJsonSeguro(snapshot.mazoA, []) : mazoOponente;
+            cartasJugadorEnJuego = Array.isArray(snapshot?.cartasEnJuegoB) ? clonarJsonSeguro(snapshot.cartasEnJuegoB, [null, null, null]) : cartasJugadorEnJuego;
+            cartasOponenteEnJuego = Array.isArray(snapshot?.cartasEnJuegoA) ? clonarJsonSeguro(snapshot.cartasEnJuegoA, [null, null, null]) : cartasOponenteEnJuego;
+            cementerioJugador = Array.isArray(snapshot?.cementerioB) ? clonarJsonSeguro(snapshot.cementerioB, []) : cementerioJugador;
+            cementerioOponente = Array.isArray(snapshot?.cementerioA) ? clonarJsonSeguro(snapshot.cementerioA, []) : cementerioOponente;
+            cartasQueYaAtacaron = Array.isArray(snapshot?.cartasYaActuaronB) ? clonarJsonSeguro(snapshot.cartasYaActuaronB, []) : cartasQueYaAtacaron;
+            cartasYaActuaronOponentePvp = Array.isArray(snapshot?.cartasYaActuaronA)
+                ? clonarJsonSeguro(snapshot.cartasYaActuaronA, [])
+                : [];
+            accionesExtraPvpLocal = Math.max(0, Number(snapshot?.accionesExtraB || 0));
+            accionesExtraOponentePvp = Math.max(0, Number(snapshot?.accionesExtraA || 0));
+            atacanteSeleccionado = Number.isInteger(snapshot?.atacanteSeleccionadoB) ? snapshot.atacanteSeleccionadoB : null;
+            atacanteSeleccionadoOponentePvp = Number.isInteger(snapshot?.atacanteSeleccionadoA) ? snapshot.atacanteSeleccionadoA : null;
+            turnoActual = snapshot?.turno === 'B' ? 'jugador' : 'oponente';
+        }
+        renderizarTablero();
+    } finally {
+        aplicandoSnapshotPvp = false;
+    }
+}
+
+function emitirSnapshotPvp(reason = 'sync') {
+    if (!ES_MODO_PVP || !socketPvp || !PVP_SESSION_ID || aplicandoSnapshotPvp || partidaFinalizada) {
+        return;
+    }
+    socketPvp.emit('multiplayer:pvp:estado', {
+        sessionId: PVP_SESSION_ID,
+        snapshot: construirSnapshotCanonicoPvp(),
+        baseRevision: Number(revisionPvpLocal || 0),
+        reason
+    });
+}
+
+function obtenerEmailOponentePvp() {
+    const directo = String(localStorage.getItem('emailOponente') || '').trim().toLowerCase();
+    if (directo) return directo;
+    const grupo = JSON.parse(localStorage.getItem('grupoActual') || '{}');
+    const companeroEmail = String(grupo?.companero?.email || '').trim().toLowerCase();
+    return companeroEmail || '';
+}
+
+function notificarResultadoPvp(ganadorClaveLocal, motivo = 'fin_partida') {
+    if (!ES_MODO_PVP || !socketPvp || !PVP_SESSION_ID || resultadoPvpEmitido) {
+        return;
+    }
+    const ganadorEmail = ganadorClaveLocal === 'jugador'
+        ? EMAIL_SESION_ACTUAL
+        : obtenerEmailOponentePvp();
+    if (!ganadorEmail) {
+        return;
+    }
+    resultadoPvpEmitido = true;
+    socketPvp.emit('multiplayer:pvp:resultado', {
+        sessionId: PVP_SESSION_ID,
+        ganadorEmail,
+        motivo
+    });
+}
+
+function obtenerNombreVisibleOponente() {
+    if (!ES_MODO_PVP) return 'BOT';
+    const nombre = String(localStorage.getItem('nombreOponente') || '').trim();
+    if (nombre) return nombre;
+    try {
+        const grupo = JSON.parse(localStorage.getItem('grupoActual') || '{}');
+        const companeroNombre = String(grupo?.companero?.nombre || '').trim();
+        if (companeroNombre) return companeroNombre;
+        const companeroEmail = String(grupo?.companero?.email || '').trim();
+        if (companeroEmail) return companeroEmail.split('@')[0] || 'Jugador rival';
+    } catch (_) {
+        // noop
+    }
+    return 'Jugador rival';
+}
+
+function intentarInicializarSocketPvp() {
+    if (!ES_MODO_PVP || !PVP_SESSION_ID || typeof io !== 'function') {
+        return;
+    }
+    if (socketPvp) {
+        return;
+    }
+    socketPvp = io();
+    const usuario = JSON.parse(localStorage.getItem('usuario') || '{}');
+    const emailRaw = String(localStorage.getItem('email') || '').trim();
+    const nicknameRaw = String(usuario?.nickname || '').trim();
+    const nombreVisible = nicknameRaw || (emailRaw ? emailRaw.split('@')[0] : 'Jugador');
+    const avatar = String(usuario?.avatar || '').trim();
+
+    socketPvp.on('connect', () => {
+        socketPvp.emit('registrarUsuario', { email: emailRaw, nickname: nombreVisible, avatar });
+        socketPvp.emit('multiplayer:pvp:join', { sessionId: PVP_SESSION_ID });
+        socketPvp.emit('multiplayer:pvp:estado:solicitar', { sessionId: PVP_SESSION_ID });
+    });
+
+    socketPvp.on('multiplayer:pvp:turno', (payload = {}) => {
+        if (String(payload?.sessionId || '').trim() !== PVP_SESSION_ID) {
+            return;
+        }
+        if (partidaFinalizada) {
+            return;
+        }
+        if (pvpEstadoProcesando) {
+            pvpTurnoSocketPendiente = payload;
+            return;
+        }
+        encolarOProcesarTurnoPvp(payload);
+    });
+
+    socketPvp.on('multiplayer:pvp:seleccionAtacante', (payload = {}) => {
+        if (String(payload?.sessionId || '').trim() !== PVP_SESSION_ID || partidaFinalizada) {
+            return;
+        }
+        const actorEmail = String(payload?.actorEmail || '').trim().toLowerCase();
+        if (!actorEmail || actorEmail === EMAIL_SESION_ACTUAL) {
+            return;
+        }
+        const slot = Number(payload?.slotAtacante);
+        atacanteSeleccionadoOponentePvp = Number.isInteger(slot) ? slot : null;
+        renderizarTablero();
+    });
+
+    socketPvp.on('multiplayer:pvp:accion', async (payload = {}) => {
+        if (String(payload?.sessionId || '').trim() !== PVP_SESSION_ID || partidaFinalizada) {
+            return;
+        }
+        const revision = Number(payload?.revision);
+        if (Number.isInteger(revision) && revision > Number(revisionPvpLocal || 0)) {
+            revisionPvpLocal = revision;
+            const revEl = document.getElementById('pvp-debug-rev');
+            if (revEl) revEl.textContent = String(revisionPvpLocal);
+            despacharWaitersRevisionPvp();
+        }
+        const accion = payload?.accion || {};
+        const actorEmailNorm = String(payload?.actorEmail || '').trim().toLowerCase();
+        pvpUltimaAccionPayload = {
+            actorEmail: actorEmailNorm,
+            accion
+        };
+        if (Number.isInteger(revision)) {
+            pvpAccionesPorRevision.set(revision, {
+                actorEmail: actorEmailNorm,
+                accion
+            });
+            const limite = revision - 10;
+            [...pvpAccionesPorRevision.keys()].forEach(key => {
+                if (key < limite) pvpAccionesPorRevision.delete(key);
+            });
+        }
+        const tipoAccion = String(accion?.tipo || '').trim();
+        if (tipoAccion === 'ataque' || tipoAccion === 'habilidad') {
+            pvpUltimaAccionRecibidaTs = Date.now();
+            if (actorEmailNorm !== EMAIL_SESION_ACTUAL) {
+                atacanteSeleccionadoOponentePvp = null;
+            }
+        }
+        if (tipoAccion === 'habilidad') {
+            pvpRetrasoHabilidadHastaTs = Date.now() + PVP_RETARDO_EFECTO_HABILIDAD_MS;
+            if (pvpAvisoHabilidadTimer) {
+                clearTimeout(pvpAvisoHabilidadTimer);
+                pvpAvisoHabilidadTimer = null;
+            }
+            const actor = actorEmailNorm && actorEmailNorm === EMAIL_SESION_ACTUAL ? 'Tú' : obtenerNombreVisibleOponente();
+            const skill = String(accion?.debugSkillName || 'habilidad').trim();
+            const caster = String(accion?.debugCasterName || actor).trim();
+            const target = String(accion?.debugTargetName || '').trim();
+            pvpAvisoHabilidadTimer = setTimeout(() => {
+                pvpAvisoHabilidadTimer = null;
+                if (partidaFinalizada) return;
+                const textoAviso = construirMensajeUsoHabilidadActiva(caster, skill, target || caster);
+                mostrarAvisoHabilidad(textoAviso, PAUSA_AVISO_HABILIDAD_MS);
+            }, PVP_RETARDO_MENSAJE_HABILIDAD_MS);
+        }
+        ultimoEventoPvp = `accion:${tipoAccion || '-'}`;
+        actualizarLineaDebugPvp(`Acción rival -> ${tipoAccion || '-'}`);
+        describirAccionPvpEnLog(accion, payload?.actorEmail);
+    });
+
+    socketPvp.on('multiplayer:pvp:estado', async (payload = {}) => {
+        if (String(payload?.sessionId || '').trim() !== PVP_SESSION_ID || partidaFinalizada) {
+            return;
+        }
+        const revisionIn = Number(payload?.revision);
+        if (!Number.isInteger(revisionIn)) {
+            return;
+        }
+        if (revisionIn < Number(revisionPvpLocal || 0)) {
+            return;
+        }
+        if (pvpEstadoProcesando) {
+            const revPendiente = Number(pvpEstadoPayloadPendiente?.revision);
+            if (!pvpEstadoPayloadPendiente || !Number.isInteger(revPendiente) || revisionIn >= revPendiente) {
+                pvpEstadoPayloadPendiente = payload;
+            }
+            return;
+        }
+        pvpEstadoProcesando = true;
+        let payloadActual = payload;
+        try {
+            while (payloadActual && !partidaFinalizada) {
+                const revision = Number(payloadActual?.revision);
+                if (!Number.isInteger(revision) || revision < Number(revisionPvpLocal || 0)) {
+                    break;
+                }
+                revisionPvpLocal = revision;
+                const revEl = document.getElementById('pvp-debug-rev');
+                if (revEl) revEl.textContent = String(revisionPvpLocal);
+                despacharWaitersRevisionPvp();
+                ultimoEventoPvp = `estado:rev${revisionPvpLocal}`;
+                actualizarLineaDebugPvp(`Estado oficial rev ${revisionPvpLocal}`);
+                const snapshot = payloadActual?.snapshot;
+                if (!snapshot || typeof snapshot !== 'object') {
+                    break;
+                }
+                const prevJ = clonarJsonSeguro(cartasJugadorEnJuego, [null, null, null]);
+                const prevO = clonarJsonSeguro(cartasOponenteEnJuego, [null, null, null]);
+                const { jugador: proxJ, oponente: proxO } = obtenerLadosDesdeSnapshotPvp(snapshot);
+                const ahora = Date.now();
+                if (pvpRetrasoHabilidadHastaTs > ahora) {
+                    await esperar(Math.max(0, pvpRetrasoHabilidadHastaTs - ahora));
+                }
+                const hayRoboTrasBaja = [0, 1, 2].some(i => (!prevJ[i] && proxJ[i]) || (!prevO[i] && proxO[i]));
+                const accionRevision = pvpAccionesPorRevision.get(revision) || pvpUltimaAccionPayload;
+                if (Number.isInteger(revision)) {
+                    pvpAccionesPorRevision.delete(revision);
+                }
+                const animacionAsociadaAccion =
+                    ES_MODO_PVP
+                    && accionRevision
+                    && pvpUltimaAccionRecibidaTs > 0
+                    && (Date.now() - pvpUltimaAccionRecibidaTs) < 7000;
+                const tipoAccionReciente = String(accionRevision?.accion?.tipo || '').trim();
+                if (animacionAsociadaAccion && tipoAccionReciente === 'ataque') {
+                    await animarImpactoAtaquePvpConSnapshot(
+                        prevJ,
+                        prevO,
+                        proxJ,
+                        proxO,
+                        accionRevision?.accion || {},
+                        accionRevision?.actorEmail || ''
+                    );
+                }
+                if (hayRoboTrasBaja && animacionAsociadaAccion) {
+                    await esperar(PVP_RETARDO_ROBO_TRAS_BAJA_MS);
+                }
+                aplicarSnapshotCanonicoPvp(snapshot);
+                if (hayRoboTrasBaja) {
+                    await animarEntradasMazoPvp(prevJ, prevO, proxJ, proxO);
+                }
+                if (animacionAsociadaAccion && tipoAccionReciente === 'habilidad') {
+                    await animarCambiosHabilidadPvp(
+                        prevJ,
+                        prevO,
+                        proxJ,
+                        proxO,
+                        accionRevision?.accion || {},
+                        accionRevision?.actorEmail || ''
+                    );
+                }
+                if (ES_MODO_PVP && esMiTurnoPvp && turnoActual === 'jugador' && !partidaFinalizada) {
+                    const enemigosActivos = obtenerIndicesCartasDisponibles(cartasOponenteEnJuego).length;
+                    if (enemigosActivos === 0) {
+                        if (verificarFinDePartida()) {
+                            break;
+                        }
+                        if (!pvpPendienteEmitirFinTurno) {
+                            escribirLog('No quedan enemigos activos. Finalizando turno automáticamente...');
+                            finalizarTurnoJugador();
+                            break;
+                        }
+                    }
+                }
+                if (pvpPendienteEmitirFinTurno) {
+                    completarFinTurnoPvpConRevision(revision);
+                }
+                payloadActual = pvpEstadoPayloadPendiente;
+                pvpEstadoPayloadPendiente = null;
+            }
+        } finally {
+            pvpEstadoProcesando = false;
+            if (pvpTurnoSocketPendiente) {
+                const turnoPendiente = pvpTurnoSocketPendiente;
+                pvpTurnoSocketPendiente = null;
+                encolarOProcesarTurnoPvp(turnoPendiente);
+            }
+        }
+    });
+
+    socketPvp.on('multiplayer:pvp:resync-required', (payload = {}) => {
+        if (String(payload?.sessionId || '').trim() !== PVP_SESSION_ID) {
+            return;
+        }
+        if (Number.isInteger(Number(payload?.revision))) {
+            revisionPvpLocal = Number(payload.revision);
+            const revEl = document.getElementById('pvp-debug-rev');
+            if (revEl) revEl.textContent = String(revisionPvpLocal);
+            despacharWaitersRevisionPvp();
+        }
+        ultimoEventoPvp = `resync:${payload?.reason || 'unknown'}`;
+        actualizarLineaDebugPvp(`Resync requerido: ${payload?.reason || 'unknown'}`);
+        socketPvp.emit('multiplayer:pvp:estado:solicitar', { sessionId: PVP_SESSION_ID });
+    });
+
+    socketPvp.on('multiplayer:pvp:resultado', (payload = {}) => {
+        if (String(payload?.sessionId || '').trim() !== PVP_SESSION_ID || partidaFinalizada) {
+            return;
+        }
+        resultadoPvpEmitido = true;
+        ultimoEventoPvp = `resultado:${payload?.motivo || 'fin_partida'}`;
+        actualizarLineaDebugPvp(`Resultado PvP: ${payload?.motivo || 'fin_partida'}`);
+        const ganadorEmail = String(payload?.ganadorEmail || '').trim().toLowerCase();
+        const ganoYo = ganadorEmail && ganadorEmail === EMAIL_SESION_ACTUAL;
+        partidaFinalizada = true;
+        actualizarTextoTurno('Partida finalizada');
+        mostrarAvisoTurno(ganoYo ? 'Has ganado' : 'Has perdido');
+        mostrarVentanaFinPartida(ganoYo ? 'jugador' : 'oponente');
+    });
+}
 
 function obtenerNombreVisibleJugador() {
     const usuario = JSON.parse(localStorage.getItem('usuario') || '{}');
@@ -42,12 +912,44 @@ function obtenerAvatarVisibleJugador() {
     return avatar || 'https://i.ibb.co/QJvLStm/zzz-Carta-Back.png';
 }
 
+function obtenerAvatarVisibleOponente() {
+    if (!ES_MODO_PVP) return 'https://i.ibb.co/QJvLStm/zzz-Carta-Back.png';
+    const avatar = String(localStorage.getItem('avatarOponente') || '').trim();
+    return avatar || 'https://i.ibb.co/QJvLStm/zzz-Carta-Back.png';
+}
+
+function leerIndicesInicialesPvp(claveStorage) {
+    if (!ES_MODO_PVP) return [];
+    try {
+        const raw = JSON.parse(localStorage.getItem(claveStorage) || '[]');
+        return Array.isArray(raw) ? raw.filter(v => Number.isInteger(v) && v >= 0) : [];
+    } catch (error) {
+        return [];
+    }
+}
+
+function extraerCartasInicialesConIndices(mazo, indices, cantidadFallback = 3) {
+    const base = Array.isArray(mazo) ? mazo : [];
+    const unicos = [...new Set((Array.isArray(indices) ? indices : []).filter(i => Number.isInteger(i) && i >= 0 && i < base.length))];
+    if (unicos.length === 0) {
+        return seleccionarCartasAleatorias(base, cantidadFallback).map(crearCartaCombateDesdeMazo);
+    }
+    const ordenAsc = [...unicos].sort((a, b) => a - b);
+    const seleccionadas = ordenAsc.map(idx => base[idx]).filter(Boolean);
+    const ordenDesc = [...ordenAsc].sort((a, b) => b - a);
+    ordenDesc.forEach(idx => {
+        base.splice(idx, 1);
+    });
+    return seleccionadas.map(crearCartaCombateDesdeMazo);
+}
+
 function configurarNombresTablero() {
     const nombreJugadorEl = document.getElementById('nombre-jugador');
     const nombreOponenteEl = document.getElementById('nombre-oponente');
     const nombreJugador = obtenerNombreVisibleJugador();
-    const nombreOponente = 'BOT';
+    const nombreOponente = obtenerNombreVisibleOponente();
     const avatarJugadorEl = document.getElementById('panel-jugador-avatar');
+    const avatarOponenteEl = document.getElementById('panel-oponente-avatar');
 
     if (nombreJugadorEl) {
         nombreJugadorEl.textContent = nombreJugador;
@@ -57,6 +959,9 @@ function configurarNombresTablero() {
     }
     if (avatarJugadorEl) {
         avatarJugadorEl.src = obtenerAvatarVisibleJugador();
+    }
+    if (avatarOponenteEl) {
+        avatarOponenteEl.src = obtenerAvatarVisibleOponente();
     }
 }
 
@@ -665,30 +1570,120 @@ function escribirLog(mensaje, clase = '') {
 }
 
 function asegurarPanelDebug() {
-    if (!DEBUG_COMBATE_ACTIVO) {
+    if (!DEBUG_COMBATE_ACTIVO && !PVP_DEBUG_UI) {
         return;
     }
-    if (document.getElementById('debug-combate-textarea')) {
+    if (document.getElementById('debug-combate-textarea') || document.getElementById('pvp-debug-panel')) {
         return;
     }
 
-    const logsContainer = document.querySelector('.logs-container');
+    const logsContainer = document.querySelector('.logs-container')
+        || document.querySelector('.tablero-container');
     if (!logsContainer) {
         return;
     }
 
-    const titulo = document.createElement('h4');
-    titulo.className = 'debug-combate-titulo';
-    titulo.textContent = 'Debug Combate';
-
-    const textarea = document.createElement('textarea');
-    textarea.id = 'debug-combate-textarea';
-    textarea.className = 'debug-combate-textarea';
-    textarea.readOnly = true;
-    textarea.spellcheck = false;
-
-    logsContainer.appendChild(titulo);
-    logsContainer.appendChild(textarea);
+    if (DEBUG_COMBATE_ACTIVO) {
+        const titulo = document.createElement('h4');
+        titulo.className = 'debug-combate-titulo';
+        titulo.textContent = 'Debug Combate';
+        const textarea = document.createElement('textarea');
+        textarea.id = 'debug-combate-textarea';
+        textarea.className = 'debug-combate-textarea';
+        textarea.readOnly = true;
+        textarea.spellcheck = false;
+        logsContainer.appendChild(titulo);
+        logsContainer.appendChild(textarea);
+    }
+    if (PVP_DEBUG_UI && ES_MODO_PVP) {
+        const panel = document.createElement('div');
+        panel.id = 'pvp-debug-panel';
+        panel.style.marginTop = '10px';
+        panel.style.padding = '8px';
+        panel.style.border = '1px solid rgba(255, 213, 95, 0.45)';
+        panel.style.borderRadius = '8px';
+        panel.style.background = 'rgba(5, 14, 28, 0.92)';
+        const title = document.createElement('div');
+        title.textContent = 'PvP Debug';
+        title.style.fontWeight = '700';
+        title.style.marginBottom = '6px';
+        const meta = document.createElement('div');
+        meta.innerHTML = `session: <b>${PVP_SESSION_ID || '-'}</b> | rev: <span id="pvp-debug-rev">${revisionPvpLocal}</span>`;
+        meta.style.fontSize = '0.78rem';
+        meta.style.marginBottom = '6px';
+        const line = document.createElement('div');
+        line.id = 'pvp-debug-line';
+        line.style.fontSize = '0.75rem';
+        line.style.color = '#cce6ff';
+        line.textContent = 'Sin eventos todavía.';
+        const logTa = document.createElement('textarea');
+        logTa.id = 'pvp-debug-log';
+        logTa.readOnly = true;
+        logTa.spellcheck = false;
+        logTa.rows = 6;
+        logTa.style.width = '100%';
+        logTa.style.marginTop = '6px';
+        logTa.style.fontSize = '0.7rem';
+        logTa.style.fontFamily = 'ui-monospace, monospace';
+        logTa.style.resize = 'vertical';
+        logTa.style.background = 'rgba(0, 0, 0, 0.35)';
+        logTa.style.color = '#e8f4ff';
+        logTa.style.border = '1px solid rgba(255, 213, 95, 0.25)';
+        logTa.style.borderRadius = '6px';
+        const actions = document.createElement('div');
+        actions.style.display = 'flex';
+        actions.style.gap = '8px';
+        actions.style.marginTop = '8px';
+        const btnLocal = document.createElement('button');
+        btnLocal.type = 'button';
+        btnLocal.textContent = 'Export local';
+        btnLocal.className = 'btn btn-secondary';
+        btnLocal.style.fontSize = '0.72rem';
+        btnLocal.addEventListener('click', () => {
+            const payload = {
+                sessionId: PVP_SESSION_ID,
+                revision: revisionPvpLocal,
+                ultimoEvento: ultimoEventoPvp,
+                snapshotLocal: construirSnapshotCanonicoPvp()
+            };
+            const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `pvp-local-${PVP_SESSION_ID || 'sin-session'}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        });
+        const btnServer = document.createElement('button');
+        btnServer.type = 'button';
+        btnServer.textContent = 'Export server';
+        btnServer.className = 'btn btn-secondary';
+        btnServer.style.fontSize = '0.72rem';
+        btnServer.addEventListener('click', async () => {
+            if (!PVP_SESSION_ID) return;
+            try {
+                const res = await fetch(`/api/pvp-debug/${encodeURIComponent(PVP_SESSION_ID)}`);
+                const data = await res.json();
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `pvp-server-${PVP_SESSION_ID}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+            } catch (error) {
+                actualizarLineaDebugPvp('Error exportando trazas del servidor.');
+            }
+        });
+        actions.appendChild(btnLocal);
+        actions.appendChild(btnServer);
+        panel.appendChild(title);
+        panel.appendChild(meta);
+        panel.appendChild(line);
+        panel.appendChild(logTa);
+        panel.appendChild(actions);
+        logsContainer.appendChild(panel);
+    }
 }
 
 function resumirCartaDebug(carta, cartasEnemigasParaSaludEfectiva = null) {
@@ -1247,7 +2242,7 @@ function seleccionarCartasAleatorias(mazo, cantidad) {
 
 function actualizarTextoTurno(texto) {
     const nombreJugador = obtenerNombreVisibleJugador();
-    const nombreOponente = 'BOT';
+    const nombreOponente = obtenerNombreVisibleOponente();
     const turnoJugadorEl = document.getElementById('turno-jugador-label');
     const turnoOponenteEl = document.getElementById('turno-oponente-label');
     if (turnoJugadorEl) {
@@ -1462,7 +2457,7 @@ function actualizarContadoresMazo() {
     }
 
     if (contadorOponente) {
-        contadorOponente.textContent = `Cartas en mazo BOT: ${mazoOponente.length}`;
+        contadorOponente.textContent = `Cartas en mazo ${obtenerNombreVisibleOponente()}: ${mazoOponente.length}`;
     }
 }
 
@@ -1647,10 +2642,15 @@ async function usarHabilidadActiva(carta, propietario, slotCarta) {
     if (meta.clase === 'heal') {
         if (valor <= 0) return false;
         const { cartasConBonus: aliadosConBonus } = aplicarBonusAfiliaciones(aliados, enemigos);
-        const disponibles = obtenerIndicesCartasDisponibles(aliados).map(index => ({
-            index,
-            carta: aliadosConBonus[index]
-        }));
+        const disponibles = obtenerIndicesCartasDisponibles(aliados)
+            .filter(index => {
+                const cartaAliada = aliados[index];
+                return cartaAliada && obtenerSaludActualCarta(cartaAliada) < obtenerSaludMaxCarta(cartaAliada);
+            })
+            .map(index => ({
+                index,
+                carta: aliadosConBonus[index]
+            }));
         if (disponibles.length === 0) return false;
         const idx = propietario === 'jugador'
             ? await abrirModalSeleccionHabilidad({
@@ -1752,6 +2752,7 @@ async function usarHabilidadActiva(carta, propietario, slotCarta) {
         escribirLog(`${carta.Nombre} desata ${meta.nombre} e impacta a todo el equipo enemigo.`);
     } else if (meta.clase === 'heal_all') {
         if (valor <= 0) return false;
+        let huboCuracion = false;
         await anunciarUsoHabilidadActiva(carta, meta, 'todo su equipo');
         aliados.forEach(objetivo => {
             if (!objetivo) return;
@@ -1761,9 +2762,14 @@ async function usarHabilidadActiva(carta, propietario, slotCarta) {
             objetivo.Salud = Math.min(saludMax, saludAntes + Math.floor(valor));
             const curado = Math.max(0, objetivo.Salud - saludAntes);
             if (curado > 0 && idxObjetivo >= 0) {
+                huboCuracion = true;
                 mostrarValorFlotante(propietario, idxObjetivo, curado, 'cura');
             }
         });
+        if (!huboCuracion) {
+            escribirLog(`${carta.Nombre} no puede usar ${meta.nombre}: todo su equipo está con salud completa.`);
+            return false;
+        }
         escribirLog(`${carta.Nombre} usa ${meta.nombre}: cura grupal +${Math.floor(valor)}.`);
     } else if (meta.clase === 'tank') {
         if (carta.tankActiva) return false;
@@ -1920,6 +2926,9 @@ async function manejarUsoHabilidadJugador(event, slotIndex) {
     if (partidaFinalizada || turnoActual !== 'jugador') {
         return;
     }
+    if (ES_MODO_PVP && !esMiTurnoPvp) {
+        return;
+    }
     if (cartasQueYaAtacaron.includes(slotIndex)) {
         escribirLog(`${cartasJugadorEnJuego[slotIndex]?.Nombre || 'Esta carta'} ya actuó en este turno.`);
         return;
@@ -1940,6 +2949,180 @@ async function manejarUsoHabilidadJugador(event, slotIndex) {
     const cooldownActual = Math.max(0, Number(carta.habilidadCooldownRestante || 0));
     if (cooldownActual > 0) {
         escribirLog(`${carta.Nombre} tiene la habilidad en cooldown (${cooldownActual} turno(s)).`);
+        return;
+    }
+
+    if (ES_MODO_PVP && socketPvp && PVP_SESSION_ID) {
+        let slotObjetivoPvp = null;
+        if (meta.clase === 'stun' || meta.clase === 'dot') {
+            const tankActivo = obtenerIndiceTankActivo(cartasOponenteEnJuego);
+            const indicesElegibles = tankActivo !== null
+                ? [tankActivo]
+                : obtenerIndicesCartasDisponibles(cartasOponenteEnJuego);
+            const { cartasConBonus: enemigosConBonus } = aplicarBonusAfiliaciones(cartasOponenteEnJuego, cartasJugadorEnJuego);
+            const disponibles = indicesElegibles
+                .filter(index => cartasOponenteEnJuego[index])
+                .map(index => ({ index, carta: enemigosConBonus[index] }));
+            if (disponibles.length === 0) {
+                escribirLog('No hay objetivos enemigos válidos para esa habilidad.');
+                return;
+            }
+            slotObjetivoPvp = await abrirModalSeleccionHabilidad({
+                titulo: `Objetivo para ${meta.nombre}`,
+                cartas: disponibles,
+                textoConfirmar: 'Confirmar',
+                textoCancelar: 'Cancelar',
+                tipoCartaTablero: 'oponente',
+                enemigosParaSalud: cartasJugadorEnJuego
+            });
+            if (!Number.isInteger(slotObjetivoPvp)) {
+                return;
+            }
+        } else if (meta.clase === 'heal' || meta.clase === 'shield') {
+            const { cartasConBonus: aliadosConBonus } = aplicarBonusAfiliaciones(cartasJugadorEnJuego, cartasOponenteEnJuego);
+            const indicesAliados = obtenerIndicesCartasDisponibles(cartasJugadorEnJuego).filter(index => {
+                if (meta.clase !== 'heal') return true;
+                const cartaAliada = cartasJugadorEnJuego[index];
+                return cartaAliada && obtenerSaludActualCarta(cartaAliada) < obtenerSaludMaxCarta(cartaAliada);
+            });
+            const disponibles = indicesAliados.map(index => ({
+                index,
+                carta: aliadosConBonus[index]
+            }));
+            if (disponibles.length === 0) {
+                escribirLog(meta.clase === 'heal'
+                    ? 'No hay aliados heridos para curar.'
+                    : 'No hay aliados válidos para esa habilidad.');
+                return;
+            }
+            slotObjetivoPvp = await abrirModalSeleccionHabilidad({
+                titulo: `Objetivo para ${meta.nombre}`,
+                cartas: disponibles,
+                textoConfirmar: 'Confirmar',
+                textoCancelar: 'Cancelar',
+                tipoCartaTablero: 'jugador',
+                enemigosParaSalud: cartasOponenteEnJuego
+            });
+            if (!Number.isInteger(slotObjetivoPvp)) {
+                return;
+            }
+        } else if (meta.clase === 'extra_attack') {
+            const tankActivo = obtenerIndiceTankActivo(cartasOponenteEnJuego);
+            const indicesElegibles = tankActivo !== null
+                ? [tankActivo]
+                : obtenerIndicesCartasDisponibles(cartasOponenteEnJuego);
+            const { cartasConBonus: enemigosConBonusExtra } = aplicarBonusAfiliaciones(cartasOponenteEnJuego, cartasJugadorEnJuego);
+            const disponibles = indicesElegibles
+                .filter(index => cartasOponenteEnJuego[index])
+                .map(index => ({ index, carta: enemigosConBonusExtra[index] }));
+            if (disponibles.length === 0) {
+                escribirLog('No hay objetivos enemigos válidos para el ataque extra.');
+                return;
+            }
+            const slotObjetivoAtaque = await abrirModalSeleccionHabilidad({
+                titulo: `Objetivo para ataque adicional de ${carta.Nombre}`,
+                cartas: disponibles,
+                textoConfirmar: 'Atacar',
+                textoCancelar: 'Cancelar',
+                tipoCartaTablero: 'oponente',
+                enemigosParaSalud: cartasJugadorEnJuego
+            });
+            if (!Number.isInteger(slotObjetivoAtaque)) {
+                return;
+            }
+            const nombreObjetivoExtra = String(cartasOponenteEnJuego[slotObjetivoAtaque]?.Nombre || 'objetivo').trim();
+            atacanteSeleccionado = null;
+            const revisionAntesHabilidad = Number(revisionPvpLocal || 0);
+            trazaAccionPvp('emit_habilidad', `extra_attack slot=${slotIndex}`);
+            socketPvp.emit('multiplayer:pvp:accion', {
+                sessionId: PVP_SESSION_ID,
+                expectedRevision: revisionAntesHabilidad,
+                accion: {
+                    tipo: 'habilidad',
+                    slotAtacante: slotIndex,
+                    slotObjetivo: null,
+                    debugSkillName: meta.nombre,
+                    debugSkillClass: meta.clase,
+                    debugCasterName: carta.Nombre,
+                    debugTargetName: nombreObjetivoExtra
+                }
+            });
+            escribirLog(`${carta.Nombre} activa ${meta.nombre}. Esperando confirmación del servidor...`);
+            try {
+                await esperarRevisionPvpMayorQue(revisionAntesHabilidad);
+                trazaAccionPvp('habilidad_confirmada', `extra_attack slot=${slotIndex}`);
+            } catch (error) {
+                trazaAccionPvp('habilidad_timeout', `extra_attack slot=${slotIndex}`);
+                escribirLog('No se confirmó la habilidad a tiempo. Reintenta o espera a sincronizar.');
+                renderizarTablero();
+                return;
+            }
+            trazaAccionPvp('emit_ataque_extra', `slot=${slotIndex}->${slotObjetivoAtaque}`);
+            socketPvp.emit('multiplayer:pvp:accion', {
+                sessionId: PVP_SESSION_ID,
+                expectedRevision: Number(revisionPvpLocal || 0),
+                accion: {
+                    tipo: 'ataque',
+                    slotAtacante: slotIndex,
+                    slotObjetivo: slotObjetivoAtaque,
+                    debugCasterName: carta.Nombre,
+                    debugTargetName: nombreObjetivoExtra
+                }
+            });
+            escribirLog(`Ataque extra enviado contra el objetivo elegido.`);
+            renderizarTablero();
+            if (!quedanAtaquesJugadorDisponibles()) {
+                finalizarTurnoJugador();
+            }
+            return;
+        } else if (meta.clase === 'revive') {
+            if (cementerioJugador.length === 0) {
+                escribirLog('No hay cartas en tu cementerio para revivir.');
+                return;
+            }
+            const opciones = cementerioJugador.map((cartaCementerio, index) => ({ index, carta: cartaCementerio }));
+            const indiceCementerio = await abrirModalSeleccionHabilidad({
+                titulo: `Revivir con ${carta.Nombre}`,
+                cartas: opciones,
+                textoConfirmar: 'Revivir carta',
+                textoCancelar: 'Cancelar',
+                tipoCartaTablero: 'jugador',
+                enemigosParaSalud: []
+            });
+            if (!Number.isInteger(indiceCementerio)) {
+                return;
+            }
+            slotObjetivoPvp = indiceCementerio;
+        } else if (meta.clase === 'heal_all') {
+            const hayAliadoHerido = obtenerSlotsAliados('jugador').some(cartaAliada => (
+                cartaAliada && obtenerSaludActualCarta(cartaAliada) < obtenerSaludMaxCarta(cartaAliada)
+            ));
+            if (!hayAliadoHerido) {
+                escribirLog(`${carta.Nombre} no puede usar ${meta.nombre}: todo tu equipo está con salud completa.`);
+                return;
+            }
+        }
+        const objetivoTexto = meta.clase === 'revive'
+            ? 'una carta del cementerio'
+            : (meta.clase === 'aoe' ? 'todo el equipo rival' : (meta.clase === 'heal_all' ? 'todo tu equipo' : null));
+        atacanteSeleccionado = null;
+        trazaAccionPvp('emit_habilidad', `${meta.clase} slot=${slotIndex}`);
+        socketPvp.emit('multiplayer:pvp:accion', {
+            sessionId: PVP_SESSION_ID,
+            expectedRevision: Number(revisionPvpLocal || 0),
+            accion: {
+                tipo: 'habilidad',
+                slotAtacante: slotIndex,
+                slotObjetivo: (meta.clase === 'revive' ? null : (Number.isInteger(slotObjetivoPvp) ? slotObjetivoPvp : null)),
+                indiceCementerio: (meta.clase === 'revive' && Number.isInteger(slotObjetivoPvp)) ? slotObjetivoPvp : null,
+                debugSkillName: meta.nombre,
+                debugSkillClass: meta.clase,
+                debugCasterName: carta.Nombre,
+                debugTargetName: objetivoTexto || null
+            }
+        });
+        escribirLog(`${carta.Nombre} intenta usar ${meta.nombre}. Esperando confirmación del servidor...`);
+        renderizarTablero();
         return;
     }
 
@@ -2001,7 +3184,9 @@ function crearCartaElemento(carta, tipo, slotIndex, opciones = {}) {
             cartaDiv.addEventListener('click', () => seleccionarCartaAtacante(slotIndex));
         }
 
-        if (tipo === 'jugador' && (cartasQueYaAtacaron.includes(slotIndex) || cartaEstaAturdida(carta))) {
+        const cartaAgotadaPorTurno = cartasQueYaAtacaron.includes(slotIndex)
+            && (turnoActual === 'jugador' || (ES_MODO_PVP && pvpMantenerOpacidadFinTurno));
+        if (tipo === 'jugador' && (cartaAgotadaPorTurno || cartaEstaAturdida(carta))) {
             cartaDiv.classList.add('carta-agotada');
         }
 
@@ -2017,6 +3202,9 @@ function crearCartaElemento(carta, tipo, slotIndex, opciones = {}) {
 
         if (tipo === 'jugador' && atacanteSeleccionado === slotIndex) {
             cartaDiv.classList.add('carta-seleccionada');
+        }
+        if (tipo === 'oponente' && Number.isInteger(atacanteSeleccionadoOponentePvp) && atacanteSeleccionadoOponentePvp === slotIndex) {
+            cartaDiv.classList.add('carta-atacando');
         }
 
         if (tipo === 'jugador' && cartaJugadorDestacada === slotIndex) {
@@ -2302,10 +3490,11 @@ function limpiarDestacados() {
 async function rellenarSlotsVacios(mazo, cartasEnJuego, propietario) {
     for (let i = 0; i < cartasEnJuego.length; i++) {
         if (!cartasEnJuego[i] && mazo.length > 0) {
-            cartasEnJuego[i] = crearCartaCombateDesdeMazo(seleccionarCartasAleatorias(mazo, 1)[0]);
+            const cartaBase = ES_MODO_PVP ? mazo.shift() : seleccionarCartasAleatorias(mazo, 1)[0];
+            cartasEnJuego[i] = crearCartaCombateDesdeMazo(cartaBase);
             aplicarHabilidadAutoSiCorresponde(cartasEnJuego[i], propietario);
             escribirLog(
-                `${propietario === 'jugador' ? 'Robas' : 'El BOT roba'} ${cartasEnJuego[i].Nombre} al slot ${i + 1}.`
+                `${propietario === 'jugador' ? 'Robas' : `${obtenerNombreVisibleOponente()} roba`} ${cartasEnJuego[i].Nombre} al slot ${i + 1}.`
             );
             localStorage.setItem('mazoJugador', JSON.stringify({ Cartas: mazoJugador }));
             localStorage.setItem('mazoOponente', JSON.stringify({ Cartas: mazoOponente }));
@@ -2334,6 +3523,50 @@ function determinarPrimerTurno(cartasJugador, cartasOponente) {
 }
 
 async function cargarCartasIniciales() {
+    if (ES_MODO_PVP) {
+        pvpDespliegueTableroListo = false;
+        pvpTurnoPendienteDesdeSocket = null;
+        pvpUltimoTurnEmailSocket = '';
+        pvpUltimoTurnEmailSocketTs = 0;
+        cartasYaActuaronOponentePvp = [];
+        atacanteSeleccionadoOponentePvp = null;
+        accionesExtraPvpLocal = 0;
+        accionesExtraOponentePvp = 0;
+        pvpPendienteEmitirFinTurno = false;
+        pvpTurnoJugadorYaPreparado = false;
+        pvpRetrasoHabilidadHastaTs = 0;
+        pvpUltimaAccionPayload = null;
+        pvpAccionesPorRevision.clear();
+        pvpMantenerOpacidadFinTurno = false;
+        pvpEstadoProcesando = false;
+        pvpTurnoSocketPendiente = null;
+        pvpEstadoPayloadPendiente = null;
+        if (pvpAvisoHabilidadTimer) {
+            clearTimeout(pvpAvisoHabilidadTimer);
+            pvpAvisoHabilidadTimer = null;
+        }
+        if (pvpTurnoAplicacionTimer) {
+            clearTimeout(pvpTurnoAplicacionTimer);
+            pvpTurnoAplicacionTimer = null;
+        }
+        while (pvpRevisionWaiters.length) {
+            const w = pvpRevisionWaiters.pop();
+            try {
+                w.cancel?.();
+                w.reject?.(new Error('pvp_reset'));
+            } catch (_) {
+                /* noop */
+            }
+        }
+        if (pvpFinTurnoFallbackTimer) {
+            clearTimeout(pvpFinTurnoFallbackTimer);
+            pvpFinTurnoFallbackTimer = null;
+        }
+        if (pvpFinTurnoDelayTimer) {
+            clearTimeout(pvpFinTurnoDelayTimer);
+            pvpFinTurnoDelayTimer = null;
+        }
+    }
     desafioActivo = obtenerDesafioActivo();
     cementerioJugador = [];
     cementerioOponente = [];
@@ -2371,10 +3604,16 @@ async function cargarCartasIniciales() {
     cartasOponenteEnJuego = [null, null, null];
     
     // Preparar cartas del mazo (sin ponerlas aún)
-    const inicialesJugador = seleccionarCartasAleatorias(mazoJugador, 3).map(crearCartaCombateDesdeMazo);
+    const indicesInicialesJugadorPvp = leerIndicesInicialesPvp('partidaPvpInicialesJugadorIdx');
+    const indicesInicialesOponentePvp = leerIndicesInicialesPvp('partidaPvpInicialesOponenteIdx');
+    const inicialesJugador = ES_MODO_PVP
+        ? extraerCartasInicialesConIndices(mazoJugador, indicesInicialesJugadorPvp, 3)
+        : seleccionarCartasAleatorias(mazoJugador, 3).map(crearCartaCombateDesdeMazo);
     const inicialesOponente = estadoDesafio.activo
         ? (estadoDesafio.gruposPendientes.shift() || []).map(crearCartaCombateDesdeMazo)
-        : seleccionarCartasAleatorias(mazoOponente, 3).map(crearCartaCombateDesdeMazo);
+        : (ES_MODO_PVP
+            ? extraerCartasInicialesConIndices(mazoOponente, indicesInicialesOponentePvp, 3)
+            : seleccionarCartasAleatorias(mazoOponente, 3).map(crearCartaCombateDesdeMazo));
 
     renderizarTablero(); 
     escribirLog("Iniciando partida... Desplegando unidades.");
@@ -2404,8 +3643,43 @@ async function cargarCartasIniciales() {
 
     // 3. Determinar turno tras el despliegue
     await esperar(400);
-    const primerTurno = determinarPrimerTurno(cartasJugadorEnJuego, cartasOponenteEnJuego);
-    escribirLog(`El primer turno es para: ${primerTurno === 'jugador' ? 'Jugador' : 'BOT'}`);
+    const primerTurnoPersistido = String(localStorage.getItem('partidaPvpPrimerTurno') || '').trim().toLowerCase();
+    const primerTurno = ES_MODO_PVP && (primerTurnoPersistido === 'jugador' || primerTurnoPersistido === 'oponente')
+        ? primerTurnoPersistido
+        : determinarPrimerTurno(cartasJugadorEnJuego, cartasOponenteEnJuego);
+    if (ES_MODO_PVP) {
+        esMiTurnoPvp = primerTurno === 'jugador';
+        turnoActual = primerTurno === 'jugador' ? 'jugador' : 'oponente';
+    }
+    escribirLog(`El primer turno es para: ${primerTurno === 'jugador' ? 'Jugador' : obtenerNombreVisibleOponente()}`);
+
+    if (ES_MODO_PVP) {
+        if (ROL_PVP === 'A' && Number(revisionPvpLocal || 0) === 0) {
+            emitirSnapshotPvp('inicio_partida');
+        }
+        pvpDespliegueTableroListo = true;
+        const pendiente = pvpTurnoPendienteDesdeSocket;
+        pvpTurnoPendienteDesdeSocket = null;
+        const marcarTurnoSocketProcesado = (turnEmailRaw) => {
+            const te = String(turnEmailRaw || '').trim().toLowerCase();
+            if (!te) {
+                return;
+            }
+            pvpUltimoTurnEmailSocket = te;
+            pvpUltimoTurnEmailSocketTs = Date.now();
+        };
+        if (pendiente && String(pendiente.turnEmail || '').trim()) {
+            marcarTurnoSocketProcesado(pendiente.turnEmail);
+            procesarTurnoPvpSocket(pendiente);
+        } else if (primerTurno === 'jugador') {
+            marcarTurnoSocketProcesado(EMAIL_SESION_ACTUAL);
+            iniciarTurnoJugador();
+        } else {
+            marcarTurnoSocketProcesado(obtenerEmailOponentePvp());
+            iniciarTurnoOponente();
+        }
+        return;
+    }
 
     if (primerTurno === 'jugador') {
         iniciarTurnoJugador();
@@ -2430,17 +3704,28 @@ async function mostrarVentanaFinPartida(ganador) {
     const botonVolverMenu = document.getElementById('boton-volver-menu');
 
     const esEventoActivo = Boolean(estadoDesafio.activo && desafioActivo?.tipo === 'evento');
+    const esPvp = ES_MODO_PVP;
 
     tituloFinPartida.textContent = ganador === 'jugador' ? 'Has ganado' : 'Has perdido';
     mensajeFinPartida.textContent = ganador === 'jugador'
-        ? 'Has derrotado al BOT.'
-        : 'El BOT ha ganado la partida.';
+        ? `Has derrotado a ${obtenerNombreVisibleOponente()}.`
+        : `${obtenerNombreVisibleOponente()} ha ganado la partida.`;
 
     recompensasContainer.innerHTML = '';
     ventanaEmergente.style.display = 'flex';
     botonReiniciar.onclick = reiniciarPartida;
     botonVolverMenu.onclick = volverAlMenu;
-    botonVolverMenu.textContent = esEventoActivo ? 'Terminar Evento' : (estadoDesafio.activo ? 'Terminar Desafío' : 'Volver al menú');
+    botonVolverMenu.textContent = esPvp
+        ? 'Volver al multijugador'
+        : (esEventoActivo ? 'Terminar Evento' : (estadoDesafio.activo ? 'Terminar Desafío' : 'Volver al menú'));
+
+    if (esPvp) {
+        const notaPvp = document.createElement('p');
+        notaPvp.classList.add('texto-recompensa-estado');
+        notaPvp.textContent = 'Resultado PvP sincronizado. Esta partida no otorga recompensas PvE.';
+        recompensasContainer.appendChild(notaPvp);
+        return;
+    }
 
     if (ganador !== 'jugador') {
         return;
@@ -2545,6 +3830,7 @@ function verificarFinDePartida() {
         actualizarTextoTurno('Partida finalizada');
         mostrarAvisoTurno('Has perdido');
         escribirLog('No te quedan cartas en mesa ni en el mazo. Has perdido.');
+        notificarResultadoPvp('oponente', 'sin_cartas');
         mostrarVentanaFinPartida('oponente');
         return true;
     }
@@ -2556,7 +3842,8 @@ function verificarFinDePartida() {
         partidaFinalizada = true;
         actualizarTextoTurno('Partida finalizada');
         mostrarAvisoTurno('Has ganado');
-        escribirLog('El BOT se ha quedado sin cartas en mesa y en el mazo. Has ganado.');
+        escribirLog(`${obtenerNombreVisibleOponente()} se ha quedado sin cartas en mesa y en el mazo. Has ganado.`);
+        notificarResultadoPvp('jugador', 'sin_cartas');
         mostrarVentanaFinPartida('jugador');
         return true;
     }
@@ -2570,13 +3857,30 @@ function finalizarTurnoJugador() {
     }
 
     atacanteSeleccionado = null;
-    cartasQueYaAtacaron = [];
+    if (ES_MODO_PVP) {
+        emitirSeleccionAtacantePvp(null);
+    }
+    if (!ES_MODO_PVP) {
+        cartasQueYaAtacaron = [];
+    }
     consumirStunFinTurno('jugador');
     limpiarDestacados();
     renderizarTablero();
     escribirLog('Tu turno ha terminado.');
 
     if (verificarFinDePartida()) {
+        return;
+    }
+
+    if (ES_MODO_PVP) {
+        esMiTurnoPvp = false;
+        pvpTurnoJugadorYaPreparado = false;
+        pvpMantenerOpacidadFinTurno = true;
+        turnoActual = 'oponente';
+        actualizarTextoTurno('Sincronizando turno...');
+        escribirLog('Esperando confirmación de fin de turno...');
+        renderizarTablero();
+        programarFinTurnoPvpCuandoLlegueEstadoOficial();
         return;
     }
 
@@ -2593,7 +3897,7 @@ function finalizarTurnoOponente() {
     consumirStunFinTurno('oponente');
     limpiarDestacados();
     renderizarTablero();
-    escribirLog('El turno del BOT ha terminado.');
+    escribirLog(`El turno de ${obtenerNombreVisibleOponente()} ha terminado.`);
 
     if (verificarFinDePartida()) {
         return;
@@ -2606,6 +3910,9 @@ function finalizarTurnoOponente() {
 
 async function seleccionarCartaAtacante(slotIndex) {
     if (partidaFinalizada || turnoActual !== 'jugador') {
+        return;
+    }
+    if (ES_MODO_PVP && !esMiTurnoPvp) {
         return;
     }
 
@@ -2630,6 +3937,9 @@ async function seleccionarCartaAtacante(slotIndex) {
     }
 
     atacanteSeleccionado = slotIndex;
+    if (ES_MODO_PVP) {
+        emitirSeleccionAtacantePvp(slotIndex);
+    }
     escribirLog(`Atacante seleccionado: ${cartasJugadorEnJuego[slotIndex].Nombre}. Elige un objetivo.`);
     renderizarTablero();
 }
@@ -2728,6 +4038,16 @@ async function resolverAtaque(cartasAtacante, slotAtacante, cartasObjetivo, slot
             }
         }
     }
+
+    const mazoObjetivo = cartasObjetivo === cartasJugadorEnJuego ? mazoJugador : mazoOponente;
+    if (!ES_MODO_PVP && obtenerIndicesCartasDisponibles(cartasObjetivo).length === 0 && mazoObjetivo.length > 0) {
+        await rellenarSlotsVacios(
+            mazoObjetivo,
+            cartasObjetivo,
+            cartasObjetivo === cartasJugadorEnJuego ? 'jugador' : 'oponente'
+        );
+        renderizarTablero();
+    }
 }
 
 function quedanAtaquesJugadorDisponibles() {
@@ -2742,6 +4062,9 @@ function quedanAtaquesJugadorDisponibles() {
 
 function seleccionarCartaObjetivo(slotIndex) {
     if (partidaFinalizada || turnoActual !== 'jugador' || atacanteSeleccionado === null) {
+        return;
+    }
+    if (ES_MODO_PVP && !esMiTurnoPvp) {
         return;
     }
 
@@ -2763,6 +4086,32 @@ function seleccionarCartaObjetivo(slotIndex) {
     cartaOponenteDestacada = slotIndex;
     renderizarTablero();
 
+    if (ES_MODO_PVP && socketPvp && PVP_SESSION_ID) {
+        const nombreAtacante = String(cartaAtacante?.Nombre || '').trim();
+        const nombreObjetivo = String(cartaObjetivo?.Nombre || '').trim();
+        trazaAccionPvp('emit_ataque', `slot=${slotAtacante}->${slotIndex}`);
+        socketPvp.emit('multiplayer:pvp:accion', {
+            sessionId: PVP_SESSION_ID,
+            expectedRevision: Number(revisionPvpLocal || 0),
+            accion: {
+                tipo: 'ataque',
+                slotAtacante,
+                slotObjetivo: slotIndex,
+                debugCasterName: nombreAtacante || null,
+                debugTargetName: nombreObjetivo || null
+            }
+        });
+        cartasQueYaAtacaron.push(slotAtacante);
+        atacanteSeleccionado = null;
+        emitirSeleccionAtacantePvp(null);
+        escribirLog(`Ataque enviado. Esperando estado oficial del servidor...`);
+        renderizarTablero();
+        if (!quedanAtaquesJugadorDisponibles()) {
+            finalizarTurnoJugador();
+        }
+        return;
+    }
+
     setTimeout(async () => {
         await resolverAtaque(
             cartasJugadorEnJuego,
@@ -2773,7 +4122,6 @@ function seleccionarCartaObjetivo(slotIndex) {
             cartaObjetivo.Nombre,
             'oponente'
         );
-
         cartasQueYaAtacaron.push(slotAtacante);
         atacanteSeleccionado = null;
         
@@ -2931,12 +4279,25 @@ async function iniciarTurnoJugador() {
     if (partidaFinalizada) {
         return;
     }
+    if (ES_MODO_PVP && !esMiTurnoPvp) {
+        turnoActual = 'oponente';
+        actualizarTextoTurno(`Turno de ${obtenerNombreVisibleOponente()}`);
+        renderizarTablero();
+        return;
+    }
+    if (ES_MODO_PVP && turnoActual === 'jugador' && esMiTurnoPvp && pvpTurnoJugadorYaPreparado) {
+        return;
+    }
 
     turnoActual = 'jugador';
     atacanteSeleccionado = null;
     cartasQueYaAtacaron = [];
-    reducirCooldownHabilidadesActivas('jugador');
-    const huboEstados = aplicarEfectosInicioTurno('jugador');
+    if (ES_MODO_PVP) {
+        pvpTurnoJugadorYaPreparado = true;
+    } else {
+        reducirCooldownHabilidadesActivas('jugador');
+    }
+    const huboEstados = ES_MODO_PVP ? false : aplicarEfectosInicioTurno('jugador');
 
     actualizarTextoTurno('Tu turno');
     mostrarAvisoTurno('Es tu turno');
@@ -2949,8 +4310,10 @@ async function iniciarTurnoJugador() {
         }
     }
 
-    await rellenarSlotsVacios(mazoJugador, cartasJugadorEnJuego, 'jugador');
-    renderizarTablero();
+    if (!ES_MODO_PVP) {
+        await rellenarSlotsVacios(mazoJugador, cartasJugadorEnJuego, 'jugador');
+        renderizarTablero();
+    }
 
     if (verificarFinDePartida()) {
         return;
@@ -2961,9 +4324,14 @@ async function iniciarTurnoJugador() {
         finalizarTurnoJugador();
         return;
     }
+    if (!quedanAtaquesJugadorDisponibles()) {
+        escribirLog('No hay ataques disponibles para este turno. Pasas turno.');
+        finalizarTurnoJugador();
+        return;
+    }
 
     if (obtenerIndicesCartasDisponibles(cartasOponenteEnJuego).length === 0) {
-        escribirLog('El BOT no tiene cartas en mesa. Pasas turno.');
+        escribirLog(`${obtenerNombreVisibleOponente()} no tiene cartas en mesa. Pasas turno.`);
         finalizarTurnoJugador();
         return;
     }
@@ -2975,6 +4343,14 @@ async function iniciarTurnoOponente() {
     if (partidaFinalizada) {
         return;
     }
+    if (ES_MODO_PVP) {
+        turnoActual = 'oponente';
+        actualizarTextoTurno(`Turno de ${obtenerNombreVisibleOponente()}`);
+        mostrarAvisoTurno(`Turno de ${obtenerNombreVisibleOponente()}`);
+        escribirLog(`Esperando la jugada de ${obtenerNombreVisibleOponente()}...`);
+        renderizarTablero();
+        return;
+    }
 
     turnoActual = 'oponente';
     atacanteSeleccionado = null;
@@ -2983,9 +4359,9 @@ async function iniciarTurnoOponente() {
     reducirCooldownHabilidadesActivas('oponente');
     const huboEstados = aplicarEfectosInicioTurno('oponente');
 
-    actualizarTextoTurno('Turno del BOT');
-    mostrarAvisoTurno('Turno del BOT');
-    escribirLog('Comienza el turno del BOT.');
+    actualizarTextoTurno(`Turno de ${obtenerNombreVisibleOponente()}`);
+    mostrarAvisoTurno(`Turno de ${obtenerNombreVisibleOponente()}`);
+    escribirLog(`Comienza el turno de ${obtenerNombreVisibleOponente()}.`);
 
     if (huboEstados) {
         renderizarTablero();
@@ -3002,13 +4378,13 @@ async function iniciarTurnoOponente() {
     }
 
     if (obtenerIndicesCartasDisponibles(cartasOponenteEnJuego).length === 0) {
-        escribirLog('El BOT no tiene cartas disponibles para atacar.');
+        escribirLog(`${obtenerNombreVisibleOponente()} no tiene cartas disponibles para atacar.`);
         finalizarTurnoOponente();
         return;
     }
 
     if (obtenerIndicesCartasDisponibles(cartasJugadorEnJuego).length === 0) {
-        escribirLog('No tienes cartas en mesa. El BOT pasa turno.');
+        escribirLog(`No tienes cartas en mesa. ${obtenerNombreVisibleOponente()} pasa turno.`);
         finalizarTurnoOponente();
         return;
     }
@@ -3017,32 +4393,99 @@ async function iniciarTurnoOponente() {
 }
 
 function abandonarPartida() {
-    if (!window.confirm(MENSAJE_SALIDA_PARTIDA)) {
-        return;
-    }
-    abandonarVistaConLimpieza();
+    mostrarModalConfirmarAbandono().then(confirmado => {
+        if (!confirmado) {
+            return;
+        }
+        if (ES_MODO_PVP && socketPvp && PVP_SESSION_ID) {
+            socketPvp.emit('multiplayer:pvp:abandonar', { sessionId: PVP_SESSION_ID });
+        }
+        abandonarVistaConLimpieza(ES_MODO_PVP ? 'multijugador.html' : 'vistaJuego.html');
+    });
 }
 
 function limpiarEstadoPartidaEnCurso() {
     partidaFinalizada = true;
     atacanteSeleccionado = null;
     cartasQueYaAtacaron = [];
+    pvpRetrasoHabilidadHastaTs = 0;
+    pvpUltimaAccionPayload = null;
+    pvpAccionesPorRevision.clear();
+    pvpMantenerOpacidadFinTurno = false;
+    pvpEstadoProcesando = false;
+    pvpTurnoSocketPendiente = null;
+    pvpEstadoPayloadPendiente = null;
+    if (pvpAvisoHabilidadTimer) {
+        clearTimeout(pvpAvisoHabilidadTimer);
+        pvpAvisoHabilidadTimer = null;
+    }
+    if (pvpTurnoAplicacionTimer) {
+        clearTimeout(pvpTurnoAplicacionTimer);
+        pvpTurnoAplicacionTimer = null;
+    }
+    pvpPendienteEmitirFinTurno = false;
+    if (pvpFinTurnoFallbackTimer) {
+        clearTimeout(pvpFinTurnoFallbackTimer);
+        pvpFinTurnoFallbackTimer = null;
+    }
+    if (pvpFinTurnoDelayTimer) {
+        clearTimeout(pvpFinTurnoDelayTimer);
+        pvpFinTurnoDelayTimer = null;
+    }
     localStorage.removeItem('mazoJugador');
     localStorage.removeItem('mazoJugadorBase');
     localStorage.removeItem('mazoOponente');
     localStorage.removeItem('mazoOponenteBase');
     localStorage.removeItem('desafioActivo');
     localStorage.removeItem('partidaRecompensada');
+    localStorage.removeItem('partidaModo');
+    localStorage.removeItem('partidaPvpSessionId');
+    localStorage.removeItem('partidaPvpRol');
+    localStorage.removeItem('partidaPvpPrimerTurno');
+    localStorage.removeItem('partidaPvpInicialesJugadorIdx');
+    localStorage.removeItem('partidaPvpInicialesOponenteIdx');
+    localStorage.removeItem('nombreOponente');
+    localStorage.removeItem('avatarOponente');
+    localStorage.removeItem('emailOponente');
 }
 
-function abandonarVistaConLimpieza() {
+function abandonarVistaConLimpieza(destino = 'vistaJuego.html') {
     proteccionSalidaActiva = false;
     sessionStorage.removeItem('dc_tablero_abandonado');
     limpiarEstadoPartidaEnCurso();
-    window.location.replace('vistaJuego.html');
+    window.location.replace(destino);
+}
+
+function mostrarModalConfirmarAbandono() {
+    return new Promise(resolve => {
+        const modal = document.getElementById('modal-abandonar-partida');
+        const btnConfirmar = document.getElementById('modal-abandonar-confirmar');
+        const btnCancelar = document.getElementById('modal-abandonar-cancelar');
+        const mensaje = document.getElementById('modal-abandonar-mensaje');
+        if (!modal || !btnConfirmar || !btnCancelar) {
+            resolve(window.confirm(MENSAJE_SALIDA_PARTIDA));
+            return;
+        }
+        if (mensaje) {
+            mensaje.textContent = MENSAJE_SALIDA_PARTIDA;
+        }
+        const cerrar = (ok) => {
+            btnConfirmar.onclick = null;
+            btnCancelar.onclick = null;
+            modal.style.display = 'none';
+            resolve(ok);
+        };
+        btnConfirmar.onclick = () => cerrar(true);
+        btnCancelar.onclick = () => cerrar(false);
+        modal.style.display = 'flex';
+    });
 }
 
 function reiniciarPartida() {
+    if (ES_MODO_PVP) {
+        window.location.href = 'multijugador.html';
+        return;
+    }
     const mazoJugadorBase = localStorage.getItem('mazoJugadorBase');
     const mazoOponenteBase = localStorage.getItem('mazoOponenteBase');
 
@@ -3059,6 +4502,10 @@ function reiniciarPartida() {
 }
 
 function volverAlMenu() {
+    if (ES_MODO_PVP) {
+        window.location.href = 'multijugador.html';
+        return;
+    }
     const esEventoActivo = Boolean(estadoDesafio.activo && desafioActivo?.tipo === 'evento');
     const esDesafioActivo = Boolean(estadoDesafio.activo && !esEventoActivo);
     if (esDesafioActivo) {
@@ -3092,6 +4539,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     asegurarPanelDebug();
+    intentarInicializarSocketPvp();
     configurarNombresTablero();
     cargarCartasIniciales();
     escribirDebug('INIT', { desafioActivo: obtenerDesafioActivo(), estado: snapshotTableroDebug() });

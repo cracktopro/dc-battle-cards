@@ -741,6 +741,14 @@ async function migrarSkillsUsuarioDesdeCatalogo() {
     if (_migracionSkillsUsuarioEnCurso) {
         return;
     }
+    if (typeof XLSX === 'undefined') {
+        if (typeof window !== 'undefined' && document?.readyState !== 'complete') {
+            window.addEventListener('load', () => {
+                void migrarSkillsUsuarioDesdeCatalogo();
+            }, { once: true });
+        }
+        return;
+    }
     _migracionSkillsUsuarioEnCurso = true;
     try {
         const usuario = JSON.parse(localStorage.getItem('usuario') || 'null');
@@ -804,6 +812,15 @@ function obtenerResumenInventarioSesion() {
     const mejoras = Math.max(0, Number(objetos?.mejoraCarta || 0));
     const mejorasEspeciales = Math.max(0, Number(objetos?.mejoraEspecial || 0));
     return { puntos, mejoras, mejorasEspeciales };
+}
+
+function obtenerEstadoGrupoSesion() {
+    try {
+        const estado = JSON.parse(localStorage.getItem('grupoActual') || '{}');
+        return (estado && typeof estado === 'object') ? estado : {};
+    } catch (_error) {
+        return {};
+    }
 }
 
 const DC_COLOR_ACENTO_DEFAULT = { r: 0, g: 123, b: 255 };
@@ -882,6 +899,17 @@ function normalizarMenuLateral() {
         perfil.innerHTML = `
             <img id="menu-user-avatar" class="menu-user-avatar" alt="Avatar">
             <div id="menu-user-name" class="menu-user-name"></div>
+            <div id="menu-group-companion" class="menu-group-companion" style="display:none;">
+                <img id="menu-group-avatar" class="menu-group-avatar" alt="Compañero">
+                <div id="menu-group-name" class="menu-group-name"></div>
+            </div>
+            <button id="menu-group-leave-btn" class="btn btn-menu menu-group-leave-btn" type="button" style="display:none;">
+                <svg class="menu-group-leave-icon" viewBox="0 0 600 600" aria-hidden="true" focusable="false">
+                    <path d="M130 0C58.672245 0 0 58.672245 0 130V470C0 541.32776 58.672245 600 130 600H301.57812C367.83331 600 423.13643 549.36696 430.67188 485H349.43555C343.32179 505.66026 324.7036 520 301.57812 520H130C101.60826 520 80 498.39174 80 470V130C80 101.60826 101.60826 80 130 80H301.57812C324.7036 80 343.32179 94.339739 349.43555 115H430.67188C423.13642 50.633038 367.83331 0 301.57812 0H130Z"></path>
+                    <path d="M476.86328 179.99911A40 40 0 0 0 448.57812 191.71395A40 40 0 0 0 448.57812 248.28427L460.29297 259.99911H163.72656A40 40 0 0 0 123.72656 299.99911A40 40 0 0 0 163.72656 339.99911H460.29297L448.57812 351.71395A40 40 0 0 0 448.57812 408.28427A40 40 0 0 0 505.14844 408.28427L577.93945 335.49325A40 40 0 0 0 600 299.99911A40 40 0 0 0 577.5293 264.09481L505.14844 191.71395A40 40 0 0 0 476.86328 179.99911Z"></path>
+                </svg>
+                <span class="menu-group-leave-text">Dejar grupo</span>
+            </button>
             <div id="menu-user-stats" class="menu-user-stats">
                 <div class="menu-user-stat-row" id="menu-user-puntos"></div>
                 <div class="menu-user-stat-row" id="menu-user-mejoras"></div>
@@ -896,7 +924,12 @@ function normalizarMenuLateral() {
     const puntosEl = menu.querySelector('#menu-user-puntos');
     const mejorasEl = menu.querySelector('#menu-user-mejoras');
     const mejorasEspecialesEl = menu.querySelector('#menu-user-mejoras-especiales');
+    const grupoCompanion = menu.querySelector('#menu-group-companion');
+    const grupoAvatar = menu.querySelector('#menu-group-avatar');
+    const grupoName = menu.querySelector('#menu-group-name');
+    const grupoLeaveBtn = menu.querySelector('#menu-group-leave-btn');
     const resumen = obtenerResumenInventarioSesion();
+    const grupoEstado = obtenerEstadoGrupoSesion();
     if (avatar) {
         avatar.src = obtenerAvatarSesion();
     }
@@ -927,8 +960,59 @@ function normalizarMenuLateral() {
             titulo: 'Mejoras especiales'
         });
     }
+    if (grupoCompanion && grupoAvatar && grupoName) {
+        const companion = grupoEstado?.companero;
+        const mostrarCompanion = Boolean(grupoEstado?.enGrupo && companion?.email);
+        grupoCompanion.style.display = mostrarCompanion ? 'flex' : 'none';
+        if (mostrarCompanion) {
+            grupoAvatar.src = String(companion?.avatar || '').trim() || 'https://i.ibb.co/QJvLStm/zzz-Carta-Back.png';
+            grupoName.textContent = companion?.nombre || companion?.email || 'Compañero';
+        }
+    }
+    if (grupoLeaveBtn) {
+        const enGrupo = Boolean(grupoEstado?.enGrupo);
+        grupoLeaveBtn.style.display = enGrupo ? 'inline-flex' : 'none';
+        grupoLeaveBtn.onclick = () => {
+            if (typeof window.confirmarAbandonoGrupo === 'function') {
+                window.confirmarAbandonoGrupo().then(confirmado => {
+                    if (confirmado && typeof window.abandonarGrupoActual === 'function') {
+                        window.abandonarGrupoActual();
+                    }
+                });
+                return;
+            }
+            if (typeof window.abandonarGrupoActual === 'function') {
+                window.abandonarGrupoActual();
+            }
+        };
+    }
 
-    const versionLabelTexto = 'Version: Beta-1.0.6-30.04.26';
+    let linkMultijugador = menu.querySelector('#menu-link-multijugador');
+    if (!linkMultijugador) {
+        linkMultijugador = document.createElement('a');
+        linkMultijugador.id = 'menu-link-multijugador';
+        linkMultijugador.href = 'multijugador.html';
+        linkMultijugador.className = 'btn btn-menu btn-menu-disabled';
+        linkMultijugador.textContent = 'Multijugador';
+        if (linkDesafios?.nextElementSibling) {
+            menu.insertBefore(linkMultijugador, linkDesafios.nextElementSibling);
+        } else {
+            menu.appendChild(linkMultijugador);
+        }
+    }
+    const multijugadorHabilitado = Boolean(grupoEstado?.enGrupo && grupoEstado?.puedeMultijugador);
+    linkMultijugador.classList.toggle('btn-menu-disabled', !multijugadorHabilitado);
+    linkMultijugador.setAttribute('aria-disabled', multijugadorHabilitado ? 'false' : 'true');
+    linkMultijugador.tabIndex = multijugadorHabilitado ? 0 : -1;
+    if (!multijugadorHabilitado) {
+        linkMultijugador.title = 'Debes estar en un grupo para habilitar Multijugador';
+        linkMultijugador.addEventListener('click', bloquearNavegacionMultijugador);
+    } else {
+        linkMultijugador.title = 'Acceder a sala multijugador';
+        linkMultijugador.removeEventListener('click', bloquearNavegacionMultijugador);
+    }
+
+    const versionLabelTexto = 'Version: Beta-1.0.7-01.05.26';
     let versionLabel = menu.querySelector('#menu-version-label');
     if (!versionLabel) {
         versionLabel = document.createElement('div');
@@ -991,6 +1075,8 @@ function cerrarModalLogout() {
 function confirmarLogoutSistema() {
     localStorage.removeItem('usuario');
     localStorage.removeItem('email');
+    localStorage.removeItem('grupoActual');
+    localStorage.removeItem('grupoInvitacionEnCurso');
     localStorage.removeItem('jugandoPartida');
     localStorage.removeItem('mazoJugador');
     localStorage.removeItem('mazoOponente');
@@ -1013,3 +1099,11 @@ window.addEventListener('dc:usuario-actualizado', () => {
     aplicarColorPrincipalDesdeSesion();
     actualizarPanelPerfilTiempoReal();
 });
+
+window.addEventListener('dc:grupo-actualizado', () => {
+    actualizarPanelPerfilTiempoReal();
+});
+
+function bloquearNavegacionMultijugador(event) {
+    event.preventDefault();
+}

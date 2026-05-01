@@ -121,6 +121,7 @@ document.addEventListener('DOMContentLoaded', function () {
     configurarJugadoresConectados();
     configurarModalEvento();
     cargarEventosActivos();
+    configurarNotificacionesGrupo();
 
     const dificultadBotones = document.querySelectorAll('.dificultad-btn');
     const selectMazo = document.getElementById('select-mazo');
@@ -273,6 +274,29 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 });
+
+function configurarNotificacionesGrupo() {
+    window.addEventListener('dc:grupo-notificacion', (event) => {
+        const payload = event?.detail || {};
+        const mensaje = String(payload?.mensaje || '').trim();
+        if (!mensaje) return;
+        const tipoRaw = String(payload?.tipo || 'info').toLowerCase();
+        const tipo = tipoRaw === 'error' ? 'danger'
+            : (tipoRaw === 'success' ? 'success' : 'warning');
+        mostrarMensajeJugadores(mensaje, tipo);
+    });
+}
+
+function mostrarMensajeJugadores(mensaje, tipo = 'warning') {
+    const el = document.getElementById('mensaje-jugadores');
+    if (!el) return;
+    el.textContent = mensaje;
+    el.className = `alert alert-${tipo}`;
+    el.style.display = 'block';
+    setTimeout(() => {
+        el.style.display = 'none';
+    }, 2800);
+}
 
 function normalizarNombre(nombre) {
     return String(nombre || '').trim().toLowerCase();
@@ -1217,17 +1241,40 @@ function configurarJugadoresConectados() {
     const nombreUsuarioActual = obtenerNombreVisibleUsuario();
 
     if (typeof socket !== 'undefined') {
+        window.addEventListener('dc:grupo-invitacion-en-curso', () => {
+            socket.emit('solicitarRefrescoJugadoresConectados');
+        });
         // Recibir actualización de la lista de jugadores conectados
         socket.on('jugadoresConectados', function (jugadores) {
             listaJugadores.innerHTML = '';
+            const invitacionEnCurso = (() => {
+                try {
+                    const estado = JSON.parse(localStorage.getItem('grupoInvitacionEnCurso') || '{}');
+                    const expiracion = Number(estado?.expiresAt || 0);
+                    const expirada = Number.isFinite(expiracion) && expiracion > 0 && expiracion <= Date.now();
+                    if (expirada) {
+                        localStorage.setItem('grupoInvitacionEnCurso', JSON.stringify({
+                            activa: false,
+                            targetEmail: null,
+                            expiresAt: null
+                        }));
+                        window.dispatchEvent(new Event('dc:grupo-invitacion-en-curso'));
+                        return false;
+                    }
+                    return Boolean(estado?.activa);
+                } catch (_error) {
+                    return false;
+                }
+            })();
 
             const normalizados = (jugadores || []).map(jugador => {
                 if (typeof jugador === 'string') {
-                    return { email: '', nombre: jugador };
+                    return { email: '', nombre: jugador, enGrupo: false };
                 }
                 return {
                     email: String(jugador?.email || ''),
-                    nombre: String(jugador?.nombre || '').trim() || String(jugador?.email || '').split('@')[0]
+                    nombre: String(jugador?.nombre || '').trim() || String(jugador?.email || '').split('@')[0],
+                    enGrupo: Boolean(jugador?.enGrupo)
                 };
             });
 
@@ -1246,10 +1293,21 @@ function configurarJugadoresConectados() {
                 nombreDiv.textContent = jugador.nombre; // Mostrar nickname
 
                 const botonInvitar = document.createElement('button');
-                botonInvitar.textContent = 'Invitar a partida';
+                botonInvitar.textContent = invitacionEnCurso ? 'Invitación en curso' : 'Invitar a grupo';
                 botonInvitar.classList.add('btn', 'btn-invitar');
+                const invitacionDisponible = Boolean(jugador.email) && !jugador.enGrupo && !invitacionEnCurso;
+                botonInvitar.disabled = !invitacionDisponible;
+                if (!invitacionDisponible) {
+                    botonInvitar.title = invitacionEnCurso
+                        ? 'Ya tienes una invitación pendiente'
+                        : (jugador.enGrupo
+                        ? 'Este jugador ya está en un grupo'
+                        : 'Jugador no disponible');
+                }
                 botonInvitar.addEventListener('click', function () {
-                    invitarJugador(jugador.nombre);  // Mantiene compatibilidad con el flujo actual
+                    if (typeof window.invitarAGrupo === 'function') {
+                        window.invitarAGrupo(jugador.email);
+                    }
                 });
 
                 jugadorItem.appendChild(nombreDiv);
@@ -1266,6 +1324,8 @@ function logout() {
     console.log('Cerrando sesión y limpiando localStorage...');
     localStorage.removeItem('usuario');
     localStorage.removeItem('email');
+    localStorage.removeItem('grupoActual');
+    localStorage.removeItem('grupoInvitacionEnCurso');
     localStorage.removeItem('jugandoPartida');
     localStorage.removeItem('mazoJugador');
     localStorage.removeItem('mazoOponente');

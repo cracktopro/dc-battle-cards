@@ -967,6 +967,65 @@ body {
     background-color: #1258d9;
 }
 
+#modal-abandonar-partida {
+    background:
+        radial-gradient(circle at top, rgba(var(--dc-accent-user-rgb), 0.16), rgba(0, 0, 0, 0.82) 54%),
+        rgba(0, 0, 0, 0.82);
+    backdrop-filter: blur(4px);
+}
+
+#modal-abandonar-partida .ventana-contenido {
+    background:
+        linear-gradient(180deg, rgba(12, 26, 48, 0.96), rgba(7, 14, 30, 0.98));
+    border: 1px solid rgba(var(--dc-accent-user-rgb), 0.46);
+    box-shadow:
+        0 0 24px rgba(0, 0, 0, 0.62),
+        0 0 20px rgba(var(--dc-accent-user-rgb), 0.28);
+}
+
+#modal-abandonar-partida .acciones-fin-partida {
+    margin-top: 18px;
+}
+
+#modal-abandonar-confirmar,
+#modal-abandonar-cancelar {
+    border-radius: 10px;
+    border: 1px solid transparent;
+    padding: 10px 18px;
+    font-family: inherit;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    cursor: pointer;
+    transition: transform 0.16s ease, box-shadow 0.2s ease, background-color 0.2s ease, border-color 0.2s ease;
+}
+
+#modal-abandonar-confirmar {
+    color: #ffd8d8;
+    background: linear-gradient(180deg, rgba(170, 42, 42, 0.92), rgba(122, 18, 18, 0.95));
+    border-color: rgba(255, 86, 86, 0.72);
+    box-shadow: 0 0 12px rgba(255, 66, 66, 0.3);
+}
+
+#modal-abandonar-confirmar:hover {
+    transform: translateY(-1px);
+    background: linear-gradient(180deg, rgba(198, 52, 52, 0.95), rgba(138, 20, 20, 0.98));
+    box-shadow: 0 0 16px rgba(255, 72, 72, 0.45);
+}
+
+#modal-abandonar-cancelar {
+    color: #dff4ff;
+    background: linear-gradient(180deg, rgba(16, 34, 64, 0.94), rgba(8, 18, 38, 0.96));
+    border-color: rgba(var(--dc-accent-user-rgb), 0.62);
+    box-shadow: 0 0 12px rgba(var(--dc-accent-user-rgb), 0.24);
+}
+
+#modal-abandonar-cancelar:hover {
+    transform: translateY(-1px);
+    background: linear-gradient(180deg, rgba(20, 44, 82, 0.96), rgba(11, 25, 50, 0.98));
+    border-color: rgba(var(--dc-accent-user-rgb), 0.92);
+    box-shadow: 0 0 16px rgba(var(--dc-accent-user-rgb), 0.38);
+}
+
 .modal-habilidad-seleccion {
     position: fixed;
     inset: 0;
