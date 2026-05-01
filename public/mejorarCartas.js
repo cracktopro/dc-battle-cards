@@ -364,11 +364,15 @@ function crearPoolCartasPorNombre(cartas) {
     const pool = new Map();
 
     cartas.forEach(carta => {
-        if (!pool.has(carta.Nombre)) {
-            pool.set(carta.Nombre, []);
+        const clave = String(carta?.Nombre || '').trim().toLowerCase();
+        if (!clave) {
+            return;
+        }
+        if (!pool.has(clave)) {
+            pool.set(clave, []);
         }
 
-        pool.get(carta.Nombre).push({ ...carta });
+        pool.get(clave).push({ ...carta });
     });
 
     pool.forEach(listaCartas => {
@@ -558,14 +562,17 @@ function sincronizarMazosConColeccion(usuario) {
     const poolCartas = crearPoolCartasPorNombre(usuario.cartas || []);
 
     usuario.mazos = usuario.mazos.map(mazo => {
-        const cartasSincronizadas = [];
+        const cartasSincronizadas = (mazo.Cartas || []).map(cartaMazo => {
+            const clave = String(cartaMazo?.Nombre || '').trim().toLowerCase();
+            const disponibles = poolCartas.get(clave) || [];
 
-        (mazo.Cartas || []).forEach(cartaMazo => {
-            const disponibles = poolCartas.get(cartaMazo.Nombre) || [];
-
+            // Tomamos la mejor versión disponible sin eliminar cartas del mazo
+            // cuando no exista coincidencia en colección (evita mazos "vacíos").
             if (disponibles.length > 0) {
-                cartasSincronizadas.push(disponibles.shift());
+                return { ...disponibles[0] };
             }
+
+            return { ...cartaMazo };
         });
 
         return {
