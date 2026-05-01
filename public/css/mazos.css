@@ -256,6 +256,10 @@ select:disabled,
     padding: 15px;
     text-align: center;
     z-index: 1000;
+    box-sizing: border-box;
+    overflow-x: hidden;
+    overflow-y: auto;
+    scrollbar-gutter: stable;
 }
 
 .menu-user-profile {

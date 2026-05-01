@@ -231,16 +231,36 @@ window.confirmarAbandonoGrupo = function confirmarAbandonoGrupo() {
     return new Promise(resolve => {
         const overlay = document.createElement('div');
         overlay.classList.add('overlay');
+        overlay.style.position = 'fixed';
+        overlay.style.inset = '0';
+        overlay.style.background = 'rgba(0, 0, 0, 0.72)';
+        overlay.style.display = 'flex';
+        overlay.style.alignItems = 'center';
+        overlay.style.justifyContent = 'center';
+        overlay.style.zIndex = '4000';
+        overlay.style.padding = '12px';
 
         const modal = document.createElement('div');
         modal.classList.add('modal-invitacion');
+        modal.style.width = 'min(320px, 92vw)';
+        modal.style.background = 'rgba(20, 20, 20, 0.95)';
+        modal.style.border = '2px solid rgba(0, 123, 255, 0.5)';
+        modal.style.borderRadius = '10px';
+        modal.style.padding = '20px';
+        modal.style.textAlign = 'center';
+        modal.style.color = '#fff';
+        modal.style.boxSizing = 'border-box';
 
         const mensaje = document.createElement('p');
         mensaje.textContent = '¿Quieres abandonar el grupo?';
+        mensaje.style.margin = '0 0 12px';
 
         const aceptarBtn = document.createElement('button');
         aceptarBtn.textContent = 'Aceptar';
         aceptarBtn.classList.add('btn', 'btn-aceptar');
+        aceptarBtn.style.margin = '8px';
+        aceptarBtn.style.padding = '10px 18px';
+        aceptarBtn.style.borderRadius = '6px';
         aceptarBtn.addEventListener('click', () => {
             if (overlay.parentElement) {
                 overlay.parentElement.removeChild(overlay);
@@ -251,7 +271,20 @@ window.confirmarAbandonoGrupo = function confirmarAbandonoGrupo() {
         const cancelarBtn = document.createElement('button');
         cancelarBtn.textContent = 'Cancelar';
         cancelarBtn.classList.add('btn', 'btn-cancelar');
+        cancelarBtn.style.margin = '8px';
+        cancelarBtn.style.padding = '10px 18px';
+        cancelarBtn.style.borderRadius = '6px';
         cancelarBtn.addEventListener('click', () => {
+            if (overlay.parentElement) {
+                overlay.parentElement.removeChild(overlay);
+            }
+            resolve(false);
+        });
+
+        overlay.addEventListener('click', (event) => {
+            if (event.target !== overlay) {
+                return;
+            }
             if (overlay.parentElement) {
                 overlay.parentElement.removeChild(overlay);
             }
