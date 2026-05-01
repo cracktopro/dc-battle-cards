@@ -754,9 +754,11 @@ function aplicarHabilidadCanonicaSnapshot(snapshot, ladoActor, slotAtacante, slo
         return { ok: false, reason: 'aturdida' };
     }
     const clase = String(atacante?.skill_class || '').trim().toLowerCase();
-    const poderAtacanteConBonos = Math.max(0, Number(obtenerPoderCartaConBonosServidor(atacante, mesaActor, mesaObjetivo)));
+    // Las habilidades usan siempre su escala propia (skill_power por nivel),
+    // sin mezclar buffs/debuffs de daño de combate.
+    const poderBaseAtacante = Math.max(0, Number(obtenerPoderCartaServidor(atacante)));
     const valorSkill = Math.max(0, Number(obtenerValorSkillServidor(atacante, 0, {
-        poder: poderAtacanteConBonos,
+        poder: poderBaseAtacante,
         salud: obtenerSaludCartaServidor(atacante)
     })));
     if (clase === 'tank') {
@@ -812,7 +814,7 @@ function aplicarHabilidadCanonicaSnapshot(snapshot, ladoActor, slotAtacante, slo
             ? Array(objetivosVivos.length).fill(tankIdx)
             : objetivosVivos;
         if (objetivos.length === 0) return { ok: false, reason: 'objetivo_invalido' };
-        const poderFuente = Math.max(1, poderAtacanteConBonos);
+        const poderFuente = Math.max(1, poderBaseAtacante);
         const danioAoe = Math.max(1, Math.floor(valorSkill || (poderFuente / 2)));
         for (let i = 0; i < objetivos.length; i++) {
             const idx = objetivos[i];

@@ -72,6 +72,7 @@ let pvpTurnoAplicacionTimer = null;
 let pvpAvisoHabilidadTimer = null;
 let pvpUltimaAccionPayload = null;
 let pvpMantenerOpacidadFinTurno = false;
+let pvpResetDestacadosTimer = null;
 const pvpAccionesPorRevision = new Map();
 const pvpRevisionWaiters = [];
 const PVP_RETARDO_CAMBIO_TURNO_MS = 900;
@@ -81,6 +82,7 @@ const PVP_RETARDO_MENSAJE_HABILIDAD_MS = 500;
 const PVP_RETARDO_PRE_IMPACTO_ATAQUE_MS = 700;
 const PVP_RETARDO_POST_IMPACTO_ATAQUE_MS = 700;
 const PVP_RETARDO_POST_BAJA_MS = 700;
+const RETARDO_MODAL_FIN_PARTIDA_MS = 700;
 
 function despacharWaitersRevisionPvp() {
     const rev = Number(revisionPvpLocal || 0);
@@ -125,12 +127,11 @@ function refrescarEtiquetasTurnoPvpDesdeEmail(turnEmailRaw) {
         return;
     }
     const esMio = turnEmail === EMAIL_SESION_ACTUAL;
-    if (esMio) {
-        actualizarTextoTurno('Tu turno');
-    } else {
-        actualizarTextoTurno(`Turno de ${obtenerNombreVisibleOponente()}`);
-        mostrarAvisoTurno(`Turno de ${obtenerNombreVisibleOponente()}`);
-    }
+    turnoActual = esMio ? 'jugador' : 'oponente';
+    const nombreTurno = esMio ? obtenerNombreVisibleJugador() : obtenerNombreVisibleOponente();
+    actualizarTextoTurno(`Turno de ${nombreTurno}`);
+    mostrarAvisoTurno(`Turno de ${nombreTurno}`);
+    renderizarTablero();
 }
 
 async function animarDaniosTrasSnapshotPvp(prevJ, prevO) {
@@ -768,6 +769,14 @@ function intentarInicializarSocketPvp() {
                     cartaOponenteDestacada = Number.isInteger(slotAtk) ? slotAtk : null;
                     cartaJugadorDestacada = Number.isInteger(slotObj) ? slotObj : null;
                     renderizarTablero();
+                    if (pvpResetDestacadosTimer) {
+                        clearTimeout(pvpResetDestacadosTimer);
+                    }
+                    pvpResetDestacadosTimer = setTimeout(() => {
+                        pvpResetDestacadosTimer = null;
+                        limpiarDestacados();
+                        renderizarTablero();
+                    }, 2200);
                 }
             }
         }
@@ -861,6 +870,17 @@ function intentarInicializarSocketPvp() {
                     await esperar(PVP_RETARDO_ROBO_TRAS_BAJA_MS);
                 }
                 aplicarSnapshotCanonicoPvp(snapshot);
+                if (animacionAsociadaAccion && tipoAccionReciente === 'ataque') {
+                    const actorAccion = String(accionRevision?.actorEmail || '').trim().toLowerCase();
+                    if (actorAccion && actorAccion === EMAIL_SESION_ACTUAL) {
+                        const slotAtacanteConfirmado = Number(accionRevision?.accion?.slotAtacante);
+                        if (Number.isInteger(slotAtacanteConfirmado) && !cartasQueYaAtacaron.includes(slotAtacanteConfirmado)) {
+                            cartasQueYaAtacaron.push(slotAtacanteConfirmado);
+                        }
+                    }
+                    limpiarDestacados();
+                    renderizarTablero();
+                }
                 if (hayRoboTrasBaja) {
                     await animarEntradasMazoPvp(prevJ, prevO, proxJ, proxO);
                 }
@@ -934,7 +954,10 @@ function intentarInicializarSocketPvp() {
         partidaFinalizada = true;
         actualizarTextoTurno('Partida finalizada');
         mostrarAvisoTurno(ganoYo ? 'Has ganado' : 'Has perdido');
-        mostrarVentanaFinPartida(ganoYo ? 'jugador' : 'oponente');
+        setTimeout(() => {
+            if (!partidaFinalizada) return;
+            mostrarVentanaFinPartida(ganoYo ? 'jugador' : 'oponente');
+        }, RETARDO_MODAL_FIN_PARTIDA_MS);
     });
 }
 
@@ -971,7 +994,9 @@ function extraerCartasInicialesConIndices(mazo, indices, cantidadFallback = 3) {
     const base = Array.isArray(mazo) ? mazo : [];
     const unicos = [...new Set((Array.isArray(indices) ? indices : []).filter(i => Number.isInteger(i) && i >= 0 && i < base.length))];
     if (unicos.length === 0) {
-        return seleccionarCartasAleatorias(base, cantidadFallback).map(crearCartaCombateDesdeMazo);
+        const cantidad = Math.max(0, Math.min(Number(cantidadFallback || 0), base.length));
+        const seleccionDeterminista = base.splice(0, cantidad);
+        return seleccionDeterminista.map(crearCartaCombateDesdeMazo);
     }
     const ordenAsc = [...unicos].sort((a, b) => a - b);
     const seleccionadas = ordenAsc.map(idx => base[idx]).filter(Boolean);
@@ -3888,7 +3913,10 @@ function verificarFinDePartida() {
         mostrarAvisoTurno('Has perdido');
         escribirLog('No te quedan cartas en mesa ni en el mazo. Has perdido.');
         notificarResultadoPvp('oponente', 'sin_cartas');
-        mostrarVentanaFinPartida('oponente');
+        setTimeout(() => {
+            if (!partidaFinalizada) return;
+            mostrarVentanaFinPartida('oponente');
+        }, RETARDO_MODAL_FIN_PARTIDA_MS);
         return true;
     }
 
@@ -3901,7 +3929,10 @@ function verificarFinDePartida() {
         mostrarAvisoTurno('Has ganado');
         escribirLog(`${obtenerNombreVisibleOponente()} se ha quedado sin cartas en mesa y en el mazo. Has ganado.`);
         notificarResultadoPvp('jugador', 'sin_cartas');
-        mostrarVentanaFinPartida('jugador');
+        setTimeout(() => {
+            if (!partidaFinalizada) return;
+            mostrarVentanaFinPartida('jugador');
+        }, RETARDO_MODAL_FIN_PARTIDA_MS);
         return true;
     }
 
@@ -4158,7 +4189,6 @@ function seleccionarCartaObjetivo(slotIndex) {
                 debugTargetName: nombreObjetivo || null
             }
         });
-        cartasQueYaAtacaron.push(slotAtacante);
         atacanteSeleccionado = null;
         emitirSeleccionAtacantePvp(null);
         escribirLog(`Ataque enviado. Esperando estado oficial del servidor...`);
