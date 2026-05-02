@@ -246,14 +246,71 @@ body {
     width: 100%;
 }
 
-/* mazos.css define .carta:hover { scale(1.05) } sin transición; aquí solo la mesa del tablero */
-.tablero-container .slot .carta {
-    transform: scale(1);
-    transition: transform 0.5s ease, box-shadow 0.28s ease, filter 0.28s ease;
+/* Mesa tablero: sin cambio de escala/tamaño (mazos.css aplica scale en .carta:hover). Box-shadow de hover como en mazos, sin transform. */
+.tablero-container .slot .carta,
+.tablero-container .slot .carta:active,
+.tablero-container .slot .carta.carta-seleccionada,
+.tablero-container .slot .carta.carta-atacando,
+.tablero-container .slot .carta.carta-objetivo {
+    transform: none !important;
+    transition: box-shadow 0.28s ease, filter 0.28s ease, opacity 0.28s ease, border-color 0.2s ease;
 }
 
 .tablero-container .slot .carta:hover {
-    transform: scale(1.05);
+    transform: none !important;
+    box-shadow:
+        0 0 20px rgba(0, 123, 255, 0.5),
+        0 0 30px rgba(0, 123, 255, 0.7);
+}
+
+.tablero-container .slot .carta.nivel-legendaria:hover {
+    transform: none !important;
+    box-shadow:
+        0 0 20px rgba(186, 112, 255, 0.68),
+        0 0 34px rgba(156, 66, 255, 0.55);
+}
+
+.tablero-container .carta-recompensa-slot .carta,
+.tablero-container .carta-recompensa-slot .carta:hover,
+.tablero-container .carta-recompensa-slot .carta:active {
+    transform: none !important;
+    transition: box-shadow 0.28s ease, filter 0.28s ease, opacity 0.28s ease, border-color 0.2s ease;
+}
+
+.tablero-container .carta-recompensa-slot .carta:hover {
+    box-shadow:
+        0 0 20px rgba(0, 123, 255, 0.5),
+        0 0 30px rgba(0, 123, 255, 0.7);
+}
+
+.tablero-container .carta-recompensa-slot .carta.nivel-legendaria:hover {
+    box-shadow:
+        0 0 20px rgba(186, 112, 255, 0.68),
+        0 0 34px rgba(156, 66, 255, 0.55);
+}
+
+/* Modal de objetivo (tablero.html): mismas reglas; el modal está fuera de .tablero-container */
+#modal-seleccion-habilidad .modal-habilidad-carta-slot .carta,
+#modal-seleccion-habilidad .modal-habilidad-carta-slot .carta:active,
+#modal-seleccion-habilidad .modal-habilidad-carta-slot .carta.carta-seleccionada,
+#modal-seleccion-habilidad .modal-habilidad-carta-slot .carta.carta-atacando,
+#modal-seleccion-habilidad .modal-habilidad-carta-slot .carta.carta-objetivo {
+    transform: none !important;
+    transition: box-shadow 0.28s ease, filter 0.28s ease, opacity 0.28s ease, border-color 0.2s ease;
+}
+
+#modal-seleccion-habilidad .modal-habilidad-carta-slot .carta:hover {
+    transform: none !important;
+    box-shadow:
+        0 0 20px rgba(0, 123, 255, 0.5),
+        0 0 30px rgba(0, 123, 255, 0.7);
+}
+
+#modal-seleccion-habilidad .modal-habilidad-carta-slot .carta.nivel-legendaria:hover {
+    transform: none !important;
+    box-shadow:
+        0 0 20px rgba(186, 112, 255, 0.68),
+        0 0 34px rgba(156, 66, 255, 0.55);
 }
 
 .slot:hover {
@@ -351,12 +408,10 @@ body {
 @keyframes cartaRobada {
     0% {
         opacity: 0;
-        transform: translateY(12px);
         filter: brightness(1.25);
     }
     100% {
         opacity: 1;
-        transform: translateY(0);
         filter: brightness(1);
     }
 }

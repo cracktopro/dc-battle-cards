@@ -1,5 +1,12 @@
 # Changelog
 
+## Beta-1.0.9-02.05.26
+
+- Partida vs BOT (offline): restaurado el mensaje inicial de turno (`Turno de …`) al iniciar partida normal, evento o desafío; el primer turno actualiza el HUD antes de la acción y el aviso central se muestra tras el relleno de huecos en mesa (sin cambios en PvP online).
+- VS BOT (offline): el aviso central de uso de habilidad solo aparece para habilidades activas (`usar`) de clase `heal`, `revive`, `shield`, `aoe`, `heal_all`, `tank`, `extra_attack`; no para efectos tipo pasiva (`buff`, `debuff`, `bonus_buff`, `bonus_debuff`, `heal_debuff`, ni otros como `stun`/`dot`/`life_steal`). El combate PvP online no se modifica.
+- Tablero (`tablero.css`): cartas en mesa, modal de selección de objetivo y recompensas finales sin escalado ni `transform` de tamaño en hover, clic y estados de combate; se mantienen sombras y brillos; animación de carta robada sin desplazamiento vertical.
+- Etiqueta de versión del menú lateral actualizada a `Version: Beta-1.0.9-02.05.26`.
+
 ## Beta-1.0.8-02.05.26
 
 - PvP online: corrección de animaciones de daño y barra de salud cuando el golpe letal vacía la mesa y el snapshot ya trae cartas nuevas en el mismo hueco (ataque básico y habilidades con objetivo único); la animación usa la carta previa hasta 0 antes de aplicar el estado oficial.

@@ -2393,6 +2393,21 @@ async function anunciarUsoHabilidadActiva(carta, meta, objetivoTexto) {
     await esperar(PAUSA_AVISO_HABILIDAD_MS);
 }
 
+/** Aviso central "usa habilidad en …" solo en VS BOT offline para estas clases (habilidad activa "usar"). PvP y jugador local sin filtrar. */
+const CLASES_AVISO_HABILIDAD_USAR_BOT = new Set([
+    'heal', 'revive', 'shield', 'aoe', 'heal_all', 'tank', 'extra_attack'
+]);
+
+async function anunciarUsoHabilidadActivaSiUI(carta, meta, objetivoTexto, propietario) {
+    if (!ES_MODO_PVP && propietario === 'oponente') {
+        const c = String(meta?.clase || '').trim().toLowerCase();
+        if (!CLASES_AVISO_HABILIDAD_USAR_BOT.has(c)) {
+            return;
+        }
+    }
+    await anunciarUsoHabilidadActiva(carta, meta, objetivoTexto);
+}
+
 function obtenerCartaBonusDebuffActiva(cartas = []) {
     return (Array.isArray(cartas) ? cartas : []).find(carta => {
         if (!carta || !cartaCuentaComoActivaEnMesa(carta)) return false;
@@ -2768,7 +2783,7 @@ async function usarHabilidadActiva(carta, propietario, slotCarta) {
         objetivo.Salud = Math.min(saludMax, saludAntes + Math.floor(valor));
         const curado = Math.max(0, objetivo.Salud - saludAntes);
         if (curado <= 0) return false;
-        await anunciarUsoHabilidadActiva(carta, meta, objetivo.Nombre);
+        await anunciarUsoHabilidadActivaSiUI(carta, meta, objetivo.Nombre, propietario);
         mostrarValorFlotante(propietario, idx, curado, 'cura');
         escribirLog(`${carta.Nombre} usa ${meta.nombre} y cura ${curado} a ${objetivo.Nombre}.`);
     } else if (meta.clase === 'revive') {
@@ -2794,7 +2809,7 @@ async function usarHabilidadActiva(carta, propietario, slotCarta) {
         if (indiceCementerio === null || indiceCementerio === undefined) return false;
         const cartaRevive = cementerio.splice(indiceCementerio, 1)[0];
         if (!cartaRevive) return false;
-        await anunciarUsoHabilidadActiva(carta, meta, cartaRevive.Nombre);
+        await anunciarUsoHabilidadActivaSiUI(carta, meta, cartaRevive.Nombre, propietario);
         mazo.push({
             ...cartaRevive,
             Salud: obtenerSaludMaxCarta(cartaRevive),
@@ -2825,7 +2840,7 @@ async function usarHabilidadActiva(carta, propietario, slotCarta) {
             : elegirAliadoMasHerido(propietario);
         if (idx === null || idx === undefined || !aliados[idx]) return false;
         const objetivo = aliados[idx];
-        await anunciarUsoHabilidadActiva(carta, meta, objetivo.Nombre);
+        await anunciarUsoHabilidadActivaSiUI(carta, meta, objetivo.Nombre, propietario);
         objetivo.escudoActual = Math.max(0, Number(objetivo.escudoActual || 0)) + Math.floor(valor);
         escribirLog(`${carta.Nombre} usa ${meta.nombre}: escudo +${Math.floor(valor)} para ${objetivo.Nombre}.`);
     } else if (meta.clase === 'aoe') {
@@ -2835,7 +2850,7 @@ async function usarHabilidadActiva(carta, propietario, slotCarta) {
         const danioAoe = Math.max(1, Math.floor(valor || (poderFuenteAoe / 2)));
         const objetivos = obtenerIndicesCartasDisponibles(enemigos);
         if (objetivos.length === 0) return false;
-        await anunciarUsoHabilidadActiva(carta, meta, 'todo el equipo rival');
+        await anunciarUsoHabilidadActivaSiUI(carta, meta, 'todo el equipo rival', propietario);
         for (const idx of objetivos) {
             await resolverAtaque(
                 aliados,
@@ -2852,7 +2867,7 @@ async function usarHabilidadActiva(carta, propietario, slotCarta) {
     } else if (meta.clase === 'heal_all') {
         if (valor <= 0) return false;
         let huboCuracion = false;
-        await anunciarUsoHabilidadActiva(carta, meta, 'todo su equipo');
+        await anunciarUsoHabilidadActivaSiUI(carta, meta, 'todo su equipo', propietario);
         aliados.forEach(objetivo => {
             if (!objetivo) return;
             const idxObjetivo = aliados.indexOf(objetivo);
@@ -2872,7 +2887,7 @@ async function usarHabilidadActiva(carta, propietario, slotCarta) {
         escribirLog(`${carta.Nombre} usa ${meta.nombre}: cura grupal +${Math.floor(valor)}.`);
     } else if (meta.clase === 'tank') {
         if (carta.tankActiva) return false;
-        await anunciarUsoHabilidadActiva(carta, meta, carta.Nombre);
+        await anunciarUsoHabilidadActivaSiUI(carta, meta, carta.Nombre, propietario);
         carta.tankActiva = true;
         carta.habilidadUsadaPartida = true;
         const saludMaxAnterior = obtenerSaludMaxCarta(carta);
@@ -2922,7 +2937,7 @@ async function usarHabilidadActiva(carta, propietario, slotCarta) {
             escribirLog(`${carta.Nombre} intenta usar ${meta.nombre}, pero ${objetivo.Nombre} es BOSS e inmune al aturdimiento.`);
             return false;
         }
-        await anunciarUsoHabilidadActiva(carta, meta, objetivo.Nombre);
+        await anunciarUsoHabilidadActivaSiUI(carta, meta, objetivo.Nombre, propietario);
         const stunPrevio = Math.max(0, Number(objetivo.stunRestante || 0));
         if (turnosStun >= stunPrevio) {
             objetivo.stunSkillName = String(meta.nombre || '').trim();
@@ -2956,12 +2971,12 @@ async function usarHabilidadActiva(carta, propietario, slotCarta) {
         }
         if (idx === null || idx === undefined || !enemigos[idx]) return false;
         const objetivo = enemigos[idx];
-        await anunciarUsoHabilidadActiva(carta, meta, objetivo.Nombre);
+        await anunciarUsoHabilidadActivaSiUI(carta, meta, objetivo.Nombre, propietario);
         objetivo.efectosDot = Array.isArray(objetivo.efectosDot) ? objetivo.efectosDot : [];
         objetivo.efectosDot.push({ danoPorTurno: danoDot, turnosRestantes: 3, skillName: String(meta.nombre || '').trim() });
         escribirLog(`${carta.Nombre} aplica sangrado a ${objetivo.Nombre}: ${danoDot} de daño por 3 turnos.`);
     } else if (meta.clase === 'life_steal') {
-        await anunciarUsoHabilidadActiva(carta, meta, carta.Nombre);
+        await anunciarUsoHabilidadActivaSiUI(carta, meta, carta.Nombre, propietario);
         carta.lifeStealActiva = true;
         escribirLog(`${carta.Nombre} activa ${meta.nombre}: robo de vida habilitado.`);
     } else if (meta.clase === 'extra_attack') {
@@ -2996,7 +3011,7 @@ async function usarHabilidadActiva(carta, propietario, slotCarta) {
         }
         if (idx === null) return false;
         const objetivo = enemigos[idx];
-        await anunciarUsoHabilidadActiva(carta, meta, objetivo.Nombre);
+        await anunciarUsoHabilidadActivaSiUI(carta, meta, objetivo.Nombre, propietario);
         await resolverAtaque(
             aliados,
             slotCarta,
@@ -3793,6 +3808,9 @@ async function cargarCartasIniciales() {
     if (ES_MODO_PVP) {
         esMiTurnoPvp = primerTurno === 'jugador';
         turnoActual = primerTurno === 'jugador' ? 'jugador' : 'oponente';
+    } else {
+        turnoActual = primerTurno === 'jugador' ? 'jugador' : 'oponente';
+        actualizarTextoTurno();
     }
     escribirLog(`El primer turno es para: ${primerTurno === 'jugador' ? 'Jugador' : obtenerNombreVisibleOponente()}`);
 
@@ -4463,7 +4481,9 @@ async function iniciarTurnoJugador() {
     const huboEstados = ES_MODO_PVP ? false : aplicarEfectosInicioTurno('jugador');
 
     actualizarTextoTurno('Tu turno');
-    mostrarAvisoTurno('Es tu turno');
+    if (ES_MODO_PVP) {
+        mostrarAvisoTurno('Es tu turno');
+    }
     escribirLog('Comienza tu turno.');
 
     if (huboEstados) {
@@ -4480,6 +4500,10 @@ async function iniciarTurnoJugador() {
 
     if (verificarFinDePartida()) {
         return;
+    }
+
+    if (!ES_MODO_PVP) {
+        mostrarAvisoTurno(`Turno de ${obtenerNombreVisibleJugador()}`, 2200);
     }
 
     if (obtenerIndicesCartasDisponibles(cartasJugadorEnJuego).length === 0) {
@@ -4523,7 +4547,6 @@ async function iniciarTurnoOponente() {
     const huboEstados = aplicarEfectosInicioTurno('oponente');
 
     actualizarTextoTurno(`Turno de ${obtenerNombreVisibleOponente()}`);
-    mostrarAvisoTurno(`Turno de ${obtenerNombreVisibleOponente()}`);
     escribirLog(`Comienza el turno de ${obtenerNombreVisibleOponente()}.`);
 
     if (huboEstados) {
@@ -4539,6 +4562,8 @@ async function iniciarTurnoOponente() {
     if (verificarFinDePartida()) {
         return;
     }
+
+    mostrarAvisoTurno(`Turno de ${obtenerNombreVisibleOponente()}`, 2200);
 
     if (obtenerIndicesCartasDisponibles(cartasOponenteEnJuego).length === 0) {
         escribirLog(`${obtenerNombreVisibleOponente()} no tiene cartas disponibles para atacar.`);
