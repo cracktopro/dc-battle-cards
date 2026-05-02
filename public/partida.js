@@ -73,6 +73,7 @@ let pvpAvisoHabilidadTimer = null;
 let pvpUltimaAccionPayload = null;
 let pvpMantenerOpacidadFinTurno = false;
 let pvpResetDestacadosTimer = null;
+let pvpCartasAgotadasConfirmadas = [];
 const pvpAccionesPorRevision = new Map();
 const pvpRevisionWaiters = [];
 const PVP_RETARDO_CAMBIO_TURNO_MS = 900;
@@ -82,6 +83,8 @@ const PVP_RETARDO_MENSAJE_HABILIDAD_MS = 500;
 const PVP_RETARDO_PRE_IMPACTO_ATAQUE_MS = 700;
 const PVP_RETARDO_POST_IMPACTO_ATAQUE_MS = 700;
 const PVP_RETARDO_POST_BAJA_MS = 700;
+/** Tras letal + robo en el mismo slot, dar tiempo a que termine la animación de barra antes de pintar el snapshot. */
+const PVP_RETARDO_ANTES_SNAPSHOT_TRAS_REFILL_MS = 380;
 const RETARDO_MODAL_FIN_PARTIDA_MS = 700;
 
 function despacharWaitersRevisionPvp() {
@@ -351,6 +354,23 @@ function obtenerLadosDesdeSnapshotPvp(snapshot = {}) {
     return { jugador, oponente };
 }
 
+function firmaCartaMesaPvp(carta) {
+    if (!carta) return '';
+    return `${String(carta.Nombre || '').trim()}|${Number(carta.Nivel || 0)}|${Number(carta.Poder || 0)}`;
+}
+
+/** Vacío→carta o carta distinta en la misma casilla (letales + robo en mismo slot no marcaban solo `!prev && prox`). */
+function hayCambioVisualPorRoboOMesa(prevArr, proxArr) {
+    if (!Array.isArray(prevArr) || !Array.isArray(proxArr)) return false;
+    for (let i = 0; i < 3; i += 1) {
+        const p = prevArr[i];
+        const q = proxArr[i];
+        if (!p && q) return true;
+        if (p && q && firmaCartaMesaPvp(p) !== firmaCartaMesaPvp(q)) return true;
+    }
+    return false;
+}
+
 function emitirSeleccionAtacantePvp(slotAtacante = null) {
     if (!ES_MODO_PVP || !socketPvp || !PVP_SESSION_ID) {
         return;
@@ -376,18 +396,42 @@ async function animarImpactoAtaquePvpConSnapshot(prevJ, prevO, proxJ, proxO, acc
     if (!cartaAntes) {
         return;
     }
-    const saludAntes = Math.max(0, Number(obtenerSaludActualCarta(cartaAntes) || 0));
     const cartaDespues = proxArr[slotObjetivo] || null;
-    const saludDespues = cartaDespues ? Math.max(0, Number(obtenerSaludActualCarta(cartaDespues) || 0)) : 0;
-    if (saludAntes <= saludDespues) {
+    const mismaCarta = Boolean(cartaDespues && firmaCartaMesaPvp(cartaAntes) === firmaCartaMesaPvp(cartaDespues));
+    const cartasEnemigasBarra = tipoObjetivo === 'jugador' ? cartasOponenteEnJuego : cartasJugadorEnJuego;
+
+    const saludAntesHp = Math.max(0, Number(obtenerSaludActualCarta(cartaAntes) || 0));
+    const escAnt = Math.max(0, Number(cartaAntes.escudoActual || 0));
+
+    let saludDespuesHp;
+    let escudoFinalAnim;
+    if (!cartaDespues || !mismaCarta) {
+        // Hueco vacío o carta distinta (letal + robo en el mismo slot): el snapshot ya trae la nueva carta;
+        // hay que animar la bajada de la carta antigua hasta 0 antes de aplicar el estado oficial.
+        saludDespuesHp = 0;
+        escudoFinalAnim = 0;
+    } else {
+        saludDespuesHp = Math.max(0, Number(obtenerSaludActualCarta(cartaDespues) || 0));
+        escudoFinalAnim = Math.max(0, Number(cartaDespues.escudoActual || 0));
+    }
+
+    const totAnt = obtenerSaludEfectiva(cartaAntes, cartasEnemigasBarra).totalActual;
+    const totDesp = !cartaDespues || !mismaCarta
+        ? 0
+        : obtenerSaludEfectiva(cartaDespues, cartasEnemigasBarra).totalActual;
+
+    if (totAnt <= totDesp) {
         return;
     }
     await esperar(PVP_RETARDO_PRE_IMPACTO_ATAQUE_MS);
-    const danio = Math.max(1, saludAntes - saludDespues);
+    const danio = Math.max(1, Math.floor(totAnt - totDesp));
     mostrarValorFlotante(tipoObjetivo, slotObjetivo, danio, 'danio');
-    await animarBajadaSaludCarta(liveArr, slotObjetivo, saludAntes, saludDespues, tipoObjetivo);
+    await animarBajadaSaludCarta(liveArr, slotObjetivo, saludAntesHp, saludDespuesHp, tipoObjetivo, {
+        escudoInicial: escAnt,
+        escudoFinal: escudoFinalAnim
+    });
     await esperar(PVP_RETARDO_POST_IMPACTO_ATAQUE_MS);
-    if (!cartaDespues) {
+    if (!cartaDespues || !mismaCarta) {
         liveArr[slotObjetivo] = null;
         renderizarTablero();
         await esperar(PVP_RETARDO_POST_BAJA_MS);
@@ -402,87 +446,118 @@ async function animarCambiosHabilidadPvp(prevJ, prevO, proxJ, proxO, accion = {}
         const tipoAliado = usaYo ? 'jugador' : 'oponente';
         const arrAntes = usaYo ? prevJ : prevO;
         const arrDespues = usaYo ? proxJ : proxO;
+        const arrLive = tipoAliado === 'jugador' ? cartasJugadorEnJuego : cartasOponenteEnJuego;
+        const cartasEnemigosParaEfectiva = tipoAliado === 'jugador' ? cartasOponenteEnJuego : cartasJugadorEnJuego;
+
         for (let i = 0; i < 3; i += 1) {
             const antes = arrAntes[i];
             const despues = arrDespues[i];
             if (!antes || !despues) continue;
+            if (firmaCartaMesaPvp(antes) !== firmaCartaMesaPvp(despues)) continue;
+
+            const totAnt = obtenerSaludEfectiva(antes, cartasEnemigosParaEfectiva).totalActual;
+            const totDesp = obtenerSaludEfectiva(despues, cartasEnemigosParaEfectiva).totalActual;
+            if (totDesp <= totAnt) continue;
+
             const salAntes = obtenerSaludActualCarta(antes);
             const salDespues = obtenerSaludActualCarta(despues);
-            if (salDespues > salAntes) {
-                mostrarValorFlotante(tipoAliado, i, salDespues - salAntes, 'cura');
-                await esperar(500);
+            const escAnt = Math.max(0, Number(antes.escudoActual || 0));
+            const escPost = Math.max(0, Number(despues.escudoActual || 0));
+
+            if (!arrLive[i]) continue;
+            Object.assign(arrLive[i], antes);
+            arrLive[i].Salud = salAntes;
+            arrLive[i].escudoActual = escAnt;
+
+            const curaMostrar = Math.max(1, Math.floor(totDesp - totAnt));
+            mostrarValorFlotante(tipoAliado, i, curaMostrar, 'cura');
+            await animarBajadaSaludCarta(arrLive, i, salAntes, salDespues, tipoAliado, {
+                escudoInicial: escAnt,
+                escudoFinal: escPost,
+                esCura: true
+            });
+        }
+        renderizarTablero();
+        return;
+    }
+    if (clase === 'aoe') {
+        const tipoObjetivo = usaYo ? 'oponente' : 'jugador';
+        const arrAntes = usaYo ? prevO : prevJ;
+        const arrDespues = usaYo ? proxO : proxJ;
+        const arrLive = tipoObjetivo === 'oponente' ? cartasOponenteEnJuego : cartasJugadorEnJuego;
+        const cartasEnemigosParaEfectiva = tipoObjetivo === 'jugador' ? cartasOponenteEnJuego : cartasJugadorEnJuego;
+        const indicesImpactados = [0, 1, 2].filter(i => {
+            const antes = arrAntes[i];
+            if (!antes) return false;
+            const despues = arrDespues[i];
+            const mismaCarta = Boolean(despues && firmaCartaMesaPvp(antes) === firmaCartaMesaPvp(despues));
+            const totAnt = obtenerSaludEfectiva(antes, cartasEnemigosParaEfectiva).totalActual;
+            const totPost = !despues || !mismaCarta
+                ? 0
+                : obtenerSaludEfectiva(despues, cartasEnemigosParaEfectiva).totalActual;
+            return totAnt > totPost;
+        });
+        if (indicesImpactados.length === 0) {
+            return;
+        }
+        for (let ii = 0; ii < indicesImpactados.length; ii += 1) {
+            const idx = indicesImpactados[ii];
+            const antes = arrAntes[idx];
+            const despues = arrDespues[idx];
+            const mismaCarta = Boolean(despues && firmaCartaMesaPvp(antes) === firmaCartaMesaPvp(despues));
+            const salAntHp = obtenerSaludActualCarta(antes);
+            const salPostHp = mismaCarta && despues ? obtenerSaludActualCarta(despues) : 0;
+            const escAnt = Math.max(0, Number(antes.escudoActual || 0));
+            const escPost = mismaCarta && despues ? Math.max(0, Number(despues.escudoActual || 0)) : 0;
+            const totAnt = obtenerSaludEfectiva(antes, cartasEnemigosParaEfectiva).totalActual;
+            const totPost = !despues || !mismaCarta
+                ? 0
+                : obtenerSaludEfectiva(despues, cartasEnemigosParaEfectiva).totalActual;
+            const danoMostrar = Math.max(1, Math.floor(totAnt - totPost));
+
+            if (!arrLive[idx]) {
+                arrLive[idx] = { ...antes };
+            } else {
+                Object.assign(arrLive[idx], antes);
+                arrLive[idx].Salud = salAntHp;
+                arrLive[idx].escudoActual = escAnt;
+            }
+
+            mostrarValorFlotante(tipoObjetivo, idx, danoMostrar, 'danio');
+
+            await animarBajadaSaludCarta(arrLive, idx, salAntHp, salPostHp, tipoObjetivo, {
+                escudoInicial: escAnt,
+                escudoFinal: escPost
+            });
+
+            if (!despues || !mismaCarta) {
+                arrLive[idx] = null;
             }
         }
+        renderizarTablero();
+        await esperar(500);
         return;
     }
-    if (clase !== 'aoe') {
-        return;
+
+    const slotObjSkill = Number(accion?.slotObjetivo);
+    if (
+        Number.isInteger(slotObjSkill)
+        && slotObjSkill >= 0
+        && slotObjSkill <= 2
+        && clase !== 'heal'
+        && clase !== 'shield'
+        && clase !== 'revive'
+    ) {
+        // stun, dot, etc.: mismo problema letal + robo en el hueco que el ataque básico.
+        await animarImpactoAtaquePvpConSnapshot(
+            prevJ,
+            prevO,
+            proxJ,
+            proxO,
+            { slotObjetivo: slotObjSkill },
+            actorEmailRaw
+        );
     }
-    const tipoObjetivo = usaYo ? 'oponente' : 'jugador';
-    const arrAntes = usaYo ? prevO : prevJ;
-    const arrDespues = usaYo ? proxO : proxJ;
-    const arrLive = tipoObjetivo === 'oponente' ? cartasOponenteEnJuego : cartasJugadorEnJuego;
-    const indicesImpactados = [0, 1, 2].filter(i => {
-        const antes = arrAntes[i];
-        if (!antes) return false;
-        const salAnt = obtenerSaludActualCarta(antes);
-        const despues = arrDespues[i];
-        const salPost = despues ? obtenerSaludActualCarta(despues) : 0;
-        return salAnt > salPost;
-    });
-    if (indicesImpactados.length === 0) {
-        return;
-    }
-    indicesImpactados.forEach(idx => {
-        const antes = arrAntes[idx];
-        const salAnt = obtenerSaludActualCarta(antes);
-        if (!arrLive[idx]) {
-            arrLive[idx] = {
-                ...antes,
-                SaludMax: obtenerSaludMaxCarta(antes),
-                Salud: salAnt
-            };
-        } else {
-            arrLive[idx].SaludMax = obtenerSaludMaxCarta(arrLive[idx]);
-            arrLive[idx].Salud = salAnt;
-        }
-    });
-    renderizarTablero();
-    indicesImpactados.forEach(idx => {
-        const antes = arrAntes[idx];
-        const despues = arrDespues[idx];
-        const salAnt = obtenerSaludActualCarta(antes);
-        const salPost = despues ? obtenerSaludActualCarta(despues) : 0;
-        const dano = Math.max(1, salAnt - salPost);
-        mostrarValorFlotante(tipoObjetivo, idx, dano, 'danio');
-        const idSlot = obtenerIdSlot(tipoObjetivo, idx);
-        const slotEl = document.getElementById(idSlot);
-        const barra = slotEl?.querySelector('.barra-salud-contenedor');
-        barra?.classList.add('recibiendo-danio');
-    });
-    await esperar(140);
-    indicesImpactados.forEach(idx => {
-        const despues = arrDespues[idx];
-        const salPost = despues ? obtenerSaludActualCarta(despues) : 0;
-        if (arrLive[idx]) {
-            arrLive[idx].Salud = salPost;
-        }
-    });
-    renderizarTablero();
-    await esperar(620);
-    indicesImpactados.forEach(idx => {
-        const idSlot = obtenerIdSlot(tipoObjetivo, idx);
-        const slotEl = document.getElementById(idSlot);
-        const barra = slotEl?.querySelector('.barra-salud-contenedor');
-        barra?.classList.remove('recibiendo-danio');
-    });
-    indicesImpactados.forEach(idx => {
-        if (!arrDespues[idx]) {
-            arrLive[idx] = null;
-        }
-    });
-    renderizarTablero();
-    await esperar(500);
 }
 
 function completarFinTurnoPvpConRevision(revisionOficial) {
@@ -846,13 +921,14 @@ function intentarInicializarSocketPvp() {
                     await esperar(Math.max(0, pvpRetrasoHabilidadHastaTs - ahora));
                 }
                 const hayRoboTrasBaja = [0, 1, 2].some(i => (!prevJ[i] && proxJ[i]) || (!prevO[i] && proxO[i]));
-                const accionRevision = pvpAccionesPorRevision.get(revision) || pvpUltimaAccionPayload;
+                const accionRevisionExacta = pvpAccionesPorRevision.get(revision) || null;
+                const accionRevision = accionRevisionExacta || pvpUltimaAccionPayload;
                 if (Number.isInteger(revision)) {
                     pvpAccionesPorRevision.delete(revision);
                 }
                 const animacionAsociadaAccion =
                     ES_MODO_PVP
-                    && accionRevision
+                    && Boolean(accionRevisionExacta)
                     && pvpUltimaAccionRecibidaTs > 0
                     && (Date.now() - pvpUltimaAccionRecibidaTs) < 7000;
                 const tipoAccionReciente = String(accionRevision?.accion?.tipo || '').trim();
@@ -866,24 +942,6 @@ function intentarInicializarSocketPvp() {
                         accionRevision?.actorEmail || ''
                     );
                 }
-                if (hayRoboTrasBaja && animacionAsociadaAccion) {
-                    await esperar(PVP_RETARDO_ROBO_TRAS_BAJA_MS);
-                }
-                aplicarSnapshotCanonicoPvp(snapshot);
-                if (animacionAsociadaAccion && tipoAccionReciente === 'ataque') {
-                    const actorAccion = String(accionRevision?.actorEmail || '').trim().toLowerCase();
-                    if (actorAccion && actorAccion === EMAIL_SESION_ACTUAL) {
-                        const slotAtacanteConfirmado = Number(accionRevision?.accion?.slotAtacante);
-                        if (Number.isInteger(slotAtacanteConfirmado) && !cartasQueYaAtacaron.includes(slotAtacanteConfirmado)) {
-                            cartasQueYaAtacaron.push(slotAtacanteConfirmado);
-                        }
-                    }
-                    limpiarDestacados();
-                    renderizarTablero();
-                }
-                if (hayRoboTrasBaja) {
-                    await animarEntradasMazoPvp(prevJ, prevO, proxJ, proxO);
-                }
                 if (animacionAsociadaAccion && tipoAccionReciente === 'habilidad') {
                     await animarCambiosHabilidadPvp(
                         prevJ,
@@ -893,6 +951,41 @@ function intentarInicializarSocketPvp() {
                         accionRevision?.accion || {},
                         accionRevision?.actorEmail || ''
                     );
+                }
+                const hayRefillOMesaNueva =
+                    hayRoboTrasBaja
+                    || hayCambioVisualPorRoboOMesa(prevO, proxO)
+                    || hayCambioVisualPorRoboOMesa(prevJ, proxJ);
+                if (hayRefillOMesaNueva && animacionAsociadaAccion) {
+                    await esperar(PVP_RETARDO_ROBO_TRAS_BAJA_MS);
+                    if (
+                        hayCambioVisualPorRoboOMesa(prevO, proxO)
+                        || hayCambioVisualPorRoboOMesa(prevJ, proxJ)
+                    ) {
+                        await esperar(PVP_RETARDO_ANTES_SNAPSHOT_TRAS_REFILL_MS);
+                    }
+                }
+                aplicarSnapshotCanonicoPvp(snapshot);
+                if (animacionAsociadaAccion && tipoAccionReciente === 'ataque') {
+                    const actorAccion = String(accionRevision?.actorEmail || '').trim().toLowerCase();
+                    if (actorAccion && actorAccion === EMAIL_SESION_ACTUAL) {
+                        const slotAtacanteConfirmado = Number(accionRevision?.accion?.slotAtacante);
+                        // El estado oficial ya trae `cartasYaActuaron*`: solo consume índice si fue ataque básico.
+                        // Los ataques extra (extra_attack) no añaden slot en servidor; no debemos forzarlo aquí
+                        // o la carta queda como "agotada" sin poder hacer su ataque normal.
+                        if (
+                            Number.isInteger(slotAtacanteConfirmado)
+                            && cartasQueYaAtacaron.includes(slotAtacanteConfirmado)
+                            && !pvpCartasAgotadasConfirmadas.includes(slotAtacanteConfirmado)
+                        ) {
+                            pvpCartasAgotadasConfirmadas.push(slotAtacanteConfirmado);
+                        }
+                    }
+                    limpiarDestacados();
+                    renderizarTablero();
+                }
+                if (hayRoboTrasBaja) {
+                    await animarEntradasMazoPvp(prevJ, prevO, proxJ, proxO);
                 }
                 if (ES_MODO_PVP && esMiTurnoPvp && turnoActual === 'jugador' && !partidaFinalizada) {
                     const enemigosActivos = obtenerIndicesCartasDisponibles(cartasOponenteEnJuego).length;
@@ -1634,10 +1727,10 @@ function escribirLog(mensaje, clase = '') {
 }
 
 function asegurarPanelDebug() {
-    if (!DEBUG_COMBATE_ACTIVO && !PVP_DEBUG_UI) {
+    if (!DEBUG_COMBATE_ACTIVO) {
         return;
     }
-    if (document.getElementById('debug-combate-textarea') || document.getElementById('pvp-debug-panel')) {
+    if (document.getElementById('debug-combate-textarea')) {
         return;
     }
 
@@ -1647,107 +1740,16 @@ function asegurarPanelDebug() {
         return;
     }
 
-    if (DEBUG_COMBATE_ACTIVO) {
-        const titulo = document.createElement('h4');
-        titulo.className = 'debug-combate-titulo';
-        titulo.textContent = 'Debug Combate';
-        const textarea = document.createElement('textarea');
-        textarea.id = 'debug-combate-textarea';
-        textarea.className = 'debug-combate-textarea';
-        textarea.readOnly = true;
-        textarea.spellcheck = false;
-        logsContainer.appendChild(titulo);
-        logsContainer.appendChild(textarea);
-    }
-    if (PVP_DEBUG_UI && ES_MODO_PVP) {
-        const panel = document.createElement('div');
-        panel.id = 'pvp-debug-panel';
-        panel.style.marginTop = '10px';
-        panel.style.padding = '8px';
-        panel.style.border = '1px solid rgba(255, 213, 95, 0.45)';
-        panel.style.borderRadius = '8px';
-        panel.style.background = 'rgba(5, 14, 28, 0.92)';
-        const title = document.createElement('div');
-        title.textContent = 'PvP Debug';
-        title.style.fontWeight = '700';
-        title.style.marginBottom = '6px';
-        const meta = document.createElement('div');
-        meta.innerHTML = `session: <b>${PVP_SESSION_ID || '-'}</b> | rev: <span id="pvp-debug-rev">${revisionPvpLocal}</span>`;
-        meta.style.fontSize = '0.78rem';
-        meta.style.marginBottom = '6px';
-        const line = document.createElement('div');
-        line.id = 'pvp-debug-line';
-        line.style.fontSize = '0.75rem';
-        line.style.color = '#cce6ff';
-        line.textContent = 'Sin eventos todavía.';
-        const logTa = document.createElement('textarea');
-        logTa.id = 'pvp-debug-log';
-        logTa.readOnly = true;
-        logTa.spellcheck = false;
-        logTa.rows = 6;
-        logTa.style.width = '100%';
-        logTa.style.marginTop = '6px';
-        logTa.style.fontSize = '0.7rem';
-        logTa.style.fontFamily = 'ui-monospace, monospace';
-        logTa.style.resize = 'vertical';
-        logTa.style.background = 'rgba(0, 0, 0, 0.35)';
-        logTa.style.color = '#e8f4ff';
-        logTa.style.border = '1px solid rgba(255, 213, 95, 0.25)';
-        logTa.style.borderRadius = '6px';
-        const actions = document.createElement('div');
-        actions.style.display = 'flex';
-        actions.style.gap = '8px';
-        actions.style.marginTop = '8px';
-        const btnLocal = document.createElement('button');
-        btnLocal.type = 'button';
-        btnLocal.textContent = 'Export local';
-        btnLocal.className = 'btn btn-secondary';
-        btnLocal.style.fontSize = '0.72rem';
-        btnLocal.addEventListener('click', () => {
-            const payload = {
-                sessionId: PVP_SESSION_ID,
-                revision: revisionPvpLocal,
-                ultimoEvento: ultimoEventoPvp,
-                snapshotLocal: construirSnapshotCanonicoPvp()
-            };
-            const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `pvp-local-${PVP_SESSION_ID || 'sin-session'}.json`;
-            a.click();
-            URL.revokeObjectURL(url);
-        });
-        const btnServer = document.createElement('button');
-        btnServer.type = 'button';
-        btnServer.textContent = 'Export server';
-        btnServer.className = 'btn btn-secondary';
-        btnServer.style.fontSize = '0.72rem';
-        btnServer.addEventListener('click', async () => {
-            if (!PVP_SESSION_ID) return;
-            try {
-                const res = await fetch(`/api/pvp-debug/${encodeURIComponent(PVP_SESSION_ID)}`);
-                const data = await res.json();
-                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `pvp-server-${PVP_SESSION_ID}.json`;
-                a.click();
-                URL.revokeObjectURL(url);
-            } catch (error) {
-                actualizarLineaDebugPvp('Error exportando trazas del servidor.');
-            }
-        });
-        actions.appendChild(btnLocal);
-        actions.appendChild(btnServer);
-        panel.appendChild(title);
-        panel.appendChild(meta);
-        panel.appendChild(line);
-        panel.appendChild(logTa);
-        panel.appendChild(actions);
-        logsContainer.appendChild(panel);
-    }
+    const titulo = document.createElement('h4');
+    titulo.className = 'debug-combate-titulo';
+    titulo.textContent = 'Debug Combate';
+    const textarea = document.createElement('textarea');
+    textarea.id = 'debug-combate-textarea';
+    textarea.className = 'debug-combate-textarea';
+    textarea.readOnly = true;
+    textarea.spellcheck = false;
+    logsContainer.appendChild(titulo);
+    logsContainer.appendChild(textarea);
 }
 
 function resumirCartaDebug(carta, cartasEnemigasParaSaludEfectiva = null) {
@@ -1851,7 +1853,7 @@ function mostrarValorFlotante(tipo, slotIndex, valor, claseVisual = 'danio') {
     }, 1200);
 }
 
-async function animarBajadaSaludCarta(cartasObjetivo, slotObjetivo, saludRawInicial, saludRawFinal, tipoObjetivo) {
+async function animarBajadaSaludCarta(cartasObjetivo, slotObjetivo, saludRawInicial, saludRawFinal, tipoObjetivo, opciones = {}) {
     const carta = cartasObjetivo[slotObjetivo];
     if (!carta) {
         return;
@@ -1861,22 +1863,55 @@ async function animarBajadaSaludCarta(cartasObjetivo, slotObjetivo, saludRawInic
     const saludFinal = Math.max(0, Number(saludRawFinal || 0));
 
     const idSlotObjetivo = obtenerIdSlot(tipoObjetivo, slotObjetivo);
+    const cartasEnemigasSalud = tipoObjetivo === 'jugador' ? cartasOponenteEnJuego : cartasJugadorEnJuego;
+    const esCura = Boolean(opciones && opciones.esCura);
+    const claseImpactoBarra = esCura ? 'recibiendo-cura' : 'recibiendo-danio';
 
     carta.SaludMax = obtenerSaludMaxCarta(carta);
     carta.Salud = saludInicial;
+    if (opciones && Object.prototype.hasOwnProperty.call(opciones, 'escudoInicial')) {
+        carta.escudoActual = Math.max(0, Number(opciones.escudoInicial || 0));
+    }
     renderizarTablero();
     const slotTrasRender = document.getElementById(idSlotObjetivo);
     const barraTrasRender = slotTrasRender?.querySelector('.barra-salud-contenedor');
-    barraTrasRender?.classList.add('recibiendo-danio');
+    barraTrasRender?.classList.add(claseImpactoBarra);
     await esperar(120);
 
+    const estadoIni = obtenerSaludEfectiva(carta, cartasEnemigasSalud);
+    const pctIni = Math.max(0, Math.min((estadoIni.totalActual / Math.max(estadoIni.totalMax, 1)) * 100, 100));
+
     carta.Salud = saludFinal;
+    if (opciones && Object.prototype.hasOwnProperty.call(opciones, 'escudoFinal')) {
+        carta.escudoActual = Math.max(0, Number(opciones.escudoFinal || 0));
+    }
+    const estadoFin = obtenerSaludEfectiva(carta, cartasEnemigasSalud);
+    const pctFin = Math.max(0, Math.min((estadoFin.totalActual / Math.max(estadoFin.totalMax, 1)) * 100, 100));
+
+    const rellenoAnim = slotTrasRender?.querySelector('.barra-salud-relleno');
+    if (!rellenoAnim) {
+        renderizarTablero();
+        barraTrasRender?.classList.remove(claseImpactoBarra);
+        return;
+    }
+
+    // Un segundo renderizarTablero() aquí recreaba el nodo .barra-salud-relleno y la transición CSS
+    // de width no corría entre valores (sobre todo al pasar a 0%). Animamos el mismo elemento.
+    rellenoAnim.style.width = `${pctIni}%`;
+    rellenoAnim.style.setProperty('--health-ratio', String(pctIni / 100));
+    void rellenoAnim.offsetWidth;
+    rellenoAnim.style.transition = 'width 0.38s cubic-bezier(0.22, 0.8, 0.2, 1), background-color 0.3s ease, filter 0.25s ease';
+    rellenoAnim.style.width = `${pctFin}%`;
+    rellenoAnim.style.setProperty('--health-ratio', String(pctFin / 100));
+
+    const saludTxt = slotTrasRender?.querySelector('.salud-carta');
+    if (saludTxt) {
+        saludTxt.textContent = `${Math.round(estadoFin.totalActual)}/${Math.round(estadoFin.totalMax)}`;
+    }
+
+    await esperar(420);
+    barraTrasRender?.classList.remove(claseImpactoBarra);
     renderizarTablero();
-    const slotFinal = document.getElementById(idSlotObjetivo);
-    const barraFinal = slotFinal?.querySelector('.barra-salud-contenedor');
-    barraFinal?.classList.add('recibiendo-danio');
-    await esperar(380);
-    barraFinal?.classList.remove('recibiendo-danio');
 }
 
 async function actualizarUsuarioFirebase(usuario, email) {
@@ -3245,7 +3280,6 @@ function crearCartaElemento(carta, tipo, slotIndex, opciones = {}) {
     if (esCartaBoss(carta)) {
         cartaDiv.classList.add('boss-carta');
         if (!soloVista) {
-            cartaDiv.style.transform = 'scale(1.12)';
             cartaDiv.style.boxShadow = '0 0 22px rgba(255, 66, 66, 0.9), 0 0 34px rgba(255, 205, 66, 0.65)';
             cartaDiv.style.border = '2px solid rgba(255, 130, 66, 0.95)';
             cartaDiv.style.zIndex = '5';
@@ -3267,6 +3301,7 @@ function crearCartaElemento(carta, tipo, slotIndex, opciones = {}) {
         }
 
         const cartaAgotadaPorTurno = cartasQueYaAtacaron.includes(slotIndex)
+            && (!ES_MODO_PVP || pvpCartasAgotadasConfirmadas.includes(slotIndex) || pvpMantenerOpacidadFinTurno)
             && (turnoActual === 'jugador' || (ES_MODO_PVP && pvpMantenerOpacidadFinTurno));
         if (tipo === 'jugador' && (cartaAgotadaPorTurno || cartaEstaAturdida(carta))) {
             cartaDiv.classList.add('carta-agotada');
@@ -3282,14 +3317,15 @@ function crearCartaElemento(carta, tipo, slotIndex, opciones = {}) {
             }
         }
 
-        if (tipo === 'jugador' && atacanteSeleccionado === slotIndex) {
+        const destacadaAtaqueJugador = tipo === 'jugador' && cartaJugadorDestacada === slotIndex;
+        if (tipo === 'jugador' && atacanteSeleccionado === slotIndex && !destacadaAtaqueJugador) {
             cartaDiv.classList.add('carta-seleccionada');
         }
         if (tipo === 'oponente' && Number.isInteger(atacanteSeleccionadoOponentePvp) && atacanteSeleccionadoOponentePvp === slotIndex) {
             cartaDiv.classList.add('carta-atacando');
         }
 
-        if (tipo === 'jugador' && cartaJugadorDestacada === slotIndex) {
+        if (destacadaAtaqueJugador) {
             cartaDiv.classList.add('carta-atacando');
         }
 
@@ -3604,6 +3640,22 @@ function determinarPrimerTurno(cartasJugador, cartasOponente) {
     return Math.random() > 0.5 ? 'jugador' : 'oponente';
 }
 
+/**
+ * Misma regla que `determinarPrimerTurnoPvp` en server.js: suma de Poder de cada mazo completo.
+ * No usar `determinarPrimerTurno` (solo 3 cartas en mesa + bonos): desincroniza el primer turno respecto al servidor.
+ */
+function determinarPrimerTurnoPvpDesdeMazosLocales() {
+    const sumaPoderMazo = mazo => (Array.isArray(mazo) ? mazo : []).reduce(
+        (acc, c) => acc + Math.max(0, Number(c?.Poder || 0)),
+        0
+    );
+    const poderJ = sumaPoderMazo(mazoJugador);
+    const poderO = sumaPoderMazo(mazoOponente);
+    if (poderJ > poderO) return 'jugador';
+    if (poderO > poderJ) return 'oponente';
+    return Math.random() > 0.5 ? 'jugador' : 'oponente';
+}
+
 async function cargarCartasIniciales() {
     if (ES_MODO_PVP) {
         pvpDespliegueTableroListo = false;
@@ -3619,6 +3671,8 @@ async function cargarCartasIniciales() {
         pvpRetrasoHabilidadHastaTs = 0;
         pvpUltimaAccionPayload = null;
         pvpAccionesPorRevision.clear();
+        pvpCartasAgotadasConfirmadas = [];
+        revisionPvpLocal = 0;
         pvpMantenerOpacidadFinTurno = false;
         pvpEstadoProcesando = false;
         pvpTurnoSocketPendiente = null;
@@ -3664,6 +3718,11 @@ async function cargarCartasIniciales() {
         if (desafioActivo) {
             estadoDesafio = await construirEstadoDesafio(desafioActivo);
             mazoOponente = [];
+        } else if (ES_MODO_PVP) {
+            // PvP online: ambos mazos vienen de la sesión (jugador real vs jugador real).
+            // No usar esMazoBotValido/generarMazoBot: un mazo de jugador no cumple reglas de bot
+            // y se sustituía por cartas aleatorias del catálogo, rompiendo índices y tablero.
+            mazoOponente = await enriquecerCartasConDatosCatalogo(mazoOponente);
         } else {
             const dificultad = obtenerDificultadActual();
             const mazoBotGuardado = JSON.parse(localStorage.getItem('mazoOponente') || '{"Cartas":[]}').Cartas || [];
@@ -3728,7 +3787,9 @@ async function cargarCartasIniciales() {
     const primerTurnoPersistido = String(localStorage.getItem('partidaPvpPrimerTurno') || '').trim().toLowerCase();
     const primerTurno = ES_MODO_PVP && (primerTurnoPersistido === 'jugador' || primerTurnoPersistido === 'oponente')
         ? primerTurnoPersistido
-        : determinarPrimerTurno(cartasJugadorEnJuego, cartasOponenteEnJuego);
+        : (ES_MODO_PVP
+            ? determinarPrimerTurnoPvpDesdeMazosLocales()
+            : determinarPrimerTurno(cartasJugadorEnJuego, cartasOponenteEnJuego));
     if (ES_MODO_PVP) {
         esMiTurnoPvp = primerTurno === 'jugador';
         turnoActual = primerTurno === 'jugador' ? 'jugador' : 'oponente';
@@ -3752,12 +3813,15 @@ async function cargarCartasIniciales() {
         };
         if (pendiente && String(pendiente.turnEmail || '').trim()) {
             marcarTurnoSocketProcesado(pendiente.turnEmail);
+            refrescarEtiquetasTurnoPvpDesdeEmail(pendiente.turnEmail);
             procesarTurnoPvpSocket(pendiente);
         } else if (primerTurno === 'jugador') {
             marcarTurnoSocketProcesado(EMAIL_SESION_ACTUAL);
+            refrescarEtiquetasTurnoPvpDesdeEmail(EMAIL_SESION_ACTUAL);
             iniciarTurnoJugador();
         } else {
             marcarTurnoSocketProcesado(obtenerEmailOponentePvp());
+            refrescarEtiquetasTurnoPvpDesdeEmail(obtenerEmailOponentePvp());
             iniciarTurnoOponente();
         }
         return;
@@ -3950,6 +4014,8 @@ function finalizarTurnoJugador() {
     }
     if (!ES_MODO_PVP) {
         cartasQueYaAtacaron = [];
+    } else {
+        pvpCartasAgotadasConfirmadas = [];
     }
     consumirStunFinTurno('jugador');
     limpiarDestacados();
@@ -4148,6 +4214,15 @@ function quedanAtaquesJugadorDisponibles() {
         .some(index => !cartasQueYaAtacaron.includes(index) && !cartaEstaAturdida(cartasJugadorEnJuego[index]));
 }
 
+function quedanAtaquesJugadorDisponiblesTrasConsumir(slotConsumido) {
+    const hayObjetivos = obtenerIndicesCartasDisponibles(cartasOponenteEnJuego).length > 0;
+    if (!hayObjetivos) {
+        return false;
+    }
+    return obtenerIndicesCartasDisponibles(cartasJugadorEnJuego)
+        .some(index => index !== slotConsumido && !cartasQueYaAtacaron.includes(index) && !cartaEstaAturdida(cartasJugadorEnJuego[index]));
+}
+
 function seleccionarCartaObjetivo(slotIndex) {
     if (partidaFinalizada || turnoActual !== 'jugador' || atacanteSeleccionado === null) {
         return;
@@ -4193,7 +4268,7 @@ function seleccionarCartaObjetivo(slotIndex) {
         emitirSeleccionAtacantePvp(null);
         escribirLog(`Ataque enviado. Esperando estado oficial del servidor...`);
         renderizarTablero();
-        if (!quedanAtaquesJugadorDisponibles()) {
+        if (!quedanAtaquesJugadorDisponiblesTrasConsumir(slotAtacante)) {
             finalizarTurnoJugador();
         }
         return;
@@ -4379,6 +4454,7 @@ async function iniciarTurnoJugador() {
     turnoActual = 'jugador';
     atacanteSeleccionado = null;
     cartasQueYaAtacaron = [];
+    pvpCartasAgotadasConfirmadas = [];
     if (ES_MODO_PVP) {
         pvpTurnoJugadorYaPreparado = true;
     } else {
@@ -4495,6 +4571,7 @@ function limpiarEstadoPartidaEnCurso() {
     partidaFinalizada = true;
     atacanteSeleccionado = null;
     cartasQueYaAtacaron = [];
+    pvpCartasAgotadasConfirmadas = [];
     pvpRetrasoHabilidadHastaTs = 0;
     pvpUltimaAccionPayload = null;
     pvpAccionesPorRevision.clear();
@@ -4509,6 +4586,10 @@ function limpiarEstadoPartidaEnCurso() {
     if (pvpTurnoAplicacionTimer) {
         clearTimeout(pvpTurnoAplicacionTimer);
         pvpTurnoAplicacionTimer = null;
+    }
+    if (pvpResetDestacadosTimer) {
+        clearTimeout(pvpResetDestacadosTimer);
+        pvpResetDestacadosTimer = null;
     }
     pvpPendienteEmitirFinTurno = false;
     if (pvpFinTurnoFallbackTimer) {
@@ -4570,6 +4651,9 @@ function mostrarModalConfirmarAbandono() {
 
 function reiniciarPartida() {
     if (ES_MODO_PVP) {
+        if (typeof window.limpiarEstadoPvpResiduoPartidaLocal === 'function') {
+            window.limpiarEstadoPvpResiduoPartidaLocal();
+        }
         window.location.href = 'multijugador.html';
         return;
     }
@@ -4590,6 +4674,9 @@ function reiniciarPartida() {
 
 function volverAlMenu() {
     if (ES_MODO_PVP) {
+        if (typeof window.limpiarEstadoPvpResiduoPartidaLocal === 'function') {
+            window.limpiarEstadoPvpResiduoPartidaLocal();
+        }
         window.location.href = 'multijugador.html';
         return;
     }

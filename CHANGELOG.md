@@ -1,5 +1,18 @@
 # Changelog
 
+## Beta-1.0.8-02.05.26
+
+- PvP online: corrección de animaciones de daño y barra de salud cuando el golpe letal vacía la mesa y el snapshot ya trae cartas nuevas en el mismo hueco (ataque básico y habilidades con objetivo único); la animación usa la carta previa hasta 0 antes de aplicar el estado oficial.
+- PvP online: AOE en cliente alinea daño/animación con vida + escudo efectivos; slots con carta sustituida por robo se tratan como letal para la carta anterior.
+- PvP online: `heal_all` anima la barra por aliado de forma secuencial al número verde (salud efectiva + escudo); clase visual `recibiendo-cura` en barra sin escalado brusco.
+- PvP online: panel de debug en tablero oculto (deja de crearse `pvp-debug-panel`); solo permanece el debug de combate si está activo.
+- Servidor PvP: AOE con tanque activo concentra el daño en el tanque **una sola vez** por uso (antes se aplicaba un golpe por cada carta viva en mesa).
+- Tablero (PvE/PvP): eliminados escalados/transform de tamaño en cartas durante selección, ataque, objetivo, agotado, robo y entrada; se mantienen resaltados por brillo/sombra; hover de escala desde `mazos.css` con transición ~0.5s solo en slots del tablero.
+- Barras de salud (`salud.css`): pulsos de impacto/cura sin `scale` para evitar efecto de “cartas que palpitan”.
+- Flujo local tras PvP: nuevo `js/limpiarPvpPartidaLocal.js` y llamadas al iniciar partida vs BOT, desafíos/eventos y al salir del tablero PvP al multijugador; evita modo PvP residual en `partida.js`.
+- Tablero: si una carta jugador está destacada en ataque, no se superpone `carta-seleccionada` con `carta-atacando`; boss sin `scale` inline (solo borde/sombra).
+- Etiqueta de versión del menú lateral actualizada a `Version: Beta-1.0.8-02.05.26`.
+
 ## Beta-1.0.7-01.05.26
 
 - PvP online: mejoras de sincronizacion de turnos/revisiones para reducir solapamientos visuales entre ultima accion, cambio de turno y refresco de estado.

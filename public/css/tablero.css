@@ -223,7 +223,7 @@ body {
     align-items: stretch;
     position: relative;
     overflow: visible;
-    transition: transform 0.2s ease;
+    transition: box-shadow 0.2s ease;
 }
 
 .slot-combate-inner {
@@ -246,6 +246,16 @@ body {
     width: 100%;
 }
 
+/* mazos.css define .carta:hover { scale(1.05) } sin transición; aquí solo la mesa del tablero */
+.tablero-container .slot .carta {
+    transform: scale(1);
+    transition: transform 0.5s ease, box-shadow 0.28s ease, filter 0.28s ease;
+}
+
+.tablero-container .slot .carta:hover {
+    transform: scale(1.05);
+}
+
 .slot:hover {
     transform: none;
     box-shadow: 0 0 20px rgba(0, 170, 255, 0.85), 0 0 30px rgba(0, 123, 255, 0.35);
@@ -261,8 +271,8 @@ body {
     display: flex;
     flex-direction: column;
     justify-content: flex-end;
-    transition: transform 0.28s ease, box-shadow 0.28s ease, filter 0.28s ease;
-    will-change: transform, filter, box-shadow;
+    transition: box-shadow 0.28s ease, filter 0.28s ease;
+    will-change: filter, box-shadow;
 }
 
 .carta.nivel-legendaria {
@@ -272,7 +282,6 @@ body {
 .carta-seleccionada {
     animation: pulsoSeleccion 0.9s ease-in-out infinite;
     box-shadow: 0 0 14px 4px rgba(255, 230, 0, 0.72), inset 0 0 22px rgba(255, 230, 0, 0.16);
-    transform: translateY(-4px);
 }
 
 .carta-atacando {
@@ -290,7 +299,6 @@ body {
 .carta-agotada {
     opacity: 0.58;
     filter: saturate(0.55) brightness(0.82);
-    transform: scale(0.98);
 }
 
 .carta-agotada .detalles-carta {
@@ -343,17 +351,12 @@ body {
 @keyframes cartaRobada {
     0% {
         opacity: 0;
-        transform: translateY(28px) scale(0.84);
-        filter: brightness(1.35);
-    }
-    60% {
-        opacity: 1;
-        transform: translateY(-6px) scale(1.04);
-        filter: brightness(1.15);
+        transform: translateY(12px);
+        filter: brightness(1.25);
     }
     100% {
         opacity: 1;
-        transform: translateY(0) scale(1);
+        transform: translateY(0);
         filter: brightness(1);
     }
 }
@@ -370,29 +373,24 @@ body {
 }
 
 @keyframes impulsoAtaque {
-    0% {
-        transform: translateY(0) scale(1);
+    0%, 100% {
+        filter: brightness(1.18) saturate(1.12);
+        box-shadow: 0 0 22px 6px rgba(0, 209, 255, 0.85), 0 0 30px rgba(0, 209, 255, 0.32);
     }
-    55% {
-        transform: translateY(-7px) scale(1.045);
-    }
-    100% {
-        transform: translateY(-3px) scale(1.015);
+    50% {
+        filter: brightness(1.26) saturate(1.18);
+        box-shadow: 0 0 28px 8px rgba(0, 209, 255, 0.92), 0 0 36px rgba(0, 209, 255, 0.38);
     }
 }
 
 @keyframes objetivoImpacto {
-    0% {
-        transform: scale(1);
-        filter: brightness(1) saturate(1);
+    0%, 100% {
+        filter: brightness(1.1) saturate(1.08);
+        box-shadow: 0 0 20px 6px rgba(255, 82, 82, 0.85), 0 0 28px rgba(255, 82, 82, 0.28);
     }
-    35% {
-        transform: scale(1.04);
-        filter: brightness(1.18) saturate(1.22);
-    }
-    100% {
-        transform: scale(1.02);
-        filter: brightness(1.08) saturate(1.08);
+    40% {
+        filter: brightness(1.22) saturate(1.2);
+        box-shadow: 0 0 26px 8px rgba(255, 96, 96, 0.92), 0 0 34px rgba(255, 82, 82, 0.36);
     }
 }
 
@@ -1243,11 +1241,9 @@ body {
 @keyframes entradaSuave {
     from {
         opacity: 0;
-        transform: translateY(20px) scale(0.95);
     }
     to {
         opacity: 1;
-        transform: translateY(0) scale(1);
     }
 }
 
@@ -1274,7 +1270,6 @@ body {
 }
 
 .poder-total-ui.cambio {
-    transform: scale(1.15);
     color: #ffffff;
     border-color: #ffffff;
     box-shadow: 0 0 20px rgba(255, 255, 255, 0.4);

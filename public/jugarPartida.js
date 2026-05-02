@@ -262,6 +262,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 localStorage.setItem('mazoOponenteBase', JSON.stringify({ Cartas: mazoOponente }));
                 localStorage.setItem('dificultad', dificultadSeleccionada);
 
+                limpiarEstadoPvpAntesDePartidaVsBot();
                 // Redirigir a tablero.html
                 console.log('Redirigiendo a tablero.html...');
                 window.location.href = 'tablero.html';
@@ -956,6 +957,10 @@ function cerrarModalSeleccionEvento() {
 }
 
 function limpiarEstadoPvpAntesDePartidaVsBot() {
+    if (typeof window.limpiarEstadoPvpResiduoPartidaLocal === 'function') {
+        window.limpiarEstadoPvpResiduoPartidaLocal();
+        return;
+    }
     localStorage.removeItem('partidaModo');
     localStorage.removeItem('partidaPvpSessionId');
     localStorage.removeItem('partidaPvpRol');

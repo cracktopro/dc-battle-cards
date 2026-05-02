@@ -810,8 +810,10 @@ function aplicarHabilidadCanonicaSnapshot(snapshot, ladoActor, slotAtacante, slo
     } else if (clase === 'aoe') {
         const objetivosVivos = obtenerIndicesCartasVivasServidor(mesaObjetivo);
         const tankIdx = obtenerIndiceTankActivoServidor(mesaObjetivo);
-        const objetivos = Number.isInteger(tankIdx) && objetivosVivos.length > 1
-            ? Array(objetivosVivos.length).fill(tankIdx)
+        // Con tanque activo, el daño AOE se concentra en el tanque pero solo una vez por uso
+        // (antes se repetía un golpe por cada carta viva en mesa, demasiado fuerte).
+        const objetivos = Number.isInteger(tankIdx) && objetivosVivos.length > 0
+            ? [tankIdx]
             : objetivosVivos;
         if (objetivos.length === 0) return { ok: false, reason: 'objetivo_invalido' };
         const poderFuente = Math.max(1, poderBaseAtacante);

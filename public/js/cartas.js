@@ -1012,7 +1012,7 @@ function normalizarMenuLateral() {
         linkMultijugador.removeEventListener('click', bloquearNavegacionMultijugador);
     }
 
-    const versionLabelTexto = 'Version: Beta-1.0.7-01.05.26';
+    const versionLabelTexto = 'Version: Beta-1.0.8-02.05.26';
     let versionLabel = menu.querySelector('#menu-version-label');
     if (!versionLabel) {
         versionLabel = document.createElement('div');

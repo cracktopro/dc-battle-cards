@@ -365,6 +365,9 @@ async function renderizarDesafiosGlobal() {
 }
 
 function iniciarDesafio(desafio, cartasSeleccionadas) {
+    if (typeof window.limpiarEstadoPvpResiduoPartidaLocal === 'function') {
+        window.limpiarEstadoPvpResiduoPartidaLocal();
+    }
     localStorage.setItem('desafioActivo', JSON.stringify(desafio));
     localStorage.setItem('dificultad', String(desafio.dificultad));
     localStorage.setItem('mazoJugador', JSON.stringify({ Cartas: cartasSeleccionadas }));
