@@ -381,9 +381,24 @@ function emitirSeleccionAtacantePvp(slotAtacante = null) {
     });
 }
 
+/**
+ * Índice de mesa 0–2 desde payload de red (PvP). Evita `Number(null) === 0` y `Number("") === 0`,
+ * que resaltaban por error la carta izquierda al sincronizar selección/ataque del rival.
+ */
+function parseSlotIndicePvp(raw) {
+    if (raw === null || raw === undefined || raw === '') {
+        return null;
+    }
+    const n = Number(raw);
+    if (!Number.isInteger(n) || n < 0 || n > 2) {
+        return null;
+    }
+    return n;
+}
+
 async function animarImpactoAtaquePvpConSnapshot(prevJ, prevO, proxJ, proxO, accion = {}, actorEmailRaw = '') {
-    const slotObjetivo = Number(accion?.slotObjetivo);
-    if (!Number.isInteger(slotObjetivo) || slotObjetivo < 0 || slotObjetivo > 2) {
+    const slotObjetivo = parseSlotIndicePvp(accion?.slotObjetivo);
+    if (slotObjetivo === null) {
         return;
     }
     const actorEmail = String(actorEmailRaw || '').trim().toLowerCase();
@@ -539,11 +554,9 @@ async function animarCambiosHabilidadPvp(prevJ, prevO, proxJ, proxO, accion = {}
         return;
     }
 
-    const slotObjSkill = Number(accion?.slotObjetivo);
+    const slotObjSkill = parseSlotIndicePvp(accion?.slotObjetivo);
     if (
-        Number.isInteger(slotObjSkill)
-        && slotObjSkill >= 0
-        && slotObjSkill <= 2
+        slotObjSkill !== null
         && clase !== 'heal'
         && clase !== 'shield'
         && clase !== 'revive'
@@ -743,18 +756,27 @@ function notificarResultadoPvp(ganadorClaveLocal, motivo = 'fin_partida') {
 
 function obtenerNombreVisibleOponente() {
     const nombre = String(localStorage.getItem('nombreOponente') || '').trim();
-    if (nombre) return nombre;
-    try {
-        const grupo = JSON.parse(localStorage.getItem('grupoActual') || '{}');
-        const companeroNombre = String(grupo?.companero?.nombre || '').trim();
-        if (companeroNombre) return companeroNombre;
-        const companeroEmail = String(grupo?.companero?.email || '').trim();
-        if (companeroEmail) return companeroEmail.split('@')[0] || 'Jugador rival';
-    } catch (_) {
-        // noop
+    if (nombre) {
+        return nombre;
     }
-    if (!ES_MODO_PVP) return 'BOT';
-    return 'Jugador rival';
+    // Solo PvP online: el compañero de grupo no es el oponente en partidas vs BOT / desafío / evento.
+    if (ES_MODO_PVP) {
+        try {
+            const grupo = JSON.parse(localStorage.getItem('grupoActual') || '{}');
+            const companeroNombre = String(grupo?.companero?.nombre || '').trim();
+            if (companeroNombre) {
+                return companeroNombre;
+            }
+            const companeroEmail = String(grupo?.companero?.email || '').trim();
+            if (companeroEmail) {
+                return companeroEmail.split('@')[0] || 'Jugador rival';
+            }
+        } catch (_) {
+            /* noop */
+        }
+        return 'Jugador rival';
+    }
+    return 'BOT';
 }
 
 function intentarInicializarSocketPvp() {
@@ -801,8 +823,12 @@ function intentarInicializarSocketPvp() {
         if (!actorEmail || actorEmail === EMAIL_SESION_ACTUAL) {
             return;
         }
-        const slot = Number(payload?.slotAtacante);
-        atacanteSeleccionadoOponentePvp = Number.isInteger(slot) ? slot : null;
+        // Si ya estamos mostrando el ataque básico del rival (acción), no aplicar selección:
+        // eventos desordenados pueden reaplicar un slot antiguo y resaltar la carta equivocada.
+        if (cartaOponenteDestacada != null) {
+            return;
+        }
+        atacanteSeleccionadoOponentePvp = parseSlotIndicePvp(payload?.slotAtacante);
         renderizarTablero();
     });
 
@@ -839,10 +865,10 @@ function intentarInicializarSocketPvp() {
             if (actorEmailNorm !== EMAIL_SESION_ACTUAL) {
                 atacanteSeleccionadoOponentePvp = null;
                 if (tipoAccion === 'ataque') {
-                    const slotAtk = Number(accion?.slotAtacante);
-                    const slotObj = Number(accion?.slotObjetivo);
-                    cartaOponenteDestacada = Number.isInteger(slotAtk) ? slotAtk : null;
-                    cartaJugadorDestacada = Number.isInteger(slotObj) ? slotObj : null;
+                    const slotAtk = parseSlotIndicePvp(accion?.slotAtacante);
+                    const slotObj = parseSlotIndicePvp(accion?.slotObjetivo);
+                    cartaOponenteDestacada = slotAtk;
+                    cartaJugadorDestacada = slotObj;
                     renderizarTablero();
                     if (pvpResetDestacadosTimer) {
                         clearTimeout(pvpResetDestacadosTimer);
@@ -969,12 +995,12 @@ function intentarInicializarSocketPvp() {
                 if (animacionAsociadaAccion && tipoAccionReciente === 'ataque') {
                     const actorAccion = String(accionRevision?.actorEmail || '').trim().toLowerCase();
                     if (actorAccion && actorAccion === EMAIL_SESION_ACTUAL) {
-                        const slotAtacanteConfirmado = Number(accionRevision?.accion?.slotAtacante);
+                        const slotAtacanteConfirmado = parseSlotIndicePvp(accionRevision?.accion?.slotAtacante);
                         // El estado oficial ya trae `cartasYaActuaron*`: solo consume índice si fue ataque básico.
                         // Los ataques extra (extra_attack) no añaden slot en servidor; no debemos forzarlo aquí
                         // o la carta queda como "agotada" sin poder hacer su ataque normal.
                         if (
-                            Number.isInteger(slotAtacanteConfirmado)
+                            slotAtacanteConfirmado !== null
                             && cartasQueYaAtacaron.includes(slotAtacanteConfirmado)
                             && !pvpCartasAgotadasConfirmadas.includes(slotAtacanteConfirmado)
                         ) {
@@ -3336,7 +3362,13 @@ function crearCartaElemento(carta, tipo, slotIndex, opciones = {}) {
         if (tipo === 'jugador' && atacanteSeleccionado === slotIndex && !destacadaAtaqueJugador) {
             cartaDiv.classList.add('carta-seleccionada');
         }
-        if (tipo === 'oponente' && Number.isInteger(atacanteSeleccionadoOponentePvp) && atacanteSeleccionadoOponentePvp === slotIndex) {
+        if (
+            ES_MODO_PVP
+            && tipo === 'oponente'
+            && cartaOponenteDestacada == null
+            && Number.isInteger(atacanteSeleccionadoOponentePvp)
+            && atacanteSeleccionadoOponentePvp === slotIndex
+        ) {
             cartaDiv.classList.add('carta-atacando');
         }
 
@@ -3618,6 +3650,9 @@ function renderizarTablero() {
 function limpiarDestacados() {
     cartaJugadorDestacada = null;
     cartaOponenteDestacada = null;
+    if (ES_MODO_PVP) {
+        atacanteSeleccionadoOponentePvp = null;
+    }
 }
 
 async function rellenarSlotsVacios(mazo, cartasEnJuego, propietario) {

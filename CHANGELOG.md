@@ -1,5 +1,15 @@
 # Changelog
 
+## Beta-1.0.10-03.05.26
+
+- Evento cooperativo online vs BOT: flujo de sesión en `server.js` (creación de partida, room, revisiones de estado, ejecutor del BOT, resultado y abandono) y cliente en `public/cliente.js` + `public/multijugador.html` / `public/multijugadorEventosCoop.js` (invitación, preparación, tablero y eventos Socket.IO).
+- Tablero coop dedicado `public/tablero_coop.html` con estilos `public/css/tablero_coop.css`, render de cartas `public/js/tableroCoopCartaRender.js` y motor `public/partidaCoop.js` (fases P1 / P2 / BOT, combate, habilidades, cementerio y sincronización por snapshots).
+- Sincronización visual entre jugadores: avisos de habilidad activa y números flotantes mediante `coopReplayVisual` + cola de estado; AOE con animación multiobjetivo y daño mostrado acotado a vida/escudo efectivos; cierre de partida coherente tras eliminar rivales (incl. AOE del BOT) y comprobación de fin al aplicar snapshot remoto.
+- Turno BOT: robo desde mazo al inicio de la fase cuando la mesa está vacía (eco a compañero); transiciones P2→BOT y P2 con relleno de huecos en el snapshot emitido y espejo en el emisor; despliegue de BOSS reutilizable sobre snapshot (`intentarDesplegarBossEnSnap`).
+- Multijugador / `public/partida.js`: limpieza de estado residual coop al iniciar otras partidas y al volver al hub; script `public/js/limpiarCoopPartidaLocal.js` para residuos en `localStorage`.
+- Recursos: actualización de `public/resources/cartas.xlsx` y recurso de apoyo `public/resources/eventos_online.xlsx` para el flujo online.
+- Etiqueta de versión del menú lateral actualizada a `Version: Beta-1.0.10-03.05.26`.
+
 ## Beta-1.0.9-02.05.26
 
 - Partida vs BOT (offline): restaurado el mensaje inicial de turno (`Turno de …`) al iniciar partida normal, evento o desafío; el primer turno actualiza el HUD antes de la acción y el aviso central se muestra tras el relleno de huecos en mesa (sin cambios en PvP online).

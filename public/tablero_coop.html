@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <title>Tablero cooperativo</title>
+    <link href="css/mazos.css" rel="stylesheet">
+    <link href="css/salud.css" rel="stylesheet">
+    <link href="css/tablero.css" rel="stylesheet">
+    <link href="css/tablero_coop.css" rel="stylesheet">
+    <link href="css/app-layout.css" rel="stylesheet">
+</head>
+<body class="tablero-coop-body">
+
+<div id="aviso-turno-coop" class="aviso-turno"></div>
+
+<div id="ventana-emergente-fin-coop" class="ventana-emergente" style="display:none;">
+    <div class="ventana-contenido">
+        <h2 id="titulo-fin-partida-coop"></h2>
+        <p id="mensaje-fin-partida-coop"></p>
+        <div class="acciones-fin-partida">
+            <button type="button" id="boton-volver-multi-coop">Volver a multijugador</button>
+        </div>
+    </div>
+</div>
+
+<div class="tablero-coop-wrap tablero-container tablero-coop-tablero-inner">
+    <div id="coop-log-mini" style="font-size:0.78rem;color:#9fd6ff;max-width:900px;text-align:center;min-height:20px;"></div>
+    <div class="coop-mesa">
+        <div class="coop-fila coop-fila-bot" id="coop-fila-bot"></div>
+        <div class="coop-fila coop-fila-humanos">
+            <div class="coop-mitad-jugador es-a" id="coop-zona-a">
+                <div class="coop-mitad-titulo" id="coop-label-a">Jugador 1</div>
+                <div class="coop-slots-par" id="coop-slots-a"></div>
+            </div>
+            <div class="coop-mitad-jugador es-b" id="coop-zona-b">
+                <div class="coop-mitad-titulo" id="coop-label-b">Jugador 2</div>
+                <div class="coop-slots-par" id="coop-slots-b"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="coop-rail">
+    <div class="coop-panel-info bot-panel">
+        <div class="turno-badge" id="coop-turno-bot-badge">BOT</div>
+        <img id="coop-bot-avatar" class="avatar-round" src="https://i.ibb.co/QJvLStm/zzz-Carta-Back.png" alt="BOT">
+        <h3 id="coop-bot-nombre">BOT</h3>
+        <div class="coop-contador-mazo" id="coop-contador-bot"></div>
+    </div>
+    <div class="coop-rail-jugadores" style="grid-column:1/-1;">
+        <div class="coop-panel-info" id="coop-panel-a">
+            <div class="turno-badge" id="coop-turno-a-badge"></div>
+            <img id="coop-avatar-a" class="avatar-round" alt="">
+            <h3 id="coop-nombre-a"></h3>
+            <div class="coop-contador-mazo" id="coop-contador-a"></div>
+        </div>
+        <div class="coop-panel-info" id="coop-panel-b">
+            <div class="turno-badge" id="coop-turno-b-badge"></div>
+            <img id="coop-avatar-b" class="avatar-round" alt="">
+            <h3 id="coop-nombre-b"></h3>
+            <div class="coop-contador-mazo" id="coop-contador-b"></div>
+        </div>
+    </div>
+    <button type="button" id="coop-btn-abandonar" class="btn btn-abandonar" style="margin-top:10px;width:100%;">Abandonar</button>
+</div>
+
+<div id="modal-abandonar-coop" class="ventana-emergente" style="display:none;">
+    <div class="ventana-contenido">
+        <h2>Abandonar partida</h2>
+        <p>¿Seguro que quieres salir del evento cooperativo?</p>
+        <div class="acciones-fin-partida">
+            <button type="button" id="modal-coop-abandonar-si">Abandonar</button>
+            <button type="button" id="modal-coop-abandonar-no">Cancelar</button>
+        </div>
+    </div>
+</div>
+
+<div id="modal-seleccion-habilidad" class="modal-habilidad-seleccion" style="display:none;">
+    <div class="modal-habilidad-contenido">
+        <h3 id="modal-habilidad-titulo">Seleccionar objetivo</h3>
+        <div id="modal-habilidad-lista" class="modal-habilidad-lista"></div>
+        <div class="modal-habilidad-acciones">
+            <button type="button" id="modal-habilidad-confirmar" class="modal-habilidad-btn modal-habilidad-btn-primary">Confirmar</button>
+            <button type="button" id="modal-habilidad-cancelar" class="modal-habilidad-btn modal-habilidad-btn-secondary">Cancelar</button>
+        </div>
+    </div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.0/xlsx.full.min.js"></script>
+<script src="js/cartas.js"></script>
+<script src="js/limpiarPvpPartidaLocal.js"></script>
+<script src="js/limpiarCoopPartidaLocal.js"></script>
+<script src="cliente.js"></script>
+<script src="js/tableroCoopCartaRender.js"></script>
+<script src="partidaCoop.js"></script>
+<script src="js/menu-mobile.js" defer></script>
+</body>
+</html>

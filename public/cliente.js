@@ -324,6 +324,66 @@ socket.on('multiplayer:session:start', (payload = {}) => {
     window.dispatchEvent(new CustomEvent('dc:lobby-session-start', { detail: payload }));
 });
 
+socket.on('coop:evento:invitacion', (payload = {}) => {
+    window.dispatchEvent(new CustomEvent('dc:coop-evento-invitacion', { detail: payload }));
+});
+
+socket.on('coop:evento:invitacion:rechazada', () => {
+    window.dispatchEvent(new CustomEvent('dc:coop-evento-invitacion-rechazada'));
+});
+
+socket.on('coop:evento:preparacion', (payload = {}) => {
+    window.dispatchEvent(new CustomEvent('dc:coop-evento-preparacion', { detail: payload }));
+});
+
+socket.on('coop:evento:preparacion:estado', (payload = {}) => {
+    window.dispatchEvent(new CustomEvent('dc:coop-evento-preparacion-estado', { detail: payload }));
+});
+
+socket.on('multiplayer:coop:session:start', (payload = {}) => {
+    window.dispatchEvent(new CustomEvent('dc:coop-session-start', { detail: payload }));
+});
+
+window.emitCoopEventoInvitar = function emitCoopEventoInvitar(payload) {
+    socket.emit('coop:evento:invitar', payload || {});
+};
+
+window.emitCoopEventoInvitacionResponder = function emitCoopEventoInvitacionResponder(payload) {
+    socket.emit('coop:evento:invitacion:responder', payload || {});
+};
+
+window.emitCoopEventoPreparacionListo = function emitCoopEventoPreparacionListo(payload) {
+    socket.emit('coop:evento:preparacion:listo', payload || {});
+};
+
+window.emitMultiplayerCoopJoin = function emitMultiplayerCoopJoin(sessionId) {
+    socket.emit('multiplayer:coop:join', { sessionId: String(sessionId || '').trim() });
+};
+
+window.emitMultiplayerCoopEstado = function emitMultiplayerCoopEstado(payload) {
+    socket.emit('multiplayer:coop:estado', payload || {});
+};
+
+window.emitMultiplayerCoopEstadoSolicitar = function emitMultiplayerCoopEstadoSolicitar(sessionId) {
+    socket.emit('multiplayer:coop:estado:solicitar', { sessionId: String(sessionId || '').trim() });
+};
+
+window.emitMultiplayerCoopResultado = function emitMultiplayerCoopResultado(payload) {
+    socket.emit('multiplayer:coop:resultado', payload || {});
+};
+
+socket.on('multiplayer:coop:estado', (payload = {}) => {
+    window.dispatchEvent(new CustomEvent('dc:coop-estado', { detail: payload }));
+});
+
+socket.on('multiplayer:coop:resync-required', (payload = {}) => {
+    window.dispatchEvent(new CustomEvent('dc:coop-resync-required', { detail: payload }));
+});
+
+socket.on('multiplayer:coop:resultado', (payload = {}) => {
+    window.dispatchEvent(new CustomEvent('dc:coop-resultado', { detail: payload }));
+});
+
 window.solicitarHistorialChatGrupo = function solicitarHistorialChatGrupo() {
     socket.emit('grupo:chat:historial:solicitar');
 };

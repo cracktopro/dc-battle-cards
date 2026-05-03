@@ -101,7 +101,12 @@
     <div class="content-container">
         <h2>Multijugador</h2>
         <div id="mensaje-multi" class="alert alert-warning" style="display:none;"></div>
-        <div class="multi-layout">
+        <section class="multi-panel" style="margin-top:8px;">
+            <h4 style="margin-bottom:10px;">Eventos cooperativos online</h4>
+            <p style="color:#b8d4ff; font-size:0.9rem; margin-bottom:8px;">Requiere grupo de 2 jugadores. Un jugador inicia; el otro acepta la invitación y ambos eligen 6 cartas.</p>
+            <div id="multi-eventos-coop-grid" class="eventos-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;"></div>
+        </section>
+        <div class="multi-layout" style="margin-top:12px;">
             <section class="multi-panel">
                 <h4 style="margin-bottom:10px;">Chat de grupo</h4>
                 <div class="chat-container" style="height:min(460px,56vh) !important;">
@@ -135,9 +140,11 @@
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.0/xlsx.full.min.js"></script>
     <script src="js/cartas.js"></script>
     <script src="cliente.js"></script>
     <script src="multijugador.js"></script>
+    <script src="multijugadorEventosCoop.js"></script>
     <script src="js/menu-mobile.js" defer></script>
 </body>
 </html>

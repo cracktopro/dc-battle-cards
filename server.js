@@ -87,6 +87,10 @@ const CHAT_GRUPO_MAX_MENSAJES = 60;
 const GRUPO_RECONEXION_GRACIA_MS = 20000;
 const disolucionesPendientesGrupo = new Map(); // partyId -> timeoutId
 const sesionesPvpActivas = new Map(); // sessionId -> metadata
+const preparacionesCoopEvento = new Map(); // prepId -> estado invitación / selección 6 cartas
+const sesionesCoopEventoActivas = new Map(); // sessionId -> metadata coop vs BOT
+let catalogoCartasServidorCache = null;
+let filasEventosOnlineCache = null;
 const LEGACY_SOCKET_COMBATE_ACTIVO = false;
 const PVP_RECONEXION_GRACIA_MS = 20000;
 const pvpDesconexionesPendientes = new Map(); // `${sessionId}::${email}` -> timeoutId
@@ -1116,6 +1120,339 @@ async function guardarMensajeChatEnHistorial(mensaje) {
     return nuevoHistorial;
 }
 
+function obtenerRoomSesionCoop(sessionId) {
+    return `coop:${String(sessionId || '').trim()}`;
+}
+
+function obtenerCatalogoCartasServidorCoop() {
+    if (catalogoCartasServidorCache) {
+        return catalogoCartasServidorCache;
+    }
+    try {
+        const workbook = XLSX.readFile(path.join(__dirname, 'public/resources/cartas.xlsx'));
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const filas = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+        catalogoCartasServidorCache = filas;
+        return filas;
+    } catch (error) {
+        console.error('Coop: error leyendo cartas.xlsx:', error.message);
+        catalogoCartasServidorCache = [];
+        return catalogoCartasServidorCache;
+    }
+}
+
+function mapaCatalogoPorNombreCoop() {
+    const catalogo = obtenerCatalogoCartasServidorCoop();
+    const mapa = new Map();
+    (Array.isArray(catalogo) ? catalogo : []).forEach(carta => {
+        const clave = normalizarTexto(String(carta?.Nombre || ''));
+        if (clave && !mapa.has(clave)) {
+            mapa.set(clave, carta);
+        }
+    });
+    return mapa;
+}
+
+function obtenerFilasEventosOnlineServidor() {
+    if (filasEventosOnlineCache) {
+        return filasEventosOnlineCache;
+    }
+    try {
+        const workbook = XLSX.readFile(path.join(__dirname, 'public/resources/eventos_online.xlsx'));
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        filasEventosOnlineCache = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+        return filasEventosOnlineCache;
+    } catch (error) {
+        console.error('Coop: error leyendo eventos_online.xlsx:', error.message);
+        filasEventosOnlineCache = [];
+        return filasEventosOnlineCache;
+    }
+}
+
+function buscarFilaEventoOnlinePorId(idBuscado) {
+    const filas = obtenerFilasEventosOnlineServidor();
+    const idNum = Number(idBuscado);
+    return filas.find(f => Number(f?.ID_evento_online ?? f?.id ?? -1) === idNum) || null;
+}
+
+function mezclarArrayServidor(arr) {
+    const a = Array.isArray(arr) ? [...arr] : [];
+    for (let i = a.length - 1; i > 0; i -= 1) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+}
+
+function escalarCartaEnemigoCoopServidor(cartaBase, dificultad) {
+    const d = Math.min(6, Math.max(1, Number(dificultad) || 1));
+    const nivelBase = Number(cartaBase?.Nivel || 1);
+    const incrementoNiveles = Math.max(d - nivelBase, 0);
+    const saludBase = obtenerSaludMaxCarta(cartaBase);
+    const saludEscalada = saludBase + (incrementoNiveles * 500);
+    const poderNum = Number(cartaBase?.Poder || 0);
+    return inicializarSaludCarta({
+        ...cartaBase,
+        Nivel: d,
+        Poder: poderNum + (incrementoNiveles * 500),
+        SaludMax: saludEscalada,
+        Salud: saludEscalada
+    });
+}
+
+/** Misma fórmula que `escalarBossSegunDificultad` en partida.js (desafíos / eventos). */
+function escalarBossSegunDificultadServidor(carta, dificultad) {
+    const cartaBoss = { ...carta };
+    const nivelBase = Number(cartaBoss.Nivel || 1);
+    const dificultadObjetivo = Math.min(Math.max(Number(dificultad) || 1, 1), 6);
+    const incrementoNiveles = Math.max(dificultadObjetivo - nivelBase, 0);
+    const incrementoPorNivel = incrementoNiveles * 500;
+    const saludBase = obtenerSaludMaxCarta(cartaBoss);
+    const poderBase = Number(cartaBoss.Poder || 0);
+
+    cartaBoss.Nivel = dificultadObjetivo;
+    cartaBoss.Poder = Math.round(poderBase + incrementoPorNivel);
+    const saludBossActual = Math.round((saludBase * 8) + incrementoPorNivel);
+    cartaBoss.SaludMax = Math.round(saludBossActual * 1.75);
+    cartaBoss.Salud = cartaBoss.SaludMax;
+    cartaBoss.esBoss = true;
+    return inicializarSaludCarta(cartaBoss);
+}
+
+/**
+ * Enemigos normales van al mazo mezclado; el BOSS queda aparte y entra al tablero cuando caen todos
+ * los rivales normales (como en desafíos: grupos y luego BOSS).
+ */
+function construirMazoBotCoopDesdeEvento(filaEvento, mapaCatalogo, dificultad) {
+    const nombresNormales = [];
+    for (let i = 1; i <= 8; i += 1) {
+        const nombre = String(filaEvento[`enemigo${i}`] || '').trim();
+        if (nombre) {
+            nombresNormales.push(nombre);
+        }
+    }
+    const cartasNormales = nombresNormales.map(nombre => {
+        const base = mapaCatalogo.get(normalizarTexto(nombre)) || {
+            Nombre: nombre,
+            Nivel: 1,
+            Poder: 500,
+            Salud: 500,
+            SaludMax: 500
+        };
+        return escalarCartaEnemigoCoopServidor({ ...base, Nombre: nombre }, dificultad);
+    });
+
+    let bossCarta = null;
+    const bossNombre = String(filaEvento?.boss || '').trim();
+    if (bossNombre) {
+        const baseBoss = mapaCatalogo.get(normalizarTexto(bossNombre)) || {
+            Nombre: bossNombre,
+            Nivel: 1,
+            Poder: 500,
+            Salud: 500,
+            SaludMax: 500
+        };
+        bossCarta = escalarBossSegunDificultadServidor({ ...baseBoss, Nombre: bossNombre }, dificultad);
+    }
+
+    return { cartasNormales, bossCarta };
+}
+
+async function extraerCartasUsuarioPorIndicesCoop(email, indicesRaw) {
+    const datos = await obtenerUsuarioPersistidoPorEmail(email);
+    const cartasUsuario = Array.isArray(datos?.cartas) ? datos.cartas : [];
+    const indices = Array.isArray(indicesRaw) ? indicesRaw.map(n => Number(n)) : [];
+    if (indices.length !== 6) {
+        return null;
+    }
+    const usados = new Set();
+    const salida = [];
+    for (const ix of indices) {
+        if (!Number.isInteger(ix) || ix < 0 || ix >= cartasUsuario.length || usados.has(ix)) {
+            return null;
+        }
+        usados.add(ix);
+        salida.push(JSON.parse(JSON.stringify(cartasUsuario[ix])));
+    }
+    return salida;
+}
+
+function enriquecerCartasConCatalogoCoop(cartas, mapaCatalogo) {
+    return (Array.isArray(cartas) ? cartas : []).map(carta => {
+        const datos = mapaCatalogo.get(normalizarTexto(carta?.Nombre || ''));
+        if (!datos) {
+            return carta;
+        }
+        return {
+            ...carta,
+            faccion: carta.faccion || datos.faccion || datos.Faccion || '',
+            Afiliacion: carta.Afiliacion || datos.Afiliacion || '',
+            skill_name: String(carta.skill_name || '').trim() || String(datos.skill_name || '').trim(),
+            skill_info: String(carta.skill_info || '').trim() || String(datos.skill_info || '').trim(),
+            skill_class: String(carta.skill_class || '').trim().toLowerCase() || String(datos.skill_class || '').trim().toLowerCase(),
+            skill_power: carta.skill_power ?? datos.skill_power ?? '',
+            skill_trigger: String(carta.skill_trigger || '').trim().toLowerCase() || String(datos.skill_trigger || '').trim().toLowerCase()
+        };
+    });
+}
+
+function construirSnapshotInicialCoopServidor({
+    mazoBotCompleto,
+    bossPendienteCoop,
+    cartasA,
+    cartasB
+}) {
+    const poderJug = calcularPoderTotalMazo(cartasA) + calcularPoderTotalMazo(cartasB);
+    const mazoParaTotalBot = [...(Array.isArray(mazoBotCompleto) ? mazoBotCompleto : [])];
+    if (bossPendienteCoop && typeof bossPendienteCoop === 'object') {
+        mazoParaTotalBot.push(bossPendienteCoop);
+    }
+    const poderBot = calcularPoderTotalMazo(mazoParaTotalBot);
+    const iniciativaJugadores = poderJug > poderBot;
+
+    const mazoBot = mezclarArrayServidor([...mazoBotCompleto]);
+    const cartasEnJuegoBot = [];
+    for (let i = 0; i < 4; i += 1) {
+        cartasEnJuegoBot.push(mazoBot.length > 0 ? inicializarSaludCarta(mazoBot.shift()) : null);
+    }
+
+    let mazoACopia = mezclarArrayServidor([...cartasA]);
+    const cartasEnJuegoA = [
+        mazoACopia.length > 0 ? inicializarSaludCarta(mazoACopia.shift()) : null,
+        mazoACopia.length > 0 ? inicializarSaludCarta(mazoACopia.shift()) : null
+    ];
+
+    let mazoBCopia = mezclarArrayServidor([...cartasB]);
+    const cartasEnJuegoB = [
+        mazoBCopia.length > 0 ? inicializarSaludCarta(mazoBCopia.shift()) : null,
+        mazoBCopia.length > 0 ? inicializarSaludCarta(mazoBCopia.shift()) : null
+    ];
+
+    const faseCoop = iniciativaJugadores ? 'P1' : 'BOT';
+
+    return {
+        revision: 0,
+        faseCoop,
+        iniciativaJugadores,
+        cartasEnJuegoBot,
+        cartasEnJuegoA,
+        cartasEnJuegoB,
+        mazoBot,
+        mazoA: mazoACopia,
+        mazoB: mazoBCopia,
+        cementerioBot: [],
+        cementerioA: [],
+        cementerioB: [],
+        cartasYaAtacaronA: [],
+        cartasYaAtacaronB: [],
+        cartasYaAtacaronBot: [],
+        accionesExtraA: 0,
+        accionesExtraB: 0,
+        accionesExtraBot: 0,
+        bossPendienteCoop: bossPendienteCoop && typeof bossPendienteCoop === 'object'
+            ? JSON.parse(JSON.stringify(bossPendienteCoop))
+            : null
+    };
+}
+
+async function iniciarSesionCoopEventoDesdePrep(prep) {
+    const fila = buscarFilaEventoOnlinePorId(prep.eventoId);
+    if (!fila) {
+        return { ok: false, mensaje: 'Evento no encontrado.' };
+    }
+    const mapaCatalogo = mapaCatalogoPorNombreCoop();
+    const dificultad = Math.min(6, Math.max(1, Number(prep.dificultad) || 1));
+    const { cartasNormales, bossCarta } = construirMazoBotCoopDesdeEvento(fila, mapaCatalogo, dificultad);
+    if (cartasNormales.length < 4) {
+        return { ok: false, mensaje: 'El evento no tiene suficientes enemigos (mínimo 4 cartas BOT).' };
+    }
+
+    let cartasA = prep.cartasA;
+    let cartasB = prep.cartasB;
+    cartasA = enriquecerCartasConCatalogoCoop(cartasA, mapaCatalogo);
+    cartasB = enriquecerCartasConCatalogoCoop(cartasB, mapaCatalogo);
+
+    const snapshotInicial = construirSnapshotInicialCoopServidor({
+        mazoBotCompleto: cartasNormales,
+        bossPendienteCoop: bossCarta,
+        cartasA,
+        cartasB
+    });
+
+    const sessionId = `coop_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+    const emailLeader = prep.inviterEmail;
+    const emailMember = prep.inviteeEmail;
+
+    const userLead = obtenerUsuarioConectadoPorEmail(emailLeader);
+    const userMem = obtenerUsuarioConectadoPorEmail(emailMember);
+
+    sesionesCoopEventoActivas.set(sessionId, {
+        sessionId,
+        partyId: prep.partyId,
+        emailLeader,
+        emailMember,
+        eventoId: prep.eventoId,
+        dificultad,
+        snapshotEstado: snapshotInicial,
+        revisionEstado: 0,
+        finalizada: false,
+        resultado: null,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        ejecutorBotEmail: emailLeader
+    });
+
+    const nombreEvento = String(prep.eventoNombre || fila.nombre || 'Evento cooperativo').trim();
+    const payloadBase = {
+        sessionId,
+        partyId: prep.partyId,
+        modo: 'coop_evento_online',
+        evento: {
+            id: Number(fila.ID_evento_online ?? prep.eventoId),
+            nombre: nombreEvento,
+            descripcion: String(fila.Descripción || fila.descripcion || '').trim(),
+            puntos: Number(fila.puntos || 0),
+            mejora: Number(fila.mejora || 0),
+            mejora_especial: Number(fila.mejora_especial || 0),
+            cartaRecompensa: String(fila.cartas || fila.carta || '').trim(),
+            dificultad
+        },
+        snapshot: snapshotInicial,
+        revision: 0,
+        emailLeader,
+        emailMember,
+        ejecutorBotEmail: emailLeader,
+        jugadorA: {
+            email: emailLeader,
+            nombre: userLead?.nombre || emailLeader.split('@')[0],
+            avatar: userLead?.avatar || ''
+        },
+        jugadorB: {
+            email: emailMember,
+            nombre: userMem?.nombre || emailMember.split('@')[0],
+            avatar: userMem?.avatar || ''
+        }
+    };
+
+    const payloadA = {
+        ...payloadBase,
+        rolCoop: 'A'
+    };
+    const payloadB = {
+        ...payloadBase,
+        rolCoop: 'B'
+    };
+
+    if (userLead?.id) {
+        io.to(userLead.id).emit('multiplayer:coop:session:start', payloadA);
+    }
+    if (userMem?.id) {
+        io.to(userMem.id).emit('multiplayer:coop:session:start', payloadB);
+    }
+
+    return { ok: true };
+}
+
 
 // Configuración de Socket.IO
 io.on('connection', (socket) => {
@@ -1948,6 +2285,243 @@ io.on('connection', (socket) => {
             ganadorEmail
         });
         io.to(obtenerRoomSesionPvp(sesion.sessionId)).emit('multiplayer:pvp:resultado', sesion.resultado);
+    });
+
+    socket.on('coop:evento:invitar', ({ eventoId, dificultad, eventoNombre }) => {
+        const usuario = obtenerUsuarioConectadoPorSocketId(socket.id);
+        if (!usuario) return;
+        const partyId = indiceGrupoPorEmail.get(usuario.email);
+        if (!partyId || !gruposActivos.has(partyId)) {
+            io.to(socket.id).emit('grupo:notificacion', { tipo: 'error', mensaje: 'Debes estar en un grupo para invitar.' });
+            return;
+        }
+        const emails = obtenerEmailsGrupo(partyId);
+        if (emails.length !== 2) {
+            io.to(socket.id).emit('grupo:notificacion', { tipo: 'error', mensaje: 'El grupo debe tener 2 jugadores.' });
+            return;
+        }
+        const otroEmail = emails.find(e => normalizarTexto(e) !== normalizarTexto(usuario.email));
+        if (!otroEmail) {
+            io.to(socket.id).emit('grupo:notificacion', { tipo: 'error', mensaje: 'No se encontró compañero de grupo.' });
+            return;
+        }
+        const idNum = Number(eventoId);
+        const difNum = Math.min(6, Math.max(1, Number(dificultad) || 1));
+        if (!Number.isFinite(idNum)) {
+            io.to(socket.id).emit('grupo:notificacion', { tipo: 'error', mensaje: 'Evento inválido.' });
+            return;
+        }
+        const fila = buscarFilaEventoOnlinePorId(idNum);
+        if (!fila) {
+            io.to(socket.id).emit('grupo:notificacion', { tipo: 'error', mensaje: 'Evento no encontrado en el servidor.' });
+            return;
+        }
+        const prepId = `coop_prep_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+        preparacionesCoopEvento.set(prepId, {
+            prepId,
+            partyId,
+            inviterEmail: usuario.email,
+            inviteeEmail: otroEmail,
+            eventoId: idNum,
+            dificultad: difNum,
+            eventoNombre: String(eventoNombre || fila.nombre || '').trim() || `Evento ${idNum}`,
+            estado: 'invitacion',
+            listoA: false,
+            listoB: false,
+            cartasA: null,
+            cartasB: null
+        });
+        const otro = obtenerUsuarioConectadoPorEmail(otroEmail);
+        const nombreEv = String(eventoNombre || fila.nombre || 'Evento cooperativo').trim();
+        if (otro?.id) {
+            io.to(otro.id).emit('coop:evento:invitacion', {
+                prepId,
+                invitadorNombre: usuario.nombre || usuario.email.split('@')[0],
+                eventoNombre: nombreEv,
+                dificultad: difNum,
+                eventoId: idNum
+            });
+        } else {
+            preparacionesCoopEvento.delete(prepId);
+            io.to(socket.id).emit('grupo:notificacion', { tipo: 'error', mensaje: 'Tu compañero no está conectado.' });
+            return;
+        }
+        io.to(socket.id).emit('grupo:notificacion', { tipo: 'success', mensaje: 'Invitación enviada.' });
+    });
+
+    socket.on('coop:evento:invitacion:responder', ({ prepId, aceptada }) => {
+        const prep = preparacionesCoopEvento.get(String(prepId || '').trim());
+        if (!prep || prep.estado !== 'invitacion') {
+            io.to(socket.id).emit('grupo:notificacion', { tipo: 'error', mensaje: 'Invitación no válida o caducada.' });
+            return;
+        }
+        const usuario = obtenerUsuarioConectadoPorSocketId(socket.id);
+        if (!usuario || normalizarTexto(usuario.email) !== normalizarTexto(prep.inviteeEmail)) {
+            io.to(socket.id).emit('grupo:notificacion', { tipo: 'error', mensaje: 'No puedes responder esta invitación.' });
+            return;
+        }
+        if (!aceptada) {
+            preparacionesCoopEvento.delete(prep.prepId);
+            const inv = obtenerUsuarioConectadoPorEmail(prep.inviterEmail);
+            if (inv?.id) {
+                io.to(inv.id).emit('coop:evento:invitacion:rechazada', {});
+            }
+            return;
+        }
+        prep.estado = 'seleccion';
+        const inviter = obtenerUsuarioConectadoPorEmail(prep.inviterEmail);
+        const invitee = usuario;
+        const basePayload = {
+            prepId: prep.prepId,
+            eventoId: prep.eventoId,
+            eventoNombre: prep.eventoNombre,
+            dificultad: prep.dificultad
+        };
+        if (inviter?.id) {
+            io.to(inviter.id).emit('coop:evento:preparacion', { ...basePayload, rolCoop: 'A' });
+        }
+        io.to(socket.id).emit('coop:evento:preparacion', { ...basePayload, rolCoop: 'B' });
+    });
+
+    socket.on('coop:evento:preparacion:listo', async ({ prepId, indicesCartas }) => {
+        const prep = preparacionesCoopEvento.get(String(prepId || '').trim());
+        if (!prep || prep.estado !== 'seleccion') {
+            io.to(socket.id).emit('grupo:notificacion', { tipo: 'error', mensaje: 'Preparación no activa.' });
+            return;
+        }
+        const usuario = obtenerUsuarioConectadoPorSocketId(socket.id);
+        if (!usuario) return;
+        const esA = normalizarTexto(usuario.email) === normalizarTexto(prep.inviterEmail);
+        const esB = normalizarTexto(usuario.email) === normalizarTexto(prep.inviteeEmail);
+        if (!esA && !esB) {
+            io.to(socket.id).emit('grupo:notificacion', { tipo: 'error', mensaje: 'No perteneces a esta preparación.' });
+            return;
+        }
+        const cartas = await extraerCartasUsuarioPorIndicesCoop(usuario.email, indicesCartas);
+        if (!cartas) {
+            io.to(socket.id).emit('grupo:notificacion', { tipo: 'error', mensaje: 'Debes elegir exactamente 6 cartas válidas de tu colección.' });
+            return;
+        }
+        if (esA) {
+            prep.cartasA = cartas;
+            prep.listoA = true;
+        }
+        if (esB) {
+            prep.cartasB = cartas;
+            prep.listoB = true;
+        }
+        const inviter = obtenerUsuarioConectadoPorEmail(prep.inviterEmail);
+        const invitee = obtenerUsuarioConectadoPorEmail(prep.inviteeEmail);
+        const estadoPrep = { prepId: prep.prepId, listoA: Boolean(prep.listoA), listoB: Boolean(prep.listoB) };
+        if (inviter?.id) io.to(inviter.id).emit('coop:evento:preparacion:estado', estadoPrep);
+        if (invitee?.id) io.to(invitee.id).emit('coop:evento:preparacion:estado', estadoPrep);
+
+        if (prep.listoA && prep.listoB) {
+            const resultado = await iniciarSesionCoopEventoDesdePrep(prep);
+            preparacionesCoopEvento.delete(prep.prepId);
+            if (!resultado.ok) {
+                const msg = resultado.mensaje || 'No se pudo iniciar la sesión cooperativa.';
+                if (inviter?.id) io.to(inviter.id).emit('grupo:notificacion', { tipo: 'error', mensaje: msg });
+                if (invitee?.id) io.to(invitee.id).emit('grupo:notificacion', { tipo: 'error', mensaje: msg });
+            }
+        }
+    });
+
+    socket.on('multiplayer:coop:join', ({ sessionId }) => {
+        const usuario = obtenerUsuarioConectadoPorSocketId(socket.id);
+        const sesion = sesionesCoopEventoActivas.get(String(sessionId || '').trim());
+        if (!usuario || !sesion || sesion.finalizada) {
+            io.to(socket.id).emit('grupo:notificacion', { tipo: 'error', mensaje: 'Sesión cooperativa inválida.' });
+            return;
+        }
+        const emailNorm = normalizarTexto(usuario.email);
+        const ok = emailNorm === normalizarTexto(sesion.emailLeader) || emailNorm === normalizarTexto(sesion.emailMember);
+        if (!ok) {
+            io.to(socket.id).emit('grupo:notificacion', { tipo: 'error', mensaje: 'No perteneces a esta sesión.' });
+            return;
+        }
+        socket.join(obtenerRoomSesionCoop(sesion.sessionId));
+        sesion.updatedAt = Date.now();
+        if (sesion.snapshotEstado) {
+            io.to(socket.id).emit('multiplayer:coop:estado', {
+                sessionId: sesion.sessionId,
+                revision: Number(sesion.revisionEstado || 0),
+                snapshot: sesion.snapshotEstado
+            });
+        }
+    });
+
+    socket.on('multiplayer:coop:estado:solicitar', ({ sessionId }) => {
+        const usuario = obtenerUsuarioConectadoPorSocketId(socket.id);
+        const sesion = sesionesCoopEventoActivas.get(String(sessionId || '').trim());
+        if (!usuario || !sesion) return;
+        const emailNorm = normalizarTexto(usuario.email);
+        const ok = emailNorm === normalizarTexto(sesion.emailLeader) || emailNorm === normalizarTexto(sesion.emailMember);
+        if (!ok) return;
+        if (sesion.snapshotEstado) {
+            io.to(socket.id).emit('multiplayer:coop:estado', {
+                sessionId: sesion.sessionId,
+                revision: Number(sesion.revisionEstado || 0),
+                snapshot: sesion.snapshotEstado
+            });
+        }
+    });
+
+    socket.on('multiplayer:coop:estado', ({ sessionId, snapshot, baseRevision }) => {
+        const usuario = obtenerUsuarioConectadoPorSocketId(socket.id);
+        const sesion = sesionesCoopEventoActivas.get(String(sessionId || '').trim());
+        if (!usuario || !sesion || sesion.finalizada) return;
+        const emailNorm = normalizarTexto(usuario.email);
+        const miembro = emailNorm === normalizarTexto(sesion.emailLeader) || emailNorm === normalizarTexto(sesion.emailMember);
+        if (!miembro) return;
+        const esEjecutorBot = emailNorm === normalizarTexto(sesion.ejecutorBotEmail || sesion.emailLeader);
+        /**
+         * Durante la fase BOT solo debe aplicar cambios el ejecutor (suele ser el líder), para que la IA
+         * no se duplique. Excepción: el jugador 2 emite la transición P2→BOT tras su último ataque;
+         * ese snapshot debe aceptarse o el servidor nunca entra en BOT y el compañero queda desincronizado.
+         */
+        if (snapshot && snapshot.faseCoop === 'BOT' && !esEjecutorBot) {
+            const faseAnterior = sesion.snapshotEstado?.faseCoop;
+            const esTransicionP2aBot = faseAnterior === 'P2';
+            if (!esTransicionP2aBot) {
+                return;
+            }
+        }
+        const revisionActual = Number(sesion.revisionEstado || 0);
+        const revisionBase = Number(baseRevision);
+        if (!Number.isInteger(revisionBase) || revisionBase !== revisionActual) {
+            io.to(socket.id).emit('multiplayer:coop:resync-required', {
+                sessionId: sesion.sessionId,
+                revision: revisionActual
+            });
+            return;
+        }
+        if (!snapshot || typeof snapshot !== 'object') return;
+        sesion.snapshotEstado = snapshot;
+        sesion.revisionEstado = revisionActual + 1;
+        sesion.updatedAt = Date.now();
+        io.to(obtenerRoomSesionCoop(sesion.sessionId)).emit('multiplayer:coop:estado', {
+            sessionId: sesion.sessionId,
+            revision: sesion.revisionEstado,
+            snapshot: sesion.snapshotEstado
+        });
+    });
+
+    socket.on('multiplayer:coop:resultado', ({ sessionId, ganaronJugadores, motivo }) => {
+        const usuario = obtenerUsuarioConectadoPorSocketId(socket.id);
+        const sesion = sesionesCoopEventoActivas.get(String(sessionId || '').trim());
+        if (!usuario || !sesion || sesion.finalizada) return;
+        const emailNorm = normalizarTexto(usuario.email);
+        const miembro = emailNorm === normalizarTexto(sesion.emailLeader) || emailNorm === normalizarTexto(sesion.emailMember);
+        if (!miembro) return;
+        sesion.finalizada = true;
+        sesion.resultado = {
+            sessionId: sesion.sessionId,
+            ganaronJugadores: Boolean(ganaronJugadores),
+            motivo: String(motivo || 'fin_partida')
+        };
+        sesion.updatedAt = Date.now();
+        io.to(obtenerRoomSesionCoop(sesion.sessionId)).emit('multiplayer:coop:resultado', sesion.resultado);
     });
 
     //-----------FUNCIONES SERVIDOR DE LA PARTIDA------------

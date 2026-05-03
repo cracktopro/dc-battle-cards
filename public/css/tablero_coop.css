@@ -1,0 +1,203 @@
+/* Tablero cooperativo online: 4 BOT arriba, 2+2 jugadores abajo. Aislado de tablero.css salvo variables heredadas. */
+
+:root {
+    --dc-coop-rail-width: 280px;
+}
+
+/* Misma variable que tablero.css para anchura útil del tablero */
+body.tablero-coop-body {
+    --dc-board-rail-right: var(--dc-coop-rail-width);
+}
+
+/* Reutilizar reglas de .tablero-container / .slot / .carta de tablero.css sin ocupar 100vh fijos. */
+.tablero-coop-tablero-inner.tablero-container {
+    height: auto;
+    min-height: 0;
+    width: 100%;
+    max-width: 100%;
+    margin-right: 0;
+    padding-bottom: 8px;
+    align-items: stretch;
+}
+
+/* Mesa coop: filas de slots alineados como en el tablero clásico */
+.tablero-coop-tablero-inner .coop-fila-bot,
+.tablero-coop-tablero-inner .coop-slots-par {
+    position: relative;
+    left: 0;
+    justify-content: center;
+    gap: clamp(10px, 1.5vw, 22px);
+    margin-top: 6px;
+    flex-wrap: wrap;
+    width: 100%;
+    max-width: min(1280px, 100%);
+}
+
+body.tablero-coop-body .tablero-coop-wrap {
+    margin-right: var(--dc-coop-rail-width);
+}
+
+.tablero-coop-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    min-height: 100vh;
+    padding: 10px 12px 120px;
+    box-sizing: border-box;
+    width: calc(100vw - var(--dc-coop-rail-width));
+}
+
+/* Slots vacíos: hueco reservado sin carta */
+.tablero-coop-tablero-inner .slot.vacio {
+    min-height: clamp(140px, 18vw, 220px);
+    background: rgba(0, 0, 0, 0.45);
+    border-style: dashed;
+    opacity: 0.7;
+    cursor: default;
+}
+
+.coop-mesa {
+    width: 100%;
+    max-width: min(1100px, 100%);
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+.coop-fila {
+    display: flex;
+    justify-content: center;
+    align-items: flex-end;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+/* Tamaño de .slot heredado de tablero.css (clamp 132px–210px) */
+
+.coop-fila-humanos {
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+    width: 100%;
+}
+
+.coop-mitad-jugador {
+    flex: 1;
+    min-width: min(420px, 100%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 8px;
+    border-radius: 12px;
+    border: 1px solid rgba(0, 209, 255, 0.28);
+    background: rgba(8, 18, 36, 0.55);
+}
+
+.coop-mitad-jugador.es-a {
+    border-color: rgba(76, 210, 255, 0.45);
+}
+
+.coop-mitad-jugador.es-b {
+    border-color: rgba(255, 196, 76, 0.42);
+}
+
+.coop-mitad-titulo {
+    font-size: 0.82rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    color: #dff8ff;
+    text-transform: uppercase;
+}
+
+.coop-slots-par {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+}
+
+/* Reglas de .carta / .barra-salud-relleno: ver tablero.css y salud.css */
+
+.coop-rail {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: var(--dc-coop-rail-width);
+    display: flex;
+    flex-direction: column;
+    padding: 12px 10px;
+    gap: 10px;
+    box-sizing: border-box;
+    background: rgba(6, 14, 30, 0.92);
+    border-left: 1px solid rgba(0, 209, 255, 0.28);
+    z-index: 40;
+}
+
+.coop-panel-info {
+    border-radius: 12px;
+    padding: 10px;
+    background: rgba(8, 20, 40, 0.88);
+    border: 1px solid rgba(0, 209, 255, 0.35);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+}
+
+.coop-panel-info.bot-panel {
+    border-color: rgba(255, 95, 95, 0.45);
+}
+
+.coop-panel-info .avatar-round {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid rgba(0, 209, 255, 0.55);
+}
+
+.coop-panel-info h3 {
+    margin: 0;
+    font-size: 0.95rem;
+    text-align: center;
+}
+
+.coop-panel-info .turno-badge {
+    font-size: 0.72rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    color: #ffd54a;
+}
+
+.coop-rail-jugadores {
+    margin-top: auto;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.coop-contador-mazo {
+    font-size: 0.78rem;
+    color: #bfe8ff;
+}
+
+@media (max-width: 900px) {
+    .coop-fila-humanos {
+        flex-direction: column;
+    }
+    :root {
+        --dc-coop-rail-width: 0px;
+    }
+    body.tablero-coop-body .tablero-coop-wrap {
+        margin-right: 0;
+        padding-bottom: 12px;
+    }
+    .coop-rail {
+        position: relative;
+        width: 100%;
+        border-left: none;
+        border-top: 1px solid rgba(0, 209, 255, 0.28);
+    }
+}
