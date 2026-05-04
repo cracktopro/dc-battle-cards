@@ -125,6 +125,30 @@
     const PAUSA_AVISO_HABILIDAD_MS = 2300;
     /** Pausa entre cartas robadas del mazo al rellenar slots (misma base que `rellenarSlotsVacios` en partida.js). */
     const COOP_MS_ENTRE_ROBO_MAZO = 420;
+    /**
+     * Tras el último impacto del BOT, el ejecutor no reproduce el eco en cola (`marcarSaltarReplayVisual`);
+     * sin esta pausa, cementerio + vaciado de slot y el salto a P1/robos se solapan en el cliente del líder.
+     */
+    const COOP_MS_RESPIRO_TRAS_ULTIMO_ATAQUE_BOT = 520;
+    /** Aviso central de cambio de fase (nombre + tiempo de lectura). */
+    const COOP_MS_AVISO_CAMBIO_FASE = 2200;
+
+    /** Un solo temporizador para `#aviso-turno-coop` (turno + habilidades); evita que un hide viejo quite el aviso del compañero. */
+    let avisoTurnoCoopHideTimer = null;
+
+    function programarOcultarAvisoTurnoCoop(avisoEl, delayMs) {
+        if (avisoTurnoCoopHideTimer !== null) {
+            clearTimeout(avisoTurnoCoopHideTimer);
+            avisoTurnoCoopHideTimer = null;
+        }
+        const ms = Math.max(200, Number(delayMs) || 800);
+        avisoTurnoCoopHideTimer = setTimeout(() => {
+            avisoTurnoCoopHideTimer = null;
+            if (avisoEl && avisoEl.classList) {
+                avisoEl.classList.remove('visible');
+            }
+        }, ms);
+    }
 
     function esLider() {
         return MI_EMAIL === EMAIL_LEADER;
@@ -146,7 +170,7 @@
         aviso.textContent = String(texto || '').trim();
         aviso.classList.add('visible');
         const dur = Math.max(300, Number(duracionMs || PAUSA_AVISO_HABILIDAD_MS));
-        setTimeout(() => aviso.classList.remove('visible'), dur);
+        programarOcultarAvisoTurnoCoop(aviso, dur);
     }
 
     function construirMensajeUsoHabilidadActiva(nombreCarta, nombreHabilidad, objetivoTexto) {
@@ -164,15 +188,20 @@
 
     /**
      * Anuncio + números flotantes reproducidos en ambos clientes al procesar el eco (ver `coopReplayVisual` en snapshot).
+     * `soloAnuncio`: solo mensaje central (p. ej. `extra_attack` antes del diff de daño en el observador).
+     * `omitirAnuncio`: no repetir el mensaje (p. ej. tras mostrarlo ya antes del daño).
      */
-    async function ejecutarCoopReplayVisual(rep) {
+    async function ejecutarCoopReplayVisual(rep, opts = {}) {
         if (!rep || typeof rep !== 'object') return;
+        const omitirAnuncio = Boolean(opts.omitirAnuncio);
+        const soloAnuncio = Boolean(opts.soloAnuncio);
         const ms = Math.max(300, Number(rep.msAviso || PAUSA_AVISO_HABILIDAD_MS));
         const txt = String(rep.textoAnuncio || '').trim();
-        if (txt) {
+        if (!omitirAnuncio && txt) {
             mostrarAvisoHabilidadCoop(txt, ms);
             await esperar(ms);
         }
+        if (soloAnuncio) return;
         const floats = Array.isArray(rep.floats) ? rep.floats : [];
         floats.forEach((f) => {
             if (!f || typeof f !== 'object') return;
@@ -200,7 +229,8 @@
         }
         const impactos = Array.isArray(replay.floats) ? replay.floats : [];
         if (!impactos.length) return;
-        const atk = inferirSlotAtacanteCoop(prev, prox);
+        const primerZonaHum = impactos.find((h) => h && (h.zona === 'A' || h.zona === 'B'));
+        const atk = inferirSlotAtacanteCoop(prev, prox, primerZonaHum ? primerZonaHum.zona : 'bot');
         for (const hit of impactos) {
             if (!hit || typeof hit !== 'object') continue;
             const zonaObj = hit.zona;
@@ -212,11 +242,13 @@
             const proxMesa = prox[key] || [];
             const c0 = prevMesa[slotObj];
             const c1 = proxMesa[slotObj];
-            const live = snapshot[key]?.[slotObj];
+            const mesaSnap = obtenerMesaPorZona(zonaObj);
+            const live = mesaSnap[slotObj];
+            /** `c0` confirma que había carta en el eco anterior; la animación debe leer salud/escudo del `snapshot` vivo. */
             if (!c0 || !live) continue;
 
-            const saludRawIni = obtenerSaludActualCarta(c0);
-            const escIni = Math.max(0, Number(c0.escudoActual || 0));
+            const saludRawIni = obtenerSaludActualCarta(live);
+            const escIni = Math.max(0, Number(live.escudoActual || 0));
             const saludRawFin = c1 ? obtenerSaludActualCarta(c1) : 0;
             const escFin = c1 ? Math.max(0, Number(c1.escudoActual || 0)) : 0;
             const esLetal = !c1;
@@ -357,25 +389,8 @@
         return enemigosSaludParaZonaDesdeSnapshot(zonaCarta, snapshot);
     }
 
-    function inferirSlotAtacanteCoop(prev, prox) {
-        const pa = prox.cartasYaAtacaronA || [];
-        const pap = prev.cartasYaAtacaronA || [];
-        if (pa.length > pap.length) {
-            const added = pa.filter(x => !pap.includes(x));
-            const slot = added.length ? added[added.length - 1] : pa[pa.length - 1];
-            return { zona: 'A', slot };
-        }
-        const pbb = prox.cartasYaAtacaronB || [];
-        const pbpb = prev.cartasYaAtacaronB || [];
-        if (pbb.length > pbpb.length) {
-            const added = pbb.filter(x => !pbpb.includes(x));
-            const slot = added.length ? added[added.length - 1] : pbb[pbb.length - 1];
-            return { zona: 'B', slot };
-        }
-        /**
-         * Turno BOT: el eco se envía antes de `cartasYaAtacaronBot.push(ib)`, así que no hay diff de longitud.
-         * El atacante activo es el primer slot en orden 0..3 vivo y aún no marcado como terminado.
-         */
+    function inferirAtacanteBotActivoDesdeProx(prox) {
+        if (!prox) return null;
         const mesaBot = prox.cartasEnJuegoBot || [];
         const yaBot = prox.cartasYaAtacaronBot || [];
         for (let slot = 0; slot < 4; slot += 1) {
@@ -385,6 +400,57 @@
             }
         }
         return null;
+    }
+
+    /**
+     * `zonaObjetivoDaño`: zona del primer cambio de vida (o hint en AoE). Evita atribuir al jugador humano
+     * un ataque del BOT cuando el diff incluye daño en A/B en fase BOT (mismo slot atacante/objetivo).
+     * Transición P2→BOT con daño en `bot`: el atacante es el último slot registrado en `prev.cartasYaAtacaronB`.
+     */
+    function inferirSlotAtacanteCoop(prev, prox, zonaObjetivoDaño) {
+        if (!prox) return null;
+        const fP = prev && prev.faseCoop;
+        const fX = prox.faseCoop;
+        const zObj = zonaObjetivoDaño;
+
+        const dañoEnMesaHumana = zObj === 'A' || zObj === 'B';
+        if (dañoEnMesaHumana && (fX === 'BOT' || fP === 'BOT')) {
+            return inferirAtacanteBotActivoDesdeProx(prox);
+        }
+
+        if (zObj === 'bot' && fP === 'P2' && fX === 'BOT') {
+            const yaPrev = prev && prev.cartasYaAtacaronB;
+            if (Array.isArray(yaPrev) && yaPrev.length) {
+                return { zona: 'B', slot: yaPrev[yaPrev.length - 1] };
+            }
+        }
+
+        if (zObj === 'bot' && fP === 'P1' && fX === 'P2') {
+            const yaPrev = prev && prev.cartasYaAtacaronA;
+            if (Array.isArray(yaPrev) && yaPrev.length) {
+                return { zona: 'A', slot: yaPrev[yaPrev.length - 1] };
+            }
+        }
+
+        const pa = prox.cartasYaAtacaronA || [];
+        const pap = (prev && prev.cartasYaAtacaronA) || [];
+        if (pa.length > pap.length) {
+            const added = pa.filter(x => !pap.includes(x));
+            const slot = added.length ? added[added.length - 1] : pa[pa.length - 1];
+            return { zona: 'A', slot };
+        }
+        const pbb = prox.cartasYaAtacaronB || [];
+        const pbpb = (prev && prev.cartasYaAtacaronB) || [];
+        if (pbb.length > pbpb.length) {
+            const added = pbb.filter(x => !pbpb.includes(x));
+            const slot = added.length ? added[added.length - 1] : pbb[pbb.length - 1];
+            return { zona: 'B', slot };
+        }
+        /**
+         * Turno BOT: el eco se envía antes de `cartasYaAtacaronBot.push(ib)`, así que no hay diff de longitud.
+         * El atacante activo es el primer slot en orden 0..3 vivo y aún no marcado como terminado.
+         */
+        return inferirAtacanteBotActivoDesdeProx(prox);
     }
 
     /**
@@ -453,7 +519,7 @@
         const cambio = encontrarPrimerCambioDanioVisual(prev, prox);
         if (!cambio) return;
 
-        const atk = inferirSlotAtacanteCoop(prev, prox);
+        const atk = inferirSlotAtacanteCoop(prev, prox, cambio.zona);
         const { zona: zonaObj, slot: slotObj, esLetal, danioMostrar, saludRawIni, saludRawFin, escIni, escFin } = cambio;
 
         const mesaKey = zonaObj === 'bot' ? 'cartasEnJuegoBot' : zonaObj === 'A' ? 'cartasEnJuegoA' : 'cartasEnJuegoB';
@@ -510,6 +576,11 @@
         if (!prox || typeof prox !== 'object') {
             return;
         }
+        /**
+         * El snapshot del eco puede llegar sin padding de huecos null; sin esto `proxMesa[slot]` puede ser
+         * `undefined` mientras `prevMesa[slot]` tiene carta y se saltan todos los impactos AoE en el otro cliente.
+         */
+        normalizarSnapshotCoop(prox);
 
         /** El eco del propio emit se resuelve en el listener de `dc:coop-estado` sin pasar por esta cola (ver ahí). */
 
@@ -519,11 +590,15 @@
 
         const prev = snapshot ? JSON.parse(JSON.stringify(snapshot)) : null;
         const replaySeEncargaAnim = Boolean(replay && replay.tipoAccion === 'aoe');
+        const replayExtraAttack = Boolean(replay && replay.tipoAccion === 'extra_attack');
         try {
             if (prev && !partidaFinalizada) {
                 if (replaySeEncargaAnim) {
                     await animarTransicionCoopAoeDesdeReplay(prev, prox, replay);
                 } else {
+                    if (replayExtraAttack) {
+                        await ejecutarCoopReplayVisual(replay, { soloAnuncio: true });
+                    }
                     await animarTransicionCoopDesdeDiff(prev, prox);
                 }
             }
@@ -533,7 +608,11 @@
         aplicarSnapshotRemoto(prox, rev);
         try {
             if (replay && !replaySeEncargaAnim && !partidaFinalizada) {
-                await ejecutarCoopReplayVisual(replay);
+                if (replayExtraAttack) {
+                    await ejecutarCoopReplayVisual(replay, { omitirAnuncio: true });
+                } else {
+                    await ejecutarCoopReplayVisual(replay);
+                }
             }
         } catch (e) {
             console.error('[coop] replay visual habilidad', e);
@@ -553,6 +632,12 @@
             console.error('[coop] anim relleno ciclo bot', e);
         }
         resolverEcoEmitSiCorresponde(rev);
+        /**
+         * Debe ejecutarse al terminar todo el procesamiento del eco (replay + rellenos). Si se dispara desde
+         * `aplicarSnapshotRemoto`, el microtask del BOT puede intercalar con `animarEntradaRellenosCicloBotPostAplicar`
+         * y solapar robo/ataque/mensajes en la primera fase BOT.
+         */
+        intentarTurnoBotSiCorresponde();
     }
 
     /**
@@ -829,6 +914,57 @@
             if (cartaViva(c)) idx.push(i);
         });
         return idx;
+    }
+
+    /**
+     * Slots con carta viva que aún no han atacado y no están incapacitadas (aturdidas).
+     * Sirve para cerrar fase P1/P2 cuando solo quedan cartas que no pueden actuar.
+     */
+    function indicesPuedenAtacarMesaCoop(mesa, yaAtacaron) {
+        const idx = [];
+        if (!Array.isArray(mesa)) return idx;
+        const ya = Array.isArray(yaAtacaron) ? yaAtacaron : [];
+        mesa.forEach((c, i) => {
+            if (!cartaViva(c)) return;
+            if (cartaEstaAturdidaCoop(c)) return;
+            if (ya.includes(i)) return;
+            idx.push(i);
+        });
+        return idx;
+    }
+
+    function indicesPuedenAtacarEnSnapshot(snap, zona) {
+        if (!snap || typeof snap !== 'object') return [];
+        const mesa = zona === 'A' ? snap.cartasEnJuegoA : snap.cartasEnJuegoB;
+        const ya = zona === 'A' ? snap.cartasYaAtacaronA : snap.cartasYaAtacaronB;
+        return indicesPuedenAtacarMesaCoop(mesa, ya);
+    }
+
+    /** True si no queda ningún ataque humano posible en esa mesa (vacía, todo aturdido o ya atacaron todos los que podían). */
+    function mesaSinAtaquesPendientesCoop(snap, zona) {
+        return indicesPuedenAtacarEnSnapshot(snap, zona).length === 0;
+    }
+
+    /**
+     * Si la fase humana actual no tiene jugada posible (mesa vacía / solo aturdidas / ya actuaron quienes podían),
+     * avanza P1→P2 y/o P2→BOT en el mismo snapshot (p. ej. clon para red o estado local tras eco).
+     */
+    function aplicarSaltosFaseHumanaHastaJugableOFinEnSnap(snap) {
+        if (!snap || typeof snap !== 'object') return;
+        normalizarSnapshotCoop(snap);
+        let guard = 0;
+        while (guard < 4) {
+            guard += 1;
+            if (snap.faseCoop === 'P1' && mesaSinAtaquesPendientesCoop(snap, 'A')) {
+                if (!avanzarFaseTrasHumanoEnSnapshot(snap, 'A')) break;
+                continue;
+            }
+            if (snap.faseCoop === 'P2' && mesaSinAtaquesPendientesCoop(snap, 'B')) {
+                if (!avanzarFaseTrasHumanoEnSnapshot(snap, 'B')) break;
+                continue;
+            }
+            break;
+        }
     }
 
     function obtenerMesaPorZona(zona) {
@@ -1533,7 +1669,11 @@
             snapshot.coopReplayVisual = {
                 textoAnuncio: coopReplayTexto,
                 msAviso: PAUSA_AVISO_HABILIDAD_MS,
-                tipoAccion: meta.clase === 'aoe' ? 'aoe' : 'general',
+                tipoAccion: meta.clase === 'aoe'
+                    ? 'aoe'
+                    : meta.clase === 'extra_attack'
+                        ? 'extra_attack'
+                        : 'general',
                 floats: coopReplayFloats
             };
         }
@@ -1651,13 +1791,19 @@
         ultimaFaseCoopParaAvisoTurno = f;
         const aviso = document.getElementById('aviso-turno-coop');
         if (!aviso) return;
+        const jaNombre = String((payload.jugadorA || {}).nombre || '').trim() || 'Jugador 1';
+        const jbNombre = String((payload.jugadorB || {}).nombre || '').trim() || 'Jugador 2';
         let txt = '';
-        if (f === 'P1') txt = 'Turno jugador 1 (izquierda)';
-        else if (f === 'P2') txt = 'Turno jugador 2 (derecha)';
-        else if (f === 'BOT') txt = 'Turno del BOT';
+        if (f === 'P1') {
+            txt = `Turno de ${jaNombre} (izquierda)`;
+        } else if (f === 'P2') {
+            txt = `Turno de ${jbNombre} (derecha)`;
+        } else if (f === 'BOT') {
+            txt = 'Turno del BOT';
+        }
         aviso.textContent = txt;
         aviso.classList.add('visible');
-        setTimeout(() => aviso.classList.remove('visible'), 1100);
+        programarOcultarAvisoTurnoCoop(aviso, COOP_MS_AVISO_CAMBIO_FASE);
     }
 
     function actualizarContadores() {
@@ -1917,8 +2063,7 @@
         if (!snap || typeof snap !== 'object') return false;
         normalizarSnapshotCoop(snap);
         if (zonaActor === 'A') {
-            const pendientes = indicesAtacantesVivos(snap.cartasEnJuegoA)
-                .filter(i => !snap.cartasYaAtacaronA.includes(i));
+            const pendientes = indicesPuedenAtacarEnSnapshot(snap, 'A');
             if (pendientes.length > 0) return false;
             snap.faseCoop = 'P2';
             snap.cartasYaAtacaronA = [];
@@ -1926,8 +2071,7 @@
             return true;
         }
         if (zonaActor === 'B') {
-            const pendientes = indicesAtacantesVivos(snap.cartasEnJuegoB)
-                .filter(i => !snap.cartasYaAtacaronB.includes(i));
+            const pendientes = indicesPuedenAtacarEnSnapshot(snap, 'B');
             if (pendientes.length > 0) return false;
             snap.faseCoop = 'BOT';
             snap.cartasYaAtacaronB = [];
@@ -2004,6 +2148,10 @@
         const atacante = mesaAt[slotAtacante];
         const objetivo = mesaObj[slotObjetivo];
         if (!atacante || !objetivo) return;
+        if (cartaEstaAturdidaCoop(atacante)) {
+            logCoop(`${atacante.Nombre} está incapacitada y no puede atacar.`);
+            return;
+        }
 
         const danio = obtenerPoderAtaqueCoop(zonaAtacante, slotAtacante);
         logCoop(`${atacante.Nombre} ataca a ${objetivo.Nombre} (${danio}).`);
@@ -2082,6 +2230,7 @@
         if (murio) promoverObjetivoMuertoACementerioEnSnapshot(snapEmitFin, zonaObjetivo, slotObjetivo);
         avanzarFaseTrasHumanoEnSnapshot(snapEmitFin, zonaAtacante);
         aplicarRobosInicioDeFaseEnSnapshotEmit(snapEmitFin);
+        aplicarSaltosFaseHumanaHastaJugableOFinEnSnap(snapEmitFin);
 
         const emitP = emitSnapshotCoopYEsperarEco(8000, {
             marcarSaltarReplayVisual: true,
@@ -2126,6 +2275,7 @@
         }
         avanzarFaseTrasHumano(zonaAtacante);
         aplicarRobosInicioDeFaseSegunFaseActual();
+        aplicarSaltosFaseHumanaHastaJugableOFinEnSnap(snapshot);
         renderTodo();
     }
 
@@ -2319,6 +2469,7 @@
             }
 
             if (!partidaFinalizada) {
+                await esperar(COOP_MS_RESPIRO_TRAS_ULTIMO_ATAQUE_BOT);
                 snapshot.cartasYaAtacaronBot = [];
                 snapshot.cartasYaAtacaronA = [];
                 snapshot.cartasYaAtacaronB = [];
@@ -2338,6 +2489,7 @@
                     }
                 }
                 logCoop('Nuevo ciclo: turno jugador 1.');
+                aplicarSaltosFaseHumanaHastaJugableOFinEnSnap(snapshot);
                 await emitSnapshotCoopYEsperarEco(8000, { marcarSaltarAnimRellenoCiclo: true });
                 renderTodo();
             }
@@ -2376,7 +2528,6 @@
         limpiarCoopAnimHighlights();
         renderTodo();
         verificarFinPartidaCoop();
-        intentarTurnoBotSiCorresponde();
     }
 
     function configurarCabecera() {
@@ -2482,8 +2633,14 @@
         if (typeof window.emitMultiplayerCoopEstadoSolicitar === 'function') {
             window.emitMultiplayerCoopEstadoSolicitar(SESSION_ID);
         }
+        /** Mismo arranque diferido que `intentarTurnoBotSiCorresponde`: deja aplicar primero un eco pendiente de `estado:solicitar`. */
         if (snapshot.faseCoop === 'BOT' && MI_EMAIL === EJECUTOR_BOT_EMAIL) {
-            void ejecutarTurnoBotSecuencial();
+            queueMicrotask(() => {
+                if (partidaFinalizada || procesandoBot) return;
+                if (!snapshot || snapshot.faseCoop !== 'BOT') return;
+                if (MI_EMAIL !== EJECUTOR_BOT_EMAIL) return;
+                void ejecutarTurnoBotSecuencial();
+            });
         }
     });
 })();

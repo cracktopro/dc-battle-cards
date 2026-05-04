@@ -1,5 +1,14 @@
 # Changelog
 
+## Beta-1.0.11-04.05.26
+
+- Coop online (`public/partidaCoop.js`): corrección de solapamiento en transición P2→BOT y primer ataque del BOSS; el arranque de IA BOT se ejecuta al final del procesamiento del eco para no intercalar replay/robos/ataques.
+- Coop online (`public/partidaCoop.js`): ajuste de inferencia de atacante y de reproducción de `extra_attack`/AOE en el cliente observador; se evita atribuir daño al slot humano equivocado y se estabiliza la animación multiobjetivo con snapshot normalizado.
+- Coop online (`public/partidaCoop.js`): avisos de turno robustos para ambos jugadores (incl. jugador 2) con temporizador único compartido con avisos de habilidad y textos con nombres reales de jugador A/B.
+- Coop online (`public/partidaCoop.js`): cierre de turno BOT más limpio en ejecutor local; se añade pausa corta antes de pasar a P1 para evitar solape entre eliminación de carta, cambio de fase y robos del nuevo ciclo.
+- Coop online (`public/partidaCoop.js`): arranque inicial de BOT en `DOMContentLoaded` alineado con el flujo diferido por microtask para respetar estados pendientes de `estado:solicitar`.
+- Etiqueta de versión del menú lateral actualizada a `Version: Beta-1.0.11-04.05.26`.
+
 ## Beta-1.0.10-03.05.26
 
 - Evento cooperativo online vs BOT: flujo de sesión en `server.js` (creación de partida, room, revisiones de estado, ejecutor del BOT, resultado y abandono) y cliente en `public/cliente.js` + `public/multijugador.html` / `public/multijugadorEventosCoop.js` (invitación, preparación, tablero y eventos Socket.IO).

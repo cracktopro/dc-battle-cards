@@ -122,8 +122,15 @@
         return { bonusMaximo, afiliacionesActivas, afiliacionPrincipal };
     }
 
-    function aplicarBonusAfiliaciones(cartas, cartasEnemigas = []) {
-        const { bonusMaximo, afiliacionPrincipal } = calcularBonusAfiliaciones(cartas);
+    /**
+     * @param {Array} cartas Mesa a la que se aplican bonos (A, B o bot).
+     * @param {Array} cartasEnemigas Enemigos para debuffs / bonus_debuff.
+     * @param {Array|null} cartasParaConteoAfiliacion Si se pasa, el conteo de afiliación (x2/x3) usa este conjunto
+     *        (p. ej. A+B en coop para bonus global del equipo humano).
+     */
+    function aplicarBonusAfiliaciones(cartas, cartasEnemigas = [], cartasParaConteoAfiliacion = null) {
+        const poolAfiliacion = cartasParaConteoAfiliacion != null ? cartasParaConteoAfiliacion : cartas;
+        const { bonusMaximo, afiliacionPrincipal } = calcularBonusAfiliaciones(poolAfiliacion);
         const debuffGlobal = (Array.isArray(cartasEnemigas) ? cartasEnemigas : []).reduce((total, carta) => {
             if (!carta || !cartaCuentaComoActivaEnMesa(carta)) return total;
             const meta = obtenerMetaHabilidad(carta);
@@ -269,9 +276,12 @@
         const enemigosDeB = [...bot, ...a].filter(Boolean);
         const enemigosDeBot = [...a, ...b].filter(Boolean);
 
+        /** Equipo humano completo: el umbral x2/x3 de afiliación cuenta cartas vivas en A y B a la vez. */
+        const equipoHumanoAfiliacion = [...a, ...b].filter(Boolean);
+
         const { cartasConBonus: mesaBot } = aplicarBonusAfiliaciones(bot, enemigosDeBot);
-        const { cartasConBonus: mesaA } = aplicarBonusAfiliaciones(a, enemigosDeA);
-        const { cartasConBonus: mesaB } = aplicarBonusAfiliaciones(b, enemigosDeB);
+        const { cartasConBonus: mesaA } = aplicarBonusAfiliaciones(a, enemigosDeA, equipoHumanoAfiliacion);
+        const { cartasConBonus: mesaB } = aplicarBonusAfiliaciones(b, enemigosDeB, equipoHumanoAfiliacion);
 
         return { mesaBot, mesaA, mesaB };
     }
