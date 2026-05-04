@@ -408,8 +408,33 @@ async function cargarCartas() {
     const contenedorCartas = document.getElementById('contenedor-cartas');
     contenedorCartas.innerHTML = '';
 
-    const cartasOrdenadas = usuario.cartas
-        .map((carta, index) => ({ carta, index }))
+    const itemsCartas = usuario.cartas
+        .map((carta, index) => ({ carta, index }));
+
+    const cartasSinDuplicados = typeof window.deduplicarItemsCartasUsuarioMejorNivel === 'function'
+        ? window.deduplicarItemsCartasUsuarioMejorNivel(itemsCartas)
+        : (() => {
+            const mejorPorNombre = new Map();
+            itemsCartas.forEach((item) => {
+                const clave = String(item?.carta?.Nombre || '').trim().toLowerCase();
+                if (!clave) {
+                    return;
+                }
+                const nivelActual = Math.max(1, Number(item.carta?.Nivel || 1));
+                const previo = mejorPorNombre.get(clave);
+                if (!previo) {
+                    mejorPorNombre.set(clave, item);
+                    return;
+                }
+                const nivelPrevio = Math.max(1, Number(previo.carta?.Nivel || 1));
+                if (nivelActual > nivelPrevio || (nivelActual === nivelPrevio && item.index < previo.index)) {
+                    mejorPorNombre.set(clave, item);
+                }
+            });
+            return Array.from(mejorPorNombre.values());
+        })();
+
+    const cartasOrdenadas = cartasSinDuplicados
         .sort((a, b) => {
             const diferenciaFaccion = normalizarFaccion(a.carta.faccion).localeCompare(normalizarFaccion(b.carta.faccion));
             if (diferenciaFaccion !== 0) {
