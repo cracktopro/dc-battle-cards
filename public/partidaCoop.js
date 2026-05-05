@@ -2588,7 +2588,7 @@
      * marcar el evento como jugado en `usuario.eventosJugadosPorRotacion`.
      */
     function coopObtenerClaveRotacionEventos() {
-        const ROT_MS = 5 * 60 * 1000;
+        const ROT_MS = 60 * 60 * 1000;
         const VERSION = 'event-rotation-v1';
         const idVentana = Math.floor(Date.now() / ROT_MS);
         return `${VERSION}-${idVentana}`;
@@ -2608,10 +2608,25 @@
         const evento = (payload && typeof payload.evento === 'object') ? payload.evento : null;
         const puntosEvento = Number(evento?.puntos || 0);
         const mejorasEvento = Number(evento?.mejora || 0);
-        const mejorasEspecialesEvento = Number(evento?.mejora_especial || 0);
+        const mejorasEspecialesEventoBase = Number(evento?.mejora_especial || 0);
         const dificultadEvento = Math.min(Math.max(Number(evento?.dificultad || 1), 1), 6);
         const idEvento = Number(evento?.id);
-        const cartaRecompensaNombre = String(evento?.cartaRecompensa || '').trim();
+        /**
+         * La mejora especial solo se entrega si la dificultad elegida es 6 o superior.
+         * En dificultades inferiores el valor entregado es 0, aunque el evento defina
+         * `mejora_especial > 0`.
+         */
+        const otorgaMejoraEspecial = dificultadEvento >= 6;
+        const mejorasEspecialesEvento = otorgaMejoraEspecial ? mejorasEspecialesEventoBase : 0;
+
+        /**
+         * Pool de candidatos para la carta de recompensa: enemigos normales + BOSS del evento.
+         * El sorteo es local en cada cliente (cada jugador tira por su cuenta).
+         */
+        const enemigosEvento = Array.isArray(evento?.enemigos)
+            ? evento.enemigos.map(n => String(n || '').trim()).filter(Boolean)
+            : [];
+        const bossEvento = String(evento?.boss || '').trim();
 
         usuario.puntos = Number(usuario.puntos || 0) + puntosEvento;
         usuario.objetos = (usuario.objetos && typeof usuario.objetos === 'object')
@@ -2633,19 +2648,39 @@
         }
 
         const cartasGanadas = [];
-        if (cartaRecompensaNombre) {
-            try {
-                const catalogo = await coopObtenerCartasDisponibles();
-                const cartaBase = catalogo.find((c) => coopNormalizarNombre(c?.Nombre) === coopNormalizarNombre(cartaRecompensaNombre));
-                if (cartaBase) {
-                    const cartaEscalada = coopEscalarCartaSegunDificultad(cartaBase, dificultadEvento);
-                    cartaEscalada.tipoRecompensa = 'evento';
-                    cartasGanadas.push(cartaEscalada);
-                    usuario.cartas = Array.isArray(usuario.cartas) ? usuario.cartas : [];
-                    usuario.cartas.push(cartaEscalada);
+        if (enemigosEvento.length > 0 || bossEvento) {
+            /**
+             * 80% probabilidad → carta aleatoria de los enemigos normales del evento.
+             * 20% probabilidad → carta del BOSS del evento.
+             * Si la opción sorteada no está disponible (sin BOSS o sin enemigos),
+             * cae en la otra disponible. Si ninguna existe, no se entrega carta.
+             */
+            const tirada = Math.random();
+            const sortearEnemigo = () => enemigosEvento[Math.floor(Math.random() * enemigosEvento.length)];
+            let nombreElegido = '';
+            if (tirada < 0.8 && enemigosEvento.length > 0) {
+                nombreElegido = sortearEnemigo();
+            } else if (bossEvento) {
+                nombreElegido = bossEvento;
+            } else if (enemigosEvento.length > 0) {
+                nombreElegido = sortearEnemigo();
+            }
+            if (nombreElegido) {
+                try {
+                    const catalogo = await coopObtenerCartasDisponibles();
+                    const cartaBase = catalogo.find((c) => coopNormalizarNombre(c?.Nombre) === coopNormalizarNombre(nombreElegido));
+                    if (cartaBase) {
+                        const cartaEscalada = coopEscalarCartaSegunDificultad(cartaBase, dificultadEvento);
+                        cartaEscalada.tipoRecompensa = 'evento';
+                        cartasGanadas.push(cartaEscalada);
+                        usuario.cartas = Array.isArray(usuario.cartas) ? usuario.cartas : [];
+                        usuario.cartas.push(cartaEscalada);
+                    } else {
+                        console.warn('[coop] carta de recompensa sorteada no encontrada en catálogo:', nombreElegido);
+                    }
+                } catch (errCarta) {
+                    console.error('[coop] no se pudo añadir carta recompensa:', errCarta);
                 }
-            } catch (errCarta) {
-                console.error('[coop] no se pudo añadir carta recompensa:', errCarta);
             }
         }
 

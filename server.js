@@ -1444,6 +1444,17 @@ async function iniciarSesionCoopEventoDesdePrep(prep) {
     });
 
     const nombreEvento = String(prep.eventoNombre || fila.nombre || 'Evento cooperativo').trim();
+    /**
+     * Lista de enemigos normales y BOSS del evento, para que el cliente pueda sortear
+     * la carta de recompensa (80% un enemigo aleatorio, 20% el BOSS) sin tener que volver
+     * a parsear `eventos_online.xlsx`.
+     */
+    const nombresEnemigosEvento = [];
+    for (let i = 1; i <= 8; i += 1) {
+        const n = String(fila[`enemigo${i}`] || '').trim();
+        if (n) nombresEnemigosEvento.push(n);
+    }
+    const nombreBossEvento = String(fila.boss || '').trim() || null;
     const payloadBase = {
         sessionId,
         partyId: prep.partyId,
@@ -1456,6 +1467,8 @@ async function iniciarSesionCoopEventoDesdePrep(prep) {
             mejora: Number(fila.mejora || 0),
             mejora_especial: Number(fila.mejora_especial || 0),
             cartaRecompensa: String(fila.cartas || fila.carta || '').trim(),
+            enemigos: nombresEnemigosEvento,
+            boss: nombreBossEvento,
             dificultad
         },
         snapshot: snapshotInicial,

@@ -2237,12 +2237,21 @@ async function otorgarRecompensasDesafio() {
         }
     }
 
+    /**
+     * Recompensas (eventos): la mejora especial solo se entrega si la dificultad
+     * elegida es 6 o superior. En desafíos no-evento se mantiene el comportamiento
+     * previo (siempre se otorga lo definido por el desafío).
+     */
+    const dificultadEntregaEspecial = Math.max(1, Number(desafioActivo?.dificultad || 0));
+    const otorgaMejoraEspecial = esEvento ? dificultadEntregaEspecial >= 6 : true;
+    const mejoraEspecialEntregada = otorgaMejoraEspecial ? Number(recompensas.mejoraEspecial || 0) : 0;
+
     usuario.puntos = Number(usuario.puntos || 0) + Number(recompensas.puntos || 0);
     usuario.objetos = (usuario.objetos && typeof usuario.objetos === 'object')
         ? usuario.objetos
         : { mejoraCarta: 0, mejoraEspecial: 0 };
     usuario.objetos.mejoraCarta = Number(usuario.objetos.mejoraCarta || 0) + Number(recompensas.mejora || 0);
-    usuario.objetos.mejoraEspecial = Number(usuario.objetos.mejoraEspecial || 0) + Number(recompensas.mejoraEspecial || 0);
+    usuario.objetos.mejoraEspecial = Number(usuario.objetos.mejoraEspecial || 0) + mejoraEspecialEntregada;
 
     const cartasGanadas = [];
     const cartasRecompensaDesafio = Array.isArray(desafioActivo?.cartas)
@@ -2251,24 +2260,46 @@ async function otorgarRecompensasDesafio() {
             .split(/[;,|]/)
             .map(nombre => String(nombre || '').trim())
             .filter(Boolean);
-    const requiereCatalogoCartas = Boolean(desafioActivo?.tipo === 'evento' && desafioActivo?.carta_recompensa)
-        || (desafioActivo?.tipo !== 'evento' && cartasRecompensaDesafio.length > 0);
+
+    /**
+     * Recompensa de carta para EVENTOS: 80% una carta aleatoria de los enemigos normales
+     * y 20% la carta del BOSS, ambas escaladas a la dificultad elegida (`Nivel = dificultad`).
+     * Si la opción sorteada no está disponible (sin enemigos o sin BOSS) cae en la otra
+     * disponible. Si no hay ni enemigos ni BOSS no se entrega carta.
+     */
+    const enemigosEvento = Array.isArray(desafioActivo?.enemigos)
+        ? desafioActivo.enemigos.map(n => String(n || '').trim()).filter(Boolean)
+        : [];
+    const bossEvento = String(desafioActivo?.boss || '').trim();
+    const requiereCatalogoCartas = Boolean(esEvento && (enemigosEvento.length > 0 || bossEvento))
+        || (!esEvento && cartasRecompensaDesafio.length > 0);
     const cartasDisponibles = requiereCatalogoCartas ? await obtenerCartasDisponibles() : [];
 
-    if (desafioActivo?.tipo === 'evento' && desafioActivo?.carta_recompensa) {
-        const cartaEvento = cartasDisponibles.find(
-            carta => normalizarNombre(carta?.Nombre) === normalizarNombre(desafioActivo.carta_recompensa)
-        );
-
-        if (cartaEvento) {
-            const dificultadEvento = Math.min(Math.max(Number(desafioActivo.dificultad || 1), 1), 6);
-            cartasGanadas.push({
-                ...escalarCartaSegunDificultad(cartaEvento, dificultadEvento),
-                tipoRecompensa: 'evento'
-            });
+    if (esEvento && (enemigosEvento.length > 0 || bossEvento)) {
+        const tirada = Math.random();
+        const sortearEnemigo = () => enemigosEvento[Math.floor(Math.random() * enemigosEvento.length)];
+        let nombreElegido = '';
+        if (tirada < 0.8 && enemigosEvento.length > 0) {
+            nombreElegido = sortearEnemigo();
+        } else if (bossEvento) {
+            nombreElegido = bossEvento;
+        } else if (enemigosEvento.length > 0) {
+            nombreElegido = sortearEnemigo();
+        }
+        if (nombreElegido) {
+            const cartaEvento = cartasDisponibles.find(
+                carta => normalizarNombre(carta?.Nombre) === normalizarNombre(nombreElegido)
+            );
+            if (cartaEvento) {
+                const dificultadEvento = Math.min(Math.max(Number(desafioActivo.dificultad || 1), 1), 6);
+                cartasGanadas.push({
+                    ...escalarCartaSegunDificultad(cartaEvento, dificultadEvento),
+                    tipoRecompensa: 'evento'
+                });
+            }
         }
     }
-    if (desafioActivo?.tipo !== 'evento' && cartasRecompensaDesafio.length > 0) {
+    if (!esEvento && cartasRecompensaDesafio.length > 0) {
         const dificultadDesafio = Math.min(Math.max(Number(desafioActivo?.dificultad || 1), 1), 6);
         const nombresUnicos = Array.from(new Set(cartasRecompensaDesafio.map(normalizarNombre)));
         nombresUnicos.forEach(nombreNormalizado => {
@@ -2297,7 +2328,7 @@ async function otorgarRecompensasDesafio() {
     return {
         puntosGanados: Number(recompensas.puntos || 0),
         mejorasGanadas: Number(recompensas.mejora || 0),
-        mejorasEspecialesGanadas: Number(recompensas.mejoraEspecial || 0),
+        mejorasEspecialesGanadas: mejoraEspecialEntregada,
         cartasGanadas
     };
 }

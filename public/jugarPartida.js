@@ -12,7 +12,7 @@ let afiliacionEventoActiva = 'todas';
 let catalogoCartasCache = null;
 let eventosEnRotacion = [];
 let temporizadorRotacionEventos = null;
-const ROTACION_EVENTOS_MS = 5 * 60 * 1000;
+const ROTACION_EVENTOS_MS = 60 * 60 * 1000;
 const VERSION_ROTACION_EVENTOS = 'event-rotation-v1';
 const OBJETIVO_SINERGIA_POR_DIFICULTAD = {
     1: 4,

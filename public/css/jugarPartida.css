@@ -335,6 +335,18 @@ body {
     color: #dff8ff;
 }
 
+.eventos-header h4 {
+    margin: 0;
+    color: #dff8ff;
+}
+
+.multi-coop-eventos-sub {
+    color: #b8d4ff;
+    font-size: 0.9rem;
+    margin: 6px 0 0;
+    max-width: min(520px, 100%);
+}
+
 .eventos-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr));

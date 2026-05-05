@@ -66,11 +66,82 @@
         return cont;
     }
 
+    const ROTACION_COOP_EVENTOS_MS = 60 * 60 * 1000;
+    const VERSION_ROTACION_COOP_EVENTOS = 'event-rotation-v1';
+    /** Lista completa del XLSX; `obtenerEventosRotacionActualCoop` devuelve el lote de 3 vigente. */
+    let eventosCoopListaCompleta = [];
+    let eventosCoopEnRotacion = [];
+    let temporizadorRotacionCoopEventos = null;
+
+    function obtenerVentanaRotacionCoopEventos() {
+        const ahora = Date.now();
+        const idVentana = Math.floor(ahora / ROTACION_COOP_EVENTOS_MS);
+        const inicio = idVentana * ROTACION_COOP_EVENTOS_MS;
+        const fin = inicio + ROTACION_COOP_EVENTOS_MS;
+        return { ahora, idVentana, inicio, fin };
+    }
+
+    function obtenerEventosRotacionActualCoop() {
+        if (!Array.isArray(eventosCoopListaCompleta) || eventosCoopListaCompleta.length === 0) {
+            return [];
+        }
+        const { idVentana } = obtenerVentanaRotacionCoopEventos();
+        const tamanoLote = 3;
+        const totalLotes = Math.ceil(eventosCoopListaCompleta.length / tamanoLote);
+        const loteActual = totalLotes > 0 ? (idVentana % totalLotes) : 0;
+        const inicio = loteActual * tamanoLote;
+        return eventosCoopListaCompleta.slice(inicio, inicio + tamanoLote);
+    }
+
     function obtenerClaveRotacionEventosLocal() {
-        const ROT_MS = 5 * 60 * 1000;
-        const VERSION = 'event-rotation-v1';
-        const idVentana = Math.floor(Date.now() / ROT_MS);
-        return `${VERSION}-${idVentana}`;
+        const { idVentana } = obtenerVentanaRotacionCoopEventos();
+        return `${VERSION_ROTACION_COOP_EVENTOS}-${idVentana}`;
+    }
+
+    function formatearTiempoRestanteCoop(msRestantes) {
+        const totalSegundos = Math.max(0, Math.floor(msRestantes / 1000));
+        const horas = Math.floor(totalSegundos / 3600);
+        const minutos = Math.floor((totalSegundos % 3600) / 60);
+        const segundos = totalSegundos % 60;
+        return `${String(horas).padStart(2, '0')}:${String(minutos).padStart(2, '0')}:${String(segundos).padStart(2, '0')}`;
+    }
+
+    function actualizarUIRotacionCoopEventos() {
+        const timerValorEl = document.getElementById('coop-eventos-rotacion-timer-valor');
+        const barraEl = document.getElementById('coop-eventos-rotacion-barra-progreso');
+        if (!timerValorEl || !barraEl) {
+            return;
+        }
+
+        const { ahora, inicio, fin } = obtenerVentanaRotacionCoopEventos();
+        const restante = fin - ahora;
+        const transcurrido = ahora - inicio;
+        const progreso = Math.min(100, Math.max(0, (transcurrido / ROTACION_COOP_EVENTOS_MS) * 100));
+        timerValorEl.textContent = formatearTiempoRestanteCoop(restante);
+        barraEl.style.width = `${progreso}%`;
+    }
+
+    function iniciarTemporizadorRotacionCoopEventos(catalogo) {
+        if (temporizadorRotacionCoopEventos) {
+            clearInterval(temporizadorRotacionCoopEventos);
+            temporizadorRotacionCoopEventos = null;
+        }
+
+        eventosCoopEnRotacion = obtenerEventosRotacionActualCoop();
+        actualizarUIRotacionCoopEventos();
+
+        temporizadorRotacionCoopEventos = setInterval(async () => {
+            const idsPrevios = eventosCoopEnRotacion.map((e) => e.id).join(',');
+            const nuevos = obtenerEventosRotacionActualCoop();
+            const idsNuevos = nuevos.map((e) => e.id).join(',');
+            eventosCoopEnRotacion = nuevos;
+
+            if (idsPrevios !== idsNuevos) {
+                await renderizarEventosCoopGrid(nuevos, catalogo);
+            }
+
+            actualizarUIRotacionCoopEventos();
+        }, 1000);
     }
 
     async function obtenerUsuarioActualCoop() {
@@ -653,7 +724,11 @@
 
         try {
             const [eventos, catalogo] = await Promise.all([cargarEventosOnline(), obtenerCatalogoCartas()]);
-            await renderizarEventosCoopGrid(eventos, catalogo);
+            eventosCoopListaCompleta = Array.isArray(eventos) ? eventos : [];
+            const loteInicial = obtenerEventosRotacionActualCoop();
+            eventosCoopEnRotacion = loteInicial;
+            await renderizarEventosCoopGrid(loteInicial, catalogo);
+            iniciarTemporizadorRotacionCoopEventos(catalogo);
         } catch (e) {
             console.error(e);
             gridHost.innerHTML = '<p class="text-warning">No se pudieron cargar los eventos cooperativos online.</p>';
