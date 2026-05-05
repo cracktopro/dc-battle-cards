@@ -1356,28 +1356,65 @@ function construirSnapshotInicialCoopServidor({
 }
 
 async function iniciarSesionCoopEventoDesdePrep(prep) {
+    /**
+     * Validaciones pre-carga: cualquier `return { ok: false }` aquí se notifica
+     * al cliente como `grupo:notificacion` (handler `coop:evento:preparacion:listo`),
+     * pero antes de eso conviene loguear con el contexto del evento + prep para
+     * diagnosticar por qué algunos eventos del XLSX no llegan a iniciar.
+     */
     const fila = buscarFilaEventoOnlinePorId(prep.eventoId);
     if (!fila) {
-        return { ok: false, mensaje: 'Evento no encontrado.' };
+        console.error(`[coop] iniciarSesionCoopEventoDesdePrep: evento eventoId=${prep.eventoId} no encontrado en eventos_online.xlsx`);
+        return { ok: false, mensaje: `Evento ${prep.eventoId} no encontrado en eventos_online.xlsx.` };
     }
     const mapaCatalogo = mapaCatalogoPorNombreCoop();
+    if (!mapaCatalogo || mapaCatalogo.size === 0) {
+        console.error('[coop] iniciarSesionCoopEventoDesdePrep: catálogo de cartas vacío (cartas.xlsx no se cargó)');
+        return { ok: false, mensaje: 'No se pudo cargar el catálogo de cartas en el servidor.' };
+    }
     const dificultad = Math.min(6, Math.max(1, Number(prep.dificultad) || 1));
     const { cartasNormales, bossCarta } = construirMazoBotCoopDesdeEvento(fila, mapaCatalogo, dificultad);
-    if (cartasNormales.length < 4) {
-        return { ok: false, mensaje: 'El evento no tiene suficientes enemigos (mínimo 4 cartas BOT).' };
+    /**
+     * EVENTO_COOPERATIVO_ONLINE_ESPEC.md: el BOT necesita 4 cartas en mesa al
+     * iniciar la partida + un BOSS pendiente. Validamos que la suma cubra esos
+     * 4 huecos: si el evento aporta <4 enemigos pero tiene BOSS, el BOSS pasa
+     * al mazo principal para llenar la mesa (el boss "real" sigue en
+     * `bossPendienteCoop` solo si hay >=4 normales).
+     */
+    let mazoBotFinal = cartasNormales.slice();
+    let bossFinal = bossCarta;
+    if (mazoBotFinal.length < 4 && bossFinal) {
+        console.warn(`[coop] evento ID=${prep.eventoId} '${fila.nombre}' solo tiene ${mazoBotFinal.length} enemigos normales; usando BOSS '${String(fila.boss || '').trim()}' como carta de mesa para alcanzar 4 slots.`);
+        mazoBotFinal.push(bossFinal);
+        bossFinal = null;
+    }
+    if (mazoBotFinal.length < 4) {
+        const total = mazoBotFinal.length + (bossCarta ? 1 : 0);
+        console.error(`[coop] evento ID=${prep.eventoId} '${fila.nombre}' rechazado: ${mazoBotFinal.length} enemigos normales + ${bossCarta ? 1 : 0} boss = ${total} (mínimo 4).`);
+        return { ok: false, mensaje: `El evento "${fila.nombre || prep.eventoId}" no tiene suficientes enemigos (mínimo 4 entre enemigos y boss).` };
     }
 
-    let cartasA = prep.cartasA;
-    let cartasB = prep.cartasB;
+    let cartasA = Array.isArray(prep.cartasA) ? prep.cartasA : null;
+    let cartasB = Array.isArray(prep.cartasB) ? prep.cartasB : null;
+    if (!cartasA || cartasA.length === 0 || !cartasB || cartasB.length === 0) {
+        console.error(`[coop] iniciarSesionCoopEventoDesdePrep: cartasA=${cartasA?.length} cartasB=${cartasB?.length} (deben ser 6 cada uno)`);
+        return { ok: false, mensaje: 'Faltan las cartas seleccionadas por uno de los jugadores.' };
+    }
     cartasA = enriquecerCartasConCatalogoCoop(cartasA, mapaCatalogo);
     cartasB = enriquecerCartasConCatalogoCoop(cartasB, mapaCatalogo);
 
-    const snapshotInicial = construirSnapshotInicialCoopServidor({
-        mazoBotCompleto: cartasNormales,
-        bossPendienteCoop: bossCarta,
-        cartasA,
-        cartasB
-    });
+    let snapshotInicial;
+    try {
+        snapshotInicial = construirSnapshotInicialCoopServidor({
+            mazoBotCompleto: mazoBotFinal,
+            bossPendienteCoop: bossFinal,
+            cartasA,
+            cartasB
+        });
+    } catch (errSnap) {
+        console.error('[coop] iniciarSesionCoopEventoDesdePrep: error construyendo snapshot inicial', errSnap);
+        return { ok: false, mensaje: 'Error interno al construir el estado inicial de la partida.' };
+    }
 
     const sessionId = `coop_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
     const emailLeader = prep.inviterEmail;
@@ -1385,6 +1422,10 @@ async function iniciarSesionCoopEventoDesdePrep(prep) {
 
     const userLead = obtenerUsuarioConectadoPorEmail(emailLeader);
     const userMem = obtenerUsuarioConectadoPorEmail(emailMember);
+    if (!userLead?.id || !userMem?.id) {
+        console.error(`[coop] iniciarSesionCoopEventoDesdePrep: jugadores desconectados (lead=${Boolean(userLead?.id)} mem=${Boolean(userMem?.id)})`);
+        return { ok: false, mensaje: 'Uno de los jugadores se ha desconectado antes de iniciar la partida.' };
+    }
 
     sesionesCoopEventoActivas.set(sessionId, {
         sessionId,
@@ -2384,7 +2425,8 @@ io.on('connection', (socket) => {
     });
 
     socket.on('coop:evento:preparacion:listo', async ({ prepId, indicesCartas }) => {
-        const prep = preparacionesCoopEvento.get(String(prepId || '').trim());
+        const prepIdNorm = String(prepId || '').trim();
+        const prep = preparacionesCoopEvento.get(prepIdNorm);
         if (!prep || prep.estado !== 'seleccion') {
             io.to(socket.id).emit('grupo:notificacion', { tipo: 'error', mensaje: 'Preparación no activa.' });
             return;
@@ -2399,6 +2441,7 @@ io.on('connection', (socket) => {
         }
         const cartas = await extraerCartasUsuarioPorIndicesCoop(usuario.email, indicesCartas);
         if (!cartas) {
+            console.error(`[coop] preparacion:listo: cartas inválidas para ${usuario.email} (indices=${JSON.stringify(indicesCartas)})`);
             io.to(socket.id).emit('grupo:notificacion', { tipo: 'error', mensaje: 'Debes elegir exactamente 6 cartas válidas de tu colección.' });
             return;
         }
@@ -2417,12 +2460,28 @@ io.on('connection', (socket) => {
         if (invitee?.id) io.to(invitee.id).emit('coop:evento:preparacion:estado', estadoPrep);
 
         if (prep.listoA && prep.listoB) {
-            const resultado = await iniciarSesionCoopEventoDesdePrep(prep);
+            console.log(`[coop] ambos jugadores listos en prep=${prep.prepId} eventoId=${prep.eventoId} dificultad=${prep.dificultad}; iniciando sesión coop`);
+            let resultado;
+            try {
+                resultado = await iniciarSesionCoopEventoDesdePrep(prep);
+            } catch (errInicio) {
+                /**
+                 * Sin este try/catch, una excepción dentro de
+                 * `iniciarSesionCoopEventoDesdePrep` quedaba absorbida por el
+                 * handler async y los clientes se quedaban "esperando" para
+                 * siempre, sin recibir `multiplayer:coop:session:start` ni la
+                 * notificación de error correspondiente.
+                 */
+                console.error('[coop] excepción al iniciar sesión coop:', errInicio);
+                resultado = { ok: false, mensaje: `Error interno al iniciar la partida: ${errInicio?.message || errInicio}` };
+            }
             preparacionesCoopEvento.delete(prep.prepId);
-            if (!resultado.ok) {
-                const msg = resultado.mensaje || 'No se pudo iniciar la sesión cooperativa.';
+            if (!resultado || !resultado.ok) {
+                const msg = (resultado && resultado.mensaje) || 'No se pudo iniciar la sesión cooperativa.';
                 if (inviter?.id) io.to(inviter.id).emit('grupo:notificacion', { tipo: 'error', mensaje: msg });
                 if (invitee?.id) io.to(invitee.id).emit('grupo:notificacion', { tipo: 'error', mensaje: msg });
+            } else {
+                console.log(`[coop] sesión coop iniciada correctamente para prep=${prep.prepId}`);
             }
         }
     });
@@ -2475,17 +2534,32 @@ io.on('connection', (socket) => {
         const miembro = emailNorm === normalizarTexto(sesion.emailLeader) || emailNorm === normalizarTexto(sesion.emailMember);
         if (!miembro) return;
         const esEjecutorBot = emailNorm === normalizarTexto(sesion.ejecutorBotEmail || sesion.emailLeader);
+        const esLeader = emailNorm === normalizarTexto(sesion.emailLeader);
+        const esMember = emailNorm === normalizarTexto(sesion.emailMember);
         /**
-         * Durante la fase BOT solo debe aplicar cambios el ejecutor (suele ser el líder), para que la IA
-         * no se duplique. Excepción: el jugador 2 emite la transición P2→BOT tras su último ataque;
-         * ese snapshot debe aceptarse o el servidor nunca entra en BOT y el compañero queda desincronizado.
+         * Validación de autoría por fase anterior (EVENTO_COOPERATIVO_ONLINE_ESPEC.md):
+         * el emisor del snapshot debe ser el titular de la fase anterior del servidor
+         * (P1→líder, P2→miembro, BOT→ejecutor). Cubre acciones dentro de la fase y el
+         * cierre de fase (incluidos saltos legítimos hacia una fase no consecutiva
+         * cuando el siguiente jugador no tiene cartas jugables).
          */
-        if (snapshot && snapshot.faseCoop === 'BOT' && !esEjecutorBot) {
-            const faseAnterior = sesion.snapshotEstado?.faseCoop;
-            const esTransicionP2aBot = faseAnterior === 'P2';
-            if (!esTransicionP2aBot) {
+        const faseAnterior = sesion.snapshotEstado?.faseCoop || null;
+        if (snapshot && typeof snapshot === 'object' && faseAnterior) {
+            const autorValido = (
+                (faseAnterior === 'P1' && esLeader)
+                || (faseAnterior === 'P2' && esMember)
+                || (faseAnterior === 'BOT' && esEjecutorBot)
+            );
+            if (!autorValido) {
+                io.to(socket.id).emit('multiplayer:coop:resync-required', {
+                    sessionId: sesion.sessionId,
+                    revision: Number(sesion.revisionEstado || 0),
+                    reason: 'fase_autor_invalido'
+                });
                 return;
             }
+        } else if (snapshot && snapshot.faseCoop === 'BOT' && !esEjecutorBot) {
+            return;
         }
         const revisionActual = Number(sesion.revisionEstado || 0);
         const revisionBase = Number(baseRevision);
@@ -2497,13 +2571,55 @@ io.on('connection', (socket) => {
             return;
         }
         if (!snapshot || typeof snapshot !== 'object') return;
-        sesion.snapshotEstado = snapshot;
+        const tieneReplayVisual = Boolean(snapshot.coopReplayVisual);
+        /**
+         * Snapshot de broadcast: incluye `coopReplayVisual` para que el observador anime.
+         * Snapshot persistido: se retira `coopReplayVisual` para que una reconexión futura
+         * (estado:solicitar) no vuelva a repetir la animación del último turno.
+         */
+        const snapshotPersistido = { ...snapshot };
+        if (Object.prototype.hasOwnProperty.call(snapshotPersistido, 'coopReplayVisual')) {
+            delete snapshotPersistido.coopReplayVisual;
+        }
+        sesion.snapshotEstado = snapshotPersistido;
         sesion.revisionEstado = revisionActual + 1;
         sesion.updatedAt = Date.now();
-        io.to(obtenerRoomSesionCoop(sesion.sessionId)).emit('multiplayer:coop:estado', {
+        const roomCoop = obtenerRoomSesionCoop(sesion.sessionId);
+        io.to(roomCoop).emit('multiplayer:coop:estado', {
             sessionId: sesion.sessionId,
             revision: sesion.revisionEstado,
-            snapshot: sesion.snapshotEstado
+            snapshot
+        });
+        io.to(roomCoop).emit('multiplayer:coop:debug', {
+            sessionId: sesion.sessionId,
+            revisionNuevo: sesion.revisionEstado,
+            emitterEmail: usuario.email,
+            fase: sesion.snapshotEstado?.faseCoop,
+            tieneReplayVisual
+        });
+    });
+
+    /**
+     * Metadata explícita de una acción (ataque básico o habilidad) que acompaña al siguiente snapshot.
+     * No es autoritativa: el servidor solo la retransmite para que el observador anime con certeza
+     * sobre quién atacó / qué objetivo, sin inferir del diff (EVENTO_COOPERATIVO_ONLINE_ESPEC.md).
+     */
+    socket.on('multiplayer:coop:accion', ({ sessionId, accion, revisionNueva }) => {
+        const usuario = obtenerUsuarioConectadoPorSocketId(socket.id);
+        const sesion = sesionesCoopEventoActivas.get(String(sessionId || '').trim());
+        if (!usuario || !sesion || sesion.finalizada) return;
+        const emailNorm = normalizarTexto(usuario.email);
+        const miembro = emailNorm === normalizarTexto(sesion.emailLeader) || emailNorm === normalizarTexto(sesion.emailMember);
+        if (!miembro) return;
+        if (!accion || typeof accion !== 'object') return;
+        const revisionNum = Number(revisionNueva);
+        if (!Number.isInteger(revisionNum) || revisionNum <= 0) return;
+        const roomCoop = obtenerRoomSesionCoop(sesion.sessionId);
+        io.to(roomCoop).emit('multiplayer:coop:accion', {
+            sessionId: sesion.sessionId,
+            revision: revisionNum,
+            actorEmail: usuario.email,
+            accion
         });
     });
 

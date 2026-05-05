@@ -96,6 +96,15 @@
     /** Evita doble envío mientras se resuelve un ataque humano. */
     let aplicandoAccionCoop = false;
 
+    /**
+     * Estado de la animación de entrada inicial (apertura de partida): mientras está activa,
+     * `renderSlotsPlano` mantiene ocultas (opacity 0) las cartas cuyo slot todavía NO ha sido
+     * revelado por `animarEntradaInicialCoop`. Los `renderTodo()` que se disparen durante la
+     * animación (toast de turno, etc.) no vuelven a hacer aparecer las cartas todavía no entradas.
+     */
+    let coopAnimEntradaInicialActiva = false;
+    const coopSlotsAperturaRevelados = new Set();
+
     let atacanteSel = null;
     let atacanteZona = null;
     /** Resaltado temporal durante animación de impacto (como carta-atacando / carta-objetivo en partida.js). */
@@ -111,14 +120,40 @@
     /** Revisión local al emitir; el eco debe tener `revision` mayor para cerrar la espera. */
     let coopEmitRevAntes = null;
     let coopEmitTimerEsperaEco = null;
+    /** Timestamp mínimo (Date.now) para permitir arranque BOT tras transición P2→BOT. */
+    let coopBloqueoArranqueBotHastaMs = 0;
     /** Serializa `dc:coop-estado` para no solapar animaciones entre revisiones. */
     let coopCadenaEstadosRed = Promise.resolve();
+    /**
+     * Metadata explícita por revisión que acompaña al snapshot correspondiente (ataque básico o habilidad).
+     * Permite al observador animar sin inferir el atacante desde el diff.
+     */
+    const coopAccionesPorRevision = new Map();
+    /** Marca local `sessionStorage` para no repetir la animación de entrada inicial al reentrar. */
+    const COOP_CLAVE_ENTRADA_INICIAL = `coop-entrada-inicial:${SESSION_ID}`;
+    /**
+     * Ventana máxima (ms) que el emisor espera a que el servidor le devuelva su propio broadcast
+     * antes de empezar a animar. Sirve para arrancar la animación casi al mismo tiempo que el observador
+     * (ambos parten del mismo evento `multiplayer:coop:estado` de la sala) y reducir la latencia visible.
+     * Si el RTT es menor que este umbral ambos quedan sincronizados; si es mayor, el emisor arranca solo.
+     */
+    const COOP_MS_ESPERA_ECO_SYNC = 420;
 
     /** Solo mostrar el toast de turno cuando cambie la fase (P1 / P2 / BOT), no en cada render. */
     let ultimaFaseCoopParaAvisoTurno = null;
 
     const COOP_MS_PRE_IMPACTO_ATAQUE = 540;
     const COOP_MS_POST_IMPACTO_ATAQUE = 760;
+    /**
+     * Cadencia específica del turno BOT (ataques básicos y BOSS multi-objetivo). Más cortas que las
+     * humanas para que el ritmo del BOT no se sienta lento frente a PvP/VS BOT. SOLO se aplican en
+     * `ejecutarTurnoBotSecuencial` y en `animarTransicionCoopDesdeDiff` cuando el atacante es BOT;
+     * los ataques humanos siguen usando COOP_MS_PRE/POST_IMPACTO_ATAQUE.
+     */
+    const COOP_MS_PRE_IMPACTO_BOT = 380;
+    const COOP_MS_POST_IMPACTO_BOT = 480;
+    /** Evita que el primer ataque BOT arranque pegado al último impacto remoto de P2. */
+    const COOP_MS_BLOQUEO_ARRANQUE_BOT_TRAS_P2 = COOP_MS_POST_IMPACTO_BOT + 80;
     /** Misma pausa que en `resolverAtaqueHumanoAZona` cuando el daño afecta escudo (impacto visual sin barra completa). */
     const COOP_MS_IMPACTO_ESCUDO_HUMANO = 280;
     const COOLDOWN_HABILIDAD_ACTIVA_TURNOS = 2;
@@ -129,7 +164,7 @@
      * Tras el último impacto del BOT, el ejecutor no reproduce el eco en cola (`marcarSaltarReplayVisual`);
      * sin esta pausa, cementerio + vaciado de slot y el salto a P1/robos se solapan en el cliente del líder.
      */
-    const COOP_MS_RESPIRO_TRAS_ULTIMO_ATAQUE_BOT = 520;
+    const COOP_MS_RESPIRO_TRAS_ULTIMO_ATAQUE_BOT = 240;
     /** Aviso central de cambio de fase (nombre + tiempo de lectura). */
     const COOP_MS_AVISO_CAMBIO_FASE = 2200;
 
@@ -162,6 +197,40 @@
         const el = document.getElementById('coop-log-mini');
         if (el) el.textContent = msg;
         console.log('[coop]', msg);
+    }
+
+    /** Depuración temporal coop online (paneles en tablero_coop). */
+    const COOP_DEBUG_MAX_LINES = 320;
+
+    function coopDebugTs() {
+        const d = new Date();
+        const p2 = (n) => String(n).padStart(2, '0');
+        const p3 = (n) => String(n).padStart(3, '0');
+        return `${p2(d.getHours())}:${p2(d.getMinutes())}:${p2(d.getSeconds())}.${p3(d.getMilliseconds())}`;
+    }
+
+    function coopDebugAppend(elId, texto) {
+        const el = document.getElementById(elId);
+        if (!el) return;
+        const row = document.createElement('div');
+        row.textContent = `${coopDebugTs()} ${String(texto || '').trim()}`;
+        el.appendChild(row);
+        while (el.childNodes.length > COOP_DEBUG_MAX_LINES) {
+            el.removeChild(el.firstChild);
+        }
+        el.scrollTop = el.scrollHeight;
+    }
+
+    function coopDebugYo(line) {
+        coopDebugAppend('coop-debug-cliente-yo', `R${ROL} ${line}`);
+    }
+
+    function coopDebugEco(line) {
+        coopDebugAppend('coop-debug-cliente-otro', `R${ROL} ${line}`);
+    }
+
+    function coopDebugServidor(line) {
+        coopDebugAppend('coop-debug-servidor', line);
     }
 
     function mostrarAvisoHabilidadCoop(texto, duracionMs = PAUSA_AVISO_HABILIDAD_MS) {
@@ -219,8 +288,22 @@
         });
     }
 
+    function atacanteDesdeReplayCoop(replay) {
+        if (!replay || typeof replay !== 'object') return null;
+        const zona = String(replay.actorZona || '').trim();
+        const slot = Number(replay.actorSlot);
+        if ((zona !== 'A' && zona !== 'B' && zona !== 'bot') || !Number.isInteger(slot)) {
+            return null;
+        }
+        if ((zona === 'A' || zona === 'B') && (slot < 0 || slot > 1)) return null;
+        if (zona === 'bot' && (slot < 0 || slot > 3)) return null;
+        return { zona, slot };
+    }
+
     async function animarTransicionCoopAoeDesdeReplay(prev, prox, replay) {
         if (!prev || !prox || !replay || typeof replay !== 'object') return;
+        const impactosPrev = Array.isArray(replay.floats) ? replay.floats.length : 0;
+        coopDebugEco(`anim AoE hits=${impactosPrev}`);
         const msAviso = Math.max(300, Number(replay.msAviso || PAUSA_AVISO_HABILIDAD_MS));
         const txtAviso = String(replay.textoAnuncio || '').trim();
         if (txtAviso) {
@@ -230,7 +313,8 @@
         const impactos = Array.isArray(replay.floats) ? replay.floats : [];
         if (!impactos.length) return;
         const primerZonaHum = impactos.find((h) => h && (h.zona === 'A' || h.zona === 'B'));
-        const atk = inferirSlotAtacanteCoop(prev, prox, primerZonaHum ? primerZonaHum.zona : 'bot');
+        const atk = atacanteDesdeReplayCoop(replay)
+            || inferirSlotAtacanteCoop(prev, prox, primerZonaHum ? primerZonaHum.zona : 'bot');
         for (const hit of impactos) {
             if (!hit || typeof hit !== 'object') continue;
             const zonaObj = hit.zona;
@@ -247,11 +331,17 @@
             /** `c0` confirma que había carta en el eco anterior; la animación debe leer salud/escudo del `snapshot` vivo. */
             if (!c0 || !live) continue;
 
+            /**
+             * Si tras el AoE el mazo BOT repuso el slot con otra carta, `c1` es una carta distinta:
+             * tratamos el impacto como letal sobre la original y la carta nueva aparecerá cuando se
+             * aplique `snapDespuesCanon` al final de la animación.
+             */
+            const cambioCarta = Boolean(c1) && String(c0.Nombre || '') !== String(c1.Nombre || '');
             const saludRawIni = obtenerSaludActualCarta(live);
             const escIni = Math.max(0, Number(live.escudoActual || 0));
-            const saludRawFin = c1 ? obtenerSaludActualCarta(c1) : 0;
-            const escFin = c1 ? Math.max(0, Number(c1.escudoActual || 0)) : 0;
-            const esLetal = !c1;
+            const saludRawFin = (c1 && !cambioCarta) ? obtenerSaludActualCarta(c1) : 0;
+            const escFin = (c1 && !cambioCarta) ? Math.max(0, Number(c1.escudoActual || 0)) : 0;
+            const esLetal = !c1 || cambioCarta;
             const impactoEsc = escIni > 0 || escFin > 0;
             const danioMostrar = Math.max(1, Number(hit.valor) || 1);
 
@@ -289,6 +379,71 @@
             renderTodo();
             await esperar(COOP_MS_POST_IMPACTO_ATAQUE);
         }
+    }
+
+    async function animarTransicionCoopExtraAttackDesdeReplay(prev, prox, replay) {
+        if (!prev || !prox || !replay || typeof replay !== 'object') return false;
+        const extra = replay.extraAttack;
+        if (!extra || typeof extra !== 'object') return false;
+
+        const zonaObj = extra.zonaObjetivo;
+        const slotObj = Number(extra.slotObjetivo);
+        const zonaAtk = extra.zonaAtacante;
+        const slotAtk = Number(extra.slotAtacante);
+        if ((zonaObj !== 'A' && zonaObj !== 'B' && zonaObj !== 'bot') || !Number.isInteger(slotObj)) return false;
+        if ((zonaAtk !== 'A' && zonaAtk !== 'B' && zonaAtk !== 'bot') || !Number.isInteger(slotAtk)) return false;
+
+        coopDebugEco(`anim extra_attack ${zonaAtk}:${slotAtk}→${zonaObj}:${slotObj}`);
+        const msAviso = Math.max(300, Number(replay.msAviso || PAUSA_AVISO_HABILIDAD_MS));
+        const txtAviso = String(replay.textoAnuncio || '').trim();
+        if (txtAviso) {
+            mostrarAvisoHabilidadCoop(txtAviso, msAviso);
+            await esperar(msAviso);
+        }
+
+        const danioMostrar = Math.max(1, Number(extra.danioMostrar || 1));
+        const saludRawIni = Math.max(0, Number(extra.saludRawIni || 0));
+        const saludRawFin = Math.max(0, Number(extra.saludRawFin || 0));
+        const escIni = Math.max(0, Number(extra.escIni || 0));
+        const escFin = Math.max(0, Number(extra.escFin || 0));
+        const esLetal = Boolean(extra.esLetal);
+        const impactoEsc = escIni > 0 || escFin > 0;
+
+        const mesaObj = obtenerMesaPorZona(zonaObj);
+        const live = mesaObj[slotObj];
+        if (!live && !esLetal) return false;
+
+        coopAnimAtacante = { zona: zonaAtk, slot: slotAtk };
+        coopAnimObjetivo = { zona: zonaObj, slot: slotObj };
+        if (live) {
+            restaurarSaludEscudoVisual(live, saludRawIni, escIni);
+        }
+        renderTodo();
+        await esperar(COOP_MS_PRE_IMPACTO_ATAQUE);
+
+        const tipoFloat = (zonaObj === 'A' || zonaObj === 'B') ? 'jugador' : 'oponente';
+        mostrarValorFlotanteCoop(zonaObj, slotObj, danioMostrar, tipoFloat, 'danio');
+
+        if (esLetal && live) {
+            await animarBajadaSaludCartaCoop(zonaObj, slotObj, saludRawIni, 0, {
+                escudoInicial: escIni,
+                escudoFinal: 0
+            });
+        } else if (!esLetal && impactoEsc && live) {
+            restaurarSaludEscudoVisual(live, saludRawFin, escFin);
+            renderTodo();
+            await esperar(COOP_MS_IMPACTO_ESCUDO_HUMANO);
+        } else if (!esLetal && live) {
+            await animarBajadaSaludCartaCoop(zonaObj, slotObj, saludRawIni, saludRawFin, {
+                escudoInicial: escIni,
+                escudoFinal: escFin
+            });
+        }
+
+        limpiarCoopAnimHighlights();
+        renderTodo();
+        await esperar(COOP_MS_POST_IMPACTO_ATAQUE);
+        return true;
     }
 
     function tipoFloatImpactoParaZonaCarta(zonaCarta) {
@@ -405,7 +560,8 @@
     /**
      * `zonaObjetivoDaño`: zona del primer cambio de vida (o hint en AoE). Evita atribuir al jugador humano
      * un ataque del BOT cuando el diff incluye daño en A/B en fase BOT (mismo slot atacante/objetivo).
-     * Transición P2→BOT con daño en `bot`: el atacante es el último slot registrado en `prev.cartasYaAtacaronB`.
+     * Transición P2→BOT / P1→P2 con daño en `bot`: el eco puede traer `cartasYaAtacaron*` vacío al cambiar de fase;
+     * entonces el atacante es el primer slot vivo de esa mesa que en `prev` aún no estaba en la lista de "ya atacó".
      */
     function inferirSlotAtacanteCoop(prev, prox, zonaObjetivoDaño) {
         if (!prox) return null;
@@ -418,18 +574,29 @@
             return inferirAtacanteBotActivoDesdeProx(prox);
         }
 
+        /**
+         * Tras el último ataque de la fase, `avanzarFaseTrasHumanoEnSnapshot` vacía `cartasYaAtacaronA|B`;
+         * el eco trae `prox` ya en la fase nueva con array vacío. No usar solo el último índice de `prev`:
+         * el atacante es el primer slot vivo de esa mesa que en `prev` aún no constaba como "ya atacó".
+         */
         if (zObj === 'bot' && fP === 'P2' && fX === 'BOT') {
-            const yaPrev = prev && prev.cartasYaAtacaronB;
-            if (Array.isArray(yaPrev) && yaPrev.length) {
-                return { zona: 'B', slot: yaPrev[yaPrev.length - 1] };
+            const mesaB = (prev && prev.cartasEnJuegoB) || [];
+            const ya = (prev && prev.cartasYaAtacaronB) || [];
+            for (let s = 0; s < mesaB.length && s < 2; s += 1) {
+                if (ya.includes(s)) continue;
+                if (cartaViva(mesaB[s])) return { zona: 'B', slot: s };
             }
+            if (Array.isArray(ya) && ya.length) return { zona: 'B', slot: ya[ya.length - 1] };
         }
 
         if (zObj === 'bot' && fP === 'P1' && fX === 'P2') {
-            const yaPrev = prev && prev.cartasYaAtacaronA;
-            if (Array.isArray(yaPrev) && yaPrev.length) {
-                return { zona: 'A', slot: yaPrev[yaPrev.length - 1] };
+            const mesaA = (prev && prev.cartasEnJuegoA) || [];
+            const ya = (prev && prev.cartasYaAtacaronA) || [];
+            for (let s = 0; s < mesaA.length && s < 2; s += 1) {
+                if (ya.includes(s)) continue;
+                if (cartaViva(mesaA[s])) return { zona: 'A', slot: s };
             }
+            if (Array.isArray(ya) && ya.length) return { zona: 'A', slot: ya[ya.length - 1] };
         }
 
         const pa = prox.cartasYaAtacaronA || [];
@@ -515,20 +682,40 @@
     /**
      * Reproduce la secuencia visual en el otro cliente (snapshot global sigue siendo `prev` hasta aplicar al final).
      */
-    async function animarTransicionCoopDesdeDiff(prev, prox) {
+    /**
+     * `accionExplicita` (opcional) = metadata de la acción emitida (`multiplayer:coop:accion`).
+     * Si viene, se usa directamente y no se infiere el atacante desde el diff.
+     */
+    async function animarTransicionCoopDesdeDiff(prev, prox, accionExplicita = null) {
         const cambio = encontrarPrimerCambioDanioVisual(prev, prox);
         if (!cambio) return;
 
-        const atk = inferirSlotAtacanteCoop(prev, prox, cambio.zona);
+        const atkExplicito = (() => {
+            if (!accionExplicita || typeof accionExplicita !== 'object') return null;
+            const zona = String(accionExplicita.zonaAtacante || '').trim();
+            const slot = Number(accionExplicita.slotAtacante);
+            if ((zona !== 'A' && zona !== 'B' && zona !== 'bot') || !Number.isInteger(slot)) return null;
+            if ((zona === 'A' || zona === 'B') && (slot < 0 || slot > 1)) return null;
+            if (zona === 'bot' && (slot < 0 || slot > 3)) return null;
+            return { zona, slot };
+        })();
+
+        const atk = atkExplicito || inferirSlotAtacanteCoop(prev, prox, cambio.zona);
+        coopDebugEco(`anim diff atk=${atk ? `${atk.zona}:${atk.slot}` : '?'} → ${cambio.zona}:${cambio.slot}${atkExplicito ? ' (explícito)' : ''}`);
         const { zona: zonaObj, slot: slotObj, esLetal, danioMostrar, saludRawIni, saludRawFin, escIni, escFin } = cambio;
 
         const mesaKey = zonaObj === 'bot' ? 'cartasEnJuegoBot' : zonaObj === 'A' ? 'cartasEnJuegoA' : 'cartasEnJuegoB';
         const live = snapshot[mesaKey][slotObj];
         if (!live && !esLetal) return;
 
-        /** Misma cadencia que `resolverAtaqueHumanoAZona` (incl. turno BOT en el ejecutador local). */
-        const msPreImpacto = COOP_MS_PRE_IMPACTO_ATAQUE;
-        const msPostImpacto = COOP_MS_POST_IMPACTO_ATAQUE;
+        /**
+         * Cadencia coherente con el ejecutor: cuando el atacante es BOT usamos la pareja
+         * COOP_MS_PRE/POST_IMPACTO_BOT (más cortas) para que el observador no vaya por detrás
+         * del ejecutor. En ataques humanos seguimos la cadencia humana clásica.
+         */
+        const esAtaqueBotObs = atk && atk.zona === 'bot';
+        const msPreImpacto = esAtaqueBotObs ? COOP_MS_PRE_IMPACTO_BOT : COOP_MS_PRE_IMPACTO_ATAQUE;
+        const msPostImpacto = esAtaqueBotObs ? COOP_MS_POST_IMPACTO_BOT : COOP_MS_POST_IMPACTO_ATAQUE;
 
         coopAnimAtacante = atk;
         coopAnimObjetivo = { zona: zonaObj, slot: slotObj };
@@ -570,6 +757,14 @@
         coopEmitDone();
     }
 
+    async function esperarFinAccionLocalCoop(maxMs = 600) {
+        const inicio = Date.now();
+        while (aplicandoAccionCoop) {
+            if ((Date.now() - inicio) >= maxMs) break;
+            await esperar(24);
+        }
+    }
+
     async function procesarEstadoCoopDesdeRed(det) {
         const prox = det.snapshot;
         const rev = Number(det.revision);
@@ -582,32 +777,49 @@
          */
         normalizarSnapshotCoop(prox);
 
+        /**
+         * Si este cliente está terminando una acción local (p. ej. último ataque de P2), no empezar a pintar
+         * el siguiente estado remoto (p. ej. primer ataque BOT) hasta cerrar su secuencia visual.
+         */
+        await esperarFinAccionLocalCoop();
+
         /** El eco del propio emit se resuelve en el listener de `dc:coop-estado` sin pasar por esta cola (ver ahí). */
 
+        const prev = snapshot ? JSON.parse(JSON.stringify(snapshot)) : null;
         const replay = prox.coopReplayVisual && typeof prox.coopReplayVisual === 'object'
             ? JSON.parse(JSON.stringify(prox.coopReplayVisual))
             : null;
+        const accionExplicita = consumirAccionCoopPorRevision(rev);
 
-        const prev = snapshot ? JSON.parse(JSON.stringify(snapshot)) : null;
+        coopDebugEco(
+            `procesar inicio rev=${rev} ${prev?.faseCoop || '?'}→${prox.faseCoop} replay=${replay?.tipoAccion || '—'} accion=${accionExplicita ? accionExplicita.tipo : '—'}`
+        );
+
         const replaySeEncargaAnim = Boolean(replay && replay.tipoAccion === 'aoe');
+        const replayExtraAttackConAnim = Boolean(replay && replay.tipoAccion === 'extra_attack' && replay.extraAttack);
         const replayExtraAttack = Boolean(replay && replay.tipoAccion === 'extra_attack');
         try {
             if (prev && !partidaFinalizada) {
                 if (replaySeEncargaAnim) {
                     await animarTransicionCoopAoeDesdeReplay(prev, prox, replay);
+                } else if (replayExtraAttackConAnim) {
+                    await animarTransicionCoopExtraAttackDesdeReplay(prev, prox, replay);
                 } else {
                     if (replayExtraAttack) {
                         await ejecutarCoopReplayVisual(replay, { soloAnuncio: true });
                     }
-                    await animarTransicionCoopDesdeDiff(prev, prox);
+                    await animarTransicionCoopDesdeDiff(prev, prox, accionExplicita);
                 }
             }
         } catch (e) {
             console.error('[coop] anim estado remoto', e);
         }
+        coopDebugEco(`procesar post-diff-anim rev=${rev}`);
         aplicarSnapshotRemoto(prox, rev);
+        coopDebugEco(`procesar snapshot aplicado rev=${rev} fase=${snapshot?.faseCoop}`);
         try {
-            if (replay && !replaySeEncargaAnim && !partidaFinalizada) {
+            if (replay && !replaySeEncargaAnim && !replayExtraAttackConAnim && !partidaFinalizada) {
+                coopDebugEco(`replayVisual post-snapshot tipo=${replay.tipoAccion || '?'}`);
                 if (replayExtraAttack) {
                     await ejecutarCoopReplayVisual(replay, { omitirAnuncio: true });
                 } else {
@@ -631,7 +843,14 @@
         } catch (e) {
             console.error('[coop] anim relleno ciclo bot', e);
         }
+        coopDebugEco(`procesar fin cadena rev=${rev} omitirRellenoCiclo=${omitirAnimRellenoCiclo ? 'sí' : 'no'}`);
         resolverEcoEmitSiCorresponde(rev);
+        if (prev && prev.faseCoop === 'P2' && prox.faseCoop === 'BOT') {
+            coopBloqueoArranqueBotHastaMs = Math.max(
+                coopBloqueoArranqueBotHastaMs,
+                Date.now() + COOP_MS_BLOQUEO_ARRANQUE_BOT_TRAS_P2
+            );
+        }
         /**
          * Debe ejecutarse al terminar todo el procesamiento del eco (replay + rellenos). Si se dispara desde
          * `aplicarSnapshotRemoto`, el microtask del BOT puede intercalar con `animarEntradaRellenosCicloBotPostAplicar`
@@ -1256,6 +1475,14 @@
     function clonarSnapshotParaRed() {
         const s = JSON.parse(JSON.stringify(snapshot));
         normalizarSnapshotCoop(s);
+        /**
+         * `coopReplayVisual` es una propiedad transitoria que viaja en el snapshot de red para
+         * que el observador anime la habilidad actual. Debe limpiarse del snapshot vivo tras
+         * clonarlo para no reusarla en la siguiente emisión (causa de ecos de AoE repetidos).
+         */
+        if (snapshot && Object.prototype.hasOwnProperty.call(snapshot, 'coopReplayVisual')) {
+            delete snapshot.coopReplayVisual;
+        }
         return s;
     }
 
@@ -1268,12 +1495,112 @@
         mesa[slotIdx] = null;
     }
 
+    /**
+     * Según EVENTO_COOPERATIVO_ONLINE_ESPEC.md, en turno humano (P1/P2) se roba del mazo BOT
+     * solo si la mesa BOT quedó totalmente vacía durante el turno activo. Se usa tras resolver
+     * la habilidad humana (AoE / extra_attack letal) para no dejar a P2 sin objetivos válidos.
+     */
+    function rellenarMesaBotSiVaciaEnSnap(snap) {
+        if (!snap || typeof snap !== 'object') return;
+        if (snap.faseCoop !== 'P1' && snap.faseCoop !== 'P2') return;
+        if (!mesaTotalmenteVacia(snap.cartasEnJuegoBot)) return;
+        rellenarVaciosDesdeMazoEnSnapshot(snap, 'bot', 4);
+        intentarDesplegarBossEnSnap(snap);
+    }
+
+    function prepararSnapshotEmitConReplayHabilidad(snap) {
+        if (!snap || typeof snap !== 'object') return;
+        const replay = snap.coopReplayVisual;
+        if (!replay || typeof replay !== 'object') return;
+        if (replay.tipoAccion === 'aoe') {
+            /**
+             * AOE puede vaciar las últimas normales del BOT manteniendo la fase humana.
+             * Para no bloquear el turno por falta de objetivos, evaluar despliegue del BOSS
+             * y, si sigue sin cartas, robar del mazo BOT (caso "turno humano con mesa BOT vacía").
+             */
+            intentarDesplegarBossEnSnap(snap);
+            rellenarMesaBotSiVaciaEnSnap(snap);
+            return;
+        }
+        if (replay.tipoAccion !== 'extra_attack') return;
+        const extra = replay.extraAttack;
+        if (!extra || typeof extra !== 'object') return;
+        const zonaObj = extra.zonaObjetivo;
+        const slotObj = Number(extra.slotObjetivo);
+        if ((zonaObj !== 'A' && zonaObj !== 'B' && zonaObj !== 'bot') || !Number.isInteger(slotObj)) return;
+        if (extra.esLetal) {
+            promoverObjetivoMuertoACementerioEnSnapshot(snap, zonaObj, slotObj);
+        }
+        if (zonaObj === 'bot') {
+            /**
+             * Salvaguarda: aunque el payload de letalidad venga incompleto, reevaluar aquí evita quedarnos
+             * sin objetivos BOT al final de la acción humana.
+             */
+            intentarDesplegarBossEnSnap(snap);
+            rellenarMesaBotSiVaciaEnSnap(snap);
+        }
+    }
+
     /** Devuelve la carta al estado previo al daño solo para la animación local (la red usa otro snapshot). */
     function restaurarSaludEscudoVisual(carta, saludRaw, escudoRaw) {
         if (!carta) return;
         const max = obtenerSaludMaxCarta(carta);
         carta.Salud = Math.max(0, Math.min(Number(saludRaw) || 0, max));
         carta.escudoActual = Math.max(0, Number(escudoRaw) || 0);
+    }
+
+    /**
+     * Copia mesas y cementerios (y `bossPendienteCoop`) desde `fuente` al snapshot vivo sin tocar
+     * fase, mazos, `cartasYaAtacaron*` ni `revisionConfirmada`. Sirve al emisor para volver visualmente
+     * al estado previo a la habilidad y luego dejar el estado canónico tras animar.
+     */
+    function aplicarEstadoVisualDesdeSnapshotCoop(fuente) {
+        if (!snapshot || !fuente || typeof fuente !== 'object') return;
+        snapshot.cartasEnJuegoBot = JSON.parse(JSON.stringify(fuente.cartasEnJuegoBot || []));
+        snapshot.cartasEnJuegoA = JSON.parse(JSON.stringify(fuente.cartasEnJuegoA || []));
+        snapshot.cartasEnJuegoB = JSON.parse(JSON.stringify(fuente.cartasEnJuegoB || []));
+        snapshot.cementerioBot = JSON.parse(JSON.stringify(fuente.cementerioBot || []));
+        snapshot.cementerioA = JSON.parse(JSON.stringify(fuente.cementerioA || []));
+        snapshot.cementerioB = JSON.parse(JSON.stringify(fuente.cementerioB || []));
+        if (Object.prototype.hasOwnProperty.call(fuente, 'bossPendienteCoop')) {
+            snapshot.bossPendienteCoop = fuente.bossPendienteCoop && typeof fuente.bossPendienteCoop === 'object'
+                ? JSON.parse(JSON.stringify(fuente.bossPendienteCoop))
+                : null;
+        }
+        normalizarSnapshotCoop(snapshot);
+    }
+
+    /**
+     * Animación local en el emisor de una habilidad activa coop. Equivalente al flujo que hace el
+     * observador al procesar el eco: mostrar aviso + floats para heal/shield/stun/..., y para AoE
+     * o extra_attack bajar la barra de salud carta a carta. Requiere dos snapshots clonados:
+     *   - `snapAntes`: estado del snapshot vivo antes de llamar a `usarHabilidadActivaCoop`.
+     *   - `snapDespuesCanon`: estado canónico tras la habilidad, ya con cementerios promovidos
+     *     (el mismo que se enviará por red en `snapshotParaRed`).
+     * El snapshot vivo queda reposicionado en `snapDespuesCanon` al terminar.
+     */
+    async function animarHabilidadLocalEnEmisorCoop(snapAntes, snapDespuesCanon, replay) {
+        if (!snapAntes || !snapDespuesCanon || !replay || typeof replay !== 'object') {
+            return;
+        }
+        /** Retrocede visualmente mesas/cementerios al estado anterior para que la animación tenga recorrido. */
+        aplicarEstadoVisualDesdeSnapshotCoop(snapAntes);
+        renderTodo();
+        try {
+            if (replay.tipoAccion === 'aoe') {
+                await animarTransicionCoopAoeDesdeReplay(snapAntes, snapDespuesCanon, replay);
+            } else if (replay.tipoAccion === 'extra_attack') {
+                await animarTransicionCoopExtraAttackDesdeReplay(snapAntes, snapDespuesCanon, replay);
+            } else {
+                await ejecutarCoopReplayVisual(replay);
+            }
+        } catch (e) {
+            console.error('[coop] animar habilidad (emisor)', e);
+        }
+        /** Reposiciona al estado canónico (con cementerio y huecos finales) tras la animación. */
+        aplicarEstadoVisualDesdeSnapshotCoop(snapDespuesCanon);
+        limpiarCoopAnimHighlights();
+        renderTodo();
     }
 
     function obtenerMesaPorZonaEnSnapshot(snap, zona) {
@@ -1360,6 +1687,7 @@
         delete snapshot.coopReplayVisual;
         let coopReplayTexto = '';
         const coopReplayFloats = [];
+        let coopReplayExtraAttack = null;
 
         const valor = Math.max(0, Number(obtenerValorNumericoSkillPower(carta, 0)));
         const aliados = ctx.aliados;
@@ -1514,7 +1842,40 @@
                 }
                 const objetivoReal = obtenerMesaPorZona(zonaObjetivo)[slotObjetivo];
                 if (objetivoReal) {
-                    aplicarDanioDirectoSinAnimCoop(objetivoReal, zonaObjetivo, slotObjetivo, danioExtra);
+                    const uiExtra = window.tableroCoopCartaUi;
+                    const enObjExtra = enemigosSaludParaZonaCoop(zonaObjetivo);
+                    const estadoAntesTotExtra = uiExtra && typeof uiExtra.obtenerSaludEfectiva === 'function'
+                        ? uiExtra.obtenerSaludEfectiva(objetivoReal, enObjExtra).totalActual
+                        : obtenerSaludActualCarta(objetivoReal) + Math.max(0, Number(objetivoReal.escudoActual || 0));
+                    const danioMostrarExtra = Math.min(danioExtra, Math.max(0, estadoAntesTotExtra));
+                    const saludIniExtra = obtenerSaludActualCarta(objetivoReal);
+                    const escIniExtra = Math.max(0, Number(objetivoReal.escudoActual || 0));
+                    const tempExtra = JSON.parse(JSON.stringify(objetivoReal));
+                    aplicarDanioCarta(tempExtra, danioExtra);
+                    const saludFinExtra = obtenerSaludActualCarta(tempExtra);
+                    const escFinExtra = Math.max(0, Number(tempExtra.escudoActual || 0));
+                    const esLetalExtra = !cartaViva(tempExtra);
+
+                    aplicarDanioCarta(objetivoReal, danioExtra);
+                    coopReplayFloats.push({
+                        zona: zonaObjetivo,
+                        slot: slotObjetivo,
+                        valor: Math.max(1, Number(danioMostrarExtra || 1)),
+                        tipoImpacto: tipoFloatImpactoParaZonaCarta(zonaObjetivo),
+                        claseVisual: 'danio'
+                    });
+                    coopReplayExtraAttack = {
+                        zonaAtacante: zonaActor,
+                        slotAtacante: slotCarta,
+                        zonaObjetivo,
+                        slotObjetivo,
+                        danioMostrar: Math.max(1, Number(danioMostrarExtra || 1)),
+                        saludRawIni: saludIniExtra,
+                        saludRawFin: saludFinExtra,
+                        escIni: escIniExtra,
+                        escFin: escFinExtra,
+                        esLetal: esLetalExtra
+                    };
                     logCoop(`${carta.Nombre} usa ${meta.nombre} y ejecuta un ataque extra sobre ${objetivoReal.Nombre}.`);
                 }
             }
@@ -1674,6 +2035,9 @@
                     : meta.clase === 'extra_attack'
                         ? 'extra_attack'
                         : 'general',
+                actorZona: zonaActor,
+                actorSlot: slotCarta,
+                extraAttack: coopReplayExtraAttack,
                 floats: coopReplayFloats
             };
         }
@@ -1719,28 +2083,58 @@
         return hubo;
     }
 
-    /** Rellena huecos desde el mazo del jugador/BOT al inicio de su fase (p. ej. mesa vacía con cartas en mazo). */
+    function mesaTotalmenteVacia(mesa) {
+        if (!Array.isArray(mesa)) return true;
+        return mesa.every((c) => !cartaViva(c));
+    }
+
+    /**
+     * Rellena huecos desde el mazo según el flujo del documento (EVENTO_COOPERATIVO_ONLINE_ESPEC.md):
+     *   - Turno humano (P1/P2): solo se roba del mazo BOT si la mesa BOT quedó totalmente vacía durante el turno.
+     *   - Turno BOT: solo se roba al mazo humano si AMBAS mesas humanas están vacías (doc: "jugador_1 y jugador_2
+     *     se han quedado sin cartas en el tablero").
+     */
     function aplicarRobosInicioDeFaseSegunFaseActual() {
         if (!snapshot || partidaFinalizada) return;
         const fase = snapshot.faseCoop;
-        if (fase === 'P2') {
-            rellenarVaciosDesdeMazo('A', 2);
-            rellenarVaciosDesdeMazo('B', 2);
+        if (fase === 'P1' || fase === 'P2') {
+            if (mesaTotalmenteVacia(snapshot.cartasEnJuegoBot)) {
+                rellenarVaciosDesdeMazo('bot', 4);
+                intentarDesplegarBossCoop();
+            }
         } else if (fase === 'BOT') {
-            rellenarVaciosDesdeMazo('bot', 4);
-            intentarDesplegarBossCoop();
+            const mesaAVacia = mesaTotalmenteVacia(snapshot.cartasEnJuegoA);
+            const mesaBVacia = mesaTotalmenteVacia(snapshot.cartasEnJuegoB);
+            if (mesaAVacia && mesaBVacia) {
+                rellenarVaciosDesdeMazo('A', 2);
+                rellenarVaciosDesdeMazo('B', 2);
+            }
+            if (mesaTotalmenteVacia(snapshot.cartasEnJuegoBot)) {
+                rellenarVaciosDesdeMazo('bot', 4);
+                intentarDesplegarBossCoop();
+            }
         }
     }
 
     function aplicarRobosInicioDeFaseEnSnapshotEmit(snap) {
         if (!snap || typeof snap !== 'object') return;
         normalizarSnapshotCoop(snap);
-        if (snap.faseCoop === 'P2') {
-            rellenarVaciosDesdeMazoEnSnapshot(snap, 'A', 2);
-            rellenarVaciosDesdeMazoEnSnapshot(snap, 'B', 2);
+        if (snap.faseCoop === 'P1' || snap.faseCoop === 'P2') {
+            if (mesaTotalmenteVacia(snap.cartasEnJuegoBot)) {
+                rellenarVaciosDesdeMazoEnSnapshot(snap, 'bot', 4);
+                intentarDesplegarBossEnSnap(snap);
+            }
         } else if (snap.faseCoop === 'BOT') {
-            rellenarVaciosDesdeMazoEnSnapshot(snap, 'bot', 4);
-            intentarDesplegarBossEnSnap(snap);
+            const mesaAVacia = mesaTotalmenteVacia(snap.cartasEnJuegoA);
+            const mesaBVacia = mesaTotalmenteVacia(snap.cartasEnJuegoB);
+            if (mesaAVacia && mesaBVacia) {
+                rellenarVaciosDesdeMazoEnSnapshot(snap, 'A', 2);
+                rellenarVaciosDesdeMazoEnSnapshot(snap, 'B', 2);
+            }
+            if (mesaTotalmenteVacia(snap.cartasEnJuegoBot)) {
+                rellenarVaciosDesdeMazoEnSnapshot(snap, 'bot', 4);
+                intentarDesplegarBossEnSnap(snap);
+            }
         }
     }
 
@@ -1783,27 +2177,45 @@
         if (badgeBot) badgeBot.textContent = fase === 'BOT' ? 'Turno BOT' : 'BOT';
     }
 
+    /** Temporizador propio del toast de cambio de turno; NO compartido con `#aviso-turno-coop`. */
+    let coopToastTurnoHideTimer = null;
+    function mostrarCoopToastTurno(texto, duracionMs = COOP_MS_AVISO_CAMBIO_FASE) {
+        const toast = document.getElementById('coop-toast-turno');
+        const txtEl = document.getElementById('coop-toast-turno-texto');
+        if (!toast || !txtEl) return;
+        txtEl.textContent = String(texto || '').trim();
+        toast.classList.add('visible');
+        toast.setAttribute('aria-hidden', 'false');
+        if (coopToastTurnoHideTimer !== null) {
+            clearTimeout(coopToastTurnoHideTimer);
+            coopToastTurnoHideTimer = null;
+        }
+        const dur = Math.max(600, Number(duracionMs) || COOP_MS_AVISO_CAMBIO_FASE);
+        coopToastTurnoHideTimer = setTimeout(() => {
+            coopToastTurnoHideTimer = null;
+            toast.classList.remove('visible');
+            toast.setAttribute('aria-hidden', 'true');
+        }, dur);
+    }
+
     function actualizarAvisoTurnoCoopSiNuevaFase() {
         if (!snapshot || partidaFinalizada) return;
         const f = snapshot.faseCoop;
         if (f !== 'P1' && f !== 'P2' && f !== 'BOT') return;
         if (f === ultimaFaseCoopParaAvisoTurno) return;
         ultimaFaseCoopParaAvisoTurno = f;
-        const aviso = document.getElementById('aviso-turno-coop');
-        if (!aviso) return;
         const jaNombre = String((payload.jugadorA || {}).nombre || '').trim() || 'Jugador 1';
         const jbNombre = String((payload.jugadorB || {}).nombre || '').trim() || 'Jugador 2';
         let txt = '';
         if (f === 'P1') {
-            txt = `Turno de ${jaNombre} (izquierda)`;
+            txt = `Turno de ${jaNombre}`;
         } else if (f === 'P2') {
-            txt = `Turno de ${jbNombre} (derecha)`;
+            txt = `Turno de ${jbNombre}`;
         } else if (f === 'BOT') {
             txt = 'Turno del BOT';
         }
-        aviso.textContent = txt;
-        aviso.classList.add('visible');
-        programarOcultarAvisoTurnoCoop(aviso, COOP_MS_AVISO_CAMBIO_FASE);
+        /** Toast propio (no se pisa con los avisos de habilidad, que siguen usando `#aviso-turno-coop`). */
+        mostrarCoopToastTurno(txt, COOP_MS_AVISO_CAMBIO_FASE);
     }
 
     function actualizarContadores() {
@@ -1931,10 +2343,32 @@
         }
     }
 
+    /**
+     * Aplica `opacity: 0` a las cartas montadas por `renderSlotsPlano` cuyo slot aún
+     * NO ha sido revelado en la animación de apertura. Se llama síncronamente después
+     * de cada `renderSlotsPlano` mientras `coopAnimEntradaInicialActiva` esté activo,
+     * antes de que el navegador pueda pintar el frame.
+     */
+    function ocultarCartasAperturaSinRevelarSync() {
+        if (!coopAnimEntradaInicialActiva) return;
+        const aplicarA = (zona, n) => {
+            for (let i = 0; i < n; i += 1) {
+                if (coopSlotsAperturaRevelados.has(`${zona}:${i}`)) continue;
+                const slotEl = obtenerSlotElementCoop(zona, i);
+                const carta = slotEl?.querySelector('.carta');
+                if (carta) carta.style.opacity = '0';
+            }
+        };
+        aplicarA('bot', 4);
+        aplicarA('A', 2);
+        aplicarA('B', 2);
+    }
+
     function renderTodo() {
         destacarTurnoUi();
         actualizarContadores();
         renderSlotsPlano();
+        ocultarCartasAperturaSinRevelarSync();
         actualizarAvisoTurnoCoopSiNuevaFase();
     }
 
@@ -1945,6 +2379,33 @@
             snapshot: snapshotWire != null ? snapshotWire : snapshot,
             baseRevision: revisionConfirmada
         });
+    }
+
+    /**
+     * Emite metadata explícita de la acción actual (ataque básico / habilidad) para que el
+     * observador no tenga que inferirla desde el diff. Debe llamarse inmediatamente antes
+     * de `emitirEstadoServidor` de esa misma revisión.
+     */
+    function emitirAccionServidor(accion) {
+        if (typeof window.emitMultiplayerCoopAccion !== 'function') return;
+        if (!accion || typeof accion !== 'object') return;
+        window.emitMultiplayerCoopAccion({
+            sessionId: SESSION_ID,
+            revisionNueva: revisionConfirmada + 1,
+            accion
+        });
+    }
+
+    function consumirAccionCoopPorRevision(rev) {
+        const r = Number(rev);
+        if (!Number.isFinite(r)) return null;
+        const a = coopAccionesPorRevision.has(r) ? coopAccionesPorRevision.get(r) : null;
+        coopAccionesPorRevision.delete(r);
+        /** Pasa del hueco las revisiones anteriores (resync o mensajes perdidos). */
+        for (const k of Array.from(coopAccionesPorRevision.keys())) {
+            if (k < r) coopAccionesPorRevision.delete(k);
+        }
+        return a;
     }
 
     /** Espera el siguiente dc:coop-estado de esta sesión (p. ej. respuesta a estado:solicitar). */
@@ -2000,6 +2461,7 @@
             coopEmitTimerEsperaEco = setTimeout(() => {
                 (async () => {
                     if (typeof coopEmitDone !== 'function') return;
+                    coopDebugYo(`emit timeout→solicitar estado revAntes=${revAlEmitir}`);
                     if (typeof window.emitMultiplayerCoopEstadoSolicitar === 'function') {
                         window.emitMultiplayerCoopEstadoSolicitar(SESSION_ID);
                     }
@@ -2008,6 +2470,9 @@
                 })();
             }, timeoutMs);
             /** Estado canónico en red (p. ej. con cementerio); el tablero local puede seguir un frame “de animación”. */
+            coopDebugYo(
+                `emit→srv revAntes=${revAlEmitir} fase=${snapWire?.faseCoop} skipReplay=${opts.marcarSaltarReplayVisual ? 'sí' : 'no'} skipRellenoCiclo=${opts.marcarSaltarAnimRellenoCiclo ? 'sí' : 'no'}`
+            );
             emitirEstadoServidor(snapWire);
         });
     }
@@ -2047,6 +2512,202 @@
         return false;
     }
 
+    /* =========================================================================
+     * RECOMPENSAS COOP (espec. EVENTO_COOPERATIVO_ONLINE_ESPEC.md):
+     * Si el equipo humano gana, cada cliente otorga su propia recompensa al
+     * usuario logueado (puntos, mejoras y carta del evento) y la persiste en
+     * Firebase con `actualizarUsuarioFirebase` (idéntico flujo que el VS BOT
+     * en `partida.js#otorgarRecompensasDesafio`). Cada cliente guarda solo su
+     * propio progreso para no interferir con la cuenta del compañero.
+     * ========================================================================= */
+
+    const COOP_ICONO_MEJORA = '/resources/icons/mejora.png';
+    const COOP_ICONO_MEJORA_ESPECIAL = '/resources/icons/mejora_especial.png';
+    const COOP_ICONO_MONEDA = '/resources/icons/moneda.png';
+
+    /** Marca local que evita aplicar las recompensas más de una vez por sesión. */
+    let coopRecompensasProcesadas = false;
+
+    function coopNormalizarNombre(nombre) {
+        return String(nombre || '').trim().toLowerCase();
+    }
+
+    async function coopActualizarUsuarioFirebase(usuario, email) {
+        const response = await fetch('/update-user', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ usuario, email })
+        });
+        if (!response.ok) {
+            throw new Error('No se pudieron guardar los datos del usuario en Firebase.');
+        }
+        return response.json();
+    }
+
+    async function coopObtenerCartasDisponibles() {
+        const response = await fetch('resources/cartas.xlsx');
+        if (!response.ok) {
+            throw new Error('No se pudo cargar el archivo de cartas para generar las recompensas.');
+        }
+        const data = await response.arrayBuffer();
+        const workbook = XLSX.read(data, { type: 'array' });
+        const sheetName = workbook.SheetNames[0];
+        const sheet = workbook.Sheets[sheetName];
+        if (!sheet) {
+            throw new Error('No se encontró ninguna hoja válida en el archivo de cartas.');
+        }
+        return XLSX.utils.sheet_to_json(sheet);
+    }
+
+    /**
+     * Replica `escalarCartaSegunDificultad` de `partida.js` sin tocar ese fichero.
+     * `obtenerSaludMaxCarta` y `recalcularSkillPowerPorNivel` ya están expuestos
+     * por `tableroCoopCartaUi` y `cartas.js` respectivamente.
+     */
+    function coopEscalarCartaSegunDificultad(carta, dificultad) {
+        const obtenerSaludMaxCartaCoop = window.tableroCoopCartaUi?.obtenerSaludMaxCarta;
+        const cartaEscalada = { ...carta };
+        const nivelBase = Number(cartaEscalada.Nivel || 1);
+        const dificultadObjetivo = Math.min(Math.max(Number(dificultad || 1), 1), 6);
+        const incrementoNiveles = Math.max(dificultadObjetivo - nivelBase, 0);
+        const saludBase = typeof obtenerSaludMaxCartaCoop === 'function'
+            ? Number(obtenerSaludMaxCartaCoop(cartaEscalada) || 0)
+            : Number(cartaEscalada.SaludMax || cartaEscalada.Salud || 0);
+        cartaEscalada.Nivel = dificultadObjetivo;
+        cartaEscalada.Poder = Number(cartaEscalada.Poder || 0) + (incrementoNiveles * 500);
+        cartaEscalada.SaludMax = saludBase + (incrementoNiveles * 500);
+        cartaEscalada.Salud = cartaEscalada.SaludMax;
+        if (typeof window.recalcularSkillPowerPorNivel === 'function') {
+            window.recalcularSkillPowerPorNivel(cartaEscalada, dificultadObjetivo, { rawEsBase: true });
+        }
+        return cartaEscalada;
+    }
+
+    /**
+     * Calcula la clave de rotación (mismo formato que `jugarPartida.js`) para
+     * marcar el evento como jugado en `usuario.eventosJugadosPorRotacion`.
+     */
+    function coopObtenerClaveRotacionEventos() {
+        const ROT_MS = 5 * 60 * 1000;
+        const VERSION = 'event-rotation-v1';
+        const idVentana = Math.floor(Date.now() / ROT_MS);
+        return `${VERSION}-${idVentana}`;
+    }
+
+    /**
+     * Otorga las recompensas del evento al usuario local (cada cliente guarda solo
+     * su propia cuenta). Equivalente coop de `otorgarRecompensasDesafio` (VS BOT).
+     */
+    async function otorgarRecompensasCoop() {
+        const usuario = JSON.parse(localStorage.getItem('usuario') || 'null');
+        const email = localStorage.getItem('email');
+        if (!usuario || !email) {
+            throw new Error('No se encontró una sesión de usuario válida para guardar las recompensas.');
+        }
+
+        const evento = (payload && typeof payload.evento === 'object') ? payload.evento : null;
+        const puntosEvento = Number(evento?.puntos || 0);
+        const mejorasEvento = Number(evento?.mejora || 0);
+        const mejorasEspecialesEvento = Number(evento?.mejora_especial || 0);
+        const dificultadEvento = Math.min(Math.max(Number(evento?.dificultad || 1), 1), 6);
+        const idEvento = Number(evento?.id);
+        const cartaRecompensaNombre = String(evento?.cartaRecompensa || '').trim();
+
+        usuario.puntos = Number(usuario.puntos || 0) + puntosEvento;
+        usuario.objetos = (usuario.objetos && typeof usuario.objetos === 'object')
+            ? usuario.objetos
+            : { mejoraCarta: 0, mejoraEspecial: 0 };
+        usuario.objetos.mejoraCarta = Number(usuario.objetos.mejoraCarta || 0) + mejorasEvento;
+        usuario.objetos.mejoraEspecial = Number(usuario.objetos.mejoraEspecial || 0) + mejorasEspecialesEvento;
+
+        if (Number.isFinite(idEvento)) {
+            const claveRotacion = coopObtenerClaveRotacionEventos();
+            usuario.eventosJugadosPorRotacion = (usuario.eventosJugadosPorRotacion && typeof usuario.eventosJugadosPorRotacion === 'object')
+                ? usuario.eventosJugadosPorRotacion
+                : {};
+            const jugadosActual = new Set(
+                (usuario.eventosJugadosPorRotacion[claveRotacion] || []).map((id) => Number(id))
+            );
+            jugadosActual.add(idEvento);
+            usuario.eventosJugadosPorRotacion[claveRotacion] = Array.from(jugadosActual);
+        }
+
+        const cartasGanadas = [];
+        if (cartaRecompensaNombre) {
+            try {
+                const catalogo = await coopObtenerCartasDisponibles();
+                const cartaBase = catalogo.find((c) => coopNormalizarNombre(c?.Nombre) === coopNormalizarNombre(cartaRecompensaNombre));
+                if (cartaBase) {
+                    const cartaEscalada = coopEscalarCartaSegunDificultad(cartaBase, dificultadEvento);
+                    cartaEscalada.tipoRecompensa = 'evento';
+                    cartasGanadas.push(cartaEscalada);
+                    usuario.cartas = Array.isArray(usuario.cartas) ? usuario.cartas : [];
+                    usuario.cartas.push(cartaEscalada);
+                }
+            } catch (errCarta) {
+                console.error('[coop] no se pudo añadir carta recompensa:', errCarta);
+            }
+        }
+
+        await coopActualizarUsuarioFirebase(usuario, email);
+        localStorage.setItem('usuario', JSON.stringify(usuario));
+
+        return {
+            puntosGanados: puntosEvento,
+            mejorasGanadas: mejorasEvento,
+            mejorasEspecialesGanadas: mejorasEspecialesEvento,
+            cartasGanadas
+        };
+    }
+
+    function coopFormatoPuntosConMoneda(valor) {
+        return `${Number(valor || 0)} <img src="${COOP_ICONO_MONEDA}" alt="Moneda" style="width:18px;height:18px;object-fit:contain;vertical-align:text-bottom;margin-left:4px;">`;
+    }
+
+    function coopCrearEtiquetaObjetoRecompensa(tipo, cantidad) {
+        const badge = document.createElement('div');
+        badge.style.display = 'inline-flex';
+        badge.style.alignItems = 'center';
+        badge.style.gap = '6px';
+        badge.style.padding = '6px 10px';
+        badge.style.borderRadius = '999px';
+        badge.style.border = '1px solid rgba(255, 215, 0, 0.6)';
+        badge.style.background = 'rgba(255, 215, 0, 0.12)';
+        badge.style.color = '#ffd700';
+        badge.style.fontWeight = '700';
+        badge.style.fontSize = '0.84rem';
+
+        const icono = document.createElement('img');
+        icono.src = tipo === 'mejoraEspecial' ? COOP_ICONO_MEJORA_ESPECIAL : COOP_ICONO_MEJORA;
+        icono.alt = tipo === 'mejoraEspecial' ? 'Mejora especial' : 'Mejora';
+        icono.style.width = '40px';
+        icono.style.height = '40px';
+        icono.style.objectFit = 'contain';
+
+        const texto = document.createElement('span');
+        texto.textContent = `x${Number(cantidad || 0)}`;
+
+        badge.appendChild(icono);
+        badge.appendChild(texto);
+        return badge;
+    }
+
+    function coopCrearCartaRecompensaElemento(carta) {
+        const contenedor = document.createElement('div');
+        contenedor.classList.add('carta-recompensa-slot');
+        const ui = window.tableroCoopCartaUi;
+        if (ui && typeof ui.crearCartaElementoCoop === 'function') {
+            const res = ui.crearCartaElementoCoop(carta, 'recompensa', -1, { soloVista: true });
+            if (res?.root) contenedor.appendChild(res.root);
+        } else {
+            const fallback = document.createElement('div');
+            fallback.className = 'carta carta-solo-vista';
+            fallback.textContent = String(carta?.Nombre || '').trim() || 'Carta';
+            contenedor.appendChild(fallback);
+        }
+        return contenedor;
+    }
+
     function mostrarFin(ganaron) {
         const modal = document.getElementById('ventana-emergente-fin-coop');
         const t = document.getElementById('titulo-fin-partida-coop');
@@ -2056,6 +2717,85 @@
             ? 'Habéis derrotado al BOT en el evento cooperativo.'
             : 'El BOT ha eliminado a tu equipo.';
         if (modal) modal.style.display = 'flex';
+
+        const recompensasContainer = document.getElementById('coop-recompensas-container');
+        if (recompensasContainer) recompensasContainer.innerHTML = '';
+
+        if (!ganaron || !recompensasContainer) return;
+
+        if (coopRecompensasProcesadas) {
+            const aviso = document.createElement('p');
+            aviso.classList.add('texto-recompensa-estado');
+            aviso.textContent = 'Las recompensas de esta victoria ya se han aplicado.';
+            recompensasContainer.appendChild(aviso);
+            return;
+        }
+        coopRecompensasProcesadas = true;
+
+        const estadoGuardado = document.createElement('p');
+        estadoGuardado.classList.add('texto-recompensa-estado');
+        estadoGuardado.textContent = 'Guardando recompensas y progreso...';
+        recompensasContainer.appendChild(estadoGuardado);
+
+        const botonVolver = document.getElementById('boton-volver-multi-coop');
+        if (botonVolver) botonVolver.disabled = true;
+
+        (async () => {
+            try {
+                const recompensa = await otorgarRecompensasCoop();
+                recompensasContainer.innerHTML = '';
+
+                const resumen = document.createElement('p');
+                resumen.classList.add('texto-recompensa-resumen');
+                const cartasTxt = recompensa.cartasGanadas.length > 0
+                    ? ` y ${recompensa.cartasGanadas.length} carta${recompensa.cartasGanadas.length === 1 ? '' : 's'} nueva${recompensa.cartasGanadas.length === 1 ? '' : 's'}`
+                    : '';
+                resumen.innerHTML = `Recompensas: ${coopFormatoPuntosConMoneda(recompensa.puntosGanados)}${cartasTxt}.`;
+                recompensasContainer.appendChild(resumen);
+
+                if (recompensa.mejorasGanadas > 0 || recompensa.mejorasEspecialesGanadas > 0) {
+                    const filaObjetos = document.createElement('div');
+                    filaObjetos.classList.add('coop-recompensas-objetos');
+                    if (recompensa.mejorasGanadas > 0) {
+                        filaObjetos.appendChild(coopCrearEtiquetaObjetoRecompensa('mejoraCarta', recompensa.mejorasGanadas));
+                    }
+                    if (recompensa.mejorasEspecialesGanadas > 0) {
+                        filaObjetos.appendChild(coopCrearEtiquetaObjetoRecompensa('mejoraEspecial', recompensa.mejorasEspecialesGanadas));
+                    }
+                    recompensasContainer.appendChild(filaObjetos);
+                }
+
+                if (recompensa.cartasGanadas.length > 0) {
+                    const rejilla = document.createElement('div');
+                    rejilla.classList.add('coop-recompensas-grid', 'recompensas-grid');
+                    recompensa.cartasGanadas.forEach((carta) => {
+                        rejilla.appendChild(coopCrearCartaRecompensaElemento(carta));
+                    });
+                    recompensasContainer.appendChild(rejilla);
+                }
+
+                const usuarioActualizado = JSON.parse(localStorage.getItem('usuario') || 'null');
+                const totalPuntos = Number(usuarioActualizado?.puntos || 0);
+                const puntosTotales = document.createElement('p');
+                puntosTotales.classList.add('texto-recompensa-puntos');
+                puntosTotales.innerHTML = `Puntos totales: ${coopFormatoPuntosConMoneda(totalPuntos)}.`;
+                recompensasContainer.appendChild(puntosTotales);
+            } catch (error) {
+                console.error('[coop] error al otorgar recompensas:', error);
+                recompensasContainer.innerHTML = '';
+                const errorEl = document.createElement('p');
+                errorEl.classList.add('texto-recompensa-error');
+                errorEl.textContent = `No se pudieron guardar las recompensas: ${error.message || error}`;
+                recompensasContainer.appendChild(errorEl);
+                /**
+                 * Si falla la persistencia, permitir reintento manual: liberamos la
+                 * marca para que el siguiente refresco del modal pueda volver a guardar.
+                 */
+                coopRecompensasProcesadas = false;
+            } finally {
+                if (botonVolver) botonVolver.disabled = false;
+            }
+        })();
     }
 
     /** Lógica de `avanzarFaseTrasHumano` sobre un snapshot concreto (p. ej. clon para enviar a red antes de avanzar el tablero local). */
@@ -2128,13 +2868,44 @@
 
         aplicandoAccionCoop = true;
         try {
+            /** Guardamos el estado previo a la habilidad para reproducir la animación local en el emisor. */
+            const snapAntes = JSON.parse(JSON.stringify(snapshot));
             const usada = await usarHabilidadActivaCoop(zona, slotIndex, false);
             if (!usada) return;
+            coopDebugYo(`habilidad activa zona=${zona} slot=${slotIndex}`);
+            /** Clon con `coopReplayVisual` incluido; `prepararSnapshotEmitConReplayHabilidad` promueve a cementerio si aplica. */
             const snapEmit = clonarSnapshotParaRed();
-            await emitSnapshotCoopYEsperarEco(8000, {
-                marcarSaltarReplayVisual: false,
+            prepararSnapshotEmitConReplayHabilidad(snapEmit);
+            const replayLocal = snapEmit.coopReplayVisual
+                ? JSON.parse(JSON.stringify(snapEmit.coopReplayVisual))
+                : null;
+            const snapDespuesCanon = JSON.parse(JSON.stringify(snapEmit));
+            /**
+             * Emitir ANTES de animar para que el observador reciba el snapshot y arranque
+             * su animación en paralelo. Tras emitir esperamos el propio broadcast del servidor
+             * (máx `COOP_MS_ESPERA_ECO_SYNC`) y SOLO entonces animamos localmente: así ambos
+             * clientes arrancan la animación partiendo del mismo `multiplayer:coop:estado`,
+             * eliminando la latencia visible entre jugador_1 y jugador_2.
+             */
+            emitirAccionServidor({
+                tipo: 'habilidad',
+                zonaAtacante: zona,
+                slotAtacante: slotIndex,
+                skillClass: replayLocal?.tipoAccion || null,
+                skillName: replayLocal?.textoAnuncio || null
+            });
+            const emitPromise = emitSnapshotCoopYEsperarEco(8000, {
+                marcarSaltarReplayVisual: true,
                 snapshotParaRed: snapEmit
             });
+            try {
+                await Promise.race([emitPromise, esperar(COOP_MS_ESPERA_ECO_SYNC)]);
+                if (replayLocal) {
+                    await animarHabilidadLocalEnEmisorCoop(snapAntes, snapDespuesCanon, replayLocal);
+                }
+            } finally {
+                await emitPromise;
+            }
         } finally {
             aplicandoAccionCoop = false;
             renderTodo();
@@ -2155,6 +2926,7 @@
 
         const danio = obtenerPoderAtaqueCoop(zonaAtacante, slotAtacante);
         logCoop(`${atacante.Nombre} ataca a ${objetivo.Nombre} (${danio}).`);
+        coopDebugYo(`ataque humano ${zonaAtacante}:${slotAtacante}→${zonaObjetivo}:${slotObjetivo} daño=${danio}`);
 
         const ui = window.tableroCoopCartaUi;
         const enemigosObj = enemigosSaludParaZonaCoop(zonaObjetivo);
@@ -2184,6 +2956,13 @@
         if (verificarFinPartidaCoop()) {
             const snapEmit = clonarSnapshotParaRed();
             if (murio) promoverObjetivoMuertoACementerioEnSnapshot(snapEmit, zonaObjetivo, slotObjetivo);
+            emitirAccionServidor({
+                tipo: 'ataque_basico',
+                zonaAtacante,
+                slotAtacante,
+                zonaObjetivo,
+                slotObjetivo
+            });
             const emitFin = emitSnapshotCoopYEsperarEco(8000, {
                 marcarSaltarReplayVisual: true,
                 snapshotParaRed: snapEmit
@@ -2224,14 +3003,23 @@
             }
             return;
         }
-        intentarDesplegarBossCoop();
-
         const snapEmitFin = clonarSnapshotParaRed();
-        if (murio) promoverObjetivoMuertoACementerioEnSnapshot(snapEmitFin, zonaObjetivo, slotObjetivo);
+        if (murio) {
+            promoverObjetivoMuertoACementerioEnSnapshot(snapEmitFin, zonaObjetivo, slotObjetivo);
+            /** En el observador solo aparece tras el impacto (snapshot aplicado al final de su animación). */
+            intentarDesplegarBossEnSnap(snapEmitFin);
+        }
         avanzarFaseTrasHumanoEnSnapshot(snapEmitFin, zonaAtacante);
         aplicarRobosInicioDeFaseEnSnapshotEmit(snapEmitFin);
         aplicarSaltosFaseHumanaHastaJugableOFinEnSnap(snapEmitFin);
 
+        emitirAccionServidor({
+            tipo: 'ataque_basico',
+            zonaAtacante,
+            slotAtacante,
+            zonaObjetivo,
+            slotObjetivo
+        });
         const emitP = emitSnapshotCoopYEsperarEco(8000, {
             marcarSaltarReplayVisual: true,
             snapshotParaRed: snapEmitFin
@@ -2272,6 +3060,8 @@
         if (murio) {
             moverACementerio(cementObj, objetivoRef);
             mesaObj[slotObjetivo] = null;
+            /** Mantener orden visual: primero baja del objetivo, luego retirada y solo entonces nuevas entradas/BOSS. */
+            intentarDesplegarBossCoop();
         }
         avanzarFaseTrasHumano(zonaAtacante);
         aplicarRobosInicioDeFaseSegunFaseActual();
@@ -2303,12 +3093,14 @@
             atacanteZona = zonaAt;
             renderTodo();
             logCoop('Elige objetivo en el campo del BOT.');
+            coopDebugYo(`selección atacante ${zonaAt}:${slot}`);
             return;
         }
 
         if (zona === 'bot' && atacanteSel !== null && atacanteZona === zonaAt) {
             const obj = snapshot.cartasEnJuegoBot[slot];
             if (!cartaViva(obj)) return;
+            coopDebugYo(`confirmar objetivo BOT slot=${slot} desde ${zonaAt}:${atacanteSel}`);
             aplicandoAccionCoop = true;
             void resolverAtaqueHumanoAZona(zonaAt, atacanteSel, 'bot', slot).finally(() => {
                 aplicandoAccionCoop = false;
@@ -2331,9 +3123,18 @@
         if (partidaFinalizada || MI_EMAIL !== EJECUTOR_BOT_EMAIL || snapshot.faseCoop !== 'BOT' || procesandoBot) {
             return;
         }
+        coopDebugYo('BOT ejecutor: secuencial inicio');
         procesandoBot = true;
         try {
-            const huboRoboInicio = await rellenarVaciosDesdeMazoAnimado('bot', 4);
+            /**
+             * Inicio del ciclo BOT: si la mesa BOT quedó vacía durante P1/P2 se roba ahora;
+             * aunque no esté vacía, el BOSS se despliega solo si no quedan rivales normales
+             * (`intentarDesplegarBossCoop`). Alineado con EVENTO_COOPERATIVO_ONLINE_ESPEC.md.
+             */
+            let huboRoboInicio = false;
+            if (mesaTotalmenteVacia(snapshot.cartasEnJuegoBot)) {
+                huboRoboInicio = await rellenarVaciosDesdeMazoAnimado('bot', 4);
+            }
             const despBossInicio = intentarDesplegarBossCoop();
             renderTodo();
             if (huboRoboInicio || despBossInicio) {
@@ -2357,13 +3158,35 @@
                     && metaHabilidadBot.trigger === 'usar'
                     && Math.max(0, Number(cartaBot.habilidadCooldownRestante || 0)) <= 0
                 ) {
+                    const snapAntesBot = JSON.parse(JSON.stringify(snapshot));
                     const usoHabilidad = await usarHabilidadActivaCoop('bot', ib, true);
                     if (usoHabilidad) {
                         const snapHabBot = clonarSnapshotParaRed();
-                        await emitSnapshotCoopYEsperarEco(8000, {
-                            marcarSaltarReplayVisual: false,
+                        prepararSnapshotEmitConReplayHabilidad(snapHabBot);
+                        const replayBot = snapHabBot.coopReplayVisual
+                            ? JSON.parse(JSON.stringify(snapHabBot.coopReplayVisual))
+                            : null;
+                        const snapHabBotCanon = JSON.parse(JSON.stringify(snapHabBot));
+                        /** Mismo orden que habilidad humana: emitir primero, esperar breve eco propio y luego animar. */
+                        emitirAccionServidor({
+                            tipo: 'habilidad',
+                            zonaAtacante: 'bot',
+                            slotAtacante: ib,
+                            skillClass: replayBot?.tipoAccion || null,
+                            skillName: replayBot?.textoAnuncio || null
+                        });
+                        const emitBotHabPromise = emitSnapshotCoopYEsperarEco(8000, {
+                            marcarSaltarReplayVisual: true,
                             snapshotParaRed: snapHabBot
                         });
+                        try {
+                            await Promise.race([emitBotHabPromise, esperar(COOP_MS_ESPERA_ECO_SYNC)]);
+                            if (replayBot) {
+                                await animarHabilidadLocalEnEmisorCoop(snapAntesBot, snapHabBotCanon, replayBot);
+                            }
+                        } finally {
+                            await emitBotHabPromise;
+                        }
                         if (partidaFinalizada) break;
                     }
                 }
@@ -2392,6 +3215,7 @@
                     const danio = obtenerPoderAtaqueCoop('bot', ib);
                     const suf = objetivosAtaque.length > 1 ? ` (${hi + 1}/${objetivosAtaque.length})` : '';
                     logCoop(`${esBoss ? 'BOSS' : 'BOT'}: ${cartaBot.Nombre} ataca a ${objetivo.Nombre}${suf} (${danio}).`);
+                    coopDebugYo(`BOT ataque ib=${ib}→${pick.zona}:${pick.slot} d=${danio}`);
 
                     const uiBot = window.tableroCoopCartaUi;
                     const enObj = enemigosSaludParaZonaCoop(pick.zona);
@@ -2413,23 +3237,40 @@
                     const cement = obtenerCementerioPorZona(pick.zona);
                     const murioBot = !cartaViva(objetivo);
 
-                    intentarDesplegarBossCoop();
-                    renderTodo();
-
                     const snapEmitBot = clonarSnapshotParaRed();
-                    if (murioBot) promoverObjetivoMuertoACementerioEnSnapshot(snapEmitBot, pick.zona, pick.slot);
+                    if (murioBot) {
+                        promoverObjetivoMuertoACementerioEnSnapshot(snapEmitBot, pick.zona, pick.slot);
+                        /** En red puede aparecer tras el impacto, pero nunca antes: se calcula sobre el snapshot post-baja. */
+                        intentarDesplegarBossEnSnap(snapEmitBot);
+                    }
 
+                    emitirAccionServidor({
+                        tipo: 'ataque_basico',
+                        zonaAtacante: 'bot',
+                        slotAtacante: ib,
+                        zonaObjetivo: pick.zona,
+                        slotObjetivo: pick.slot
+                    });
                     const emitBot = emitSnapshotCoopYEsperarEco(8000, {
                         marcarSaltarReplayVisual: true,
                         snapshotParaRed: snapEmitBot
                     });
 
-                    coopAnimAtacante = { zona: 'bot', slot: ib };
-                    coopAnimObjetivo = { zona: pick.zona, slot: pick.slot };
-                    restaurarSaludEscudoVisual(objetivo, saludAnt, escAnt);
-                    renderTodo();
                     try {
-                        await esperar(COOP_MS_PRE_IMPACTO_ATAQUE);
+                        /**
+                         * Sincronización ejecutor↔observador: tras emitir esperamos brevemente al propio
+                         * broadcast del servidor para que ambos clientes arranquen la animación a partir
+                         * del mismo `multiplayer:coop:estado` (mismo patrón que las habilidades). Si el
+                         * RTT es menor que `COOP_MS_ESPERA_ECO_SYNC` quedan totalmente sincronizados.
+                         */
+                        await Promise.race([emitBot, esperar(COOP_MS_ESPERA_ECO_SYNC)]);
+
+                        coopAnimAtacante = { zona: 'bot', slot: ib };
+                        coopAnimObjetivo = { zona: pick.zona, slot: pick.slot };
+                        restaurarSaludEscudoVisual(objetivo, saludAnt, escAnt);
+                        renderTodo();
+
+                        await esperar(COOP_MS_PRE_IMPACTO_BOT);
 
                         const tipoFlBot = (pick.zona === 'A' || pick.zona === 'B') ? 'jugador' : 'oponente';
                         mostrarValorFlotanteCoop(pick.zona, pick.slot, danioMostrar, tipoFlBot, 'danio');
@@ -2452,13 +3293,18 @@
 
                         limpiarCoopAnimHighlights();
                         renderTodo();
-                        await esperar(COOP_MS_POST_IMPACTO_ATAQUE);
+                        await esperar(COOP_MS_POST_IMPACTO_BOT);
                     } finally {
                         await emitBot;
                     }
                     if (murioBot) {
                         moverACementerio(cement, objetivo);
                         mesaObj[pick.slot] = null;
+                        /**
+                         * Mantener misma secuencia visual que en el observador:
+                         * 1) finalizar animación 2) retirar carta derrotada 3) desplegar cartas nuevas (incl. BOSS).
+                         */
+                        intentarDesplegarBossCoop();
                         renderTodo();
                     }
                     if (verificarFinPartidaCoop()) break;
@@ -2475,7 +3321,16 @@
                 snapshot.cartasYaAtacaronB = [];
                 snapshot.faseCoop = 'P1';
                 aplicarInicioDeFaseEnSnapshot(snapshot, 'P1');
-                await rellenarVaciosDesdeMazoAnimado('bot', 4);
+                /**
+                 * Cierre de ciclo BOT → nuevo P1: al comienzo del nuevo ciclo ambos humanos
+                 * reponen CUALQUIER hueco que haya dejado el BOT (misma lógica que al inicio
+                 * de turno en VS BOT: `rellenarSlotsVacios` para el equipo que arranca turno).
+                 * BOT rellena sus huecos solo si su mesa quedó completamente vacía (el BOSS
+                 * se evalúa abajo via `intentarDesplegarBossCoop`).
+                 */
+                if (mesaTotalmenteVacia(snapshot.cartasEnJuegoBot)) {
+                    await rellenarVaciosDesdeMazoAnimado('bot', 4);
+                }
                 await rellenarVaciosDesdeMazoAnimado('A', 2);
                 await rellenarVaciosDesdeMazoAnimado('B', 2);
                 const refAntesBoss = JSON.parse(JSON.stringify(snapshot));
@@ -2506,6 +3361,15 @@
         if (partidaFinalizada || procesandoBot) return;
         if (!snapshot || snapshot.faseCoop !== 'BOT') return;
         if (MI_EMAIL !== EJECUTOR_BOT_EMAIL) return;
+        const esperaMs = Math.max(0, Number(coopBloqueoArranqueBotHastaMs || 0) - Date.now());
+        if (esperaMs > 0) {
+            coopDebugYo(`BOT arranque diferido ${esperaMs}ms`);
+            setTimeout(() => {
+                intentarTurnoBotSiCorresponde();
+            }, esperaMs);
+            return;
+        }
+        coopDebugYo('BOT queueMicrotask ejecutar');
         queueMicrotask(() => {
             if (partidaFinalizada || procesandoBot) return;
             if (!snapshot || snapshot.faseCoop !== 'BOT') return;
@@ -2576,6 +3440,36 @@
             }
             window.location.href = 'multijugador.html';
         });
+        document.getElementById('coop-debug-toggle')?.addEventListener('click', () => {
+            const p = document.getElementById('coop-debug-panel');
+            if (!p) return;
+            const abierto = p.style.display === 'none';
+            p.style.display = abierto ? 'grid' : 'none';
+            document.getElementById('coop-debug-wrap')?.setAttribute('aria-hidden', abierto ? 'false' : 'true');
+        });
+        window.addEventListener('dc:coop-debug', (ev) => {
+            const det = ev.detail || {};
+            if (String(det.sessionId || '') !== SESSION_ID) return;
+            coopDebugServidor(
+                `srv rev=${det.revisionNuevo} emit=${String(det.emitterEmail || '').trim()} fase=${det.fase} replay=${det.tieneReplayVisual ? 'sí' : 'no'}`
+            );
+        });
+        /**
+         * Registro de acciones explícitas por revisión: se consumen en `procesarEstadoCoopDesdeRed`
+         * para animar sin depender del diff (EVENTO_COOPERATIVO_ONLINE_ESPEC.md).
+         */
+        window.addEventListener('dc:coop-accion', (ev) => {
+            const det = ev.detail || {};
+            if (String(det.sessionId || '') !== SESSION_ID) return;
+            const rev = Number(det.revision);
+            if (!Number.isFinite(rev)) return;
+            const accion = det.accion && typeof det.accion === 'object' ? det.accion : null;
+            if (!accion) return;
+            coopAccionesPorRevision.set(rev, accion);
+            coopDebugServidor(
+                `srv accion rev=${rev} tipo=${accion.tipo || '?'} ${accion.zonaAtacante || '?'}:${accion.slotAtacante ?? '?'}→${accion.zonaObjetivo || '?'}:${accion.slotObjetivo ?? '—'}`
+            );
+        });
     }
 
     window.addEventListener('dc:coop-estado', (ev) => {
@@ -2592,10 +3486,13 @@
                 coopSaltarReplayProximaRevision = null;
                 if (Number.isFinite(rev)) revisionConfirmada = rev;
                 resolverEcoEmitSiCorresponde(rev);
+                coopDebugYo(`eco propio (sin cola anim) rev=${rev}`);
                 return;
             }
+            coopDebugYo(`eco saltarReplay flag descartado, rev recibida=${rev}`);
             coopSaltarReplayProximaRevision = null;
         }
+        coopDebugEco(`cola red rev=${rev} fase=${det.snapshot?.faseCoop}`);
         coopCadenaEstadosRed = coopCadenaEstadosRed
             .then(() => procesarEstadoCoopDesdeRed(det))
             .catch((err) => console.error('[coop] procesar estado red', err));
@@ -2619,13 +3516,150 @@
         mostrarFin(Boolean(det.ganaronJugadores));
     });
 
-    document.addEventListener('DOMContentLoaded', () => {
+    function obtenerNombreJugadorParaFase(faseCoop) {
+        const ja = payload.jugadorA || {};
+        const jb = payload.jugadorB || {};
+        if (faseCoop === 'P1') return String(ja.nombre || 'Jugador 1').trim() || 'Jugador 1';
+        if (faseCoop === 'P2') return String(jb.nombre || 'Jugador 2').trim() || 'Jugador 2';
+        if (faseCoop === 'BOT') return 'BOT';
+        return '';
+    }
+
+    /**
+     * Modal central "Turno de $nombre$" (EVENTO_COOPERATIVO_ONLINE_ESPEC.md).
+     * Se cierra solo tras `duracionMs`; no bloquea interacción del fondo.
+     */
+    function mostrarModalTurnoInicialCoop(nombre, duracionMs = 2200) {
+        return new Promise((resolve) => {
+            const modal = document.getElementById('modal-turno-inicial-coop');
+            const titulo = document.getElementById('modal-turno-inicial-coop-titulo');
+            if (!modal || !titulo) {
+                resolve();
+                return;
+            }
+            const nombreLimpio = String(nombre || '').trim() || '—';
+            titulo.textContent = `Turno de ${nombreLimpio}`;
+            modal.style.display = 'flex';
+            const dur = Math.max(600, Number(duracionMs) || 2200);
+            setTimeout(() => {
+                modal.style.display = 'none';
+                resolve();
+            }, dur);
+        });
+    }
+
+    /**
+     * Animación de entrada inicial: el tablero arranca con las cartas ocultas
+     * (`coopAnimEntradaInicialActiva` mantiene `opacity:0` en cualquier render que ocurra
+     * durante la animación) y se van revelando en parejas con la animación
+     * `animarCartaRobadaCoop`, en este orden:
+     *   1) bot[0] + A[0]
+     *   2) bot[1] + A[1]
+     *   3) bot[2] + B[0]
+     *   4) bot[3] + B[1]
+     * Se ejecuta solo una vez por `sessionId` (marca en sessionStorage).
+     */
+    async function animarEntradaInicialCoop() {
+        try {
+            if (sessionStorage.getItem(COOP_CLAVE_ENTRADA_INICIAL) === '1') {
+                /** Reconexión / segunda carga: no animar pero asegurar que ningún slot quede oculto. */
+                coopAnimEntradaInicialActiva = false;
+                coopSlotsAperturaRevelados.clear();
+                renderTodo();
+                return;
+            }
+        } catch (_e) { /* sessionStorage puede no estar disponible en algunos contextos */ }
+        if (!snapshot) return;
+
+        const parejas = [
+            [{ zona: 'bot', slot: 0 }, { zona: 'A', slot: 0 }],
+            [{ zona: 'bot', slot: 1 }, { zona: 'A', slot: 1 }],
+            [{ zona: 'bot', slot: 2 }, { zona: 'B', slot: 0 }],
+            [{ zona: 'bot', slot: 3 }, { zona: 'B', slot: 1 }]
+        ];
+
+        const cartaEnSlot = ({ zona, slot }) => {
+            if (zona === 'bot') return snapshot.cartasEnJuegoBot?.[slot];
+            if (zona === 'A') return snapshot.cartasEnJuegoA?.[slot];
+            if (zona === 'B') return snapshot.cartasEnJuegoB?.[slot];
+            return null;
+        };
+
+        const PAUSA_ENTRE_PAREJAS_MS = 500;
+        for (let p = 0; p < parejas.length; p += 1) {
+            const [a, b] = parejas[p];
+            const haySomething = cartaEnSlot(a) || cartaEnSlot(b);
+            if (haySomething) {
+                if (cartaEnSlot(a)) coopSlotsAperturaRevelados.add(`${a.zona}:${a.slot}`);
+                if (cartaEnSlot(b)) coopSlotsAperturaRevelados.add(`${b.zona}:${b.slot}`);
+                /**
+                 * Quitar `opacity:0` y disparar la animación de robo en ambos slots a la vez.
+                 * Forzamos un reflow tras quitar el `opacity` para que el `carta-robada` arranque
+                 * desde el estado visible (si no, el navegador podría agrupar los dos cambios).
+                 */
+                for (const pos of [a, b]) {
+                    if (!cartaEnSlot(pos)) continue;
+                    const slotEl = obtenerSlotElementCoop(pos.zona, pos.slot);
+                    const carta = slotEl?.querySelector('.carta');
+                    if (!carta) continue;
+                    carta.style.removeProperty('opacity');
+                    void carta.offsetWidth;
+                    animarCartaRobadaCoop(pos.zona, pos.slot);
+                }
+                if (p < parejas.length - 1) {
+                    await esperar(PAUSA_ENTRE_PAREJAS_MS);
+                }
+            }
+        }
+
+        /** Limpieza: liberar el modo "ocultar no revelados" y restaurar opacidad por si quedó algún inline. */
+        coopAnimEntradaInicialActiva = false;
+        coopSlotsAperturaRevelados.clear();
+        const limpiarOpacidades = (zona, n) => {
+            for (let i = 0; i < n; i += 1) {
+                const slotEl = obtenerSlotElementCoop(zona, i);
+                const carta = slotEl?.querySelector('.carta');
+                if (carta) carta.style.removeProperty('opacity');
+            }
+        };
+        limpiarOpacidades('bot', 4);
+        limpiarOpacidades('A', 2);
+        limpiarOpacidades('B', 2);
+
+        try { sessionStorage.setItem(COOP_CLAVE_ENTRADA_INICIAL, '1'); } catch (_e) { /* noop */ }
+    }
+
+    async function inicializarPartidaCoopUi() {
         if (!snapshot) {
             window.location.replace('multijugador.html');
             return;
         }
         configurarCabecera();
         wireUi();
+
+        /**
+         * Apertura de partida: marcamos el flag ANTES del primer `renderTodo` para que
+         * `renderSlotsPlano` pinte las cartas ya con `opacity:0` (sin reveladas en el set).
+         * Como el bloque hasta el primer `await` es síncrono, el navegador no llega a pintar
+         * el frame con las cartas visibles → no hay flash inicial. La animación
+         * `animarEntradaInicialCoop` revelará las cartas por parejas y desactivará el flag.
+         */
+        const esAperturaPartida = Number(revisionConfirmada) === 0
+            && sessionStorage.getItem(COOP_CLAVE_ENTRADA_INICIAL) !== '1';
+        if (esAperturaPartida) {
+            coopAnimEntradaInicialActiva = true;
+            coopSlotsAperturaRevelados.clear();
+        }
+
+        /**
+         * En apertura de partida mostramos el modal central "Turno de …" (bloqueante);
+         * pre-poblamos `ultimaFaseCoopParaAvisoTurno` con la fase actual para que el
+         * primer render NO dispare también el toast no-bloqueante por encima.
+         */
+        if (esAperturaPartida
+            && (snapshot.faseCoop === 'P1' || snapshot.faseCoop === 'P2' || snapshot.faseCoop === 'BOT')) {
+            ultimaFaseCoopParaAvisoTurno = snapshot.faseCoop;
+        }
         renderTodo();
         if (typeof window.emitMultiplayerCoopJoin === 'function') {
             window.emitMultiplayerCoopJoin(SESSION_ID);
@@ -2633,6 +3667,28 @@
         if (typeof window.emitMultiplayerCoopEstadoSolicitar === 'function') {
             window.emitMultiplayerCoopEstadoSolicitar(SESSION_ID);
         }
+
+        /**
+         * Entrada inicial solo cuando el snapshot local representa la apertura de partida (revisión 0).
+         * En reconexiones posteriores el `estado:solicitar` devolverá una revisión >0 y nos saltamos.
+         */
+        if (esAperturaPartida) {
+            aplicandoAccionCoop = true;
+            try {
+                await animarEntradaInicialCoop();
+                const nombre = obtenerNombreJugadorParaFase(snapshot.faseCoop);
+                if (nombre) await mostrarModalTurnoInicialCoop(nombre, 2200);
+            } catch (err) {
+                console.error('[coop] entrada inicial', err);
+            } finally {
+                /** Asegurar que el flag queda desactivado aunque se haya lanzado un error. */
+                coopAnimEntradaInicialActiva = false;
+                coopSlotsAperturaRevelados.clear();
+                aplicandoAccionCoop = false;
+                renderTodo();
+            }
+        }
+
         /** Mismo arranque diferido que `intentarTurnoBotSiCorresponde`: deja aplicar primero un eco pendiente de `estado:solicitar`. */
         if (snapshot.faseCoop === 'BOT' && MI_EMAIL === EJECUTOR_BOT_EMAIL) {
             queueMicrotask(() => {
@@ -2642,5 +3698,9 @@
                 void ejecutarTurnoBotSecuencial();
             });
         }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        void inicializarPartidaCoopUi();
     });
 })();

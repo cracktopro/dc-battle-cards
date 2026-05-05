@@ -12,6 +12,84 @@
         return String(nombre || '').trim().toLowerCase();
     }
 
+    /* Helpers locales aislados (replican `crearMazos.js` / `partida.js`) para no
+     * acoplar este módulo coop a esos ficheros, que no se cargan en multijugador.html.
+     */
+    function normalizarFaccionLocal(valor) {
+        if (!valor) return '';
+        const f = String(valor).trim().toUpperCase();
+        return (f === 'H' || f === 'V') ? f : '';
+    }
+
+    function normalizarAfiliacionLocal(afi) {
+        return String(afi || '').trim().toLowerCase();
+    }
+
+    function obtenerAfiliacionesCartaLocal(carta) {
+        const afiliacionRaw = String(carta?.Afiliacion || carta?.afiliacion || '');
+        if (!afiliacionRaw.trim()) return [];
+        return afiliacionRaw.split(';').map((item) => item.trim()).filter(Boolean);
+    }
+
+    function obtenerSaludMaxCartaLocal(carta) {
+        if (!carta) return 0;
+        const saludMax = Number(carta.SaludMax);
+        if (Number.isFinite(saludMax) && saludMax > 0) return saludMax;
+        const salud = Number(carta.Salud);
+        if (Number.isFinite(salud) && salud > 0) return salud;
+        return Math.max(Number(carta.Poder || 0), 0);
+    }
+
+    function obtenerSaludActualCartaLocal(carta) {
+        const saludMax = Math.max(obtenerSaludMaxCartaLocal(carta), 0);
+        const salud = Number(carta?.Salud);
+        const saludValida = Number.isFinite(salud) ? salud : saludMax;
+        return Math.max(0, Math.min(saludValida, saludMax));
+    }
+
+    function crearBarraSaludElementoLocal(carta) {
+        const saludActual = obtenerSaludActualCartaLocal(carta);
+        const saludMax = Math.max(obtenerSaludMaxCartaLocal(carta), 1);
+        const porcentaje = Math.max(0, Math.min((saludActual / saludMax) * 100, 100));
+        const ratio = porcentaje / 100;
+        const cont = document.createElement('div');
+        cont.classList.add('barra-salud-contenedor');
+        const relleno = document.createElement('div');
+        relleno.classList.add('barra-salud-relleno');
+        relleno.style.width = `${porcentaje}%`;
+        relleno.style.setProperty('--health-ratio', String(ratio));
+        const span = document.createElement('span');
+        span.classList.add('salud-carta');
+        span.textContent = `${saludActual}/${saludMax}`;
+        cont.appendChild(relleno);
+        cont.appendChild(span);
+        return cont;
+    }
+
+    function obtenerClaveRotacionEventosLocal() {
+        const ROT_MS = 5 * 60 * 1000;
+        const VERSION = 'event-rotation-v1';
+        const idVentana = Math.floor(Date.now() / ROT_MS);
+        return `${VERSION}-${idVentana}`;
+    }
+
+    async function obtenerUsuarioActualCoop() {
+        const email = localStorage.getItem('email');
+        if (!email) return null;
+        try {
+            const response = await fetch('/get-user', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email })
+            });
+            if (!response.ok) return null;
+            const data = await response.json();
+            return data?.usuario || null;
+        } catch (_e) {
+            return null;
+        }
+    }
+
     function mapearEventoOnlineDesdeFila(fila, fallbackIndex) {
         const enemigos = [];
         for (let i = 1; i <= 8; i += 1) {
@@ -72,14 +150,24 @@
         if (!contenedor) return;
 
         const mapaCatalogo = new Map(
-            catalogo.map(carta => [normalizarNombre(carta.Nombre), carta])
+            catalogo.map((carta) => [normalizarNombre(carta.Nombre), carta])
         );
+
+        /* Mismo criterio que VS BOT: marcar eventos ya jugados en la rotación
+         * actual usando `usuario.eventosJugadosPorRotacion[claveRotacion]`. */
+        const usuario = await obtenerUsuarioActualCoop();
+        const claveRotacion = obtenerClaveRotacionEventosLocal();
+        const jugadosPorRotacion = (usuario?.eventosJugadosPorRotacion && typeof usuario.eventosJugadosPorRotacion === 'object')
+            ? usuario.eventosJugadosPorRotacion
+            : {};
+        const jugadosActual = new Set((jugadosPorRotacion[claveRotacion] || []).map((id) => Number(id)));
 
         contenedor.innerHTML = '';
 
-        eventos.forEach(evento => {
+        eventos.forEach((evento) => {
+            const yaJugado = jugadosActual.has(Number(evento.id));
             const card = document.createElement('div');
-            card.className = 'evento-card pendiente';
+            card.className = `evento-card ${yaJugado ? 'completado' : 'pendiente'}`;
 
             const nombre = document.createElement('div');
             nombre.className = 'evento-nombre';
@@ -89,19 +177,21 @@
             descripcion.className = 'evento-descripcion';
             descripcion.textContent = evento.descripcion || 'Sin descripción.';
 
-            const enemigosEl = document.createElement('div');
-            enemigosEl.className = 'evento-enemigos';
+            /* Mismo orden visual que VS BOT: la etiqueta "Enemigos" va FUERA y
+             * encima del grid de enemigos, no dentro. */
             const etiquetaEnemigos = document.createElement('div');
             etiquetaEnemigos.className = 'evento-enemigos-label';
             etiquetaEnemigos.textContent = 'Enemigos';
-            enemigosEl.appendChild(etiquetaEnemigos);
+
+            const enemigosEl = document.createElement('div');
+            enemigosEl.className = 'evento-enemigos';
 
             const rivales = [
-                ...(evento.enemigos || []).map(nombre => ({ nombre, boss: false })),
+                ...(evento.enemigos || []).map((n) => ({ nombre: n, boss: false })),
                 ...(evento.boss ? [{ nombre: evento.boss, boss: true }] : [])
             ];
 
-            rivales.forEach(rival => {
+            rivales.forEach((rival) => {
                 const nombreEnemigo = rival.nombre;
                 const cartaBase = mapaCatalogo.get(normalizarNombre(nombreEnemigo)) || { Nombre: nombreEnemigo, Nivel: 1 };
                 const enemigoCard = document.createElement('div');
@@ -159,26 +249,37 @@
             dificultadLabel.textContent = 'Dificultad';
             const selectDificultad = document.createElement('select');
             selectDificultad.className = 'evento-dificultad-select';
+            const optionPlaceholder = document.createElement('option');
+            optionPlaceholder.value = '';
+            optionPlaceholder.textContent = 'Selecciona Dificultad';
+            selectDificultad.appendChild(optionPlaceholder);
             for (let d = 1; d <= 6; d += 1) {
                 const option = document.createElement('option');
                 option.value = String(d);
                 option.textContent = `${'★'.repeat(d)}  Nivel ${d}`;
                 selectDificultad.appendChild(option);
             }
-            selectDificultad.value = evento.dificultadSeleccionada ? String(Number(evento.dificultadSeleccionada)) : '1';
+            selectDificultad.value = evento.dificultadSeleccionada ? String(Number(evento.dificultadSeleccionada)) : '';
+            selectDificultad.disabled = yaJugado;
             selectDificultad.addEventListener('change', () => {
-                evento.dificultadSeleccionada = Number(selectDificultad.value);
+                const valor = selectDificultad.value;
+                evento.dificultadSeleccionada = valor ? Number(valor) : null;
             });
-            evento.dificultadSeleccionada = Number(selectDificultad.value);
             contenedorDificultad.appendChild(dificultadLabel);
             contenedorDificultad.appendChild(selectDificultad);
 
             const empezarBtn = document.createElement('button');
             empezarBtn.type = 'button';
-            empezarBtn.className = 'btn btn-primary btn-block evento-empezar-btn';
-            empezarBtn.textContent = 'Empezar evento';
+            empezarBtn.className = `btn ${yaJugado ? 'btn-success' : 'btn-primary'}`;
+            empezarBtn.textContent = yaJugado ? 'Ya jugado en esta rotación' : 'Empezar Evento';
+            empezarBtn.disabled = yaJugado;
             empezarBtn.addEventListener('click', () => {
+                if (yaJugado) return;
                 const dif = Number(selectDificultad.value);
+                if (!Number.isFinite(dif) || dif <= 0) {
+                    mostrarMensajeCoop('Selecciona una dificultad antes de empezar el evento.', 'warning');
+                    return;
+                }
                 if (typeof window.emitCoopEventoInvitar === 'function') {
                     window.emitCoopEventoInvitar({
                         eventoId: evento.id,
@@ -188,13 +289,21 @@
                 }
             });
 
+            /* Mismo bloque inferior que VS BOT (clase `evento-bottom`) para que
+             * recompensas/dificultad/botón queden anclados al fondo y todas las
+             * cards queden alineadas independientemente del nº de enemigos. */
+            const bloqueInferior = document.createElement('div');
+            bloqueInferior.className = 'evento-bottom';
+            bloqueInferior.appendChild(recompensaLabel);
+            bloqueInferior.appendChild(recompensas);
+            bloqueInferior.appendChild(contenedorDificultad);
+            bloqueInferior.appendChild(empezarBtn);
+
             card.appendChild(nombre);
             card.appendChild(descripcion);
+            card.appendChild(etiquetaEnemigos);
             card.appendChild(enemigosEl);
-            card.appendChild(recompensaLabel);
-            card.appendChild(recompensas);
-            card.appendChild(contenedorDificultad);
-            card.appendChild(empezarBtn);
+            card.appendChild(bloqueInferior);
             contenedor.appendChild(card);
         });
     }
@@ -260,31 +369,36 @@
 
     let prepContext = null;
     let usuarioCartasSeleccion = [];
-    const seleccionIndices = new Set();
+    let seleccionIndices = new Set();
+    let faccionEventoCoopActiva = 'H';
+    let afiliacionEventoCoopActiva = 'todas';
 
+    /**
+     * Modal de selección de 6 cartas para el evento coop. Replica el formato
+     * de `#modal-seleccion-evento` de VS BOT (`vistaJuego.html`): pestañas
+     * Héroes/Villanos, filtro de afiliación, grid `cartas-seleccion-grid` con
+     * `carta-mini` (estrellas, nombre, poder, badges y barra de salud).
+     * Usa un id propio (`modal-seleccion-evento-coop`) para no chocar con
+     * el modal de VS BOT.
+     */
     async function abrirModalSeleccionSeisCartas(payload) {
         prepContext = {
             prepId: String(payload?.prepId || '').trim(),
             rolCoop: String(payload?.rolCoop || 'A').trim().toUpperCase()
         };
-        seleccionIndices.clear();
 
-        const email = localStorage.getItem('email');
-        const response = await fetch('/get-user', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email })
-        });
-        const data = await response.json();
-        const usuario = data.usuario;
+        const usuario = await obtenerUsuarioActualCoop();
         if (!usuario || !Array.isArray(usuario.cartas) || usuario.cartas.length < 6) {
             mostrarMensajeCoop('Necesitas al menos 6 cartas en tu colección.', 'danger');
             return;
         }
+        try {
+            localStorage.setItem('usuario', JSON.stringify(usuario));
+        } catch (_e) { /* noop */ }
 
         const catalogo = await obtenerCatalogoCartas();
         const mapaFaccion = new Map();
-        catalogo.forEach(carta => {
+        catalogo.forEach((carta) => {
             mapaFaccion.set(normalizarNombre(carta.Nombre), {
                 faccion: carta.faccion,
                 Afiliacion: carta.Afiliacion || '',
@@ -324,74 +438,179 @@
             return;
         }
 
-        const wrap = document.createElement('div');
-        const titulo = document.createElement('h4');
-        titulo.textContent = 'Selecciona 6 cartas para el evento cooperativo';
-        titulo.style.marginTop = '0';
+        seleccionIndices = new Set();
+        faccionEventoCoopActiva = 'H';
+        afiliacionEventoCoopActiva = 'todas';
 
-        const estado = document.createElement('p');
-        estado.id = 'coop-prep-seleccion-estado';
-        estado.textContent = 'Seleccionadas: 0 / 6';
+        /* Cualquier instancia previa colgada se elimina antes de abrir. */
+        document.getElementById('modal-seleccion-evento-coop')?.remove();
 
-        const grid = document.createElement('div');
-        grid.className = 'evento-seleccion-grid';
-        grid.style.display = 'grid';
-        grid.style.gridTemplateColumns = 'repeat(auto-fill, minmax(72px, 1fr))';
-        grid.style.gap = '8px';
-        grid.style.maxHeight = '48vh';
-        grid.style.overflowY = 'auto';
-        grid.style.marginTop = '10px';
+        const modal = document.createElement('div');
+        modal.id = 'modal-seleccion-evento-coop';
+        modal.className = 'modal-seleccion-mazo';
+        modal.style.display = 'flex';
+        modal.innerHTML = `
+            <div class="modal-seleccion-contenido">
+                <div class="modal-header-desafio">
+                    <h4>Selecciona 6 cartas para el evento cooperativo</h4>
+                    <div class="estado-seleccion" data-coop-estado>Seleccionadas: 0 / 6</div>
+                </div>
+                <div class="filtros-seleccion">
+                    <div class="faccion-tabs">
+                        <button type="button" class="btn faccion-tab active" data-coop-tab="H">Héroes</button>
+                        <button type="button" class="btn faccion-tab" data-coop-tab="V">Villanos</button>
+                    </div>
+                    <select class="form-control" data-coop-filtro-afi style="width:auto; min-width:220px;"></select>
+                </div>
+                <div class="cartas-seleccion-grid" data-coop-grid></div>
+                <div class="modal-footer-desafio">
+                    <button type="button" class="btn btn-secondary" data-coop-cancelar>Cancelar</button>
+                    <button type="button" class="btn btn-primary" data-coop-confirmar disabled>Listo</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+
+        const grid = modal.querySelector('[data-coop-grid]');
+        const estadoEl = modal.querySelector('[data-coop-estado]');
+        const filtroAfi = modal.querySelector('[data-coop-filtro-afi]');
+        const btnTabH = modal.querySelector('[data-coop-tab="H"]');
+        const btnTabV = modal.querySelector('[data-coop-tab="V"]');
+        const btnCancelar = modal.querySelector('[data-coop-cancelar]');
+        const btnConfirmar = modal.querySelector('[data-coop-confirmar]');
+
+        function cerrarPrepCoop() {
+            prepContext = null;
+            modal.remove();
+        }
+
+        function actualizarBotonesFaccion() {
+            btnTabH.classList.toggle('active', faccionEventoCoopActiva === 'H');
+            btnTabV.classList.toggle('active', faccionEventoCoopActiva === 'V');
+        }
+
+        function renderizarFiltroAfiliacion() {
+            const mapa = new Map();
+            usuarioCartasSeleccion
+                .filter((item) => normalizarFaccionLocal(item.carta.faccion) === faccionEventoCoopActiva)
+                .forEach((item) => {
+                    obtenerAfiliacionesCartaLocal(item.carta).forEach((afi) => {
+                        const key = normalizarAfiliacionLocal(afi);
+                        if (key && !mapa.has(key)) mapa.set(key, afi);
+                    });
+                });
+
+            filtroAfi.innerHTML = '';
+            const optTodas = document.createElement('option');
+            optTodas.value = 'todas';
+            optTodas.textContent = 'Todas';
+            filtroAfi.appendChild(optTodas);
+
+            Array.from(mapa.entries())
+                .sort((a, b) => a[1].localeCompare(b[1]))
+                .forEach(([, afi]) => {
+                    const option = document.createElement('option');
+                    option.value = afi;
+                    option.textContent = afi;
+                    filtroAfi.appendChild(option);
+                });
+            filtroAfi.value = 'todas';
+        }
 
         function actualizarEstado() {
-            estado.textContent = `Seleccionadas: ${seleccionIndices.size} / 6`;
-            listoBtn.disabled = seleccionIndices.size !== 6;
-            grid.querySelectorAll('.carta-mini').forEach(el => {
-                const idx = Number(el.dataset.index);
-                el.classList.toggle('seleccionada', seleccionIndices.has(idx));
+            estadoEl.textContent = `Seleccionadas: ${seleccionIndices.size} / 6`;
+            btnConfirmar.disabled = seleccionIndices.size !== 6;
+        }
+
+        function renderizarGrid() {
+            grid.innerHTML = '';
+            const cartasFiltradas = usuarioCartasSeleccion
+                .filter((item) => normalizarFaccionLocal(item.carta.faccion) === faccionEventoCoopActiva)
+                .filter((item) => {
+                    if (afiliacionEventoCoopActiva === 'todas') return true;
+                    const afis = obtenerAfiliacionesCartaLocal(item.carta).map(normalizarAfiliacionLocal);
+                    return afis.includes(afiliacionEventoCoopActiva);
+                });
+
+            cartasFiltradas.forEach((item) => {
+                const carta = item.carta;
+                const cartaDiv = document.createElement('div');
+                cartaDiv.className = `carta-mini ${seleccionIndices.has(item.index) ? 'seleccionada' : ''}`;
+                if (Number(carta.Nivel || 1) >= 6) cartaDiv.classList.add('nivel-legendaria');
+                cartaDiv.style.backgroundImage = `url(${obtenerImagenCarta(carta)})`;
+
+                const estrellasDiv = document.createElement('div');
+                estrellasDiv.className = 'estrellas-carta';
+                const nivel = Number(carta.Nivel || 1);
+                for (let i = 0; i < nivel; i += 1) {
+                    const estrella = document.createElement('img');
+                    estrella.className = 'estrella';
+                    estrella.src = 'https://i.ibb.co/zZt4R3x/star-level.png';
+                    estrella.alt = 'star';
+                    estrellasDiv.appendChild(estrella);
+                }
+
+                const detallesDiv = document.createElement('div');
+                detallesDiv.className = 'detalles-carta';
+                const nombre = document.createElement('span');
+                nombre.className = 'nombre-carta';
+                nombre.textContent = carta.Nombre;
+                const poder = document.createElement('span');
+                poder.className = 'poder-carta';
+                poder.textContent = carta.Poder;
+                detallesDiv.appendChild(nombre);
+                detallesDiv.appendChild(poder);
+
+                cartaDiv.appendChild(estrellasDiv);
+                cartaDiv.appendChild(detallesDiv);
+
+                const badgeHabilidad = window.crearBadgeHabilidadCarta ? window.crearBadgeHabilidadCarta(carta) : null;
+                if (badgeHabilidad) cartaDiv.appendChild(badgeHabilidad);
+                const badgeAfiliacion = window.crearBadgeAfiliacionCarta ? window.crearBadgeAfiliacionCarta(carta) : null;
+                if (badgeAfiliacion) cartaDiv.appendChild(badgeAfiliacion);
+                cartaDiv.appendChild(crearBarraSaludElementoLocal(carta));
+
+                cartaDiv.onclick = () => {
+                    if (seleccionIndices.has(item.index)) {
+                        seleccionIndices.delete(item.index);
+                    } else {
+                        if (seleccionIndices.size >= 6) {
+                            mostrarMensajeCoop('Solo puedes seleccionar 6 cartas.', 'warning');
+                            return;
+                        }
+                        seleccionIndices.add(item.index);
+                    }
+                    actualizarEstado();
+                    renderizarGrid();
+                };
+                grid.appendChild(cartaDiv);
             });
         }
 
-        usuarioCartasSeleccion.forEach(item => {
-            const div = document.createElement('div');
-            div.className = 'carta-mini';
-            div.dataset.index = String(item.index);
-            div.style.backgroundImage = `url(${obtenerImagenCarta(item.carta)})`;
-            div.style.height = '96px';
-            div.style.borderRadius = '8px';
-            div.style.border = '2px solid transparent';
-            div.style.cursor = 'pointer';
-            div.title = item.carta.Nombre || '';
-            div.addEventListener('click', () => {
-                if (seleccionIndices.has(item.index)) {
-                    seleccionIndices.delete(item.index);
-                } else {
-                    if (seleccionIndices.size >= 6) {
-                        mostrarMensajeCoop('Ya tienes 6 cartas seleccionadas.', 'warning');
-                        return;
-                    }
-                    seleccionIndices.add(item.index);
-                }
-                actualizarEstado();
-            });
-            grid.appendChild(div);
+        btnTabH.addEventListener('click', () => {
+            faccionEventoCoopActiva = 'H';
+            afiliacionEventoCoopActiva = 'todas';
+            actualizarBotonesFaccion();
+            renderizarFiltroAfiliacion();
+            renderizarGrid();
+        });
+        btnTabV.addEventListener('click', () => {
+            faccionEventoCoopActiva = 'V';
+            afiliacionEventoCoopActiva = 'todas';
+            actualizarBotonesFaccion();
+            renderizarFiltroAfiliacion();
+            renderizarGrid();
+        });
+        filtroAfi.addEventListener('change', () => {
+            afiliacionEventoCoopActiva = normalizarAfiliacionLocal(filtroAfi.value || 'todas');
+            renderizarGrid();
         });
 
-        const listoBtn = document.createElement('button');
-        listoBtn.type = 'button';
-        listoBtn.className = 'btn btn-primary';
-        listoBtn.textContent = 'Listo';
-        listoBtn.disabled = true;
-        listoBtn.style.marginTop = '12px';
+        btnCancelar.addEventListener('click', () => {
+            cerrarPrepCoop();
+        });
 
-        const cancelWrap = document.createElement('p');
-        cancelWrap.style.fontSize = '0.85rem';
-        cancelWrap.style.opacity = '0.85';
-        cancelWrap.textContent = 'Cuando ambos jugadores marquen listo, comenzará la partida en el tablero cooperativo.';
-
-        const filaListo = document.createElement('div');
-        filaListo.appendChild(listoBtn);
-
-        listoBtn.addEventListener('click', () => {
+        btnConfirmar.addEventListener('click', () => {
             if (seleccionIndices.size !== 6 || !prepContext?.prepId) return;
             const indicesCartas = Array.from(seleccionIndices);
             if (typeof window.emitCoopEventoPreparacionListo === 'function') {
@@ -400,20 +619,16 @@
                     indicesCartas
                 });
             }
-            cerrarPrep();
+            /* Mantener el modal cerrado pero con un aviso (mismo patrón que la
+             * versión previa), ya que el inicio real depende del compañero. */
+            mostrarMensajeCoop('Esperando a que tu compañero termine la selección...', 'success');
+            cerrarPrepCoop();
         });
 
-        wrap.appendChild(titulo);
-        wrap.appendChild(estado);
-        wrap.appendChild(grid);
-        wrap.appendChild(filaListo);
-        wrap.appendChild(cancelWrap);
-
-        const { overlay, cerrar } = crearOverlayModal(wrap);
-        function cerrarPrep() {
-            prepContext = null;
-            cerrar();
-        }
+        actualizarBotonesFaccion();
+        renderizarFiltroAfiliacion();
+        renderizarGrid();
+        actualizarEstado();
     }
 
     function iniciarSesionCoopRedirect(payload = {}) {

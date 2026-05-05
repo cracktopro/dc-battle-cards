@@ -13,12 +13,37 @@
 </head>
 <body class="tablero-coop-body">
 
+<!-- Depuración temporal coop online (cliente + eco servidor) -->
+<div id="coop-debug-wrap" class="coop-debug-wrap" aria-hidden="true">
+    <button type="button" id="coop-debug-toggle" class="coop-debug-toggle">Debug coop</button>
+    <div id="coop-debug-panel" class="coop-debug-panel" style="display:none;">
+        <div class="coop-debug-col">
+            <h4 class="coop-debug-title">Cliente — Yo (acciones locales)</h4>
+            <div id="coop-debug-cliente-yo" class="coop-debug-log" tabindex="0"></div>
+        </div>
+        <div class="coop-debug-col">
+            <h4 class="coop-debug-title">Cliente — Eco / otro (red)</h4>
+            <div id="coop-debug-cliente-otro" class="coop-debug-log" tabindex="0"></div>
+        </div>
+        <div class="coop-debug-col coop-debug-col-servidor">
+            <h4 class="coop-debug-title">Servidor (broadcast)</h4>
+            <div id="coop-debug-servidor" class="coop-debug-log" tabindex="0"></div>
+        </div>
+    </div>
+</div>
+
 <div id="aviso-turno-coop" class="aviso-turno"></div>
 
+<!-- Toast central de cambio de turno (no bloqueante; distinto a #aviso-turno-coop para que no lo pise una animación de habilidad) -->
+<div id="coop-toast-turno" class="coop-toast-turno" aria-hidden="true">
+    <div id="coop-toast-turno-texto" class="coop-toast-turno-texto"></div>
+</div>
+
 <div id="ventana-emergente-fin-coop" class="ventana-emergente" style="display:none;">
-    <div class="ventana-contenido">
+    <div class="ventana-contenido coop-fin-contenido">
         <h2 id="titulo-fin-partida-coop"></h2>
         <p id="mensaje-fin-partida-coop"></p>
+        <div id="coop-recompensas-container" class="coop-recompensas-container"></div>
         <div class="acciones-fin-partida">
             <button type="button" id="boton-volver-multi-coop">Volver a multijugador</button>
         </div>
@@ -74,6 +99,13 @@
             <button type="button" id="modal-coop-abandonar-si">Abandonar</button>
             <button type="button" id="modal-coop-abandonar-no">Cancelar</button>
         </div>
+    </div>
+</div>
+
+<!-- Modal central con el primer turno (EVENTO_COOPERATIVO_ONLINE_ESPEC.md: "Turno de $nombre$") -->
+<div id="modal-turno-inicial-coop" class="ventana-emergente" style="display:none;">
+    <div class="ventana-contenido coop-modal-turno">
+        <h2 id="modal-turno-inicial-coop-titulo">Turno de…</h2>
     </div>
 </div>
 

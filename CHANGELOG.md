@@ -1,5 +1,20 @@
 # Changelog
 
+## Beta-1.0.12-05.05.26
+
+- Coop online (`server.js`): endurecidas las validaciones de inicio de sesión coop (`iniciarSesionCoopEventoDesdePrep`) — se valida catálogo de cartas cargado, selecciones de cartas no vacías de ambos jugadores y conexión activa de líder y miembro, con `console.error` específico en cada fallo y `try/catch` alrededor de `construirSnapshotInicialCoopServidor`.
+- Coop online (`server.js`): se relaja el mínimo de enemigos del BOT — si el evento define < 4 enemigos normales pero hay BOSS, el BOSS se usa como una de las 4 cartas iniciales del tablero (`bossPendienteCoop = null`) y solo se rechaza si `enemigos + boss < 4`.
+- Coop online (`server.js`): handler `coop:evento:preparacion:listo` envuelto en `try/catch` y limpieza garantizada de `preparacionesCoopEvento.delete(prep.prepId)` en cualquier resultado; ambos clientes reciben `grupo:notificacion` con mensaje claro si el inicio falla.
+- Coop online (`public/multijugadorEventosCoop.js`): modales de selección de personaje replican el formato de eventos/desafíos VS BOT (pestañas Héroes/Villanos, filtro de afiliación, `carta-mini` con estrellas, poder, badges de habilidad/afiliación y barra de salud); helpers locales para no introducir dependencias entre módulos.
+- Coop online (`public/multijugador.html` + `public/multijugadorEventosCoop.js`): grid de eventos coop con descripción arriba, etiqueta de enemigos sobre las cartas, recompensas y dificultad fijadas abajo; eventos ya jugados se marcan como `completado` y se inhabilita la invitación.
+- Coop online (`public/multijugador.html`): se añade `<link href="css/salud.css">` para que la barra de salud del modal de selección coop se renderice con el estilo correcto.
+- Coop online — Recompensas (`public/partidaCoop.js`, `public/css/tablero_coop.css`, `public/tablero_coop.html`): al ganar la partida ambos jugadores reciben puntos, mejoras, mejora especial y carta del evento (escalada por dificultad), se marca el evento como jugado en `eventosJugadosPorRotacion` y se persiste en Firebase + `localStorage`. Modal final muestra mensaje "Guardando recompensas…" y tarjeta de recompensas con el mismo formato que VS BOT.
+- Coop online — Latencia BOT (`public/partidaCoop.js`): cadencia específica del turno BOT (`COOP_MS_PRE_IMPACTO_BOT = 380`, `COOP_MS_POST_IMPACTO_BOT = 480`) sin tocar la cadencia de los ataques humanos; bloqueo P2→BOT reducido a `COOP_MS_POST_IMPACTO_BOT + 80`; `COOP_MS_RESPIRO_TRAS_ULTIMO_ATAQUE_BOT` reducido a 240 ms; el observador (`animarTransicionCoopDesdeDiff`) usa los mismos tiempos cuando el atacante es BOT.
+- Coop online — Sincronía ataques BOT (`public/partidaCoop.js`): los ataques básicos del BOT también esperan brevemente el propio broadcast del servidor (`Promise.race([emit, esperar(420)])`) antes de iniciar la animación local, igual que las habilidades, eliminando el desfase visual entre jugador 1 y jugador 2.
+- Coop online — Refill mesa humanos al cierre de turno BOT (`public/partidaCoop.js`): tras el último ataque del BOT siempre se rellenan los huecos de A y B con cartas del mazo (animadas) antes de pasar a P1, en línea con la lógica de VS BOT.
+- Coop online — Animación de entrada inicial (`public/partidaCoop.js`): el tablero arranca con todas las cartas ocultas (sin flash) y se revelan por parejas en el orden bot[0]+A[0] → bot[1]+A[1] → bot[2]+B[0] → bot[3]+B[1] con `animarCartaRobadaCoop` y 500 ms entre parejas; `coopAnimEntradaInicialActiva` evita que cualquier `renderTodo()` durante la animación reaparezca cartas aún no entradas.
+- Etiqueta de versión del menú lateral actualizada a `Version: Beta-1.0.12-05.05.26`.
+
 ## Beta-1.0.11-04.05.26
 
 - Coop online (`public/partidaCoop.js`): corrección de solapamiento en transición P2→BOT y primer ataque del BOSS; el arranque de IA BOT se ejecuta al final del procesamiento del eco para no intercalar replay/robos/ataques.

@@ -372,6 +372,10 @@ window.emitMultiplayerCoopResultado = function emitMultiplayerCoopResultado(payl
     socket.emit('multiplayer:coop:resultado', payload || {});
 };
 
+window.emitMultiplayerCoopAccion = function emitMultiplayerCoopAccion(payload) {
+    socket.emit('multiplayer:coop:accion', payload || {});
+};
+
 socket.on('multiplayer:coop:estado', (payload = {}) => {
     window.dispatchEvent(new CustomEvent('dc:coop-estado', { detail: payload }));
 });
@@ -382,6 +386,14 @@ socket.on('multiplayer:coop:resync-required', (payload = {}) => {
 
 socket.on('multiplayer:coop:resultado', (payload = {}) => {
     window.dispatchEvent(new CustomEvent('dc:coop-resultado', { detail: payload }));
+});
+
+socket.on('multiplayer:coop:debug', (payload = {}) => {
+    window.dispatchEvent(new CustomEvent('dc:coop-debug', { detail: payload }));
+});
+
+socket.on('multiplayer:coop:accion', (payload = {}) => {
+    window.dispatchEvent(new CustomEvent('dc:coop-accion', { detail: payload }));
 });
 
 window.solicitarHistorialChatGrupo = function solicitarHistorialChatGrupo() {
