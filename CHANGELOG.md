@@ -1,5 +1,15 @@
 # Changelog
 
+## Beta-1.0.13-08.05.26
+
+- Vista `vistaJuego`: panel **Consejos** con carrusel automático (Excel `resources/consejos.xlsx`), flechas, dots y texto con resaltado `$…$` según color RGB del jugador.
+- Recompensa diaria (sobres H1/V1): temporizador y barra de progreso en el perfil del menú lateral; procesamiento global desde `cartas.js` con modal en todas las vistas; corrección de conflicto `RECOMPENSA_DIARIA_COOLDOWN_MS` en `jugarPartida.js`; persistencia de payload reducido para `/update-user`; `server.js`: límite JSON/urlencoded a 5 MB para evitar 413.
+- Mejorar cartas (`mejorarCartas`): pestaña **Destruir cartas repetidas** separada de la mejora clásica; botón **Combinar todas las cartas duplicadas** sin destruir duplicados de nivel máximo; destrucción masiva con tabla de puntos (50–400 por nivel) y modal de resumen con icono de moneda; panel informativo con estilo de juego (`.panel-info-destruccion-duplicados`).
+- Colección (`coleccion.js`): el catálogo se deduplica por nombre (se prioriza mayor nivel / poder) para no mostrar filas duplicadas; nombres conseguidos normalizados con la misma clave.
+- Tablero / render de cartas: `background-position: center top` en estilos y en JS donde aplica, para alinear el arte de la carta.
+- Coop online: ajustes de latencia del BOT, layout en `tablero_coop.css` e indicadores de **bonus de afiliación** (y anulación en rojo) alineados con otros modos.
+- Etiqueta de versión del menú lateral actualizada a `Version: Beta-1.0.13-08.05.26`.
+
 ## Beta-1.0.12-05.05.26
 
 - Coop online (`server.js`): endurecidas las validaciones de inicio de sesión coop (`iniciarSesionCoopEventoDesdePrep`) — se valida catálogo de cartas cargado, selecciones de cartas no vacías de ambos jugadores y conexión activa de líder y miembro, con `console.error` específico en cada fallo y `try/catch` alrededor de `construirSnapshotInicialCoopServidor`.

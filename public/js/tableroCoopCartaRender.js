@@ -310,7 +310,7 @@
         const imagenUrl = obtenerImagenCartaSafe(carta);
         cartaDiv.style.backgroundImage = `url(${imagenUrl})`;
         cartaDiv.style.backgroundSize = 'cover';
-        cartaDiv.style.backgroundPosition = 'center';
+        cartaDiv.style.backgroundPosition = 'center top';
 
         if (!soloVista) {
             if (opciones.onClickCarta) {

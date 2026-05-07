@@ -424,6 +424,9 @@ async function reiniciarProgresoCuenta() {
     usuarioActual.cartas = crearCartasInicialesPorDefecto();
     usuarioActual.mazos = [];
     usuarioActual.objetos = { mejoraCarta: 0, mejoraEspecial: 0 };
+    if (typeof window.DC_SOBRES_MEZCLAR_INVENTARIO === 'function') {
+        usuarioActual.objetos = window.DC_SOBRES_MEZCLAR_INVENTARIO(usuarioActual.objetos);
+    }
     usuarioActual.desafiosCompletados = [];
     usuarioActual.tienda = null;
     usuarioActual.eventosJugadosPorRotacion = {};

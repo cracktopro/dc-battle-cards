@@ -2183,11 +2183,29 @@ async function otorgarRecompensasVictoria() {
     }
 
     usuario.cartas = Array.isArray(usuario.cartas) ? usuario.cartas : [];
+    const nombresPrevios = new Set(usuario.cartas.map(c => normalizarNombre(c?.Nombre)));
+    let nuevasH = 0;
+    let nuevasV = 0;
     usuario.puntos = Number(usuario.puntos || 0) + puntosGanados;
+    cartasPremio.forEach((carta) => {
+        const clave = normalizarNombre(carta?.Nombre);
+        if (clave && !nombresPrevios.has(clave)) {
+            const fac = normalizarFaccion(carta?.faccion || carta?.Faccion || '');
+            if (fac === 'H') nuevasH++;
+            if (fac === 'V') nuevasV++;
+            nombresPrevios.add(clave);
+        }
+    });
     usuario.cartas.push(...cartasPremio);
 
     await actualizarUsuarioFirebase(usuario, email);
     localStorage.setItem('usuario', JSON.stringify(usuario));
+    if (window.DCMisiones?.track) {
+        window.DCMisiones.track('bot', { amount: 1 });
+        window.DCMisiones.track('bot_defeat', { amount: 1 });
+        if (nuevasH > 0) window.DCMisiones.track('coleccion_h', { amount: nuevasH });
+        if (nuevasV > 0) window.DCMisiones.track('coleccion_v', { amount: nuevasV });
+    }
 
     return {
         dificultad,
@@ -2316,13 +2334,40 @@ async function otorgarRecompensasDesafio() {
         });
     }
 
+    let nuevasH = 0;
+    let nuevasV = 0;
     if (cartasGanadas.length > 0) {
         usuario.cartas = Array.isArray(usuario.cartas) ? usuario.cartas : [];
+        const nombresPrevios = new Set(usuario.cartas.map(c => normalizarNombre(c?.Nombre)));
+        cartasGanadas.forEach((carta) => {
+            const clave = normalizarNombre(carta?.Nombre);
+            if (clave && !nombresPrevios.has(clave)) {
+                const fac = normalizarFaccion(carta?.faccion || carta?.Faccion || '');
+                if (fac === 'H') nuevasH++;
+                if (fac === 'V') nuevasV++;
+                nombresPrevios.add(clave);
+            }
+        });
         usuario.cartas.push(...cartasGanadas);
     }
 
     await actualizarUsuarioFirebase(usuario, email);
     localStorage.setItem('usuario', JSON.stringify(usuario));
+    if (window.DCMisiones?.track) {
+        if (esEvento) {
+            // Misión de desafíos excluye eventos.
+            if (String(desafioActivo?.boss || '').trim()) {
+                window.DCMisiones.track('boss', { amount: 1 });
+            }
+        } else {
+            window.DCMisiones.track('desafios', { amount: 1 });
+            if (String(desafioActivo?.boss || '').trim()) {
+                window.DCMisiones.track('boss', { amount: 1 });
+            }
+        }
+        if (nuevasH > 0) window.DCMisiones.track('coleccion_h', { amount: nuevasH });
+        if (nuevasV > 0) window.DCMisiones.track('coleccion_v', { amount: nuevasV });
+    }
     localStorage.removeItem('desafioActivo');
 
     return {
@@ -3364,7 +3409,7 @@ function crearCartaElemento(carta, tipo, slotIndex, opciones = {}) {
     const imagenUrl = obtenerImagenCarta(carta);
     cartaDiv.style.backgroundImage = `url(${imagenUrl})`;
     cartaDiv.style.backgroundSize = 'cover';
-    cartaDiv.style.backgroundPosition = 'center';
+    cartaDiv.style.backgroundPosition = 'center top';
 
     if (!soloVista) {
         if (tipo === 'jugador' && turnoActual === 'jugador' && !cartasQueYaAtacaron.includes(slotIndex)) {
@@ -3950,6 +3995,9 @@ async function mostrarVentanaFinPartida(ganador) {
         : (esEventoActivo ? 'Terminar Evento' : (estadoDesafio.activo ? 'Terminar Desafío' : 'Volver al menú'));
 
     if (esPvp) {
+        if (window.DCMisiones?.track) {
+            window.DCMisiones.track('pvp', { amount: 1 });
+        }
         const notaPvp = document.createElement('p');
         notaPvp.classList.add('texto-recompensa-estado');
         notaPvp.textContent = 'Resultado PvP sincronizado. Esta partida no otorga recompensas PvE.';
@@ -3958,6 +4006,9 @@ async function mostrarVentanaFinPartida(ganador) {
     }
 
     if (ganador !== 'jugador') {
+        if (!esPvp && !estadoDesafio.activo && window.DCMisiones?.track) {
+            window.DCMisiones.track('bot', { amount: 1 });
+        }
         return;
     }
 

@@ -109,16 +109,33 @@ body {
     margin-bottom: 20px;
 }
 
+.chat-misiones-stack {
+    flex: 1 1 min(720px, 100%);
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.comunicacion-lateral-stack {
+    flex: 1 1 min(360px, 100%);
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
 /* Estilo del contenedor de chat */
 .chat-container {
     background-color: rgba(30, 30, 30, 0.8);
     border: 2px solid rgba(var(--dc-accent-user-rgb), 0.5);
     border-radius: 8px;
     padding: 15px;
-    flex: 1 1 min(520px, 100%);
+    flex: 0 0 min(460px, 52vh);
     min-width: 0;
     width: auto;
     height: min(460px, 52vh) !important;
+    max-height: min(460px, 52vh);
     overflow-y: auto; /* Permite el scroll si hay muchos mensajes */
     box-shadow: 0 0 15px rgba(var(--dc-accent-user-rgb), 0.5);
     display: flex;
@@ -185,13 +202,123 @@ body {
     border: 2px solid rgba(var(--dc-accent-user-rgb), 0.5);
     border-radius: 8px;
     padding: 15px;
-    flex: 1 1 min(360px, 100%);
+    flex: 0 0 min(460px, 52vh);
     min-width: 0;
     height: min(460px, 52vh) !important;
     overflow: hidden; /* El scroll queda en la lista interna */
     box-shadow: 0 0 15px rgba(var(--dc-accent-user-rgb), 0.5);
     display: flex;
     flex-direction: column;
+}
+
+.consejos-panel {
+    background-color: rgba(30, 30, 30, 0.8);
+    border: 2px solid rgba(var(--dc-accent-user-rgb), 0.5);
+    border-radius: 8px;
+    padding: 12px;
+    box-shadow: 0 0 15px rgba(var(--dc-accent-user-rgb), 0.35);
+    min-height: 170px;
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+}
+
+.consejos-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.consejos-header h4 {
+    margin: 0;
+    color: #00d1ff;
+    font-size: 1.08rem;
+}
+
+.consejos-controles {
+    display: inline-flex;
+    gap: 6px;
+}
+
+.consejos-btn-nav {
+    min-width: 34px;
+    padding: 2px 8px;
+}
+
+.consejos-slide {
+    border: 1px solid rgba(var(--dc-accent-user-rgb), 0.35);
+    border-radius: 10px;
+    padding: 10px;
+    background: linear-gradient(140deg, rgba(8, 22, 42, 0.88), rgba(14, 34, 62, 0.72));
+    min-height: 124px;
+    flex: 1 1 auto;
+    transition: transform 0.32s ease, opacity 0.32s ease;
+    opacity: 1;
+    transform: translateX(0);
+}
+
+.consejos-slide.anim-out-left {
+    opacity: 0;
+    transform: translateX(-20px);
+}
+
+.consejos-slide.anim-out-right {
+    opacity: 0;
+    transform: translateX(20px);
+}
+
+.consejos-slide.anim-in-left {
+    opacity: 0;
+    transform: translateX(20px);
+}
+
+.consejos-slide.anim-in-right {
+    opacity: 0;
+    transform: translateX(-20px);
+}
+
+.consejos-titulo {
+    color: #dff8ff;
+    font-size: 1.16rem;
+    font-weight: 700;
+    margin-bottom: 6px;
+}
+
+.consejos-descripcion {
+    color: #cfeeff;
+    font-size: 1.03rem;
+    line-height: 1.6;
+}
+
+.consejos-highlight {
+    color: rgba(var(--dc-accent-user-rgb), 0.98);
+    font-weight: 800;
+    text-shadow: 0 0 8px rgba(var(--dc-accent-user-rgb), 0.3);
+}
+
+.consejos-dots {
+    margin-top: 8px;
+    display: flex;
+    justify-content: center;
+    gap: 7px;
+    flex-wrap: wrap;
+}
+
+.consejos-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.45);
+    background: rgba(255, 255, 255, 0.22);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.consejos-dot.active {
+    background: rgba(var(--dc-accent-user-rgb), 0.92);
+    box-shadow: 0 0 8px rgba(var(--dc-accent-user-rgb), 0.7);
+    transform: scale(1.12);
 }
 
 /* Ajustar estilo de los elementos de la lista de jugadores */
@@ -408,7 +535,7 @@ body {
     border: 1px solid rgba(0, 123, 255, 0.5);
     border-radius: 8px;
     background-size: cover;
-    background-position: center;
+    background-position: center top;
     position: relative;
     overflow: hidden;
 }
@@ -474,9 +601,42 @@ body {
     border: 1px solid rgba(255, 215, 0, 0.65);
     border-radius: 8px;
     background-size: cover;
-    background-position: center;
+    background-position: center top;
     position: relative;
     overflow: hidden;
+}
+
+.evento-recompensa-card.evento-recompensa-carta-aleatoria {
+    background-image: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    background: linear-gradient(
+        145deg,
+        #12081f 0%,
+        #1e1240 28%,
+        #152b45 62%,
+        #0a1628 100%
+    );
+    box-shadow:
+        inset 0 0 22px rgba(0, 0, 0, 0.55),
+        inset 0 1px 0 rgba(255, 215, 0, 0.12),
+        0 2px 14px rgba(0, 0, 0, 0.45);
+    border-color: rgba(255, 215, 0, 0.5);
+}
+
+.evento-recompensa-carta-aleatoria-simbolo {
+    font-size: 2.35rem;
+    font-weight: 900;
+    color: #ffd700;
+    line-height: 1;
+    font-family: Georgia, "Times New Roman", serif;
+    text-shadow:
+        0 0 16px rgba(255, 215, 0, 0.9),
+        0 0 4px rgba(255, 255, 200, 0.5),
+        0 2px 6px rgba(0, 0, 0, 0.85);
+    user-select: none;
 }
 
 .evento-recompensas-meta {
@@ -664,6 +824,15 @@ body {
         flex: 1 1 auto;
         width: 100%;
         height: min(420px, 48vh) !important;
+    }
+
+    .comunicacion-lateral-stack {
+        flex: 1 1 auto;
+        width: 100%;
+    }
+
+    .consejos-panel {
+        min-height: 180px;
     }
 }
 
@@ -961,4 +1130,203 @@ body {
 .dificultad-btn:hover {
     border-color: #007bff;
     background-color: rgba(0, 123, 255, 0.2);
+}
+
+/* —— Selección coop online: espera a jugador A y cartas no disponibles para B —— */
+.coop-prep-espera-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    box-sizing: border-box;
+    background: rgba(5, 10, 22, 0.75);
+    backdrop-filter: blur(3px);
+}
+
+.coop-prep-espera-panel {
+    max-width: 360px;
+    width: 100%;
+    padding: 16px 20px;
+    border-radius: 12px;
+    background: linear-gradient(145deg, rgba(12, 24, 48, 0.98), rgba(var(--dc-accent-user-rgb), 0.18));
+    border: 1px solid rgba(var(--dc-accent-user-rgb), 0.45);
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
+    text-align: center;
+}
+
+.coop-prep-espera-texto {
+    margin: 0;
+    color: #dff8ff;
+    font-size: 0.98rem;
+    line-height: 1.45;
+}
+
+.coop-prep-espera-nombre {
+    color: #ffd700;
+}
+
+.carta-mini.coop-carta-no-disponible {
+    position: relative;
+    opacity: 0.42;
+    filter: grayscale(0.85) brightness(0.92);
+    pointer-events: none;
+    cursor: not-allowed;
+}
+
+.carta-mini.coop-carta-no-disponible .coop-prep-no-disponible-badge {
+    pointer-events: none;
+}
+
+.coop-prep-no-disponible-badge {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 6;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: #fff;
+    background: rgba(180, 20, 30, 0.95);
+    border: 1px solid rgba(255, 100, 110, 0.85);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.55);
+    white-space: nowrap;
+}
+
+.misiones-container {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.misiones-panel {
+    background-color: rgba(30, 30, 30, 0.8);
+    border: 2px solid rgba(var(--dc-accent-user-rgb), 0.5);
+    border-radius: 8px;
+    padding: 12px;
+    box-shadow: 0 0 15px rgba(var(--dc-accent-user-rgb), 0.35);
+}
+
+.misiones-panel h4 {
+    margin: 0 0 10px;
+    color: #00d1ff;
+    font-size: 0.96rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+}
+
+.misiones-reset-tiempo {
+    color: #ffd86f;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+}
+
+.misiones-reset-progress {
+    width: 100%;
+    height: 6px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.14);
+    overflow: hidden;
+    margin: -2px 0 8px;
+}
+
+.misiones-reset-progress-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #00d1ff 0%, #ffd86f 100%);
+    transition: width 0.25s linear;
+}
+
+.misiones-lista {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.misiones-item {
+    border: 1px solid rgba(0, 209, 255, 0.24);
+    border-radius: 10px;
+    padding: 7px;
+    background: rgba(4, 12, 24, 0.62);
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+        "desc btn"
+        "progress btn"
+        "bar btn"
+        "reward btn";
+    column-gap: 8px;
+    row-gap: 3px;
+    align-items: center;
+}
+
+.misiones-item.done {
+    border-color: rgba(255, 215, 0, 0.42);
+}
+
+.misiones-item-desc {
+    grid-area: desc;
+    color: #e6f7ff;
+    font-size: 0.81rem;
+    margin: 0;
+}
+
+.misiones-steps-highlight {
+    color: #ffd86f;
+    font-weight: 800;
+    text-shadow: 0 0 8px rgba(255, 216, 111, 0.28);
+}
+
+.misiones-item-progreso,
+.misiones-item-recompensa {
+    color: #bde6ff;
+    font-size: 0.74rem;
+    margin: 0;
+}
+
+.misiones-item-progreso {
+    grid-area: progress;
+}
+
+.misiones-item-recompensa {
+    grid-area: reward;
+}
+
+.misiones-progress {
+    grid-area: bar;
+    width: 100%;
+    height: 7px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.12);
+    overflow: hidden;
+    margin: 5px 0;
+}
+
+.misiones-progress-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #00d1ff 0%, #6be2ff 100%);
+}
+
+.misiones-btn-claim {
+    grid-area: btn;
+    margin: 0;
+    width: 112px;
+    padding: 5px 6px;
+    font-size: 0.76rem;
+}
+
+@media (max-width: 1200px) {
+    .misiones-lista {
+        grid-template-columns: 1fr;
+    }
 }

@@ -7,7 +7,7 @@ const PRECIOS_CARTAS = {
 };
 
 const DISTRIBUCION_TIENDA = [
-    { nivel: 1, cantidad: 3 },
+    { nivel: 1, cantidad: 4 },
     { nivel: 2, cantidad: 3 },
     { nivel: 3, cantidad: 2 },
     { nivel: 4, cantidad: 2 },
@@ -32,7 +32,8 @@ const OBJETOS_TIENDA = [
 ];
 const ICONOS_OBJETO_POR_ID = {
     'obj-mejora-carta': '/resources/icons/mejora.png',
-    'obj-mejora-especial': '/resources/icons/mejora_especial.png'
+    'obj-mejora-especial': '/resources/icons/mejora_especial.png',
+    ...(typeof window.DC_SOBRES_ICONOS_POR_ID === 'object' && window.DC_SOBRES_ICONOS_POR_ID ? window.DC_SOBRES_ICONOS_POR_ID : {})
 };
 const ICONO_MONEDA = '/resources/icons/moneda.png';
 
@@ -53,12 +54,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     usuarioActual.cartas = Array.isArray(usuarioActual.cartas) ? usuarioActual.cartas : [];
     usuarioActual.puntos = Number(usuarioActual.puntos || 0);
-    usuarioActual.objetos = (usuarioActual.objetos && typeof usuarioActual.objetos === 'object')
-        ? {
-            mejoraCarta: Number(usuarioActual.objetos.mejoraCarta || 0),
-            mejoraEspecial: Number(usuarioActual.objetos.mejoraEspecial || 0)
-        }
-        : { mejoraCarta: 0, mejoraEspecial: 0 };
+    const objsRaw = (usuarioActual.objetos && typeof usuarioActual.objetos === 'object') ? usuarioActual.objetos : {};
+    usuarioActual.objetos = { ...objsRaw };
+    usuarioActual.objetos.mejoraCarta = Number(usuarioActual.objetos.mejoraCarta || 0);
+    usuarioActual.objetos.mejoraEspecial = Number(usuarioActual.objetos.mejoraEspecial || 0);
+    if (typeof window.DC_SOBRES_MEZCLAR_INVENTARIO === 'function') {
+        usuarioActual.objetos = window.DC_SOBRES_MEZCLAR_INVENTARIO(usuarioActual.objetos);
+    }
 
     try {
         await prepararTiendaDiaria();
@@ -105,6 +107,36 @@ function crearRngSemilla(semillaTexto) {
 
 function normalizarNombreCarta(nombre) {
     return String(nombre || '').trim().toLowerCase();
+}
+
+/** Mejor nivel que el jugador tiene de esa carta en colección (0 si no la tiene). */
+function obtenerMejorNivelUsuarioEnColeccion(nombreCarta) {
+    const clave = normalizarNombreCarta(nombreCarta);
+    if (!clave) {
+        return 0;
+    }
+    let mejor = 0;
+    (usuarioActual.cartas || []).forEach((carta) => {
+        if (normalizarNombreCarta(carta?.Nombre) !== clave) {
+            return;
+        }
+        mejor = Math.max(mejor, Number(carta?.Nivel || 1));
+    });
+    return mejor;
+}
+
+function crearBadgeYaObtenidaTienda(nivelColeccion) {
+    const wrap = document.createElement('div');
+    wrap.className = 'tienda-badge-carta-obtenida';
+    const linea1 = document.createElement('div');
+    linea1.className = 'tienda-badge-carta-obtenida-titulo';
+    linea1.textContent = 'Ya obtenida';
+    const linea2 = document.createElement('div');
+    linea2.className = 'tienda-badge-carta-obtenida-nivel';
+    linea2.textContent = `Nivel: ${Math.max(1, Math.floor(Number(nivelColeccion || 1)))}`;
+    wrap.appendChild(linea1);
+    wrap.appendChild(linea2);
+    return wrap;
 }
 
 function escalarPoderPorNivel(poderBase, nivel) {
@@ -195,14 +227,18 @@ async function generarCartasTienda(fechaSemilla) {
 }
 
 function crearObjetosTienda() {
-    return OBJETOS_TIENDA.map(objeto => ({ ...objeto }));
+    const objetosFijos = OBJETOS_TIENDA.map(objeto => ({ ...objeto }));
+    const sobres = (typeof window.DC_SOBRES_ITEMS_TIENDA === 'function')
+        ? window.DC_SOBRES_ITEMS_TIENDA()
+        : [];
+    return objetosFijos.concat(sobres.map((s) => ({
+        ...s,
+        icono: s.icono || ICONOS_OBJETO_POR_ID[s.id] || ''
+    })));
 }
 
-function normalizarObjetosTienda(objetos = []) {
-    return (Array.isArray(objetos) ? objetos : []).map(objeto => ({
-        ...objeto,
-        icono: objeto.icono || ICONOS_OBJETO_POR_ID[objeto.id] || ''
-    }));
+function normalizarObjetosTienda() {
+    return crearObjetosTienda();
 }
 
 async function prepararTiendaDiaria() {
@@ -225,7 +261,7 @@ async function prepararTiendaDiaria() {
         };
         await persistirUsuario();
     } else {
-        usuarioActual.tienda.objetos = normalizarObjetosTienda(usuarioActual.tienda.objetos);
+        usuarioActual.tienda.objetos = normalizarObjetosTienda();
     }
 }
 
@@ -341,11 +377,6 @@ function renderizarCartasTienda() {
         }
         preview.style.backgroundImage = `url(${obtenerImagenCarta(oferta.carta)})`;
 
-        const badgeNivel = document.createElement('div');
-        badgeNivel.className = 'badge-nivel';
-        badgeNivel.textContent = `${oferta.nivel}★`;
-
-        preview.appendChild(badgeNivel);
         preview.appendChild(crearEstrellasNivel(oferta.nivel));
         preview.appendChild(crearDetallesCarta(oferta.carta));
         const badgeHabilidad = window.crearBadgeHabilidadCarta ? window.crearBadgeHabilidadCarta(oferta.carta) : null;
@@ -353,6 +384,11 @@ function renderizarCartasTienda() {
             preview.appendChild(badgeHabilidad);
         }
         preview.appendChild(crearBarraSaludElemento(oferta.carta));
+
+        const nivelColeccionUsuario = obtenerMejorNivelUsuarioEnColeccion(oferta.carta.Nombre);
+        if (nivelColeccionUsuario > 0) {
+            preview.appendChild(crearBadgeYaObtenidaTienda(nivelColeccionUsuario));
+        }
 
         const precio = document.createElement('div');
         precio.className = 'precio-item';
@@ -372,53 +408,116 @@ function renderizarCartasTienda() {
         contenedor.appendChild(item);
     });
 }
-
 function renderizarObjetosTienda() {
-    const contenedor = document.getElementById('tienda-objetos');
-    contenedor.innerHTML = '';
+    const contenedorPadre = document.getElementById('tienda-objetos');
+    if (!contenedorPadre) {
+        return;
+    }
+    contenedorPadre.innerHTML = '';
+    contenedorPadre.classList.remove('objetos-grid');
+    contenedorPadre.classList.add('tienda-objetos-layout');
 
-    usuarioActual.tienda.objetos = normalizarObjetosTienda(usuarioActual.tienda.objetos);
-    usuarioActual.tienda.objetos.forEach((objeto, index) => {
-        const item = document.createElement('div');
-        item.className = 'objeto-tienda';
+    const lista = normalizarObjetosTienda();
+    usuarioActual.tienda.objetos = lista;
 
+    const filaMejoras = document.createElement('div');
+    filaMejoras.className = 'tienda-objetos-fila tienda-objetos-mejoras';
+
+    const subtHero = document.createElement('h5');
+    subtHero.className = 'tienda-objetos-subtitulo';
+    subtHero.textContent = 'Sobres de héroe';
+
+    const filaSobresHeroes = document.createElement('div');
+    filaSobresHeroes.className = 'tienda-objetos-fila tienda-objetos-sobres-heroes';
+
+    const subtVill = document.createElement('h5');
+    subtVill.className = 'tienda-objetos-subtitulo';
+    subtVill.textContent = 'Sobres de villano';
+
+    const filaSobresVill = document.createElement('div');
+    filaSobresVill.className = 'tienda-objetos-fila tienda-objetos-sobres-villanos';
+
+    lista.forEach((objeto) => {
+        const item = crearTarjetaObjetoTienda(objeto);
+
+        if (objeto.id === 'obj-mejora-carta' || objeto.id === 'obj-mejora-especial') {
+            filaMejoras.appendChild(item);
+        } else if (objeto.id && /^obj-sobre-h\d$/i.test(objeto.id)) {
+            filaSobresHeroes.appendChild(item);
+        } else if (objeto.id && /^obj-sobre-v\d$/i.test(objeto.id)) {
+            filaSobresVill.appendChild(item);
+        } else {
+            filaMejoras.appendChild(item);
+        }
+    });
+
+    contenedorPadre.appendChild(filaMejoras);
+    contenedorPadre.appendChild(subtHero);
+    contenedorPadre.appendChild(filaSobresHeroes);
+    contenedorPadre.appendChild(subtVill);
+    contenedorPadre.appendChild(filaSobresVill);
+}
+
+function crearTarjetaObjetoTienda(objeto) {
+    const esSobre = objeto.id && String(objeto.id).startsWith('obj-sobre-');
+    const item = document.createElement('div');
+    item.className = esSobre ? 'objeto-tienda objeto-tienda-sobre' : 'objeto-tienda objeto-tienda-mejora';
+
+    if (!esSobre) {
         const header = document.createElement('div');
-        header.style.display = 'flex';
-        header.style.alignItems = 'center';
-        header.style.gap = '10px';
+        header.className = 'objeto-tienda-mejora-cabecera';
 
         const icono = document.createElement('img');
+        icono.className = 'objeto-tienda-mejora-icono';
         icono.src = objeto.icono || '';
         icono.alt = objeto.nombre;
-        icono.style.width = '56px';
-        icono.style.height = '56px';
-        icono.style.objectFit = 'contain';
+
+        const titWrap = document.createElement('div');
+        titWrap.className = 'objeto-tienda-mejora-texto-top';
+        const nombre = document.createElement('h5');
+        nombre.textContent = objeto.nombre;
+        titWrap.appendChild(nombre);
+
+        header.appendChild(icono);
+        header.appendChild(titWrap);
+        item.appendChild(header);
+
+        const descripcion = document.createElement('p');
+        descripcion.className = 'objeto-tienda-desc';
+        descripcion.textContent = objeto.descripcion;
+        item.appendChild(descripcion);
+    } else {
+        const preview = document.createElement('div');
+        preview.className = 'preview-sobre-tienda';
+        const url = objeto.icono || '';
+        preview.style.backgroundImage = url ? `url(${url})` : 'none';
 
         const nombre = document.createElement('h5');
-        nombre.style.margin = '0';
+        nombre.className = 'objeto-tienda-nombre-sobre';
         nombre.textContent = objeto.nombre;
 
         const descripcion = document.createElement('p');
+        descripcion.className = 'objeto-tienda-desc objeto-tienda-desc-sobre';
         descripcion.textContent = objeto.descripcion;
 
-        const precio = document.createElement('div');
-        precio.className = 'precio-item';
-        precio.innerHTML = `Precio: ${objeto.precio} <img src="${ICONO_MONEDA}" alt="Moneda" style="width:18px;height:18px;object-fit:contain;vertical-align:text-bottom;margin-left:4px;">`;
-
-        const boton = document.createElement('button');
-        boton.className = 'btn btn-primary';
-        boton.textContent = 'Comprar';
-        boton.disabled = usuarioActual.puntos < objeto.precio;
-        boton.addEventListener('click', () => comprarObjeto(index));
-
-        header.appendChild(icono);
-        header.appendChild(nombre);
-        item.appendChild(header);
+        item.appendChild(preview);
+        item.appendChild(nombre);
         item.appendChild(descripcion);
-        item.appendChild(precio);
-        item.appendChild(boton);
-        contenedor.appendChild(item);
-    });
+    }
+
+    const precio = document.createElement('div');
+    precio.className = 'precio-item';
+    precio.innerHTML = `Precio: ${objeto.precio} <img src="${ICONO_MONEDA}" alt="Moneda" style="width:18px;height:18px;object-fit:contain;vertical-align:text-bottom;margin-left:4px;">`;
+
+    const boton = document.createElement('button');
+    boton.className = 'btn btn-primary';
+    boton.textContent = 'Comprar';
+    boton.disabled = usuarioActual.puntos < objeto.precio;
+    boton.addEventListener('click', () => comprarObjeto(objeto.id));
+
+    item.appendChild(precio);
+    item.appendChild(boton);
+    return item;
 }
 
 function renderizarTienda() {
@@ -486,12 +585,25 @@ async function comprarCarta(indexOferta) {
         return;
     }
 
+    const nombresPrevios = new Set(
+        (usuarioActual.cartas || []).map((c) => normalizarNombreCarta(c?.Nombre))
+    );
     usuarioActual.puntos -= oferta.precio;
     usuarioActual.cartas.push({ ...oferta.carta });
     usuarioActual.tienda.cartas[indexOferta].agotada = true;
+    const nombreNueva = normalizarNombreCarta(oferta.carta?.Nombre);
+    const esNueva = Boolean(nombreNueva && !nombresPrevios.has(nombreNueva));
+    const faccionNueva = String(oferta.carta?.faccion || oferta.carta?.Faccion || '').trim().toUpperCase();
 
     try {
         await persistirUsuario();
+        if (esNueva && window.DCMisiones?.track) {
+            if (faccionNueva === 'H') {
+                window.DCMisiones.track('coleccion_h', { amount: 1 });
+            } else if (faccionNueva === 'V') {
+                window.DCMisiones.track('coleccion_v', { amount: 1 });
+            }
+        }
         renderizarTienda();
         mostrarMensaje(`Has comprado ${oferta.carta.Nombre}.`, 'success');
     } catch (error) {
@@ -500,8 +612,12 @@ async function comprarCarta(indexOferta) {
     }
 }
 
-async function comprarObjeto(indexObjeto) {
-    const objeto = usuarioActual.tienda.objetos[indexObjeto];
+async function comprarObjeto(identificador) {
+    usuarioActual.tienda.objetos = normalizarObjetosTienda();
+    const objeto =
+        typeof identificador === 'number'
+            ? usuarioActual.tienda.objetos[identificador]
+            : usuarioActual.tienda.objetos.find(o => o.id === identificador);
 
     if (!objeto) {
         return;
@@ -519,17 +635,32 @@ async function comprarObjeto(indexObjeto) {
 
     usuarioActual.puntos -= objeto.precio;
     usuarioActual.objetos = (usuarioActual.objetos && typeof usuarioActual.objetos === 'object')
-        ? usuarioActual.objetos
-        : { mejoraCarta: 0, mejoraEspecial: 0 };
+        ? { ...usuarioActual.objetos }
+        : {};
+    usuarioActual.objetos.mejoraCarta = Number(usuarioActual.objetos.mejoraCarta || 0);
+    usuarioActual.objetos.mejoraEspecial = Number(usuarioActual.objetos.mejoraEspecial || 0);
+    if (typeof window.DC_SOBRES_MEZCLAR_INVENTARIO === 'function') {
+        usuarioActual.objetos = window.DC_SOBRES_MEZCLAR_INVENTARIO(usuarioActual.objetos);
+    }
 
-    if (objeto.id === 'obj-mejora-carta') {
+    const defSobre = window.DC_SOBRES_POR_ID && window.DC_SOBRES_POR_ID[objeto.id];
+    if (defSobre && defSobre.inventarioKey) {
+        usuarioActual.objetos[defSobre.inventarioKey] = Number(usuarioActual.objetos[defSobre.inventarioKey] || 0) + 1;
+    } else if (objeto.id === 'obj-mejora-carta') {
         usuarioActual.objetos.mejoraCarta = Number(usuarioActual.objetos.mejoraCarta || 0) + 1;
-    } else {
+    } else if (objeto.id === 'obj-mejora-especial') {
         usuarioActual.objetos.mejoraEspecial = Number(usuarioActual.objetos.mejoraEspecial || 0) + 1;
     }
 
     try {
         await persistirUsuario();
+        if (window.DCMisiones?.track) {
+            if (defSobre) {
+                window.DCMisiones.track('shop_sobres', { amount: 1 });
+            } else {
+                window.DCMisiones.track('shop_mejora', { amount: 1 });
+            }
+        }
         renderizarTienda();
         mostrarMensaje(`Has comprado ${objeto.nombre}.`, 'success');
     } catch (error) {

@@ -65,6 +65,25 @@
     }
 }
 
+/* Red Dot: notificación en botones del menú lateral */
+.menu-container .btn.dc-menu-item-con-red-dot {
+    position: relative;
+}
+
+.menu-container .dc-menu-red-dot {
+    position: absolute;
+    top: 7px;
+    right: 10px;
+    width: 11px;
+    height: 11px;
+    border-radius: 999px;
+    background: radial-gradient(circle at 35% 35%, #ff9a9a 0%, #ff2b2b 45%, #b40000 100%);
+    border: 1px solid rgba(255, 255, 255, 0.68);
+    box-shadow: 0 0 10px rgba(255, 60, 60, 0.75);
+    pointer-events: none;
+    z-index: 3;
+}
+
 /* Móvil: barra fija + menú drawer */
 @media (max-width: 899px) {
     :root {

@@ -466,7 +466,7 @@ async function cargarCartas() {
         const imagenUrl = obtenerImagenCarta(carta);
         cartaDiv.style.backgroundImage = `url(${imagenUrl})`;
         cartaDiv.style.backgroundSize = 'cover';
-        cartaDiv.style.backgroundPosition = 'center';
+        cartaDiv.style.backgroundPosition = 'center top';
 
         const detallesDiv = document.createElement('div');
         detallesDiv.classList.add('detalles-carta');

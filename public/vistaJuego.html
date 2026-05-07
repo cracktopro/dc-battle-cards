@@ -114,25 +114,61 @@
 
     <!-- Contenedor de comunicación para chat y lista de jugadores -->
     <section class="comunicacion-container">
-        <!-- Chat -->
-        <div class="chat-container">
-            <div id="chat-mensajes" class="chat-mensajes">
-                <!-- Mensajes del chat se cargarán aquí -->
+        <div class="chat-misiones-stack">
+            <!-- Chat -->
+            <div class="chat-container">
+                <div id="chat-mensajes" class="chat-mensajes">
+                    <!-- Mensajes del chat se cargarán aquí -->
+                </div>
+                <!-- Contenedor para alinear el input y el botón en la misma línea -->
+                <div class="chat-input-container">
+                    <input type="text" id="chat-input" class="form-control" placeholder="Escribe un mensaje...">
+                    <button id="enviar-mensaje" class="btn btn-success">Enviar</button>
+                </div>
             </div>
-            <!-- Contenedor para alinear el input y el botón en la misma línea -->
-            <div class="chat-input-container">
-                <input type="text" id="chat-input" class="form-control" placeholder="Escribe un mensaje...">
-                <button id="enviar-mensaje" class="btn btn-success">Enviar</button>
+
+            <div class="misiones-container">
+                <div class="misiones-panel">
+                <h4>Misiones Diarias <span id="misiones-diarias-reset" class="misiones-reset-tiempo">Tiempo restante: 00:00:00</span></h4>
+                <div class="misiones-reset-progress">
+                    <div id="misiones-diarias-reset-bar" class="misiones-reset-progress-fill"></div>
+                </div>
+                    <div id="misiones-diarias-lista" class="misiones-lista"></div>
+                </div>
+                <div class="misiones-panel">
+                <h4>Misiones Semanales <span id="misiones-semanales-reset" class="misiones-reset-tiempo">Tiempo restante: 00:00:00</span></h4>
+                <div class="misiones-reset-progress">
+                    <div id="misiones-semanales-reset-bar" class="misiones-reset-progress-fill"></div>
+                </div>
+                    <div id="misiones-semanales-lista" class="misiones-lista"></div>
+                </div>
             </div>
         </div>
 
-        <!-- Lista de jugadores conectados -->
-        <div class="jugadores-conectados-container">
-            <h4>Jugadores Conectados</h4>
-            <div id="mensaje-jugadores" class="alert alert-warning" style="display:none; margin-bottom:8px;"></div>
-            <ul id="lista-jugadores" class="lista-jugadores">
-                <!-- Lista dinámica de jugadores conectados -->
-            </ul>
+        <div class="comunicacion-lateral-stack">
+            <!-- Lista de jugadores conectados -->
+            <div class="jugadores-conectados-container">
+                <h4>Jugadores Conectados</h4>
+                <div id="mensaje-jugadores" class="alert alert-warning" style="display:none; margin-bottom:8px;"></div>
+                <ul id="lista-jugadores" class="lista-jugadores">
+                    <!-- Lista dinámica de jugadores conectados -->
+                </ul>
+            </div>
+
+            <div class="consejos-panel">
+                <div class="consejos-header">
+                    <h4>Consejos</h4>
+                    <div class="consejos-controles">
+                        <button id="consejos-prev" type="button" class="btn btn-sm btn-secondary consejos-btn-nav" aria-label="Consejo anterior">◀</button>
+                        <button id="consejos-next" type="button" class="btn btn-sm btn-secondary consejos-btn-nav" aria-label="Siguiente consejo">▶</button>
+                    </div>
+                </div>
+                <div id="consejos-slide" class="consejos-slide">
+                    <div id="consejos-titulo" class="consejos-titulo">Cargando consejos...</div>
+                    <div id="consejos-descripcion" class="consejos-descripcion">Preparando información del panel.</div>
+                </div>
+                <div id="consejos-dots" class="consejos-dots"></div>
+            </div>
         </div>
     </section>
 
@@ -167,6 +203,19 @@
     </section>
 </div>
 
+<div id="modal-recompensa-diaria" class="modal-dc" style="display:none;">
+    <div class="modal-dc-content" style="width:min(760px,92vw); max-height:88vh; overflow:hidden;">
+        <h4 style="margin-top:0;">Recompensas diarias</h4>
+        <div style="display:flex; justify-content:center; gap:18px; flex-wrap:wrap; padding:12px 4px 16px;">
+            <img src="/resources/hud/sobre_H1.png" alt="Sobre héroe H1" class="coleccion-sobre-imagen" style="width:min(190px,38vw);">
+            <img src="/resources/hud/sobre_V1.png" alt="Sobre villano V1" class="coleccion-sobre-imagen" style="width:min(190px,38vw);">
+        </div>
+        <div class="modal-dc-actions">
+            <button id="btn-aceptar-recompensa-diaria" class="btn btn-primary" type="button">Aceptar</button>
+        </div>
+    </div>
+</div>
+
 <div id="modal-seleccion-evento" class="modal-seleccion-mazo">
     <div class="modal-seleccion-contenido">
         <div class="modal-header-desafio">
@@ -194,6 +243,8 @@
     localStorage.removeItem('nombreOponente');
 </script>
 <script src="js/cartas.js"></script>
+<script src="js/sobresCartas.js"></script>
+<script src="js/misionesDiarias.js"></script>
 <script src="js/limpiarPvpPartidaLocal.js"></script>
 <script src="cliente.js"></script>
 <script src="jugarPartida.js"></script>

@@ -876,6 +876,224 @@ function construirFilaStatMenu({ icono, alt, valor, titulo }) {
     `;
 }
 
+const RECOMPENSA_DIARIA_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+const RECOMPENSA_DIARIA_CHECK_INTERVAL_MS = 60 * 1000;
+const RECOMPENSA_DIARIA_LOCK_KEY = 'dc_daily_reward_claim_lock_v1';
+let timerMenuRecompensaDiaria = null;
+let timerCheckRecompensaDiaria = null;
+let recompensaDiariaEnProceso = false;
+
+function leerUsuarioSesionSeguro() {
+    try {
+        const raw = JSON.parse(localStorage.getItem('usuario') || 'null');
+        return (raw && typeof raw === 'object') ? raw : null;
+    } catch (_err) {
+        return null;
+    }
+}
+
+function normalizarObjetosConSobresGlobal(usuario) {
+    if (!usuario || typeof usuario !== 'object') return;
+    const base = (usuario.objetos && typeof usuario.objetos === 'object') ? { ...usuario.objetos } : {};
+    base.mejoraCarta = Number(base.mejoraCarta || 0);
+    base.mejoraEspecial = Number(base.mejoraEspecial || 0);
+    if (typeof window.DC_SOBRES_MEZCLAR_INVENTARIO === 'function') {
+        usuario.objetos = window.DC_SOBRES_MEZCLAR_INVENTARIO(base);
+        return;
+    }
+    usuario.objetos = {
+        ...base,
+        sobreH1: Number(base.sobreH1 || 0),
+        sobreH2: Number(base.sobreH2 || 0),
+        sobreH3: Number(base.sobreH3 || 0),
+        sobreV1: Number(base.sobreV1 || 0),
+        sobreV2: Number(base.sobreV2 || 0),
+        sobreV3: Number(base.sobreV3 || 0)
+    };
+}
+
+function formatearHMSGlobal(ms) {
+    const total = Math.max(0, Math.floor(ms / 1000));
+    const h = Math.floor(total / 3600);
+    const m = Math.floor((total % 3600) / 60);
+    const s = total % 60;
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+function obtenerEstadoRecompensaDiaria(usuario) {
+    const ahora = Date.now();
+    const ultima = Number(usuario?.recompensas?.diariaSobres?.lastClaimAt || 0);
+    const ultimaValida = Number.isFinite(ultima) && ultima > 0 ? ultima : 0;
+    const siguiente = ultimaValida > 0 ? (ultimaValida + RECOMPENSA_DIARIA_COOLDOWN_MS) : ahora;
+    const restante = Math.max(0, siguiente - ahora);
+    const progreso = ultimaValida <= 0
+        ? 100
+        : Math.max(0, Math.min(((RECOMPENSA_DIARIA_COOLDOWN_MS - restante) / RECOMPENSA_DIARIA_COOLDOWN_MS) * 100, 100));
+    return {
+        disponible: restante <= 0,
+        restanteMs: restante,
+        progreso,
+        siguienteClaimAt: siguiente
+    };
+}
+
+function renderTimerRecompensaDiariaMenu() {
+    const tiempoEl = document.getElementById('menu-recompensa-diaria-tiempo');
+    const barEl = document.getElementById('menu-recompensa-diaria-bar');
+    const wrapEl = document.getElementById('menu-recompensa-diaria');
+    if (!tiempoEl || !barEl || !wrapEl) return;
+
+    const usuario = leerUsuarioSesionSeguro();
+    const estado = obtenerEstadoRecompensaDiaria(usuario || {});
+    if (estado.disponible) {
+        tiempoEl.textContent = 'Recompensa diaria disponible';
+        barEl.style.width = '100%';
+        wrapEl.classList.add('ready');
+        return;
+    }
+    tiempoEl.textContent = `Siguiente recompensa en: ${formatearHMSGlobal(estado.restanteMs)}`;
+    barEl.style.width = `${estado.progreso}%`;
+    wrapEl.classList.remove('ready');
+}
+
+function crearModalRecompensaDiariaFallback() {
+    if (document.getElementById('modal-recompensa-diaria-fallback')) return;
+    const modal = document.createElement('div');
+    modal.id = 'modal-recompensa-diaria-fallback';
+    modal.className = 'modal-dc';
+    modal.style.display = 'none';
+    modal.innerHTML = `
+        <div class="modal-dc-content">
+            <h4>Recompensa diaria recibida</h4>
+            <p>Has recibido:</p>
+            <div style="display:flex;justify-content:center;gap:18px;flex-wrap:wrap;margin:10px 0 14px;">
+                <img src="/resources/hud/sobre_H1.png" alt="Sobre héroe H1" class="coleccion-sobre-imagen" style="width:min(170px,34vw);">
+                <img src="/resources/hud/sobre_V1.png" alt="Sobre villano V1" class="coleccion-sobre-imagen" style="width:min(170px,34vw);">
+            </div>
+            <div class="modal-dc-actions">
+                <button id="btn-aceptar-recompensa-diaria-fallback" class="btn btn-primary">Aceptar</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+}
+
+function abrirModalRecompensaDiariaGlobal() {
+    return new Promise((resolve) => {
+        const modalPrincipal = document.getElementById('modal-recompensa-diaria');
+        const btnPrincipal = document.getElementById('btn-aceptar-recompensa-diaria');
+        if (modalPrincipal && btnPrincipal) {
+            modalPrincipal.style.display = 'flex';
+            const cerrar = () => {
+                modalPrincipal.style.display = 'none';
+                btnPrincipal.removeEventListener('click', onAceptar);
+                resolve();
+            };
+            const onAceptar = () => cerrar();
+            btnPrincipal.addEventListener('click', onAceptar);
+            return;
+        }
+
+        crearModalRecompensaDiariaFallback();
+        const modal = document.getElementById('modal-recompensa-diaria-fallback');
+        const btn = document.getElementById('btn-aceptar-recompensa-diaria-fallback');
+        if (!modal || !btn) {
+            resolve();
+            return;
+        }
+        modal.style.display = 'flex';
+        const cerrar = () => {
+            modal.style.display = 'none';
+            btn.removeEventListener('click', onAceptar);
+            resolve();
+        };
+        const onAceptar = () => cerrar();
+        btn.addEventListener('click', onAceptar);
+    });
+}
+
+function adquirirLockRecompensaDiaria() {
+    const ahora = Date.now();
+    const lockTs = Number(localStorage.getItem(RECOMPENSA_DIARIA_LOCK_KEY) || 0);
+    if (Number.isFinite(lockTs) && lockTs > 0 && (ahora - lockTs) < 15000) {
+        return false;
+    }
+    localStorage.setItem(RECOMPENSA_DIARIA_LOCK_KEY, String(ahora));
+    return true;
+}
+
+function liberarLockRecompensaDiaria() {
+    localStorage.removeItem(RECOMPENSA_DIARIA_LOCK_KEY);
+}
+
+async function persistirUsuarioConRecompensaDiaria(usuario) {
+    const email = localStorage.getItem('email');
+    if (!email) throw new Error('No hay email en sesión');
+    const payloadUsuario = {
+        objetos: usuario?.objetos || {},
+        recompensas: usuario?.recompensas || {}
+    };
+    const response = await fetch('/update-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ usuario: payloadUsuario, email })
+    });
+    if (!response.ok) {
+        throw new Error('No se pudo actualizar usuario en servidor');
+    }
+    localStorage.setItem('usuario', JSON.stringify(usuario));
+    window.dispatchEvent(new Event('dc:usuario-actualizado'));
+    if (typeof window.DCRedDot?.refresh === 'function') {
+        window.DCRedDot.refresh();
+    }
+}
+
+async function procesarRecompensaDiariaGlobal() {
+    if (recompensaDiariaEnProceso) return false;
+    if (!adquirirLockRecompensaDiaria()) return false;
+    recompensaDiariaEnProceso = true;
+    try {
+        const usuario = leerUsuarioSesionSeguro();
+        if (!usuario) return false;
+        normalizarObjetosConSobresGlobal(usuario);
+        const estado = obtenerEstadoRecompensaDiaria(usuario);
+        if (!estado.disponible) return false;
+
+        usuario.objetos.sobreH1 = Number(usuario.objetos.sobreH1 || 0) + 1;
+        usuario.objetos.sobreV1 = Number(usuario.objetos.sobreV1 || 0) + 1;
+        usuario.recompensas = (usuario.recompensas && typeof usuario.recompensas === 'object') ? usuario.recompensas : {};
+        usuario.recompensas.diariaSobres = { lastClaimAt: Date.now() };
+
+        await persistirUsuarioConRecompensaDiaria(usuario);
+        renderTimerRecompensaDiariaMenu();
+        await abrirModalRecompensaDiariaGlobal();
+        return true;
+    } catch (error) {
+        console.error('Error aplicando recompensa diaria global:', error);
+        return false;
+    } finally {
+        recompensaDiariaEnProceso = false;
+        liberarLockRecompensaDiaria();
+    }
+}
+
+function iniciarTimerRecompensaDiariaMenu() {
+    if (timerMenuRecompensaDiaria) {
+        clearInterval(timerMenuRecompensaDiaria);
+    }
+    renderTimerRecompensaDiariaMenu();
+    timerMenuRecompensaDiaria = setInterval(renderTimerRecompensaDiariaMenu, 1000);
+}
+
+function iniciarChequeoRecompensaDiariaGlobal() {
+    if (timerCheckRecompensaDiaria) {
+        clearInterval(timerCheckRecompensaDiaria);
+    }
+    timerCheckRecompensaDiaria = setInterval(() => {
+        void procesarRecompensaDiariaGlobal();
+    }, RECOMPENSA_DIARIA_CHECK_INTERVAL_MS);
+}
+
 function normalizarMenuLateral() {
     const menu = document.querySelector('.menu-container');
     if (!menu) {
@@ -914,6 +1132,12 @@ function normalizarMenuLateral() {
                 <div class="menu-user-stat-row" id="menu-user-puntos"></div>
                 <div class="menu-user-stat-row" id="menu-user-mejoras"></div>
                 <div class="menu-user-stat-row" id="menu-user-mejoras-especiales"></div>
+            </div>
+            <div id="menu-recompensa-diaria" class="menu-recompensa-diaria">
+                <div id="menu-recompensa-diaria-tiempo" class="menu-recompensa-diaria-tiempo">Siguiente recompensa en: 00:00:00</div>
+                <div class="menu-recompensa-diaria-progress">
+                    <div id="menu-recompensa-diaria-bar" class="menu-recompensa-diaria-progress-fill"></div>
+                </div>
             </div>
         `;
         menu.insertBefore(perfil, menu.firstChild);
@@ -986,6 +1210,7 @@ function normalizarMenuLateral() {
             }
         };
     }
+    renderTimerRecompensaDiariaMenu();
 
     let linkMultijugador = menu.querySelector('#menu-link-multijugador');
     if (!linkMultijugador) {
@@ -1012,7 +1237,7 @@ function normalizarMenuLateral() {
         linkMultijugador.removeEventListener('click', bloquearNavegacionMultijugador);
     }
 
-    const versionLabelTexto = 'Version: Beta-1.0.12-05.05.26';
+    const versionLabelTexto = 'Version: Beta-1.0.13-08.05.26';
     let versionLabel = menu.querySelector('#menu-version-label');
     if (!versionLabel) {
         versionLabel = document.createElement('div');
@@ -1033,6 +1258,11 @@ function actualizarPanelPerfilTiempoReal() {
 }
 
 window.actualizarPanelPerfilTiempoReal = actualizarPanelPerfilTiempoReal;
+window.DCRecompensaDiaria = {
+    procesar: procesarRecompensaDiariaGlobal,
+    renderTimerMenu: renderTimerRecompensaDiariaMenu,
+    obtenerEstado: () => obtenerEstadoRecompensaDiaria(leerUsuarioSesionSeguro() || {})
+};
 
 function asegurarModalLogout() {
     if (document.getElementById('logout-confirm-modal')) {
@@ -1093,15 +1323,31 @@ document.addEventListener('DOMContentLoaded', () => {
     normalizarMenuLateral();
     asegurarModalLogout();
     void migrarSkillsUsuarioDesdeCatalogo();
+    iniciarTimerRecompensaDiariaMenu();
+    iniciarChequeoRecompensaDiariaGlobal();
+    void procesarRecompensaDiariaGlobal();
 });
 
 window.addEventListener('dc:usuario-actualizado', () => {
     aplicarColorPrincipalDesdeSesion();
     actualizarPanelPerfilTiempoReal();
+    renderTimerRecompensaDiariaMenu();
 });
 
 window.addEventListener('dc:grupo-actualizado', () => {
     actualizarPanelPerfilTiempoReal();
+});
+
+window.addEventListener('focus', () => {
+    renderTimerRecompensaDiariaMenu();
+    void procesarRecompensaDiariaGlobal();
+});
+
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+        renderTimerRecompensaDiariaMenu();
+        void procesarRecompensaDiariaGlobal();
+    }
 });
 
 function bloquearNavegacionMultijugador(event) {

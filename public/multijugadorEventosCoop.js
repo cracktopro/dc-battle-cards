@@ -68,7 +68,7 @@
 
     const ROTACION_COOP_EVENTOS_MS = 60 * 60 * 1000;
     const VERSION_ROTACION_COOP_EVENTOS = 'event-rotation-v1';
-    /** Lista completa del XLSX; `obtenerEventosRotacionActualCoop` devuelve el lote de 3 vigente. */
+    /** Lista completa del XLSX; `obtenerEventosRotacionActualCoop` devuelve el lote de 4 vigente. */
     let eventosCoopListaCompleta = [];
     let eventosCoopEnRotacion = [];
     let temporizadorRotacionCoopEventos = null;
@@ -86,7 +86,7 @@
             return [];
         }
         const { idVentana } = obtenerVentanaRotacionCoopEventos();
-        const tamanoLote = 3;
+        const tamanoLote = 4;
         const totalLotes = Math.ceil(eventosCoopListaCompleta.length / tamanoLote);
         const loteActual = totalLotes > 0 ? (idVentana % totalLotes) : 0;
         const inicio = loteActual * tamanoLote;
@@ -282,17 +282,12 @@
 
             const recompensas = document.createElement('div');
             recompensas.className = 'evento-recompensas';
-            const cartaRecompensaCatalogo = mapaCatalogo.get(normalizarNombre(evento.cartaRecompensa || ''));
-            if (cartaRecompensaCatalogo) {
-                const mini = document.createElement('div');
-                mini.className = 'evento-recompensa-card';
-                mini.style.backgroundImage = `url(${obtenerImagenCarta(cartaRecompensaCatalogo)})`;
-                const nombreMini = document.createElement('div');
-                nombreMini.className = 'evento-enemigo-nombre';
-                nombreMini.textContent = cartaRecompensaCatalogo.Nombre;
-                mini.appendChild(nombreMini);
-                recompensas.appendChild(mini);
-            }
+            /** Carta de recompensa aleatoria (no fija en XLSX): reverso con interrogación. */
+            const miniMisterio = document.createElement('div');
+            miniMisterio.className = 'evento-recompensa-card evento-recompensa-carta-aleatoria';
+            miniMisterio.setAttribute('title', 'Carta de recompensa aleatoria');
+            miniMisterio.innerHTML = '<span class="evento-recompensa-carta-aleatoria-simbolo" aria-hidden="true">?</span>';
+            recompensas.appendChild(miniMisterio);
             const puntosEvento = Math.max(0, Number(evento.puntos || 0));
             const metaPuntos = document.createElement('div');
             metaPuntos.className = 'evento-recompensa-tag';
@@ -439,6 +434,9 @@
     }
 
     let prepContext = null;
+    /** Handler activo para sincronizar `coop:evento:preparacion:estado` con el modal de selección. */
+    let coopPrepModalEstadoHandler = null;
+    let ultimoDetalleEstadoPrepCoop = null;
     let usuarioCartasSeleccion = [];
     let seleccionIndices = new Set();
     let faccionEventoCoopActiva = 'H';
@@ -457,6 +455,8 @@
             prepId: String(payload?.prepId || '').trim(),
             rolCoop: String(payload?.rolCoop || 'A').trim().toUpperCase()
         };
+        const rolCoop = prepContext.rolCoop;
+        const nombreJugadorA = String(payload?.nombreJugadorA || payload?.invitadorNombre || 'tu compañero').trim();
 
         const usuario = await obtenerUsuarioActualCoop();
         if (!usuario || !Array.isArray(usuario.cartas) || usuario.cartas.length < 6) {
@@ -550,9 +550,60 @@
         const btnCancelar = modal.querySelector('[data-coop-cancelar]');
         const btnConfirmar = modal.querySelector('[data-coop-confirmar]');
 
+        const clavesBloqueadasInvitador = new Set();
+
+        function aplicarClavesCartasA(arr) {
+            clavesBloqueadasInvitador.clear();
+            (arr || []).forEach((k) => {
+                const n = typeof k === 'string'
+                    ? String(k).trim().toLowerCase()
+                    : String(k?.n || '').trim().toLowerCase();
+                if (n) clavesBloqueadasInvitador.add(n);
+            });
+        }
+
+        function esCartaNoDisponibleParaB(item) {
+            if (rolCoop !== 'B') return false;
+            return clavesBloqueadasInvitador.has(normalizarNombre(item.carta.Nombre));
+        }
+
         function cerrarPrepCoop() {
+            coopPrepModalEstadoHandler = null;
             prepContext = null;
             modal.remove();
+        }
+
+        const contenedorPrincipal = modal.querySelector('.modal-seleccion-contenido');
+        let overlayEsperaEl = null;
+        if (contenedorPrincipal) {
+            contenedorPrincipal.style.position = 'relative';
+            overlayEsperaEl = document.createElement('div');
+            overlayEsperaEl.className = 'coop-prep-espera-overlay';
+            overlayEsperaEl.innerHTML = `
+                <div class="coop-prep-espera-panel">
+                    <p class="coop-prep-espera-texto">Esperando a que <strong class="coop-prep-espera-nombre"></strong> seleccione sus cartas.</p>
+                </div>
+            `;
+            const nombreStrong = overlayEsperaEl.querySelector('.coop-prep-espera-nombre');
+            if (nombreStrong) nombreStrong.textContent = nombreJugadorA;
+            contenedorPrincipal.insertBefore(overlayEsperaEl, contenedorPrincipal.firstChild);
+            if (rolCoop === 'A') {
+                overlayEsperaEl.style.display = 'none';
+            }
+        }
+
+        function procesarEstadoPreparacionCoop(det) {
+            if (!prepContext || String(det?.prepId || '') !== String(prepContext.prepId)) {
+                return;
+            }
+            if (Array.isArray(det.clavesCartasA)) {
+                aplicarClavesCartasA(det.clavesCartasA);
+            }
+            if (rolCoop === 'B' && det.listoA && overlayEsperaEl) {
+                overlayEsperaEl.style.display = 'none';
+            }
+            renderizarGrid();
+            actualizarEstado();
         }
 
         function actualizarBotonesFaccion() {
@@ -590,7 +641,17 @@
 
         function actualizarEstado() {
             estadoEl.textContent = `Seleccionadas: ${seleccionIndices.size} / 6`;
-            btnConfirmar.disabled = seleccionIndices.size !== 6;
+            let puedeConfirmar = seleccionIndices.size === 6;
+            if (puedeConfirmar && rolCoop === 'B') {
+                for (const idx of seleccionIndices) {
+                    const item = usuarioCartasSeleccion.find((x) => x.index === idx);
+                    if (item && esCartaNoDisponibleParaB(item)) {
+                        puedeConfirmar = false;
+                        break;
+                    }
+                }
+            }
+            btnConfirmar.disabled = !puedeConfirmar;
         }
 
         function renderizarGrid() {
@@ -605,8 +666,10 @@
 
             cartasFiltradas.forEach((item) => {
                 const carta = item.carta;
+                const noDisponible = esCartaNoDisponibleParaB(item);
                 const cartaDiv = document.createElement('div');
                 cartaDiv.className = `carta-mini ${seleccionIndices.has(item.index) ? 'seleccionada' : ''}`;
+                if (noDisponible) cartaDiv.classList.add('coop-carta-no-disponible');
                 if (Number(carta.Nivel || 1) >= 6) cartaDiv.classList.add('nivel-legendaria');
                 cartaDiv.style.backgroundImage = `url(${obtenerImagenCarta(carta)})`;
 
@@ -641,7 +704,17 @@
                 if (badgeAfiliacion) cartaDiv.appendChild(badgeAfiliacion);
                 cartaDiv.appendChild(crearBarraSaludElementoLocal(carta));
 
+                if (noDisponible) {
+                    const badgeNd = document.createElement('div');
+                    badgeNd.className = 'coop-prep-no-disponible-badge';
+                    badgeNd.textContent = 'No disponible';
+                    cartaDiv.appendChild(badgeNd);
+                }
+
                 cartaDiv.onclick = () => {
+                    if (noDisponible) {
+                        return;
+                    }
                     if (seleccionIndices.has(item.index)) {
                         seleccionIndices.delete(item.index);
                     } else {
@@ -683,6 +756,15 @@
 
         btnConfirmar.addEventListener('click', () => {
             if (seleccionIndices.size !== 6 || !prepContext?.prepId) return;
+            if (rolCoop === 'B') {
+                for (const idx of seleccionIndices) {
+                    const item = usuarioCartasSeleccion.find((x) => x.index === idx);
+                    if (item && esCartaNoDisponibleParaB(item)) {
+                        mostrarMensajeCoop('No puedes enviar cartas que ya ha elegido tu compañero.', 'warning');
+                        return;
+                    }
+                }
+            }
             const indicesCartas = Array.from(seleccionIndices);
             if (typeof window.emitCoopEventoPreparacionListo === 'function') {
                 window.emitCoopEventoPreparacionListo({
@@ -700,6 +782,11 @@
         renderizarFiltroAfiliacion();
         renderizarGrid();
         actualizarEstado();
+
+        coopPrepModalEstadoHandler = procesarEstadoPreparacionCoop;
+        if (ultimoDetalleEstadoPrepCoop && String(ultimoDetalleEstadoPrepCoop.prepId || '') === String(prepContext.prepId)) {
+            procesarEstadoPreparacionCoop(ultimoDetalleEstadoPrepCoop);
+        }
     }
 
     function iniciarSesionCoopRedirect(payload = {}) {
@@ -748,6 +835,14 @@
 
         window.addEventListener('dc:coop-session-start', (ev) => {
             iniciarSesionCoopRedirect(ev.detail || {});
+        });
+
+        window.addEventListener('dc:coop-evento-preparacion-estado', (ev) => {
+            const det = ev.detail || {};
+            ultimoDetalleEstadoPrepCoop = det;
+            if (typeof coopPrepModalEstadoHandler === 'function') {
+                coopPrepModalEstadoHandler(det);
+            }
         });
     });
 })();

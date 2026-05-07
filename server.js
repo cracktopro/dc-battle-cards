@@ -40,8 +40,9 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use(cors());
 
 // Middleware para procesar datos JSON
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
+// Subimos el límite para evitar 413 en perfiles con inventarios/cartas grandes.
+app.use(bodyParser.json({ limit: '5mb' }));
+app.use(bodyParser.urlencoded({ extended: true, limit: '5mb' }));
 
 app.get('/api/pvp-debug/:sessionId', (req, res) => {
     if (!PVP_DEBUG_ENABLED) {
@@ -187,6 +188,34 @@ function cancelarDesconexionPendientePvp(sessionId, email) {
 
 function normalizarTexto(valor) {
     return String(valor || '').trim().toLowerCase();
+}
+
+/**
+ * Nombres de carta (sin nivel) para bloqueo cruzado en la selección coop:
+ * si jugador A elige una carta, jugador B no puede elegir ninguna copia
+ * con el mismo nombre, independientemente del nivel.
+ */
+function clavesCartasCoopParaBloqueo(cartas) {
+    const unicos = new Set();
+    (Array.isArray(cartas) ? cartas : []).forEach((c) => {
+        const n = normalizarTexto(c?.Nombre || '');
+        if (n) unicos.add(n);
+    });
+    return Array.from(unicos).map((n) => ({ n }));
+}
+
+function cartasBContienenClavesDeA(cartasB, clavesA) {
+    if (!Array.isArray(cartasB) || !cartasB.length || !Array.isArray(clavesA) || !clavesA.length) {
+        return false;
+    }
+    const setA = new Set(clavesA.map((k) => normalizarTexto(k?.n || '')).filter(Boolean));
+    for (const c of cartasB) {
+        const n = normalizarTexto(c?.Nombre || '');
+        if (n && setA.has(n)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 function obtenerUsuarioConectadoPorEmail(email) {
@@ -2425,11 +2454,13 @@ io.on('connection', (socket) => {
         prep.estado = 'seleccion';
         const inviter = obtenerUsuarioConectadoPorEmail(prep.inviterEmail);
         const invitee = usuario;
+        const nombreJugadorA = String(inviter?.nombre || prep.inviterEmail.split('@')[0] || 'Jugador').trim();
         const basePayload = {
             prepId: prep.prepId,
             eventoId: prep.eventoId,
             eventoNombre: prep.eventoNombre,
-            dificultad: prep.dificultad
+            dificultad: prep.dificultad,
+            nombreJugadorA
         };
         if (inviter?.id) {
             io.to(inviter.id).emit('coop:evento:preparacion', { ...basePayload, rolCoop: 'A' });
@@ -2458,6 +2489,28 @@ io.on('connection', (socket) => {
             io.to(socket.id).emit('grupo:notificacion', { tipo: 'error', mensaje: 'Debes elegir exactamente 6 cartas válidas de tu colección.' });
             return;
         }
+        if (esA && prep.listoA) {
+            io.to(socket.id).emit('grupo:notificacion', { tipo: 'info', mensaje: 'Ya enviaste tu selección de cartas.' });
+            return;
+        }
+        if (esB && prep.listoB) {
+            io.to(socket.id).emit('grupo:notificacion', { tipo: 'info', mensaje: 'Ya enviaste tu selección de cartas.' });
+            return;
+        }
+        if (esB && !prep.listoA) {
+            io.to(socket.id).emit('grupo:notificacion', {
+                tipo: 'warning',
+                mensaje: 'Debes esperar a que tu compañero termine su selección de cartas.'
+            });
+            return;
+        }
+        if (esB && prep.cartasA && cartasBContienenClavesDeA(cartas, clavesCartasCoopParaBloqueo(prep.cartasA))) {
+            io.to(socket.id).emit('grupo:notificacion', {
+                tipo: 'error',
+                mensaje: 'No puedes elegir cartas que ya haya seleccionado tu compañero (mismo nombre de carta).'
+            });
+            return;
+        }
         if (esA) {
             prep.cartasA = cartas;
             prep.listoA = true;
@@ -2468,7 +2521,13 @@ io.on('connection', (socket) => {
         }
         const inviter = obtenerUsuarioConectadoPorEmail(prep.inviterEmail);
         const invitee = obtenerUsuarioConectadoPorEmail(prep.inviteeEmail);
-        const estadoPrep = { prepId: prep.prepId, listoA: Boolean(prep.listoA), listoB: Boolean(prep.listoB) };
+        const clavesA = prep.cartasA ? clavesCartasCoopParaBloqueo(prep.cartasA) : [];
+        const estadoPrep = {
+            prepId: prep.prepId,
+            listoA: Boolean(prep.listoA),
+            listoB: Boolean(prep.listoB),
+            clavesCartasA: clavesA
+        };
         if (inviter?.id) io.to(inviter.id).emit('coop:evento:preparacion:estado', estadoPrep);
         if (invitee?.id) io.to(invitee.id).emit('coop:evento:preparacion:estado', estadoPrep);
 
@@ -3117,7 +3176,7 @@ app.post('/update-user', async (req, res) => {
 
         // Actualizar el documento del usuario en Firebase Firestore
         const docActual = await getDoc(docRef);
-        const datosActuales = docActual.data();
+        const datosActuales = docActual.data() || {};
 
         // PROTECCIÓN DE CARTAS: solo rellenar cuando venga undefined/null.
         if (!Array.isArray(usuario.cartas)) {
@@ -3128,6 +3187,15 @@ app.post('/update-user', async (req, res) => {
         if (!Array.isArray(usuario.mazos)) {
             usuario.mazos = datosActuales.mazos || [];
         }
+
+        // Fusión de `objetos`: un mapa parcial del cliente no debe borrar otras claves (p. ej. sobres vs mejoras).
+        const objsPrev = datosActuales.objetos && typeof datosActuales.objetos === 'object'
+            ? datosActuales.objetos
+            : {};
+        const objsCli = usuario.objetos && typeof usuario.objetos === 'object'
+            ? usuario.objetos
+            : {};
+        usuario.objetos = { ...objsPrev, ...objsCli };
 
         await setDoc(docRef, { ...usuario }, { merge: true });
 

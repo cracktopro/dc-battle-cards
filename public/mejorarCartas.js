@@ -80,8 +80,16 @@ function esCartaLegendaria(carta) {
 }
 
 function obtenerValorDestruccion(nivel) {
-    const nivelSeguro = Number(nivel || 1);
-    return nivelSeguro * 10;
+    const nivelSeguro = Math.max(1, Math.min(6, Number(nivel || 1)));
+    const tabla = {
+        1: 50,
+        2: 100,
+        3: 150,
+        4: 200,
+        5: 250,
+        6: 400
+    };
+    return Number(tabla[nivelSeguro] || 50);
 }
 
 function obtenerSaludMaxCarta(carta) {
@@ -181,6 +189,24 @@ function grupoVisibleEnVistaClasica(grupo) {
         return false;
     }
     return true;
+}
+
+function construirGruposDestruccion(usuario) {
+    return construirGruposMejoraClasica(usuario)
+        .filter((grupo) => Number(grupo?.keeperCarta?.Nivel || 1) >= 6 && Number(grupo?.total || 0) > 1)
+        .map((grupo) => {
+            const copiasDestruibles = grupo.sacrificables.map((item) => ({
+                index: item.index,
+                carta: { ...item.carta },
+                puntos: obtenerValorDestruccion(item?.carta?.Nivel || 1)
+            }));
+            const puntosTotalesGrupo = copiasDestruibles.reduce((acc, item) => acc + Number(item.puntos || 0), 0);
+            return {
+                ...grupo,
+                copiasDestruibles,
+                puntosTotalesGrupo
+            };
+        });
 }
 
 function grupoEsClicableCombinar(grupo) {
@@ -344,10 +370,17 @@ async function confirmarCombinacionDuplicados() {
 
     usuario.cartas = resultado.nuevasCartas;
     sincronizarMazosConColeccion(usuario);
+    const facFusion = normalizarFaccion(resultado?.cartaMejorada?.faccion || resultado?.cartaMejorada?.Faccion || '');
+    const fusionNivel5 = Number(resultado?.cartaAntes?.Nivel || 1) < 5 && Number(resultado?.cartaMejorada?.Nivel || 1) >= 5;
 
     try {
         await actualizarUsuarioFirebase(usuario, email);
         localStorage.setItem('usuario', JSON.stringify(usuario));
+        if (window.DCMisiones?.track) {
+            if (facFusion === 'H') window.DCMisiones.track('mejorar_cartas_h', { amount: 1 });
+            if (facFusion === 'V') window.DCMisiones.track('mejorar_cartas_v', { amount: 1 });
+            if (fusionNivel5) window.DCMisiones.track('mejorar_nivel', { amount: 1 });
+        }
         refrescarPanelPerfilLateral();
         const { cartaAntes, cartaMejorada } = resultado;
         cerrarModalCombinarDuplicados();
@@ -394,15 +427,12 @@ function normalizarObjetosUsuario(usuario) {
         return;
     }
 
-    const objetosBase = {
-        mejoraCarta: 0,
-        mejoraEspecial: 0
-    };
+    const objetosBase = usuario.objetos && typeof usuario.objetos === 'object'
+        ? { ...usuario.objetos }
+        : { mejoraCarta: 0, mejoraEspecial: 0 };
 
-    if (usuario.objetos && typeof usuario.objetos === 'object') {
-        objetosBase.mejoraCarta = Number(usuario.objetos.mejoraCarta || 0);
-        objetosBase.mejoraEspecial = Number(usuario.objetos.mejoraEspecial || 0);
-    }
+    objetosBase.mejoraCarta = Number(usuario.objetos?.mejoraCarta ?? objetosBase.mejoraCarta ?? 0);
+    objetosBase.mejoraEspecial = Number(usuario.objetos?.mejoraEspecial ?? objetosBase.mejoraEspecial ?? 0);
 
     if (Array.isArray(usuario.inventarioObjetos)) {
         const legacyMejoraCarta = usuario.inventarioObjetos.find(item => item.id === 'obj-mejora-carta');
@@ -412,7 +442,11 @@ function normalizarObjetosUsuario(usuario) {
         objetosBase.mejoraEspecial = Math.max(objetosBase.mejoraEspecial, Number(legacyMejoraEspecial?.cantidad || 0));
     }
 
-    usuario.objetos = objetosBase;
+    if (typeof window.DC_SOBRES_MEZCLAR_INVENTARIO === 'function') {
+        usuario.objetos = window.DC_SOBRES_MEZCLAR_INVENTARIO(objetosBase);
+    } else {
+        usuario.objetos = objetosBase;
+    }
 }
 
 function crearElementoCartaSoloVisual(carta, destacarPoder = false, anchoCartaPx = 210) {
@@ -428,7 +462,7 @@ function crearElementoCartaSoloVisual(carta, destacarPoder = false, anchoCartaPx
     const imagenUrl = obtenerImagenCarta(carta);
     cartaDiv.style.backgroundImage = `url(${imagenUrl})`;
     cartaDiv.style.backgroundSize = 'cover';
-    cartaDiv.style.backgroundPosition = 'center';
+    cartaDiv.style.backgroundPosition = 'center top';
 
     const detallesDiv = document.createElement('div');
     detallesDiv.classList.add('detalles-carta');
@@ -639,26 +673,41 @@ function analizarMejoraAutomatica(cartas) {
             }
         }
 
-        if ((cartaBase.Nivel || 1) >= 5 && duplicados.length > 0) {
-            duplicados.forEach(carta => {
-                const puntos = obtenerValorDestruccion(carta.Nivel);
-                puntosGanados += puntos;
-                destruidas.push({
-                    nombre: carta.Nombre,
-                    nivel: carta.Nivel || 1,
-                    puntos
-                });
-            });
-
-            duplicados = [];
-        }
-
         cartasActualizadas.push(cartaBase, ...duplicados);
     });
 
     return {
         cartasActualizadas,
         mejoras,
+        destruidas,
+        puntosGanados
+    };
+}
+
+function analizarDestruccionDuplicados(cartas) {
+    const usuarioMock = { cartas: Array.isArray(cartas) ? cartas : [] };
+    const grupos = construirGruposDestruccion(usuarioMock);
+    const indicesADestruir = new Set();
+    const destruidas = [];
+    let puntosGanados = 0;
+
+    grupos.forEach((grupo) => {
+        grupo.copiasDestruibles.forEach((item) => {
+            indicesADestruir.add(item.index);
+            const nivel = Number(item?.carta?.Nivel || 1);
+            const puntos = obtenerValorDestruccion(nivel);
+            puntosGanados += puntos;
+            destruidas.push({
+                nombre: String(item?.carta?.Nombre || grupo.nombre),
+                nivel,
+                puntos
+            });
+        });
+    });
+
+    const cartasActualizadas = (Array.isArray(cartas) ? cartas : []).filter((_, idx) => !indicesADestruir.has(idx));
+    return {
+        cartasActualizadas,
         destruidas,
         puntosGanados
     };
@@ -694,7 +743,7 @@ function cargarCartas() {
             const imagenUrl = obtenerImagenCarta(carta);
             cartaDiv.style.backgroundImage = `url(${imagenUrl})`;
             cartaDiv.style.backgroundSize = 'cover';
-            cartaDiv.style.backgroundPosition = 'center';
+            cartaDiv.style.backgroundPosition = 'center top';
 
             const detallesDiv = document.createElement('div');
             detallesDiv.classList.add('detalles-carta');
@@ -733,6 +782,9 @@ function cargarCartas() {
             }
             cartaDiv.appendChild(crearBarraSaludElemento(carta));
             cartaDiv.appendChild(estrellasDiv);
+            if (window.DCRedDot && typeof window.DCRedDot.attachCardBadge === 'function') {
+                window.DCRedDot.attachCardBadge(cartaDiv, carta.Nombre);
+            }
 
             wrap.appendChild(cartaDiv);
 
@@ -750,6 +802,7 @@ function cargarCartas() {
 
             contenedorCartas.appendChild(wrap);
         });
+        renderizarSeccionDestruccion(usuario);
         renderizarSeccionMejorasObjetos(usuario);
     } else {
         console.error('No se encontraron cartas para el usuario.');
@@ -760,6 +813,10 @@ function configurarEventos() {
     const botonAuto = document.getElementById('mejorar-duplicados-auto');
     if (botonAuto) {
         botonAuto.onclick = mejorarDuplicadosAutomaticamente;
+    }
+    const botonDestruirTodo = document.getElementById('destruir-duplicados-todo');
+    if (botonDestruirTodo) {
+        botonDestruirTodo.onclick = destruirDuplicadosNivel6;
     }
 
     const btnConfirmarObjeto = document.getElementById('btn-confirmar-objeto');
@@ -780,6 +837,10 @@ function configurarEventos() {
     if (btnCerrarResultadoAuto) {
         btnCerrarResultadoAuto.onclick = cerrarModalResultadoAuto;
     }
+    const btnCerrarResultadoDestruccion = document.getElementById('btn-cerrar-resultado-destruccion');
+    if (btnCerrarResultadoDestruccion) {
+        btnCerrarResultadoDestruccion.onclick = cerrarModalResultadoDestruccion;
+    }
 
     const btnCombinarAceptar = document.getElementById('btn-combinar-duplicados-aceptar');
     const btnCombinarCancelar = document.getElementById('btn-combinar-duplicados-cancelar');
@@ -799,9 +860,11 @@ function configurarEventos() {
     }
 
     const tabClasica = document.getElementById('tab-mejora-clasica');
+    const tabDestruir = document.getElementById('tab-destruir-repetidas');
     const tabObjetos = document.getElementById('tab-mejoras-objetos');
-    if (tabClasica && tabObjetos) {
+    if (tabClasica && tabObjetos && tabDestruir) {
         tabClasica.onclick = () => cambiarPestanaMejoras('clasica');
+        tabDestruir.onclick = () => cambiarPestanaMejoras('destruir');
         tabObjetos.onclick = () => cambiarPestanaMejoras('objetos');
     }
 
@@ -824,14 +887,12 @@ function mostrarResultadoMejoraAutomatica(analisis) {
     const modal = document.getElementById('modal-resultado-auto');
     const resumen = document.getElementById('resultado-auto-resumen');
     const mejoradas = document.getElementById('resultado-auto-mejoradas');
-    const destruidas = document.getElementById('resultado-auto-destruidas');
-    if (!modal || !resumen || !mejoradas || !destruidas) {
+    if (!modal || !resumen || !mejoradas) {
         return;
     }
 
-    resumen.textContent = `Cartas mejoradas: ${analisis.mejoras.length} | Cartas destruidas: ${analisis.destruidas.length} | Puntos obtenidos: ${analisis.puntosGanados}`;
+    resumen.textContent = `Cartas combinadas/mejoradas: ${analisis.mejoras.length}`;
     mejoradas.innerHTML = '';
-    destruidas.innerHTML = '';
 
     if (analisis.mejoras.length === 0) {
         const vacio = document.createElement('div');
@@ -878,40 +939,33 @@ function mostrarResultadoMejoraAutomatica(analisis) {
         });
     }
 
-    if (analisis.destruidas.length === 0) {
-        const vacio = document.createElement('div');
-        vacio.className = 'alert alert-secondary';
-        vacio.textContent = 'No se destruyeron cartas.';
-        destruidas.appendChild(vacio);
-    } else {
-        analisis.destruidas.forEach(item => {
-            const tag = document.createElement('div');
-            tag.className = 'alert alert-warning';
-            tag.style.margin = '0';
-            tag.style.padding = '6px 10px';
-            tag.textContent = `${item.nombre} (Nivel ${item.nivel}) +${item.puntos} pts`;
-            destruidas.appendChild(tag);
-        });
-    }
-
     modal.style.display = 'flex';
 }
 
 function cambiarPestanaMejoras(pestana) {
     const tabClasica = document.getElementById('tab-mejora-clasica');
+    const tabDestruir = document.getElementById('tab-destruir-repetidas');
     const tabObjetos = document.getElementById('tab-mejoras-objetos');
     const seccionClasica = document.getElementById('seccion-mejora-clasica');
+    const seccionDestruir = document.getElementById('seccion-destruir-repetidas');
     const seccionObjetos = document.getElementById('seccion-mejoras-objetos');
 
     const mostrarObjetos = pestana === 'objetos';
+    const mostrarDestruir = pestana === 'destruir';
     if (tabClasica) {
-        tabClasica.classList.toggle('active', !mostrarObjetos);
+        tabClasica.classList.toggle('active', !mostrarObjetos && !mostrarDestruir);
+    }
+    if (tabDestruir) {
+        tabDestruir.classList.toggle('active', mostrarDestruir);
     }
     if (tabObjetos) {
         tabObjetos.classList.toggle('active', mostrarObjetos);
     }
     if (seccionClasica) {
-        seccionClasica.style.display = mostrarObjetos ? 'none' : 'block';
+        seccionClasica.style.display = (!mostrarObjetos && !mostrarDestruir) ? 'block' : 'none';
+    }
+    if (seccionDestruir) {
+        seccionDestruir.style.display = mostrarDestruir ? 'block' : 'none';
     }
     if (seccionObjetos) {
         seccionObjetos.style.display = mostrarObjetos ? 'block' : 'none';
@@ -1072,6 +1126,8 @@ async function confirmarMejoraConObjeto() {
     }
 
     const { original, mejorada } = crearCartaMejoradaPorObjeto(carta, tipo);
+    const faccionMejorada = normalizarFaccion(mejorada?.faccion || mejorada?.Faccion || '');
+    const subeANivel5 = Number(original?.Nivel || 1) < 5 && Number(mejorada?.Nivel || 1) >= 5;
     usuario.cartas[indiceCarta] = mejorada;
     usuario.objetos[tipo] = stock - 1;
     sincronizarMazosConColeccion(usuario);
@@ -1079,6 +1135,11 @@ async function confirmarMejoraConObjeto() {
     try {
         await actualizarUsuarioFirebase(usuario, email);
         localStorage.setItem('usuario', JSON.stringify(usuario));
+        if (window.DCMisiones?.track) {
+            if (faccionMejorada === 'H') window.DCMisiones.track('mejorar_cartas_h', { amount: 1 });
+            if (faccionMejorada === 'V') window.DCMisiones.track('mejorar_cartas_v', { amount: 1 });
+            if (subeANivel5) window.DCMisiones.track('mejorar_nivel', { amount: 1 });
+        }
         refrescarPanelPerfilLateral();
         cerrarModalConfirmacionObjeto();
         cargarCartas();
@@ -1107,8 +1168,130 @@ async function mejorarDuplicadosAutomaticamente() {
 
     const analisis = analizarMejoraAutomatica(usuario.cartas);
 
-    if (analisis.mejoras.length === 0 && analisis.destruidas.length === 0) {
-        mostrarMensaje('No hay duplicados que mejorar o destruir automáticamente.', 'warning');
+    if (analisis.mejoras.length === 0) {
+        mostrarMensaje('No hay duplicados combinables para mejorar automáticamente.', 'warning');
+        return;
+    }
+
+    usuario.cartas = analisis.cartasActualizadas;
+    sincronizarMazosConColeccion(usuario);
+    let mejorasH = 0;
+    let mejorasV = 0;
+    let mejorasNivel5 = 0;
+    analisis.mejoras.forEach((m) => {
+        const fac = normalizarFaccion(m?.cartaDespues?.faccion || m?.cartaDespues?.Faccion || '');
+        if (fac === 'H') mejorasH++;
+        if (fac === 'V') mejorasV++;
+        const nA = Number(m?.cartaAntes?.Nivel || 1);
+        const nD = Number(m?.cartaDespues?.Nivel || 1);
+        if (nA < 5 && nD >= 5) mejorasNivel5++;
+    });
+
+    try {
+        await actualizarUsuarioFirebase(usuario, email);
+        localStorage.setItem('usuario', JSON.stringify(usuario));
+        if (window.DCMisiones?.track) {
+            if (mejorasH > 0) window.DCMisiones.track('mejorar_cartas_h', { amount: mejorasH });
+            if (mejorasV > 0) window.DCMisiones.track('mejorar_cartas_v', { amount: mejorasV });
+            if (mejorasNivel5 > 0) window.DCMisiones.track('mejorar_nivel', { amount: mejorasNivel5 });
+        }
+        refrescarPanelPerfilLateral();
+        cargarCartas();
+        mostrarResultadoMejoraAutomatica(analisis);
+
+        const resumenMejoras = analisis.mejoras.length > 0
+            ? `${analisis.mejoras.length} cartas mejoradas`
+            : 'sin mejoras de nivel';
+
+        mostrarMensaje(`Combinación automática completada: ${resumenMejoras}.`, 'success');
+    } catch (error) {
+        console.error('Error al aplicar la mejora automática:', error);
+        mostrarMensaje('Error al aplicar la mejora automática en Firebase.', 'danger');
+    }
+}
+
+function renderizarSeccionDestruccion(usuario) {
+    const contenedor = document.getElementById('contenedor-cartas-destruccion');
+    const boton = document.getElementById('destruir-duplicados-todo');
+    if (!contenedor) return;
+
+    const grupos = construirGruposDestruccion(usuario);
+    contenedor.innerHTML = '';
+    let puntosTotales = 0;
+    grupos.forEach((grupo) => {
+        puntosTotales += Number(grupo.puntosTotalesGrupo || 0);
+        const wrap = document.createElement('div');
+        wrap.className = 'carta-grupo-duplicados-wrap';
+
+        const cartaDiv = crearElementoCartaSoloVisual(grupo.keeperCarta);
+        wrap.appendChild(cartaDiv);
+
+        const badgeDup = document.createElement('div');
+        badgeDup.className = 'carta-duplicados-badge';
+        badgeDup.textContent = String(grupo.total);
+        badgeDup.title = `${grupo.total} copias · ${grupo.puntosTotalesGrupo} puntos potenciales`;
+        wrap.appendChild(badgeDup);
+
+        const puntosTag = document.createElement('div');
+        puntosTag.className = 'carta-destruccion-puntos';
+        puntosTag.innerHTML = `+${grupo.puntosTotalesGrupo} <img src="/resources/icons/moneda.png" alt="Moneda">`;
+        wrap.appendChild(puntosTag);
+
+        contenedor.appendChild(wrap);
+    });
+
+    if (boton) {
+        boton.disabled = grupos.length === 0;
+        boton.textContent = grupos.length === 0
+            ? 'No hay cartas para destruir'
+            : `Destruir Todas las cartas (+${puntosTotales})`;
+    }
+
+    if (grupos.length === 0) {
+        const vacio = document.createElement('div');
+        vacio.className = 'alert alert-info';
+        vacio.textContent = 'No hay cartas repetidas para destruir en personajes con nivel 6.';
+        contenedor.appendChild(vacio);
+    }
+}
+
+function cerrarModalResultadoDestruccion() {
+    const modal = document.getElementById('modal-resultado-destruccion');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+function mostrarResultadoDestruccion(analisis) {
+    const modal = document.getElementById('modal-resultado-destruccion');
+    const resumen = document.getElementById('resultado-destruccion-resumen');
+    const lista = document.getElementById('resultado-destruccion-lista');
+    if (!modal || !resumen || !lista) return;
+
+    resumen.innerHTML = `Cartas destruidas: <strong>${analisis.destruidas.length}</strong> · Total obtenido: <strong>${analisis.puntosGanados}</strong> <img src="/resources/icons/moneda.png" alt="Moneda" style="width:18px; height:18px; object-fit:contain;">`;
+    lista.innerHTML = '';
+    analisis.destruidas.forEach((item) => {
+        const tag = document.createElement('div');
+        tag.className = 'alert alert-warning';
+        tag.style.margin = '0';
+        tag.style.padding = '6px 10px';
+        tag.textContent = `${item.nombre} (Nivel ${item.nivel}) +${item.puntos} pts`;
+        lista.appendChild(tag);
+    });
+    modal.style.display = 'flex';
+}
+
+async function destruirDuplicadosNivel6() {
+    const usuario = JSON.parse(localStorage.getItem('usuario'));
+    const email = localStorage.getItem('email');
+    if (!usuario || !Array.isArray(usuario.cartas) || !email) {
+        mostrarMensaje('No se pudo validar la sesión para destruir cartas.', 'danger');
+        return;
+    }
+
+    const analisis = analizarDestruccionDuplicados(usuario.cartas);
+    if (analisis.destruidas.length === 0) {
+        mostrarMensaje('No hay cartas repetidas para destruir.', 'warning');
         return;
     }
 
@@ -1121,19 +1304,11 @@ async function mejorarDuplicadosAutomaticamente() {
         localStorage.setItem('usuario', JSON.stringify(usuario));
         refrescarPanelPerfilLateral();
         cargarCartas();
-        mostrarResultadoMejoraAutomatica(analisis);
-
-        const resumenMejoras = analisis.mejoras.length > 0
-            ? `${analisis.mejoras.length} cartas mejoradas`
-            : 'sin mejoras de nivel';
-        const resumenDestrucciones = analisis.destruidas.length > 0
-            ? `, ${analisis.destruidas.length} duplicados destruidos por ${analisis.puntosGanados} puntos`
-            : '';
-
-        mostrarMensaje(`Mejora automática completada: ${resumenMejoras}${resumenDestrucciones}.`, 'success');
+        mostrarResultadoDestruccion(analisis);
+        mostrarMensaje(`Se destruyeron ${analisis.destruidas.length} cartas y ganaste ${analisis.puntosGanados} puntos.`, 'success');
     } catch (error) {
-        console.error('Error al aplicar la mejora automática:', error);
-        mostrarMensaje('Error al aplicar la mejora automática en Firebase.', 'danger');
+        console.error('Error al destruir cartas repetidas:', error);
+        mostrarMensaje('Error al destruir cartas repetidas en Firebase.', 'danger');
     }
 }
 

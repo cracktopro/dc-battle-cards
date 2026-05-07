@@ -25,6 +25,12 @@ const OBJETIVO_SINERGIA_POR_DIFICULTAD = {
 const ICONO_MEJORA = '/resources/icons/mejora.png';
 const ICONO_MEJORA_ESPECIAL = '/resources/icons/mejora_especial.png';
 const ICONO_MONEDA = '/resources/icons/moneda.png';
+const RECOMPENSA_DIARIA_COOLDOWN_MS_VISTA = 24 * 60 * 60 * 1000;
+const ROTACION_CONSEJOS_MS = 9500;
+let consejosCarrusel = [];
+let consejoIndexActual = 0;
+let timerConsejos = null;
+let direccionAnimacionConsejos = 1;
 
 function obtenerNombreVisibleUsuario() {
     const usuario = JSON.parse(localStorage.getItem('usuario') || '{}');
@@ -122,6 +128,8 @@ document.addEventListener('DOMContentLoaded', function () {
     configurarModalEvento();
     cargarEventosActivos();
     configurarNotificacionesGrupo();
+    void inicializarPanelConsejos();
+    void procesarRecompensaDiariaLogin();
 
     const dificultadBotones = document.querySelectorAll('.dificultad-btn');
     const selectMazo = document.getElementById('select-mazo');
@@ -276,6 +284,249 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 });
 
+async function cargarConsejosDesdeExcel() {
+    if (typeof XLSX === 'undefined') {
+        return [];
+    }
+    const response = await fetch('resources/consejos.xlsx');
+    if (!response.ok) {
+        return [];
+    }
+    const data = await response.arrayBuffer();
+    const workbook = XLSX.read(data, { type: 'array' });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const filas = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+    return filas
+        .map((fila, index) => ({
+            id: index + 1,
+            nombre: String(fila.nombre || fila.titulo || fila.Nombre || `Consejo ${index + 1}`).trim(),
+            descripcion: String(fila.descripcion || fila.Descripcion || '').trim()
+        }))
+        .filter((c) => c.nombre && c.descripcion);
+}
+
+function escaparHTMLConsejos(texto) {
+    return String(texto || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function formatearDescripcionConsejo(texto) {
+    const textoEscapado = escaparHTMLConsejos(texto);
+    return textoEscapado.replace(/\$([^$]+)\$/g, '<span class="consejos-highlight">$1</span>');
+}
+
+function aplicarContenidoConsejo(item) {
+    const tituloEl = document.getElementById('consejos-titulo');
+    const descEl = document.getElementById('consejos-descripcion');
+    if (!tituloEl || !descEl) {
+        return;
+    }
+    tituloEl.textContent = item?.nombre || '';
+    descEl.innerHTML = formatearDescripcionConsejo(item?.descripcion || '');
+}
+
+function animarTransicionConsejo(item, direccion = 1) {
+    const slideEl = document.getElementById('consejos-slide');
+    if (!slideEl) {
+        aplicarContenidoConsejo(item);
+        return;
+    }
+    const claseSalida = direccion >= 0 ? 'anim-out-left' : 'anim-out-right';
+    const claseEntrada = direccion >= 0 ? 'anim-in-right' : 'anim-in-left';
+    slideEl.classList.remove('anim-out-left', 'anim-out-right', 'anim-in-left', 'anim-in-right');
+    slideEl.classList.add(claseSalida);
+    setTimeout(() => {
+        aplicarContenidoConsejo(item);
+        slideEl.classList.remove(claseSalida);
+        slideEl.classList.add(claseEntrada);
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                slideEl.classList.remove('anim-in-left', 'anim-in-right');
+            });
+        });
+    }, 160);
+}
+
+function renderConsejoActual({ animar = false } = {}) {
+    const tituloEl = document.getElementById('consejos-titulo');
+    const descEl = document.getElementById('consejos-descripcion');
+    const dotsEl = document.getElementById('consejos-dots');
+    if (!tituloEl || !descEl || !dotsEl) {
+        return;
+    }
+    if (!Array.isArray(consejosCarrusel) || consejosCarrusel.length === 0) {
+        tituloEl.textContent = 'Sin consejos';
+        descEl.textContent = 'No se pudieron cargar consejos en este momento.';
+        dotsEl.innerHTML = '';
+        return;
+    }
+    const item = consejosCarrusel[consejoIndexActual] || consejosCarrusel[0];
+    if (animar) {
+        animarTransicionConsejo(item, direccionAnimacionConsejos);
+    } else {
+        aplicarContenidoConsejo(item);
+    }
+    dotsEl.innerHTML = '';
+    consejosCarrusel.forEach((_, idx) => {
+        const dot = document.createElement('button');
+        dot.type = 'button';
+        dot.className = `consejos-dot ${idx === consejoIndexActual ? 'active' : ''}`;
+        dot.setAttribute('aria-label', `Ir al consejo ${idx + 1}`);
+        dot.addEventListener('click', () => {
+            direccionAnimacionConsejos = idx >= consejoIndexActual ? 1 : -1;
+            consejoIndexActual = idx;
+            renderConsejoActual({ animar: true });
+            reiniciarTimerConsejos();
+        });
+        dotsEl.appendChild(dot);
+    });
+}
+
+function avanzarConsejo(delta) {
+    if (!Array.isArray(consejosCarrusel) || consejosCarrusel.length === 0) {
+        return;
+    }
+    direccionAnimacionConsejos = delta >= 0 ? 1 : -1;
+    const total = consejosCarrusel.length;
+    consejoIndexActual = (consejoIndexActual + delta + total) % total;
+    renderConsejoActual({ animar: true });
+}
+
+function reiniciarTimerConsejos() {
+    if (timerConsejos) {
+        clearInterval(timerConsejos);
+    }
+    if (!Array.isArray(consejosCarrusel) || consejosCarrusel.length <= 1) {
+        return;
+    }
+    timerConsejos = setInterval(() => {
+        avanzarConsejo(1);
+    }, ROTACION_CONSEJOS_MS);
+}
+
+async function inicializarPanelConsejos() {
+    const prevBtn = document.getElementById('consejos-prev');
+    const nextBtn = document.getElementById('consejos-next');
+    if (!prevBtn || !nextBtn) {
+        return;
+    }
+    try {
+        consejosCarrusel = await cargarConsejosDesdeExcel();
+    } catch (error) {
+        console.error('Error cargando consejos:', error);
+        consejosCarrusel = [];
+    }
+    consejoIndexActual = 0;
+    direccionAnimacionConsejos = 1;
+    renderConsejoActual({ animar: false });
+    prevBtn.onclick = () => {
+        avanzarConsejo(-1);
+        reiniciarTimerConsejos();
+    };
+    nextBtn.onclick = () => {
+        avanzarConsejo(1);
+        reiniciarTimerConsejos();
+    };
+    reiniciarTimerConsejos();
+}
+
+function normalizarObjetosConSobres(usuario) {
+    if (!usuario || typeof usuario !== 'object') {
+        return;
+    }
+    const base = (usuario.objetos && typeof usuario.objetos === 'object') ? { ...usuario.objetos } : {};
+    base.mejoraCarta = Number(base.mejoraCarta || 0);
+    base.mejoraEspecial = Number(base.mejoraEspecial || 0);
+    if (typeof window.DC_SOBRES_MEZCLAR_INVENTARIO === 'function') {
+        usuario.objetos = window.DC_SOBRES_MEZCLAR_INVENTARIO(base);
+    } else {
+        usuario.objetos = {
+            ...base,
+            sobreH1: Number(base.sobreH1 || 0),
+            sobreH2: Number(base.sobreH2 || 0),
+            sobreH3: Number(base.sobreH3 || 0),
+            sobreV1: Number(base.sobreV1 || 0),
+            sobreV2: Number(base.sobreV2 || 0),
+            sobreV3: Number(base.sobreV3 || 0)
+        };
+    }
+}
+
+async function persistirUsuarioVistaJuego(usuario) {
+    const email = localStorage.getItem('email');
+    if (!email) {
+        throw new Error('No hay email en sesión');
+    }
+    const response = await fetch('/update-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ usuario, email })
+    });
+    if (!response.ok) {
+        throw new Error('No se pudo actualizar usuario en servidor');
+    }
+    localStorage.setItem('usuario', JSON.stringify(usuario));
+    window.dispatchEvent(new Event('dc:usuario-actualizado'));
+    if (typeof window.DCRedDot?.refresh === 'function') {
+        window.DCRedDot.refresh();
+    }
+}
+
+function abrirModalRecompensaDiaria() {
+    return new Promise((resolve) => {
+        const modal = document.getElementById('modal-recompensa-diaria');
+        const btn = document.getElementById('btn-aceptar-recompensa-diaria');
+        if (!modal || !btn) {
+            resolve();
+            return;
+        }
+        modal.style.display = 'flex';
+        const cerrar = () => {
+            modal.style.display = 'none';
+            btn.removeEventListener('click', onAceptar);
+            resolve();
+        };
+        const onAceptar = () => cerrar();
+        btn.addEventListener('click', onAceptar);
+    });
+}
+
+async function procesarRecompensaDiariaLogin() {
+    if (typeof window.DCRecompensaDiaria?.procesar === 'function') {
+        await window.DCRecompensaDiaria.procesar();
+        return;
+    }
+    try {
+        const usuario = JSON.parse(localStorage.getItem('usuario') || 'null');
+        if (!usuario || typeof usuario !== 'object') {
+            return;
+        }
+        normalizarObjetosConSobres(usuario);
+        const ahora = Date.now();
+        const ultimaRecompensa = Number(usuario?.recompensas?.diariaSobres?.lastClaimAt || 0);
+        const disponible = !Number.isFinite(ultimaRecompensa) || ultimaRecompensa <= 0 || (ahora - ultimaRecompensa) >= RECOMPENSA_DIARIA_COOLDOWN_MS_VISTA;
+        if (!disponible) {
+            return;
+        }
+
+        usuario.objetos.sobreH1 = Number(usuario.objetos.sobreH1 || 0) + 1;
+        usuario.objetos.sobreV1 = Number(usuario.objetos.sobreV1 || 0) + 1;
+        usuario.recompensas = (usuario.recompensas && typeof usuario.recompensas === 'object') ? usuario.recompensas : {};
+        usuario.recompensas.diariaSobres = {
+            lastClaimAt: ahora
+        };
+
+        await persistirUsuarioVistaJuego(usuario);
+        await abrirModalRecompensaDiaria();
+    } catch (error) {
+        console.error('Error aplicando recompensa diaria:', error);
+    }
+}
+
 function configurarNotificacionesGrupo() {
     window.addEventListener('dc:grupo-notificacion', (event) => {
         const payload = event?.detail || {};
@@ -426,7 +677,7 @@ function obtenerEventosRotacionActual() {
     }
 
     const { idVentana } = obtenerVentanaRotacionEventos();
-    const tamanoLote = 3;
+    const tamanoLote = 4;
     const totalLotes = Math.ceil(eventosActivos.length / tamanoLote);
     const loteActual = totalLotes > 0 ? (idVentana % totalLotes) : 0;
     const inicio = loteActual * tamanoLote;

@@ -137,7 +137,7 @@
      * (ambos parten del mismo evento `multiplayer:coop:estado` de la sala) y reducir la latencia visible.
      * Si el RTT es menor que este umbral ambos quedan sincronizados; si es mayor, el emisor arranca solo.
      */
-    const COOP_MS_ESPERA_ECO_SYNC = 420;
+    const COOP_MS_ESPERA_ECO_SYNC = 150;
 
     /** Solo mostrar el toast de turno cuando cambie la fase (P1 / P2 / BOT), no en cada render. */
     let ultimaFaseCoopParaAvisoTurno = null;
@@ -153,7 +153,7 @@
     const COOP_MS_PRE_IMPACTO_BOT = 380;
     const COOP_MS_POST_IMPACTO_BOT = 480;
     /** Evita que el primer ataque BOT arranque pegado al último impacto remoto de P2. */
-    const COOP_MS_BLOQUEO_ARRANQUE_BOT_TRAS_P2 = COOP_MS_POST_IMPACTO_BOT + 80;
+    const COOP_MS_BLOQUEO_ARRANQUE_BOT_TRAS_P2 = 120;
     /** Misma pausa que en `resolverAtaqueHumanoAZona` cuando el daño afecta escudo (impacto visual sin barra completa). */
     const COOP_MS_IMPACTO_ESCUDO_HUMANO = 280;
     const COOLDOWN_HABILIDAD_ACTIVA_TURNOS = 2;
@@ -164,7 +164,7 @@
      * Tras el último impacto del BOT, el ejecutor no reproduce el eco en cola (`marcarSaltarReplayVisual`);
      * sin esta pausa, cementerio + vaciado de slot y el salto a P1/robos se solapan en el cliente del líder.
      */
-    const COOP_MS_RESPIRO_TRAS_ULTIMO_ATAQUE_BOT = 240;
+    const COOP_MS_RESPIRO_TRAS_ULTIMO_ATAQUE_BOT = 140;
     /** Aviso central de cambio de fase (nombre + tiempo de lectura). */
     const COOP_MS_AVISO_CAMBIO_FASE = 2200;
 
@@ -510,7 +510,7 @@
             const carta = slotEl?.querySelector('.carta');
             if (carta) carta.style.opacity = '0';
         }
-        await esperar(32);
+        await esperar(12);
         for (let p = 0; p < pasos.length; p += 1) {
             const { zona, slot } = pasos[p];
             const slotEl = obtenerSlotElementCoop(zona, slot);
@@ -761,7 +761,7 @@
         const inicio = Date.now();
         while (aplicandoAccionCoop) {
             if ((Date.now() - inicio) >= maxMs) break;
-            await esperar(24);
+            await esperar(10);
         }
     }
 
@@ -2343,6 +2343,73 @@
         }
     }
 
+    function formatearEtiquetaAfiliacionCoop(afiliacion) {
+        const txt = String(afiliacion || '').trim();
+        return txt ? txt.charAt(0).toUpperCase() + txt.slice(1) : 'Sin afiliación';
+    }
+
+    function obtenerCartaBonusDebuffActivaCoop(cartas = []) {
+        for (const carta of (Array.isArray(cartas) ? cartas : [])) {
+            if (!cartaViva(carta)) continue;
+            const meta = obtenerMetaHabilidad(carta);
+            if (meta.tieneHabilidad && meta.trigger === 'auto' && meta.clase === 'bonus_debuff') {
+                return carta;
+            }
+        }
+        return null;
+    }
+
+    function actualizarIndicadoresAfiliacionesActivasCoop() {
+        const ui = window.tableroCoopCartaUi;
+        if (!ui || typeof ui.aplicarBonusAfiliaciones !== 'function' || !snapshot) return;
+        const cartasA = Array.isArray(snapshot.cartasEnJuegoA) ? snapshot.cartasEnJuegoA : [];
+        const cartasB = Array.isArray(snapshot.cartasEnJuegoB) ? snapshot.cartasEnJuegoB : [];
+        const cartasBot = Array.isArray(snapshot.cartasEnJuegoBot) ? snapshot.cartasEnJuegoBot : [];
+        const equipoHumano = [...cartasA, ...cartasB].filter(Boolean);
+        const enemigosA = [...cartasBot, ...cartasB].filter(Boolean);
+        const enemigosB = [...cartasBot, ...cartasA].filter(Boolean);
+        const enemigosBot = [...cartasA, ...cartasB].filter(Boolean);
+
+        const { afiliacionPrincipal: activaA } = ui.aplicarBonusAfiliaciones(cartasA, enemigosA, equipoHumano);
+        const { afiliacionPrincipal: activaB } = ui.aplicarBonusAfiliaciones(cartasB, enemigosB, equipoHumano);
+        const { afiliacionPrincipal: activaBot } = ui.aplicarBonusAfiliaciones(cartasBot, enemigosBot);
+
+        const anulaA = obtenerCartaBonusDebuffActivaCoop(enemigosA);
+        const anulaB = obtenerCartaBonusDebuffActivaCoop(enemigosB);
+        const anulaBot = obtenerCartaBonusDebuffActivaCoop(enemigosBot);
+
+        const actualizar = (id, parentSelector, beforeSelector, afiliacionActiva, anulador = null) => {
+            let contenedor = document.getElementById(id);
+            if (!contenedor) {
+                const parent = document.querySelector(parentSelector);
+                if (!parent) return;
+                contenedor = document.createElement('div');
+                contenedor.id = id;
+                contenedor.className = 'bonus-activo-tablero';
+                const before = beforeSelector ? parent.querySelector(beforeSelector) : null;
+                if (before) parent.insertBefore(contenedor, before);
+                else parent.appendChild(contenedor);
+            }
+
+            contenedor.innerHTML = '';
+            if (!afiliacionActiva) return;
+
+            const linea = document.createElement('div');
+            if (anulador) {
+                linea.className = 'bonus-anulado-item';
+                linea.textContent = `Bonus Anulado por "${anulador.Nombre}": ${formatearEtiquetaAfiliacionCoop(afiliacionActiva.afiliacion)} (+${afiliacionActiva.bonus})`;
+            } else {
+                linea.className = 'bonus-activo-item';
+                linea.textContent = `Bonus activo: ${formatearEtiquetaAfiliacionCoop(afiliacionActiva.afiliacion)} (+${afiliacionActiva.bonus})`;
+            }
+            contenedor.appendChild(linea);
+        };
+
+        actualizar('coop-bonus-activo-bot', '.coop-mesa', '#coop-fila-bot', activaBot, anulaBot);
+        actualizar('coop-bonus-activo-a', '#coop-zona-a', '#coop-slots-a', activaA, anulaA);
+        actualizar('coop-bonus-activo-b', '#coop-zona-b', '#coop-slots-b', activaB, anulaB);
+    }
+
     /**
      * Aplica `opacity: 0` a las cartas montadas por `renderSlotsPlano` cuyo slot aún
      * NO ha sido revelado en la animación de apertura. Se llama síncronamente después
@@ -2368,6 +2435,7 @@
         destacarTurnoUi();
         actualizarContadores();
         renderSlotsPlano();
+        actualizarIndicadoresAfiliacionesActivasCoop();
         ocultarCartasAperturaSinRevelarSync();
         actualizarAvisoTurnoCoopSiNuevaFase();
     }
@@ -2527,6 +2595,7 @@
 
     /** Marca local que evita aplicar las recompensas más de una vez por sesión. */
     let coopRecompensasProcesadas = false;
+    let coopMisionCompletadaRegistrada = false;
 
     function coopNormalizarNombre(nombre) {
         return String(nombre || '').trim().toLowerCase();
@@ -2648,6 +2717,10 @@
         }
 
         const cartasGanadas = [];
+        usuario.cartas = Array.isArray(usuario.cartas) ? usuario.cartas : [];
+        const nombresPrevios = new Set(usuario.cartas.map((c) => coopNormalizarNombre(c?.Nombre)));
+        let nuevasH = 0;
+        let nuevasV = 0;
         if (enemigosEvento.length > 0 || bossEvento) {
             /**
              * 80% probabilidad → carta aleatoria de los enemigos normales del evento.
@@ -2673,7 +2746,13 @@
                         const cartaEscalada = coopEscalarCartaSegunDificultad(cartaBase, dificultadEvento);
                         cartaEscalada.tipoRecompensa = 'evento';
                         cartasGanadas.push(cartaEscalada);
-                        usuario.cartas = Array.isArray(usuario.cartas) ? usuario.cartas : [];
+                        const clave = coopNormalizarNombre(cartaEscalada?.Nombre);
+                        if (clave && !nombresPrevios.has(clave)) {
+                            const fac = String(cartaEscalada?.faccion || cartaEscalada?.Faccion || '').trim().toUpperCase();
+                            if (fac === 'H') nuevasH++;
+                            if (fac === 'V') nuevasV++;
+                            nombresPrevios.add(clave);
+                        }
                         usuario.cartas.push(cartaEscalada);
                     } else {
                         console.warn('[coop] carta de recompensa sorteada no encontrada en catálogo:', nombreElegido);
@@ -2691,7 +2770,9 @@
             puntosGanados: puntosEvento,
             mejorasGanadas: mejorasEvento,
             mejorasEspecialesGanadas: mejorasEspecialesEvento,
-            cartasGanadas
+            cartasGanadas,
+            nuevasH,
+            nuevasV
         };
     }
 
@@ -2755,6 +2836,10 @@
 
         const recompensasContainer = document.getElementById('coop-recompensas-container');
         if (recompensasContainer) recompensasContainer.innerHTML = '';
+        if (!coopMisionCompletadaRegistrada && window.DCMisiones?.track) {
+            coopMisionCompletadaRegistrada = true;
+            window.DCMisiones.track('evento_coop', { amount: 1 });
+        }
 
         if (!ganaron || !recompensasContainer) return;
 
@@ -2779,6 +2864,13 @@
             try {
                 const recompensa = await otorgarRecompensasCoop();
                 recompensasContainer.innerHTML = '';
+                if (window.DCMisiones?.track) {
+                    if (String(payload?.evento?.boss || '').trim()) {
+                        window.DCMisiones.track('boss', { amount: 1 });
+                    }
+                    if (Number(recompensa.nuevasH || 0) > 0) window.DCMisiones.track('coleccion_h', { amount: Number(recompensa.nuevasH || 0) });
+                    if (Number(recompensa.nuevasV || 0) > 0) window.DCMisiones.track('coleccion_v', { amount: Number(recompensa.nuevasV || 0) });
+                }
 
                 const resumen = document.createElement('p');
                 resumen.classList.add('texto-recompensa-resumen');

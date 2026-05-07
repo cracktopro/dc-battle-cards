@@ -190,8 +190,25 @@ function configurarEventos() {
     const selectMazo = document.getElementById('select-mazo');
     selectMazo.addEventListener('change', function () {
         mazoIndexSeleccionado = Number(this.value);
+        actualizarEditorNombreMazo();
         cargarCartasDelMazo();
     });
+
+    const inputNombreMazo = document.getElementById('input-nombre-mazo');
+    const guardarNombreBtn = document.getElementById('guardar-nombre-mazo');
+    if (guardarNombreBtn) {
+        guardarNombreBtn.addEventListener('click', async () => {
+            await guardarNombreMazoSeleccionado();
+        });
+    }
+    if (inputNombreMazo) {
+        inputNombreMazo.addEventListener('keydown', async (event) => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                await guardarNombreMazoSeleccionado();
+            }
+        });
+    }
 
     document.getElementById('borrar-mazo').addEventListener('click', async function () {
         if (mazoIndexSeleccionado < 0) {
@@ -231,6 +248,16 @@ function configurarEventos() {
         cerrarModalConfirmacionBorrado();
         await borrarMazo(indiceABorrar);
     });
+}
+
+function actualizarEditorNombreMazo() {
+    const usuario = JSON.parse(localStorage.getItem('usuario'));
+    const input = document.getElementById('input-nombre-mazo');
+    if (!input) {
+        return;
+    }
+    const nombreActual = String(usuario?.mazos?.[mazoIndexSeleccionado]?.Nombre || '').trim();
+    input.value = nombreActual;
 }
 
 async function sincronizarLocalStorage() {
@@ -276,6 +303,40 @@ function configurarSelectorMazo() {
     // Por defecto se selecciona el primer mazo creado
     mazoIndexSeleccionado = 0;
     selectMazo.value = '0';
+    actualizarEditorNombreMazo();
+}
+
+async function guardarNombreMazoSeleccionado() {
+    const usuario = JSON.parse(localStorage.getItem('usuario'));
+    const email = localStorage.getItem('email');
+    const input = document.getElementById('input-nombre-mazo');
+    const select = document.getElementById('select-mazo');
+    if (!usuario || !Array.isArray(usuario.mazos) || !email || mazoIndexSeleccionado < 0) {
+        mostrarMensaje('No se pudo guardar el nombre del mazo.', 'danger');
+        return;
+    }
+    const mazo = usuario.mazos[mazoIndexSeleccionado];
+    if (!mazo) {
+        mostrarMensaje('No hay un mazo seleccionado.', 'warning');
+        return;
+    }
+    const nuevoNombre = String(input?.value || '').trim();
+    if (!nuevoNombre) {
+        mostrarMensaje('El nombre del mazo no puede estar vacío.', 'warning');
+        return;
+    }
+    mazo.Nombre = nuevoNombre;
+    try {
+        await actualizarUsuarioFirebase(usuario, email);
+        localStorage.setItem('usuario', JSON.stringify(usuario));
+        if (select?.options?.[mazoIndexSeleccionado]) {
+            select.options[mazoIndexSeleccionado].textContent = nuevoNombre;
+        }
+        mostrarMensaje('Nombre del mazo actualizado correctamente.', 'success');
+    } catch (error) {
+        console.error('Error al guardar el nombre del mazo:', error);
+        mostrarMensaje('Error al guardar el nombre del mazo en Firebase.', 'danger');
+    }
 }
 
 function renderizarPoderTotal(cartasMazo) {
@@ -309,7 +370,7 @@ function crearCartaMazoElemento(carta, indiceCarta) {
     const imagenUrl = obtenerImagenCarta(carta);
     cartaDiv.style.backgroundImage = `url(${imagenUrl})`;
     cartaDiv.style.backgroundSize = 'cover';
-    cartaDiv.style.backgroundPosition = 'center';
+    cartaDiv.style.backgroundPosition = 'center top';
 
     const detallesDiv = document.createElement('div');
     detallesDiv.classList.add('detalles-carta');
@@ -412,7 +473,7 @@ function crearCartaReemplazoElemento(carta) {
     const imagenUrl = obtenerImagenCarta(carta);
     item.style.backgroundImage = `url(${imagenUrl})`;
     item.style.backgroundSize = 'cover';
-    item.style.backgroundPosition = 'center';
+    item.style.backgroundPosition = 'center top';
 
     const detallesDiv = document.createElement('div');
     detallesDiv.classList.add('detalles-carta');

@@ -116,7 +116,7 @@
             border-radius: 10px;
             overflow: hidden;
             background-size: cover;
-            background-position: center;
+            background-position: center top;
             border: 2px solid rgba(var(--dc-accent-user-rgb, 0, 123, 255), 0.7);
         }
 
@@ -194,10 +194,117 @@
             color: #dff8ff;
         }
 
-        .objeto-tienda p {
+        .objeto-tienda-desc {
             margin: 0;
             color: #bde6ff;
             font-size: 0.9rem;
+        }
+
+        .tienda-objetos-layout {
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+        }
+
+        .tienda-objetos-subtitulo {
+            margin: 6px 0 0;
+            color: #ffd700;
+            font-size: 1.02rem;
+            font-weight: 700;
+            letter-spacing: 0.03em;
+        }
+
+        .tienda-objetos-fila.tienda-objetos-mejoras {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 16px;
+            align-items: stretch;
+        }
+
+        .tienda-objetos-fila.tienda-objetos-sobres-heroes,
+        .tienda-objetos-fila.tienda-objetos-sobres-villanos {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 16px;
+            align-items: stretch;
+        }
+
+        .objeto-tienda-mejora-cabecera {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+        }
+
+        .objeto-tienda-mejora-icono {
+            width: 56px;
+            height: 56px;
+            object-fit: contain;
+            flex-shrink: 0;
+        }
+
+        .objeto-tienda-mejora-texto-top h5 {
+            margin: 0;
+            color: #dff8ff;
+        }
+
+        .preview-sobre-tienda {
+            width: min(124px, 68%);
+            aspect-ratio: 6.3 / 8.8;
+            margin-left: auto;
+            margin-right: auto;
+            border-radius: 10px;
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+            border: 2px solid rgba(var(--dc-accent-user-rgb, 0, 123, 255), 0.7);
+            background-color: rgba(6, 14, 28, 0.65);
+            flex-shrink: 0;
+        }
+
+        .tienda-badge-carta-obtenida {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 5;
+            pointer-events: none;
+            min-width: min(118px, 80%);
+            padding: 7px 10px;
+            border-radius: 10px;
+            text-align: center;
+            background: rgba(4, 14, 28, 0.9);
+            border: 1px solid rgba(255, 215, 0, 0.55);
+            box-shadow:
+                0 4px 16px rgba(0, 0, 0, 0.58),
+                0 0 14px rgba(255, 215, 0, 0.22);
+        }
+
+        .tienda-badge-carta-obtenida-titulo {
+            font-size: 0.67rem;
+            font-weight: 800;
+            color: #ffd84a;
+            line-height: 1.2;
+            letter-spacing: 0.04em;
+        }
+
+        .tienda-badge-carta-obtenida-nivel {
+            margin-top: 3px;
+            font-size: 0.78rem;
+            font-weight: 700;
+            color: #e8f6ff;
+            line-height: 1.15;
+        }
+
+        .objeto-tienda-nombre-sobre {
+            margin: 2px 0 0;
+            color: #dff8ff;
+            font-size: 0.95rem;
+            text-align: center;
+        }
+
+        .objeto-tienda-desc-sobre {
+            font-size: 0.82rem;
+            text-align: center;
         }
 
         #mensaje-tienda {
@@ -211,6 +318,13 @@
             }
             .item-tienda {
                 padding: 8px;
+            }
+            .tienda-objetos-fila.tienda-objetos-mejoras {
+                grid-template-columns: 1fr;
+            }
+            .tienda-objetos-fila.tienda-objetos-sobres-heroes,
+            .tienda-objetos-fila.tienda-objetos-sobres-villanos {
+                grid-template-columns: repeat(auto-fit, minmax(min(200px, 46vw), 1fr));
             }
         }
     </style>
@@ -275,6 +389,8 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.0/xlsx.full.min.js"></script>
     <script src="js/cartas.js"></script>
+    <script src="js/sobresCartas.js"></script>
+    <script src="js/misionesDiarias.js"></script>
     <script src="tienda.js"></script>
     <script src="js/menu-mobile.js" defer></script>
 </body>
