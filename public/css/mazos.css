@@ -832,6 +832,81 @@ select:disabled,
     box-shadow: 0 0 12px rgba(var(--dc-accent-user-rgb), 0.2);
 }
 
+/* Mejoras con objetos (pestaña Mejoras especiales): carta + botón = ancho de columna */
+#contenedor-mejora-carta-objeto.contenedor-cartas,
+#contenedor-mejora-especial-objeto.contenedor-cartas {
+    justify-items: stretch;
+}
+
+@keyframes entradaSuave {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+.mejora-objeto-fila {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    animation: entradaSuave 0.35s ease-out;
+}
+
+.mejora-objeto-fila > .carta {
+    width: 100%;
+}
+
+/* Botón al ancho de la carta; color RGB del jugador (opciones → cartas.js --dc-accent-user-rgb) */
+.mejora-objeto-fila > .btn.btn-mejora-objeto {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    flex-shrink: 0;
+    margin: 0;
+    padding: 10px 14px;
+    border-radius: 10px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    font-size: clamp(0.72rem, 2vw, 0.85rem);
+    background-color: rgba(var(--dc-accent-user-rgb), 0.14);
+    border: 2px solid rgba(var(--dc-accent-user-rgb), 0.42);
+    color: var(--dc-accent-user);
+    text-shadow: 0 0 8px rgba(var(--dc-accent-user-rgb), 0.65);
+    box-shadow: 0 0 12px rgba(var(--dc-accent-user-rgb), 0.22);
+    transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, color 0.2s ease;
+}
+
+.mejora-objeto-fila > .btn.btn-mejora-objeto:hover:not(:disabled) {
+    background-color: rgba(var(--dc-accent-user-rgb), 0.26);
+    border-color: var(--dc-accent-user);
+    color: #fff;
+    box-shadow:
+        0 0 14px rgba(var(--dc-accent-user-rgb), 0.55),
+        0 0 22px rgba(var(--dc-accent-user-rgb), 0.35);
+}
+
+.mejora-objeto-fila > .btn.btn-mejora-objeto:focus {
+    outline: none;
+    box-shadow:
+        0 0 0 2px rgba(var(--dc-accent-user-rgb), 0.25),
+        0 0 14px rgba(var(--dc-accent-user-rgb), 0.4);
+}
+
+.mejora-objeto-fila > .btn.btn-mejora-objeto:disabled {
+    opacity: 0.48;
+    cursor: not-allowed;
+    filter: grayscale(0.35);
+    box-shadow: none;
+}
+
 /* Modal combinar duplicados (mejorarCartas) */
 .modal-combinar-duplicados {
     position: fixed;

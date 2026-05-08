@@ -68,6 +68,11 @@ const seleccionIndicesCombinacion = new Set();
 const ICONO_MEJORA = '/resources/icons/mejora.png';
 const ICONO_MEJORA_ESPECIAL = '/resources/icons/mejora_especial.png';
 
+function normalizarFaccion(valor) {
+    const faccion = String(valor || '').trim().toUpperCase();
+    return faccion === 'H' || faccion === 'V' ? faccion : '';
+}
+
 function refrescarPanelPerfilLateral() {
     if (typeof window.actualizarPanelPerfilTiempoReal === 'function') {
         window.actualizarPanelPerfilTiempoReal();
@@ -564,13 +569,11 @@ function renderizarBloqueMejoraObjetos(usuario, tipo, contenedorId) {
 
     cartas.forEach(carta => {
         const wrapper = document.createElement('div');
-        wrapper.className = 'd-flex flex-column';
-        wrapper.style.gap = '8px';
-        wrapper.style.animation = 'entradaSuave 0.35s ease-out';
+        wrapper.className = 'mejora-objeto-fila';
 
-        const cartaVisual = crearElementoCartaSoloVisual(carta);
+        const cartaVisual = crearElementoCartaSoloVisual(carta, false, 0);
         const boton = document.createElement('button');
-        boton.className = 'btn btn-primary';
+        boton.className = 'btn btn-mejora-objeto';
         boton.textContent = 'Mejorar';
         boton.disabled = cantidadObjetos <= 0;
         boton.addEventListener('click', () => abrirModalConfirmacionMejora(tipo, carta.originalIndex));

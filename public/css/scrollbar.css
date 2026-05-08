@@ -1,3 +1,39 @@
+/* Firefox: barra principal y paneles con scroll (webkit usa las reglas globales de abajo) */
+html {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(var(--dc-accent-user-rgb, 0, 123, 255), 0.5) rgba(20, 20, 20, 0.8);
+}
+
+.menu-container,
+.content-container {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(var(--dc-accent-user-rgb, 0, 123, 255), 0.5) rgba(20, 20, 20, 0.8);
+}
+
+.menu-container::-webkit-scrollbar,
+.content-container::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+.menu-container::-webkit-scrollbar-thumb,
+.content-container::-webkit-scrollbar-thumb {
+    background-color: rgba(var(--dc-accent-user-rgb, 0, 123, 255), 0.5);
+    border-radius: 10px;
+    border: 2px solid rgba(0, 0, 0, 0.2);
+}
+
+.menu-container::-webkit-scrollbar-thumb:hover,
+.content-container::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(var(--dc-accent-user-rgb, 0, 123, 255), 0.8);
+}
+
+.menu-container::-webkit-scrollbar-track,
+.content-container::-webkit-scrollbar-track {
+    background: rgba(20, 20, 20, 0.8);
+    border-radius: 10px;
+}
+
 /* Estilo de la scrollbar para toda la página */
 ::-webkit-scrollbar {
     width: 8px; /* Ancho de la scrollbar */
