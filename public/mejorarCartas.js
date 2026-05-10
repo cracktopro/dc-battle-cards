@@ -529,7 +529,7 @@ function actualizarContadoresObjetos(usuario) {
 
 function obtenerCartasValidasMejoraObjeto(usuario, tipo) {
     const cartas = Array.isArray(usuario?.cartas) ? usuario.cartas : [];
-    const filtradas = cartas
+    const candidatos = cartas
         .map((carta, index) => ({ ...carta, originalIndex: index }))
         .filter(carta => {
             const nivel = Number(carta.Nivel || 1);
@@ -537,16 +537,41 @@ function obtenerCartasValidasMejoraObjeto(usuario, tipo) {
                 return nivel >= 1 && nivel <= 3;
             }
             return nivel === 5;
-        })
-        .sort((a, b) => {
-            const diffNivel = (a.Nivel || 1) - (b.Nivel || 1);
-            if (diffNivel !== 0) {
-                return diffNivel;
-            }
-            return a.Nombre.localeCompare(b.Nombre);
         });
 
-    return filtradas;
+    const mejorPorNombre = new Map();
+    candidatos.forEach((item) => {
+        const nombre = String(item.Nombre || '').trim().toLowerCase();
+        if (!nombre) {
+            return;
+        }
+        const prev = mejorPorNombre.get(nombre);
+        if (!prev) {
+            mejorPorNombre.set(nombre, item);
+            return;
+        }
+        const nPrev = Number(prev.Nivel || 1);
+        const nCur = Number(item.Nivel || 1);
+        if (nCur > nPrev) {
+            mejorPorNombre.set(nombre, item);
+            return;
+        }
+        if (nCur === nPrev) {
+            const pPrev = Number(prev.Poder || 0);
+            const pCur = Number(item.Poder || 0);
+            if (pCur > pPrev || (pCur === pPrev && item.originalIndex < prev.originalIndex)) {
+                mejorPorNombre.set(nombre, item);
+            }
+        }
+    });
+
+    return Array.from(mejorPorNombre.values()).sort((a, b) => {
+        const diffNivel = (a.Nivel || 1) - (b.Nivel || 1);
+        if (diffNivel !== 0) {
+            return diffNivel;
+        }
+        return String(a.Nombre || '').localeCompare(String(b.Nombre || ''));
+    });
 }
 
 function renderizarBloqueMejoraObjetos(usuario, tipo, contenedorId) {

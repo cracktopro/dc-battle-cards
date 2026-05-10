@@ -585,23 +585,22 @@ async function comprarCarta(indexOferta) {
         return;
     }
 
-    const nombresPrevios = new Set(
-        (usuarioActual.cartas || []).map((c) => normalizarNombreCarta(c?.Nombre))
-    );
+    const snapshotPrevias = (usuarioActual.cartas || []).slice();
     usuarioActual.puntos -= oferta.precio;
     usuarioActual.cartas.push({ ...oferta.carta });
     usuarioActual.tienda.cartas[indexOferta].agotada = true;
-    const nombreNueva = normalizarNombreCarta(oferta.carta?.Nombre);
-    const esNueva = Boolean(nombreNueva && !nombresPrevios.has(nombreNueva));
-    const faccionNueva = String(oferta.carta?.faccion || oferta.carta?.Faccion || '').trim().toUpperCase();
+    const conteoCompra = typeof window.dcContarCartasNuevasPorFaccion === 'function'
+        ? window.dcContarCartasNuevasPorFaccion([oferta.carta], snapshotPrevias, null)
+        : { nuevasH: 0, nuevasV: 0 };
 
     try {
         await persistirUsuario();
-        if (esNueva && window.DCMisiones?.track) {
-            if (faccionNueva === 'H') {
-                window.DCMisiones.track('coleccion_h', { amount: 1 });
-            } else if (faccionNueva === 'V') {
-                window.DCMisiones.track('coleccion_v', { amount: 1 });
+        if (window.DCMisiones?.track) {
+            if (conteoCompra.nuevasH > 0) {
+                window.DCMisiones.track('coleccion_h', { amount: conteoCompra.nuevasH });
+            }
+            if (conteoCompra.nuevasV > 0) {
+                window.DCMisiones.track('coleccion_v', { amount: conteoCompra.nuevasV });
             }
         }
         renderizarTienda();

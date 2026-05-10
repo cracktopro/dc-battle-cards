@@ -675,22 +675,16 @@ async function ejecutarAnimacionYAperturaSobre(inventarioKey) {
             aperturaSobreEnCurso = false;
             return;
         }
-        const nombresPrevios = new Set(
-            (usuario.cartas || []).map((c) => obtenerClaveCarta(c?.Nombre))
-        );
-        let nuevasH = 0;
-        let nuevasV = 0;
+        const snapshotPrevias = (usuario.cartas || []).slice();
         usuario.objetos[def.inventarioKey] = Number(usuario.objetos[def.inventarioKey] || 0) - 1;
         cartasGeneradas.forEach((carta) => {
-            const clave = obtenerClaveCarta(carta?.Nombre);
-            if (clave && !nombresPrevios.has(clave)) {
-                const fac = normalizarFaccion(carta?.faccion || carta?.Faccion || '');
-                if (fac === 'H') nuevasH++;
-                if (fac === 'V') nuevasV++;
-                nombresPrevios.add(clave);
-            }
             usuario.cartas.push({ ...carta });
         });
+        const conteo = typeof window.dcContarCartasNuevasPorFaccion === 'function'
+            ? window.dcContarCartasNuevasPorFaccion(cartasGeneradas, snapshotPrevias, todasLasCartasCatalogo)
+            : { nuevasH: 0, nuevasV: 0 };
+        const nuevasH = conteo.nuevasH;
+        const nuevasV = conteo.nuevasV;
         await persistirUsuarioDesdeColeccion(usuario);
         if (window.DCMisiones?.track) {
             window.DCMisiones.track('sobres', { amount: 1 });

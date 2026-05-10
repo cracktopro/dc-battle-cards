@@ -2183,19 +2183,13 @@ async function otorgarRecompensasVictoria() {
     }
 
     usuario.cartas = Array.isArray(usuario.cartas) ? usuario.cartas : [];
-    const nombresPrevios = new Set(usuario.cartas.map(c => normalizarNombre(c?.Nombre)));
-    let nuevasH = 0;
-    let nuevasV = 0;
     usuario.puntos = Number(usuario.puntos || 0) + puntosGanados;
-    cartasPremio.forEach((carta) => {
-        const clave = normalizarNombre(carta?.Nombre);
-        if (clave && !nombresPrevios.has(clave)) {
-            const fac = normalizarFaccion(carta?.faccion || carta?.Faccion || '');
-            if (fac === 'H') nuevasH++;
-            if (fac === 'V') nuevasV++;
-            nombresPrevios.add(clave);
-        }
-    });
+    const snapshotPrevias = usuario.cartas.slice();
+    const conteo = typeof window.dcContarCartasNuevasPorFaccion === 'function'
+        ? window.dcContarCartasNuevasPorFaccion(cartasPremio, snapshotPrevias, cartasDisponibles)
+        : { nuevasH: 0, nuevasV: 0 };
+    let nuevasH = conteo.nuevasH;
+    let nuevasV = conteo.nuevasV;
     usuario.cartas.push(...cartasPremio);
 
     await actualizarUsuarioFirebase(usuario, email);
@@ -2338,16 +2332,12 @@ async function otorgarRecompensasDesafio() {
     let nuevasV = 0;
     if (cartasGanadas.length > 0) {
         usuario.cartas = Array.isArray(usuario.cartas) ? usuario.cartas : [];
-        const nombresPrevios = new Set(usuario.cartas.map(c => normalizarNombre(c?.Nombre)));
-        cartasGanadas.forEach((carta) => {
-            const clave = normalizarNombre(carta?.Nombre);
-            if (clave && !nombresPrevios.has(clave)) {
-                const fac = normalizarFaccion(carta?.faccion || carta?.Faccion || '');
-                if (fac === 'H') nuevasH++;
-                if (fac === 'V') nuevasV++;
-                nombresPrevios.add(clave);
-            }
-        });
+        const snapshotPrevias = usuario.cartas.slice();
+        const conteo = typeof window.dcContarCartasNuevasPorFaccion === 'function'
+            ? window.dcContarCartasNuevasPorFaccion(cartasGanadas, snapshotPrevias, cartasDisponibles)
+            : { nuevasH: 0, nuevasV: 0 };
+        nuevasH = conteo.nuevasH;
+        nuevasV = conteo.nuevasV;
         usuario.cartas.push(...cartasGanadas);
     }
 

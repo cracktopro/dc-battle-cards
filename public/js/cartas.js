@@ -777,6 +777,19 @@ async function migrarSkillsUsuarioDesdeCatalogo() {
         usuario.versionMigracionSkills = VERSION_MIGRACION_SKILLS_USUARIO;
         usuario.firmaCatalogoSkills = firmaCatalogoNueva;
 
+        /** Evitar pisar recompensa diaria u objetos si hubo claim entre la lectura inicial y el guardado. */
+        const enStorage = JSON.parse(localStorage.getItem('usuario') || 'null');
+        if (enStorage && typeof enStorage === 'object') {
+            if (enStorage.recompensas && typeof enStorage.recompensas === 'object') {
+                usuario.recompensas = { ...(usuario.recompensas || {}), ...enStorage.recompensas };
+            }
+            if (enStorage.objetos && typeof enStorage.objetos === 'object') {
+                usuario.objetos = { ...(usuario.objetos || {}), ...enStorage.objetos };
+            }
+        }
+        aplicarRespaldoClaimLocalUsuario(usuario);
+        normalizarObjetosConSobresGlobal(usuario);
+
         localStorage.setItem('usuario', JSON.stringify(usuario));
 
         if (cambiosColeccion || cambiosMazos || requiereMigracionPorVersion || requiereMigracionPorCatalogo) {
@@ -867,6 +880,67 @@ function aplicarColorPrincipalDesdeSesion() {
 window.aplicarColorPrincipalUsuario = aplicarColorPrincipalUsuario;
 window.aplicarColorPrincipalDesdeSesion = aplicarColorPrincipalDesdeSesion;
 
+/** Clave de nombre para deduplicar cartas en colección / misiones. */
+function dcNormalizarNombreCartaColeccion(nombre) {
+    return String(nombre || '').trim().toLowerCase();
+}
+
+/**
+ * Resuelve facción H/V desde valores típicos del Excel y variantes de texto.
+ */
+function dcNormalizarFaccionHeroeVillano(valor) {
+    const u = String(valor || '').trim().toUpperCase();
+    if (u === 'H' || u === 'V') {
+        return u;
+    }
+    const lo = String(valor || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    if (!lo) {
+        return '';
+    }
+    if (lo.includes('vill') || lo.includes('villain')) {
+        return 'V';
+    }
+    if (lo.includes('hero')) {
+        return 'H';
+    }
+    return '';
+}
+
+/**
+ * Cuenta cartas cuyo nombre no estaba en la colección (solo cuentan como nuevas la primera vez).
+ * Usa catálogo opcional si la carta no trae facción explícita (coherente con el resto del juego).
+ */
+function dcContarCartasNuevasPorFaccion(cartasAAñadir, cartasUsuarioPrevias, catalogoOpcional) {
+    const prev = new Set((cartasUsuarioPrevias || []).map((c) => dcNormalizarNombreCartaColeccion(c?.Nombre)));
+    const mapaCat = Array.isArray(catalogoOpcional) && catalogoOpcional.length > 0
+        ? new Map(catalogoOpcional.map((c) => [dcNormalizarNombreCartaColeccion(c?.Nombre), c]))
+        : null;
+    let nuevasH = 0;
+    let nuevasV = 0;
+    (cartasAAñadir || []).forEach((carta) => {
+        const clave = dcNormalizarNombreCartaColeccion(carta?.Nombre);
+        if (!clave || prev.has(clave)) {
+            return;
+        }
+        let fac = dcNormalizarFaccionHeroeVillano(carta?.faccion ?? carta?.Faccion);
+        if (!fac && mapaCat) {
+            const base = mapaCat.get(clave);
+            if (base) {
+                fac = dcNormalizarFaccionHeroeVillano(base.faccion ?? base.Faccion);
+            }
+        }
+        if (fac === 'H') {
+            nuevasH++;
+        } else if (fac === 'V') {
+            nuevasV++;
+        }
+        prev.add(clave);
+    });
+    return { nuevasH, nuevasV };
+}
+
+window.dcContarCartasNuevasPorFaccion = dcContarCartasNuevasPorFaccion;
+
 function construirFilaStatMenu({ icono, alt, valor, titulo }) {
     return `
         <span class="menu-user-stat-icon-wrap" title="${titulo}">
@@ -879,6 +953,10 @@ function construirFilaStatMenu({ icono, alt, valor, titulo }) {
 const RECOMPENSA_DIARIA_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 const RECOMPENSA_DIARIA_CHECK_INTERVAL_MS = 60 * 1000;
 const RECOMPENSA_DIARIA_LOCK_KEY = 'dc_daily_reward_claim_lock_v1';
+/** Respaldo del último claim (evita perder cooldown si otra rutina pisa `usuario` en localStorage). */
+const DC_DIARIA_LAST_CLAIM_LS_KEY = 'dc_diaria_last_claim_at_v1';
+/** Evita mostrar el modal dos veces en la misma sesión para el mismo claim (p. ej. foco + cambio de vista). */
+const RECOMPENSA_DIARIA_MODAL_ACK_KEY = 'dc_daily_reward_modal_ack_claim_ts';
 let timerMenuRecompensaDiaria = null;
 let timerCheckRecompensaDiaria = null;
 let recompensaDiariaEnProceso = false;
@@ -920,10 +998,34 @@ function formatearHMSGlobal(ms) {
     return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
+function obtenerTimestampUltimaRecompensaDiaria(usuario) {
+    const fromUser = Number(usuario?.recompensas?.diariaSobres?.lastClaimAt || 0);
+    const fromLs = Number(localStorage.getItem(DC_DIARIA_LAST_CLAIM_LS_KEY) || 0);
+    const v = (t) => (Number.isFinite(t) && t > 0 ? t : 0);
+    return Math.max(v(fromUser), v(fromLs));
+}
+
+/** Fusiona en memoria el respaldo local si Firebase/`usuario` llegaron sin recompensa diaria (p. ej. tras GET /get-user). */
+function aplicarRespaldoClaimLocalUsuario(usuario) {
+    if (!usuario || typeof usuario !== 'object') {
+        return usuario;
+    }
+    const claimLs = Number(localStorage.getItem(DC_DIARIA_LAST_CLAIM_LS_KEY) || 0);
+    if (!(claimLs > 0)) {
+        return usuario;
+    }
+    const prev = Number(usuario?.recompensas?.diariaSobres?.lastClaimAt || 0);
+    usuario.recompensas = (usuario.recompensas && typeof usuario.recompensas === 'object') ? usuario.recompensas : {};
+    usuario.recompensas.diariaSobres = {
+        ...(usuario.recompensas.diariaSobres || {}),
+        lastClaimAt: Math.max(prev, claimLs)
+    };
+    return usuario;
+}
+
 function obtenerEstadoRecompensaDiaria(usuario) {
     const ahora = Date.now();
-    const ultima = Number(usuario?.recompensas?.diariaSobres?.lastClaimAt || 0);
-    const ultimaValida = Number.isFinite(ultima) && ultima > 0 ? ultima : 0;
+    const ultimaValida = obtenerTimestampUltimaRecompensaDiaria(usuario || {});
     const siguiente = ultimaValida > 0 ? (ultimaValida + RECOMPENSA_DIARIA_COOLDOWN_MS) : ahora;
     const restante = Math.max(0, siguiente - ahora);
     const progreso = ultimaValida <= 0
@@ -978,13 +1080,23 @@ function crearModalRecompensaDiariaFallback() {
     document.body.appendChild(modal);
 }
 
-function abrirModalRecompensaDiariaGlobal() {
+function abrirModalRecompensaDiariaGlobal(claimTs) {
+    const tsStr = claimTs != null && Number.isFinite(Number(claimTs)) ? String(claimTs) : '';
+    if (tsStr && sessionStorage.getItem(RECOMPENSA_DIARIA_MODAL_ACK_KEY) === tsStr) {
+        return Promise.resolve();
+    }
     return new Promise((resolve) => {
+        const marcarVisto = () => {
+            if (tsStr) {
+                sessionStorage.setItem(RECOMPENSA_DIARIA_MODAL_ACK_KEY, tsStr);
+            }
+        };
         const modalPrincipal = document.getElementById('modal-recompensa-diaria');
         const btnPrincipal = document.getElementById('btn-aceptar-recompensa-diaria');
         if (modalPrincipal && btnPrincipal) {
             modalPrincipal.style.display = 'flex';
             const cerrar = () => {
+                marcarVisto();
                 modalPrincipal.style.display = 'none';
                 btnPrincipal.removeEventListener('click', onAceptar);
                 resolve();
@@ -1003,6 +1115,7 @@ function abrirModalRecompensaDiariaGlobal() {
         }
         modal.style.display = 'flex';
         const cerrar = () => {
+            marcarVisto();
             modal.style.display = 'none';
             btn.removeEventListener('click', onAceptar);
             resolve();
@@ -1042,6 +1155,10 @@ async function persistirUsuarioConRecompensaDiaria(usuario) {
         throw new Error('No se pudo actualizar usuario en servidor');
     }
     localStorage.setItem('usuario', JSON.stringify(usuario));
+    const tsClaim = Number(usuario?.recompensas?.diariaSobres?.lastClaimAt);
+    if (Number.isFinite(tsClaim) && tsClaim > 0) {
+        localStorage.setItem(DC_DIARIA_LAST_CLAIM_LS_KEY, String(tsClaim));
+    }
     window.dispatchEvent(new Event('dc:usuario-actualizado'));
     if (typeof window.DCRedDot?.refresh === 'function') {
         window.DCRedDot.refresh();
@@ -1062,11 +1179,12 @@ async function procesarRecompensaDiariaGlobal() {
         usuario.objetos.sobreH1 = Number(usuario.objetos.sobreH1 || 0) + 1;
         usuario.objetos.sobreV1 = Number(usuario.objetos.sobreV1 || 0) + 1;
         usuario.recompensas = (usuario.recompensas && typeof usuario.recompensas === 'object') ? usuario.recompensas : {};
-        usuario.recompensas.diariaSobres = { lastClaimAt: Date.now() };
+        const claimAt = Date.now();
+        usuario.recompensas.diariaSobres = { lastClaimAt: claimAt };
 
         await persistirUsuarioConRecompensaDiaria(usuario);
         renderTimerRecompensaDiariaMenu();
-        await abrirModalRecompensaDiariaGlobal();
+        await abrirModalRecompensaDiariaGlobal(claimAt);
         return true;
     } catch (error) {
         console.error('Error aplicando recompensa diaria global:', error);
@@ -1077,10 +1195,28 @@ async function procesarRecompensaDiariaGlobal() {
     }
 }
 
+function sincronizarUsuarioConRespaldoClaimDiaria() {
+    try {
+        const usuario = JSON.parse(localStorage.getItem('usuario') || 'null');
+        if (!usuario || typeof usuario !== 'object') {
+            return;
+        }
+        aplicarRespaldoClaimLocalUsuario(usuario);
+        const ts = Number(usuario?.recompensas?.diariaSobres?.lastClaimAt || 0);
+        if (Number.isFinite(ts) && ts > 0) {
+            localStorage.setItem(DC_DIARIA_LAST_CLAIM_LS_KEY, String(ts));
+        }
+        localStorage.setItem('usuario', JSON.stringify(usuario));
+    } catch (_e) {
+        /* ignore */
+    }
+}
+
 function iniciarTimerRecompensaDiariaMenu() {
     if (timerMenuRecompensaDiaria) {
         clearInterval(timerMenuRecompensaDiaria);
     }
+    sincronizarUsuarioConRespaldoClaimDiaria();
     renderTimerRecompensaDiariaMenu();
     timerMenuRecompensaDiaria = setInterval(renderTimerRecompensaDiariaMenu, 1000);
 }
@@ -1261,7 +1397,8 @@ window.actualizarPanelPerfilTiempoReal = actualizarPanelPerfilTiempoReal;
 window.DCRecompensaDiaria = {
     procesar: procesarRecompensaDiariaGlobal,
     renderTimerMenu: renderTimerRecompensaDiariaMenu,
-    obtenerEstado: () => obtenerEstadoRecompensaDiaria(leerUsuarioSesionSeguro() || {})
+    obtenerEstado: () => obtenerEstadoRecompensaDiaria(leerUsuarioSesionSeguro() || {}),
+    aplicarRespaldoClaimLocalUsuario
 };
 
 function asegurarModalLogout() {
@@ -1304,6 +1441,7 @@ function cerrarModalLogout() {
 
 function confirmarLogoutSistema() {
     localStorage.removeItem('usuario');
+    localStorage.removeItem(DC_DIARIA_LAST_CLAIM_LS_KEY);
     localStorage.removeItem('email');
     localStorage.removeItem('grupoActual');
     localStorage.removeItem('grupoInvitacionEnCurso');
@@ -1318,11 +1456,11 @@ window.abrirModalLogout = abrirModalLogout;
 window.cerrarModalLogout = cerrarModalLogout;
 window.confirmarLogoutSistema = confirmarLogoutSistema;
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     aplicarColorPrincipalDesdeSesion();
     normalizarMenuLateral();
     asegurarModalLogout();
-    void migrarSkillsUsuarioDesdeCatalogo();
+    await migrarSkillsUsuarioDesdeCatalogo();
     iniciarTimerRecompensaDiariaMenu();
     iniciarChequeoRecompensaDiariaGlobal();
     void procesarRecompensaDiariaGlobal();
@@ -1340,13 +1478,11 @@ window.addEventListener('dc:grupo-actualizado', () => {
 
 window.addEventListener('focus', () => {
     renderTimerRecompensaDiariaMenu();
-    void procesarRecompensaDiariaGlobal();
 });
 
 document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
         renderTimerRecompensaDiariaMenu();
-        void procesarRecompensaDiariaGlobal();
     }
 });
 

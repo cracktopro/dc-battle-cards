@@ -2718,9 +2718,10 @@
 
         const cartasGanadas = [];
         usuario.cartas = Array.isArray(usuario.cartas) ? usuario.cartas : [];
-        const nombresPrevios = new Set(usuario.cartas.map((c) => coopNormalizarNombre(c?.Nombre)));
+        const cartasUsuarioAntesRecompensa = usuario.cartas.slice();
         let nuevasH = 0;
         let nuevasV = 0;
+        let catalogoCoopParaMision = null;
         if (enemigosEvento.length > 0 || bossEvento) {
             /**
              * 80% probabilidad → carta aleatoria de los enemigos normales del evento.
@@ -2741,18 +2742,12 @@
             if (nombreElegido) {
                 try {
                     const catalogo = await coopObtenerCartasDisponibles();
+                    catalogoCoopParaMision = catalogo;
                     const cartaBase = catalogo.find((c) => coopNormalizarNombre(c?.Nombre) === coopNormalizarNombre(nombreElegido));
                     if (cartaBase) {
                         const cartaEscalada = coopEscalarCartaSegunDificultad(cartaBase, dificultadEvento);
                         cartaEscalada.tipoRecompensa = 'evento';
                         cartasGanadas.push(cartaEscalada);
-                        const clave = coopNormalizarNombre(cartaEscalada?.Nombre);
-                        if (clave && !nombresPrevios.has(clave)) {
-                            const fac = String(cartaEscalada?.faccion || cartaEscalada?.Faccion || '').trim().toUpperCase();
-                            if (fac === 'H') nuevasH++;
-                            if (fac === 'V') nuevasV++;
-                            nombresPrevios.add(clave);
-                        }
                         usuario.cartas.push(cartaEscalada);
                     } else {
                         console.warn('[coop] carta de recompensa sorteada no encontrada en catálogo:', nombreElegido);
@@ -2761,6 +2756,16 @@
                     console.error('[coop] no se pudo añadir carta recompensa:', errCarta);
                 }
             }
+        }
+
+        if (cartasGanadas.length > 0 && typeof window.dcContarCartasNuevasPorFaccion === 'function') {
+            const c = window.dcContarCartasNuevasPorFaccion(
+                cartasGanadas,
+                cartasUsuarioAntesRecompensa,
+                catalogoCoopParaMision
+            );
+            nuevasH = c.nuevasH;
+            nuevasV = c.nuevasV;
         }
 
         await coopActualizarUsuarioFirebase(usuario, email);

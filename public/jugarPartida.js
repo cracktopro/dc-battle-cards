@@ -25,7 +25,6 @@ const OBJETIVO_SINERGIA_POR_DIFICULTAD = {
 const ICONO_MEJORA = '/resources/icons/mejora.png';
 const ICONO_MEJORA_ESPECIAL = '/resources/icons/mejora_especial.png';
 const ICONO_MONEDA = '/resources/icons/moneda.png';
-const RECOMPENSA_DIARIA_COOLDOWN_MS_VISTA = 24 * 60 * 60 * 1000;
 const ROTACION_CONSEJOS_MS = 9500;
 let consejosCarrusel = [];
 let consejoIndexActual = 0;
@@ -129,7 +128,8 @@ document.addEventListener('DOMContentLoaded', function () {
     cargarEventosActivos();
     configurarNotificacionesGrupo();
     void inicializarPanelConsejos();
-    void procesarRecompensaDiariaLogin();
+    /* Recompensa diaria: solo cartas.js (DOMContentLoaded → procesarRecompensaDiariaGlobal).
+       Evita doble modal al combinar con este mismo handler. */
 
     const dificultadBotones = document.querySelectorAll('.dificultad-btn');
     const selectMazo = document.getElementById('select-mazo');
@@ -432,99 +432,6 @@ async function inicializarPanelConsejos() {
         reiniciarTimerConsejos();
     };
     reiniciarTimerConsejos();
-}
-
-function normalizarObjetosConSobres(usuario) {
-    if (!usuario || typeof usuario !== 'object') {
-        return;
-    }
-    const base = (usuario.objetos && typeof usuario.objetos === 'object') ? { ...usuario.objetos } : {};
-    base.mejoraCarta = Number(base.mejoraCarta || 0);
-    base.mejoraEspecial = Number(base.mejoraEspecial || 0);
-    if (typeof window.DC_SOBRES_MEZCLAR_INVENTARIO === 'function') {
-        usuario.objetos = window.DC_SOBRES_MEZCLAR_INVENTARIO(base);
-    } else {
-        usuario.objetos = {
-            ...base,
-            sobreH1: Number(base.sobreH1 || 0),
-            sobreH2: Number(base.sobreH2 || 0),
-            sobreH3: Number(base.sobreH3 || 0),
-            sobreV1: Number(base.sobreV1 || 0),
-            sobreV2: Number(base.sobreV2 || 0),
-            sobreV3: Number(base.sobreV3 || 0)
-        };
-    }
-}
-
-async function persistirUsuarioVistaJuego(usuario) {
-    const email = localStorage.getItem('email');
-    if (!email) {
-        throw new Error('No hay email en sesión');
-    }
-    const response = await fetch('/update-user', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ usuario, email })
-    });
-    if (!response.ok) {
-        throw new Error('No se pudo actualizar usuario en servidor');
-    }
-    localStorage.setItem('usuario', JSON.stringify(usuario));
-    window.dispatchEvent(new Event('dc:usuario-actualizado'));
-    if (typeof window.DCRedDot?.refresh === 'function') {
-        window.DCRedDot.refresh();
-    }
-}
-
-function abrirModalRecompensaDiaria() {
-    return new Promise((resolve) => {
-        const modal = document.getElementById('modal-recompensa-diaria');
-        const btn = document.getElementById('btn-aceptar-recompensa-diaria');
-        if (!modal || !btn) {
-            resolve();
-            return;
-        }
-        modal.style.display = 'flex';
-        const cerrar = () => {
-            modal.style.display = 'none';
-            btn.removeEventListener('click', onAceptar);
-            resolve();
-        };
-        const onAceptar = () => cerrar();
-        btn.addEventListener('click', onAceptar);
-    });
-}
-
-async function procesarRecompensaDiariaLogin() {
-    if (typeof window.DCRecompensaDiaria?.procesar === 'function') {
-        await window.DCRecompensaDiaria.procesar();
-        return;
-    }
-    try {
-        const usuario = JSON.parse(localStorage.getItem('usuario') || 'null');
-        if (!usuario || typeof usuario !== 'object') {
-            return;
-        }
-        normalizarObjetosConSobres(usuario);
-        const ahora = Date.now();
-        const ultimaRecompensa = Number(usuario?.recompensas?.diariaSobres?.lastClaimAt || 0);
-        const disponible = !Number.isFinite(ultimaRecompensa) || ultimaRecompensa <= 0 || (ahora - ultimaRecompensa) >= RECOMPENSA_DIARIA_COOLDOWN_MS_VISTA;
-        if (!disponible) {
-            return;
-        }
-
-        usuario.objetos.sobreH1 = Number(usuario.objetos.sobreH1 || 0) + 1;
-        usuario.objetos.sobreV1 = Number(usuario.objetos.sobreV1 || 0) + 1;
-        usuario.recompensas = (usuario.recompensas && typeof usuario.recompensas === 'object') ? usuario.recompensas : {};
-        usuario.recompensas.diariaSobres = {
-            lastClaimAt: ahora
-        };
-
-        await persistirUsuarioVistaJuego(usuario);
-        await abrirModalRecompensaDiaria();
-    } catch (error) {
-        console.error('Error aplicando recompensa diaria:', error);
-    }
 }
 
 function configurarNotificacionesGrupo() {
@@ -837,17 +744,12 @@ async function renderizarEventosActivos() {
 
         const recompensas = document.createElement('div');
         recompensas.className = 'evento-recompensas';
-        const cartaRecompensaCatalogo = mapaCatalogo.get(normalizarNombre(evento.cartaRecompensa || ''));
-        if (cartaRecompensaCatalogo) {
-            const mini = document.createElement('div');
-            mini.className = 'evento-recompensa-card';
-            mini.style.backgroundImage = `url(${obtenerImagenCarta(cartaRecompensaCatalogo)})`;
-            const nombreMini = document.createElement('div');
-            nombreMini.className = 'evento-enemigo-nombre';
-            nombreMini.textContent = cartaRecompensaCatalogo.Nombre;
-            mini.appendChild(nombreMini);
-            recompensas.appendChild(mini);
-        }
+        /** Carta de recompensa aleatoria (80 % enemigo / 20 % BOSS): mismo reverso que coop online. */
+        const miniMisterio = document.createElement('div');
+        miniMisterio.className = 'evento-recompensa-card evento-recompensa-carta-aleatoria';
+        miniMisterio.setAttribute('title', 'Carta de recompensa aleatoria');
+        miniMisterio.innerHTML = '<span class="evento-recompensa-carta-aleatoria-simbolo" aria-hidden="true">?</span>';
+        recompensas.appendChild(miniMisterio);
 
         const puntosEvento = Math.max(0, Number(evento.puntos || 0));
         const metaPuntos = document.createElement('div');
@@ -1006,6 +908,9 @@ async function abrirModalSeleccionEvento(evento) {
     });
     const data = await response.json();
     const usuario = data.usuario;
+    if (typeof window.DCRecompensaDiaria?.aplicarRespaldoClaimLocalUsuario === 'function') {
+        window.DCRecompensaDiaria.aplicarRespaldoClaimLocalUsuario(usuario);
+    }
     localStorage.setItem('usuario', JSON.stringify(usuario));
 
     const claveRotacion = obtenerClaveRotacionEventos();
