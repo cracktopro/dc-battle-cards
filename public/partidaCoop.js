@@ -2595,7 +2595,6 @@
 
     /** Marca local que evita aplicar las recompensas más de una vez por sesión. */
     let coopRecompensasProcesadas = false;
-    let coopMisionCompletadaRegistrada = false;
 
     function coopNormalizarNombre(nombre) {
         return String(nombre || '').trim().toLowerCase();
@@ -2841,10 +2840,6 @@
 
         const recompensasContainer = document.getElementById('coop-recompensas-container');
         if (recompensasContainer) recompensasContainer.innerHTML = '';
-        if (!coopMisionCompletadaRegistrada && window.DCMisiones?.track) {
-            coopMisionCompletadaRegistrada = true;
-            window.DCMisiones.track('evento_coop', { amount: 1 });
-        }
 
         if (!ganaron || !recompensasContainer) return;
 
@@ -2869,7 +2864,9 @@
             try {
                 const recompensa = await otorgarRecompensasCoop();
                 recompensasContainer.innerHTML = '';
+                /** Tras persistir recompensas en LS/Firebase para no pisar puntos/cartas con el POST de misiones. */
                 if (window.DCMisiones?.track) {
+                    window.DCMisiones.track('evento_coop', { amount: 1 });
                     if (String(payload?.evento?.boss || '').trim()) {
                         window.DCMisiones.track('boss', { amount: 1 });
                     }

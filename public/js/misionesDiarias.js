@@ -401,7 +401,14 @@
             if (incrementarMisionLista(usuario.misiones.semanales.lista, pred, inc.amount)) changed = true;
         });
         if (!changed) return;
-        await persistirUsuarioDebounced(usuario);
+        /**
+         * Releer `usuario` desde localStorage antes de persistir: si otro flujo (p. ej. recompensas coop)
+         * acaba de guardar puntos/cartas/objetos, evitamos machacarlos en Firebase con esta copia antigua.
+         */
+        const latest = leerUsuario();
+        if (!latest) return;
+        latest.misiones = usuario.misiones;
+        await persistirUsuarioDebounced(latest);
         render();
     }
 
