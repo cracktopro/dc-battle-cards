@@ -1373,7 +1373,7 @@ function normalizarMenuLateral() {
         linkMultijugador.removeEventListener('click', bloquearNavegacionMultijugador);
     }
 
-    const versionLabelTexto = 'Version: Beta-1.0.13-08.05.26';
+    const versionLabelTexto = 'Versión: 1.0.0';
     let versionLabel = menu.querySelector('#menu-version-label');
     if (!versionLabel) {
         versionLabel = document.createElement('div');

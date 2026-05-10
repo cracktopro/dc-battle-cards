@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.0
+
+- Etiqueta de versión del menú lateral: formato **`Versión: 1.0.0`** (sustituye el esquema anterior `Version: Beta-…-fecha`).
+- Coop online: las recompensas y el progreso de misiones (diarias, boss, colección) se aplican de forma coherente en ambos jugadores; el guardado de misiones fusiona con el usuario más reciente en `localStorage` para no pisar en Firebase puntos, cartas u objetos (`misionesDiarias.js`, `partidaCoop.js`).
+- Desafíos (`partida.js`): objetos **mejora** y **mejora especial**, y **cartas de recompensa** del desafío o evento, solo en la **primera** victoria (o primera vez del evento en la ventana de rotación); en repeticiones siguen otorgándose los **puntos**.
+
 ## Beta-1.0.13-08.05.26
 
 - Vista `vistaJuego`: panel **Consejos** con carrusel automático (Excel `resources/consejos.xlsx`), flechas, dots y texto con resaltado `$…$` según color RGB del jugador.
