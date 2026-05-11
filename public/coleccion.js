@@ -668,30 +668,46 @@ async function ejecutarAnimacionYAperturaSobre(inventarioKey) {
     faseEnv.appendChild(envTxt);
 
     let persistOk = false;
+    let nuevasH = 0;
+    let nuevasV = 0;
     try {
-        const usuario = obtenerUsuarioDesdeLsNormalizado();
-        if (!usuario || Number(usuario.objetos[def.inventarioKey] || 0) <= 0) {
-            cerrarModalAperturaSobre();
-            aperturaSobreEnCurso = false;
-            return;
+        const maxIntentos = 3;
+        for (let intento = 0; intento < maxIntentos && !persistOk; intento++) {
+            try {
+                const usuario = obtenerUsuarioDesdeLsNormalizado();
+                if (!usuario || Number(usuario.objetos[def.inventarioKey] || 0) <= 0) {
+                    cerrarModalAperturaSobre();
+                    aperturaSobreEnCurso = false;
+                    return;
+                }
+                const snapshotPrevias = (usuario.cartas || []).slice();
+                usuario.objetos[def.inventarioKey] = Number(usuario.objetos[def.inventarioKey] || 0) - 1;
+                cartasGeneradas.forEach((carta) => {
+                    usuario.cartas.push({ ...carta });
+                });
+                const conteo = typeof window.dcContarCartasNuevasPorFaccion === 'function'
+                    ? window.dcContarCartasNuevasPorFaccion(cartasGeneradas, snapshotPrevias, todasLasCartasCatalogo)
+                    : { nuevasH: 0, nuevasV: 0 };
+                nuevasH = conteo.nuevasH;
+                nuevasV = conteo.nuevasV;
+                await persistirUsuarioDesdeColeccion(usuario);
+                persistOk = true;
+            } catch (e) {
+                const es409 =
+                    e?.status === 409 ||
+                    e?.codigo === 'SYNC_CONFLICT' ||
+                    /SYNC_CONFLICT|conflicto de sincronizaci/i.test(String(e?.message || ''));
+                if (!es409 || intento === maxIntentos - 1) {
+                    throw e;
+                }
+                await esperar(120);
+            }
         }
-        const snapshotPrevias = (usuario.cartas || []).slice();
-        usuario.objetos[def.inventarioKey] = Number(usuario.objetos[def.inventarioKey] || 0) - 1;
-        cartasGeneradas.forEach((carta) => {
-            usuario.cartas.push({ ...carta });
-        });
-        const conteo = typeof window.dcContarCartasNuevasPorFaccion === 'function'
-            ? window.dcContarCartasNuevasPorFaccion(cartasGeneradas, snapshotPrevias, todasLasCartasCatalogo)
-            : { nuevasH: 0, nuevasV: 0 };
-        const nuevasH = conteo.nuevasH;
-        const nuevasV = conteo.nuevasV;
-        await persistirUsuarioDesdeColeccion(usuario);
         if (window.DCMisiones?.track) {
             window.DCMisiones.track('sobres', { amount: 1 });
             if (nuevasH > 0) window.DCMisiones.track('coleccion_h', { amount: nuevasH });
             if (nuevasV > 0) window.DCMisiones.track('coleccion_v', { amount: nuevasV });
         }
-        persistOk = true;
     } catch (e) {
         console.error(e);
         window.alert('No se pudo guardar el resultado. Inténtalo de nuevo.');
@@ -748,7 +764,10 @@ async function persistirUsuarioDesdeColeccion(usuario) {
             localStorage.setItem('usuario', JSON.stringify(data.usuario));
             window.dispatchEvent(new Event('dc:usuario-actualizado'));
         }
-        throw new Error(data?.mensaje || 'update-user failed');
+        const err = new Error(data?.mensaje || 'update-user failed');
+        err.status = response.status;
+        err.codigo = data?.codigo;
+        throw err;
     }
     if (data?.usuario && usuario && typeof usuario === 'object') {
         Object.keys(usuario).forEach((k) => delete usuario[k]);

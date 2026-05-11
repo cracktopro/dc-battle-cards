@@ -26,6 +26,7 @@ let nivelDesafioActivo = 1;
 let desafiosCache = [];
 const ICONO_MEJORA = '/resources/icons/mejora.png';
 const ICONO_MEJORA_ESPECIAL = '/resources/icons/mejora_especial.png';
+const ICONO_MONEDA = '/resources/icons/moneda.png';
 
 function normalizarNombre(nombre) {
     return String(nombre || '').trim().toLowerCase();
@@ -297,11 +298,11 @@ async function renderizarDesafiosGlobal() {
         });
 
         const etiquetaRecompensas = document.createElement('div');
-        etiquetaRecompensas.className = 'desafio-recompensas-label';
+        etiquetaRecompensas.className = 'evento-recompensas-label';
         etiquetaRecompensas.textContent = 'Recompensas';
 
         const recompensas = document.createElement('div');
-        recompensas.className = 'desafio-recompensas';
+        recompensas.className = 'evento-recompensas';
         const cartasRecompensa = Array.isArray(desafio.cartas)
             ? desafio.cartas.map(nombre => String(nombre || '').trim()).filter(Boolean)
             : [];
@@ -317,21 +318,22 @@ async function renderizarDesafiosGlobal() {
             recompensas.appendChild(mini);
         });
 
-        const meta = document.createElement('div');
-        meta.className = 'desafio-recompensas-meta';
-        meta.textContent = `Puntos: ${desafio.puntos}`;
-        recompensas.appendChild(meta);
+        const puntosDesafio = Math.max(0, Number(desafio.puntos || 0));
+        const metaPuntos = document.createElement('div');
+        metaPuntos.className = 'evento-recompensa-tag';
+        metaPuntos.innerHTML = `<img src="${ICONO_MONEDA}" alt="Moneda" style="width:28px;height:28px;object-fit:contain;"> <span>${puntosDesafio}</span>`;
+        recompensas.appendChild(metaPuntos);
 
         if (Number(desafio.mejora || 0) > 0) {
             const tagMejora = document.createElement('div');
-            tagMejora.className = 'desafio-recompensa-tag';
+            tagMejora.className = 'evento-recompensa-tag';
             tagMejora.innerHTML = `<img src="${ICONO_MEJORA}" alt="Mejora" style="width:28px;height:28px;object-fit:contain;"> <span>x${desafio.mejora}</span>`;
             recompensas.appendChild(tagMejora);
         }
 
         if (Number(desafio.mejora_especial || 0) > 0) {
             const tagEspecial = document.createElement('div');
-            tagEspecial.className = 'desafio-recompensa-tag';
+            tagEspecial.className = 'evento-recompensa-tag';
             tagEspecial.innerHTML = `<img src="${ICONO_MEJORA_ESPECIAL}" alt="Mejora especial" style="width:28px;height:28px;object-fit:contain;"> <span>x${desafio.mejora_especial}</span>`;
             recompensas.appendChild(tagEspecial);
         }

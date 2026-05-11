@@ -3247,7 +3247,8 @@ app.post('/update-user', async (req, res) => {
         console.log("Datos del usuario actualizados correctamente en Firebase.");
 
         // Verificar datos después de la actualización
-        const updatedDoc = await getDoc(docRef);
+        const docRefUsuario = doc(db, "users", email);
+        const updatedDoc = await getDoc(docRefUsuario);
         if (updatedDoc.exists()) {
             console.log("Datos actuales en Firebase después de la actualización:", updatedDoc.data());
         } else {
