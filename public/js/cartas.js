@@ -1157,30 +1157,7 @@ function liberarLockRecompensaDiaria() {
     localStorage.removeItem(RECOMPENSA_DIARIA_LOCK_KEY);
 }
 
-async function persistirUsuarioConRecompensaDiaria(usuario) {
-    const email = localStorage.getItem('email');
-    if (!email) throw new Error('No hay email en sesión');
-    const payloadUsuario = {
-        objetos: usuario?.objetos || {},
-        recompensas: usuario?.recompensas || {}
-    };
-    const response = await fetch('/update-user', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ usuario: payloadUsuario, email })
-    });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) {
-        if (response.status === 409 && data?.usuario) {
-            localStorage.setItem('usuario', JSON.stringify(data.usuario));
-            window.dispatchEvent(new Event('dc:usuario-actualizado'));
-        }
-        throw new Error(data?.mensaje || 'No se pudo actualizar usuario en servidor');
-    }
-    if (data?.usuario && usuario && typeof usuario === 'object') {
-        Object.keys(usuario).forEach((k) => delete usuario[k]);
-        Object.assign(usuario, data.usuario);
-    }
+function finalizarPersistenciaRecompensaDiariaOk(usuario) {
     localStorage.setItem('usuario', JSON.stringify(usuario));
     const tsClaim = Number(usuario?.recompensas?.diariaSobres?.lastClaimAt);
     if (Number.isFinite(tsClaim) && tsClaim > 0) {
@@ -1190,6 +1167,91 @@ async function persistirUsuarioConRecompensaDiaria(usuario) {
     if (typeof window.DCRedDot?.refresh === 'function') {
         window.DCRedDot.refresh();
     }
+}
+
+/**
+ * Persiste sobres diarios + `recompensas.diariaSobres` en Firebase.
+ * Debe enviar `syncToken` (y `syncUpdatedAt` si existe): un payload solo con `objetos`/`recompensas`
+ * provoca 409 si el servidor exige concurrencia.
+ * @returns {Promise<boolean>} true si este cliente aplicó el claim; false si el servidor ya tenía cooldown activo (no mostrar modal duplicado).
+ */
+async function persistirUsuarioConRecompensaDiaria(usuario) {
+    const email = localStorage.getItem('email');
+    if (!email) throw new Error('No hay email en sesión');
+
+    const claimAt = Number(usuario?.recompensas?.diariaSobres?.lastClaimAt || Date.now());
+    if (!Number.isFinite(claimAt) || claimAt <= 0) {
+        throw new Error('Falta timestamp de claim de recompensa diaria.');
+    }
+
+    for (let intento = 0; intento < 3; intento += 1) {
+        const desdeLs = leerUsuarioSesionSeguro();
+        if (desdeLs && typeof desdeLs === 'object') {
+            const tok = String(desdeLs.syncToken || '').trim();
+            if (tok) {
+                usuario.syncToken = desdeLs.syncToken;
+            }
+            const su = Number(desdeLs.syncUpdatedAt);
+            if (Number.isFinite(su) && su > 0) {
+                usuario.syncUpdatedAt = su;
+            }
+        }
+
+        const syncTok = String(usuario?.syncToken || '').trim();
+        const payloadUsuario = {
+            objetos: usuario?.objetos && typeof usuario.objetos === 'object' ? { ...usuario.objetos } : {},
+            recompensas: usuario?.recompensas && typeof usuario.recompensas === 'object' ? { ...usuario.recompensas } : {}
+        };
+        if (syncTok) {
+            payloadUsuario.syncToken = syncTok;
+            const su = Number(usuario?.syncUpdatedAt);
+            if (Number.isFinite(su) && su > 0) {
+                payloadUsuario.syncUpdatedAt = su;
+            }
+        }
+
+        const response = await fetch('/update-user', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ usuario: payloadUsuario, email })
+        });
+        const data = await response.json().catch(() => ({}));
+
+        if (response.ok) {
+            if (data?.usuario && usuario && typeof usuario === 'object') {
+                Object.keys(usuario).forEach((k) => delete usuario[k]);
+                Object.assign(usuario, data.usuario);
+            }
+            finalizarPersistenciaRecompensaDiariaOk(usuario);
+            return true;
+        }
+
+        if (response.status === 409 && data?.usuario) {
+            localStorage.setItem('usuario', JSON.stringify(data.usuario));
+            window.dispatchEvent(new Event('dc:usuario-actualizado'));
+            Object.keys(usuario).forEach((k) => delete usuario[k]);
+            Object.assign(usuario, data.usuario);
+            normalizarObjetosConSobresGlobal(usuario);
+
+            const estadoTrasConflicto = obtenerEstadoRecompensaDiaria(usuario);
+            if (!estadoTrasConflicto.disponible) {
+                finalizarPersistenciaRecompensaDiariaOk(usuario);
+                return false;
+            }
+
+            usuario.objetos.sobreH1 = Number(usuario.objetos.sobreH1 || 0) + 1;
+            usuario.objetos.sobreV1 = Number(usuario.objetos.sobreV1 || 0) + 1;
+            usuario.recompensas = (usuario.recompensas && typeof usuario.recompensas === 'object')
+                ? usuario.recompensas
+                : {};
+            usuario.recompensas.diariaSobres = { lastClaimAt: claimAt };
+            continue;
+        }
+
+        throw new Error(data?.mensaje || 'No se pudo actualizar usuario en servidor');
+    }
+
+    throw new Error('No se pudo sincronizar la recompensa diaria tras varios intentos. Recarga e inténtalo de nuevo.');
 }
 
 async function procesarRecompensaDiariaGlobal() {
@@ -1209,10 +1271,12 @@ async function procesarRecompensaDiariaGlobal() {
         const claimAt = Date.now();
         usuario.recompensas.diariaSobres = { lastClaimAt: claimAt };
 
-        await persistirUsuarioConRecompensaDiaria(usuario);
+        const mostrarModal = await persistirUsuarioConRecompensaDiaria(usuario);
         renderTimerRecompensaDiariaMenu();
-        await abrirModalRecompensaDiariaGlobal(claimAt);
-        return true;
+        if (mostrarModal) {
+            await abrirModalRecompensaDiariaGlobal(claimAt);
+        }
+        return mostrarModal;
     } catch (error) {
         console.error('Error aplicando recompensa diaria global:', error);
         return false;
