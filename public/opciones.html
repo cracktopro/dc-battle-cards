@@ -86,6 +86,99 @@
             background: rgba(255, 215, 0, 0.1);
         }
 
+        .admin-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
+            gap: 10px;
+        }
+
+        .admin-subpanel {
+            background: rgba(6, 14, 28, 0.72);
+            border: 1px solid rgba(120, 190, 255, 0.25);
+            border-radius: 10px;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .admin-cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(170px, 170px));
+            gap: 10px;
+            justify-content: start;
+            max-height: 480px;
+            overflow: auto;
+            padding-right: 4px;
+        }
+
+        .admin-card-item {
+            position: relative;
+            border: 2px solid rgba(90, 180, 255, 0.55);
+            border-radius: 10px;
+            overflow: hidden;
+            background: rgba(4, 12, 24, 0.86);
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(90, 180, 255, 0.25);
+            width: 170px;
+        }
+
+        .admin-card-item.selected {
+            border-color: rgba(255, 215, 0, 0.95);
+            box-shadow: 0 0 16px rgba(255, 215, 0, 0.58);
+        }
+
+        .admin-card-visual {
+            width: 100%;
+            aspect-ratio: 6.3 / 8.8;
+            min-height: 220px;
+            height: auto;
+            background-size: cover;
+            background-position: center top;
+            position: relative;
+        }
+
+        .admin-card-overlay {
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            padding: 8px;
+            background: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.84) 68%);
+            color: #fff;
+            font-size: 0.78rem;
+            text-shadow: 0 0 6px rgba(0, 0, 0, 0.78);
+        }
+
+        .admin-card-name {
+            display: block;
+            font-weight: 700;
+            font-size: 0.82rem;
+            line-height: 1.1;
+        }
+
+        .admin-card-meta {
+            display: block;
+            color: #c7f0ff;
+        }
+
+        .admin-inline {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .admin-sobres-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 8px;
+        }
+
+        #admin-panel {
+            margin-top: 14px;
+        }
+
         .color-principal-preview-wrap {
             display: flex;
             align-items: center;
@@ -253,24 +346,93 @@
                 </div>
             </section>
 
-            <section id="admin-panel" class="opcion-panel" style="display:none;">
-                <h4>Opciones de Administrador</h4>
-                <div class="admin-badge">Solo administrador</div>
-                <button id="admin-sumar-puntos-btn" class="btn btn-primary" type="button">Obtener 5000 puntos</button>
-                <button id="admin-obtener-cartas-btn" class="btn btn-primary" type="button">Obtener todas las cartas</button>
-                <div class="d-flex" style="gap:8px; flex-wrap:wrap;">
-                    <select id="admin-nivel-cartas" class="form-control" style="width:auto; min-width:170px;">
-                        <option value="1">Nivel 1</option>
-                        <option value="2">Nivel 2</option>
-                        <option value="3">Nivel 3</option>
-                        <option value="4">Nivel 4</option>
-                        <option value="5">Nivel 5</option>
-                        <option value="6">Nivel 6</option>
-                    </select>
-                    <button id="admin-mejorar-cartas-btn" class="btn btn-warning" type="button">Mejorar todas las cartas</button>
-                </div>
-            </section>
         </div>
+
+        <section id="admin-panel" class="opcion-panel" style="display:none;">
+            <h4>Opciones de Administrador</h4>
+            <div class="admin-badge">Solo administrador</div>
+            <button id="admin-sumar-puntos-btn" class="btn btn-primary" type="button">Obtener 5000 puntos</button>
+            <button id="admin-obtener-cartas-btn" class="btn btn-primary" type="button">Obtener todas las cartas</button>
+            <div class="d-flex" style="gap:8px; flex-wrap:wrap;">
+                <select id="admin-nivel-cartas" class="form-control" style="width:auto; min-width:170px;">
+                    <option value="1">Nivel 1</option>
+                    <option value="2">Nivel 2</option>
+                    <option value="3">Nivel 3</option>
+                    <option value="4">Nivel 4</option>
+                    <option value="5">Nivel 5</option>
+                    <option value="6">Nivel 6</option>
+                </select>
+                <button id="admin-mejorar-cartas-btn" class="btn btn-warning" type="button">Mejorar todas las cartas</button>
+            </div>
+
+            <hr style="border-color:rgba(120,190,255,0.35); margin:8px 0;">
+            <h5 style="margin:0; color:#dff8ff;">Gestión de usuarios</h5>
+            <div class="admin-grid">
+                <div class="admin-subpanel">
+                    <label for="admin-user-select" style="margin:0;">Usuario registrado</label>
+                    <div class="admin-inline">
+                        <select id="admin-user-select" class="form-control" style="min-width:220px; flex:1 1 220px;"></select>
+                        <button id="admin-user-load-btn" class="btn btn-info" type="button">Cargar usuario</button>
+                    </div>
+                    <label for="admin-target-puntos" style="margin:0;">Puntos</label>
+                    <input id="admin-target-puntos" class="form-control" type="number" min="0" step="1" value="0">
+                    <div class="admin-inline">
+                        <div style="flex:1 1 160px;">
+                            <label for="admin-target-mejora" style="margin:0;">Mejora</label>
+                            <input id="admin-target-mejora" class="form-control" type="number" min="0" step="1" value="0">
+                        </div>
+                        <div style="flex:1 1 160px;">
+                            <label for="admin-target-mejora-especial" style="margin:0;">Mejora especial</label>
+                            <input id="admin-target-mejora-especial" class="form-control" type="number" min="0" step="1" value="0">
+                        </div>
+                    </div>
+                    <label style="margin:4px 0 0; color:#b8ecff; font-size:0.88rem;">Sobres (claves en <code>objetos</code>: <code>sobreH1</code>…; HUD <code>sobre_H1</code>…)</label>
+                    <div class="admin-sobres-grid">
+                        <div>
+                            <label for="admin-target-sobreH1" style="margin:0; font-size:0.82rem;">sobre_H1</label>
+                            <input id="admin-target-sobreH1" class="form-control" type="number" min="0" step="1" value="0">
+                        </div>
+                        <div>
+                            <label for="admin-target-sobreH2" style="margin:0; font-size:0.82rem;">sobre_H2</label>
+                            <input id="admin-target-sobreH2" class="form-control" type="number" min="0" step="1" value="0">
+                        </div>
+                        <div>
+                            <label for="admin-target-sobreH3" style="margin:0; font-size:0.82rem;">sobre_H3</label>
+                            <input id="admin-target-sobreH3" class="form-control" type="number" min="0" step="1" value="0">
+                        </div>
+                        <div>
+                            <label for="admin-target-sobreV1" style="margin:0; font-size:0.82rem;">sobre_V1</label>
+                            <input id="admin-target-sobreV1" class="form-control" type="number" min="0" step="1" value="0">
+                        </div>
+                        <div>
+                            <label for="admin-target-sobreV2" style="margin:0; font-size:0.82rem;">sobre_V2</label>
+                            <input id="admin-target-sobreV2" class="form-control" type="number" min="0" step="1" value="0">
+                        </div>
+                        <div>
+                            <label for="admin-target-sobreV3" style="margin:0; font-size:0.82rem;">sobre_V3</label>
+                            <input id="admin-target-sobreV3" class="form-control" type="number" min="0" step="1" value="0">
+                        </div>
+                    </div>
+                    <button id="admin-target-save-btn" class="btn btn-success" type="button">Guardar cambios en Firebase</button>
+                </div>
+
+                <div class="admin-subpanel">
+                    <div class="admin-inline">
+                        <select id="admin-card-catalog-select" class="form-control" style="min-width:220px; flex:1 1 220px;"></select>
+                        <button id="admin-card-add-btn" class="btn btn-primary" type="button">Agregar carta</button>
+                    </div>
+                    <div class="admin-inline">
+                        <button id="admin-card-remove-btn" class="btn btn-danger" type="button">Eliminar seleccionada</button>
+                        <button id="admin-card-level-down-btn" class="btn btn-secondary" type="button">Nivel -1</button>
+                        <button id="admin-card-level-up-btn" class="btn btn-warning" type="button">Nivel +1</button>
+                    </div>
+                    <input id="admin-card-search-input" class="form-control" type="text" placeholder="Buscar carta del usuario...">
+                    <small id="admin-card-summary" style="color:#b8ecff;">Cartas: 0</small>
+                </div>
+            </div>
+
+            <div id="admin-cards-grid" class="admin-cards-grid"></div>
+        </section>
     </div>
 
     <div id="modal-seleccion-personaje" class="modal-seleccion-personaje">

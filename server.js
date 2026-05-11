@@ -3,7 +3,7 @@ const bodyParser = require('body-parser');
 const bcrypt = require('bcrypt');
 const XLSX = require('xlsx');
 const { initializeApp } = require('firebase/app');
-const { getFirestore, doc, setDoc, getDoc } = require('firebase/firestore/lite');
+const { getFirestore, doc, setDoc, getDoc, collection, getDocs } = require('firebase/firestore/lite');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
@@ -3022,6 +3022,66 @@ function obtenerCartas() {
     return cartas;
 }
 
+function generarSyncTokenUsuario() {
+    return `sync_${Date.now()}_${Math.random().toString(36).slice(2, 12)}`;
+}
+
+function esEmailAdmin(email) {
+    return String(email || '').trim().toLowerCase() === 'lorenzopablo93@gmail.com';
+}
+
+async function asegurarMetadataSyncUsuario(email, userData = {}) {
+    const tokenActual = String(userData.syncToken || '').trim();
+    const updatedAtActual = Number(userData.syncUpdatedAt || 0);
+    if (tokenActual && Number.isFinite(updatedAtActual) && updatedAtActual > 0) {
+        return userData;
+    }
+    const syncToken = tokenActual || generarSyncTokenUsuario();
+    const syncUpdatedAt = Date.now();
+    const docRef = doc(db, "users", email);
+    await setDoc(docRef, { syncToken, syncUpdatedAt }, { merge: true });
+    return { ...userData, syncToken, syncUpdatedAt };
+}
+
+async function guardarUsuarioConControlConcurrencia(email, usuarioPayload = {}) {
+    const docRef = doc(db, "users", email);
+    const docActual = await getDoc(docRef);
+    const datosActuales = docActual.data() || {};
+    const tokenServidor = String(datosActuales.syncToken || '').trim();
+    const tokenCliente = String(usuarioPayload.syncToken || '').trim();
+
+    if (tokenServidor && tokenCliente !== tokenServidor) {
+        return {
+            ok: false,
+            conflict: true,
+            usuario: datosActuales
+        };
+    }
+
+    const usuario = (usuarioPayload && typeof usuarioPayload === 'object') ? { ...usuarioPayload } : {};
+    if (!Array.isArray(usuario.cartas)) {
+        usuario.cartas = datosActuales.cartas || [];
+    }
+    if (!Array.isArray(usuario.mazos)) {
+        usuario.mazos = datosActuales.mazos || [];
+    }
+    const objsPrev = datosActuales.objetos && typeof datosActuales.objetos === 'object'
+        ? datosActuales.objetos
+        : {};
+    const objsCli = usuario.objetos && typeof usuario.objetos === 'object'
+        ? usuario.objetos
+        : {};
+    usuario.objetos = { ...objsPrev, ...objsCli };
+    usuario.syncToken = generarSyncTokenUsuario();
+    usuario.syncUpdatedAt = Date.now();
+
+    await setDoc(docRef, { ...usuario }, { merge: true });
+    return {
+        ok: true,
+        usuario
+    };
+}
+
 // Ruta de registro de usuario
 app.post('/register', async (req, res) => {
     const nickname = String(req.body?.nickname || '').trim();
@@ -3092,7 +3152,9 @@ app.post('/register', async (req, res) => {
             avatar: '',
             puntos: 0,
             cartas: cartasAsignadas,
-            mazos: []
+            mazos: [],
+            syncToken: generarSyncTokenUsuario(),
+            syncUpdatedAt: Date.now()
         });
 
         res.status(201).json({ mensaje: 'Usuario registrado con éxito' });
@@ -3114,10 +3176,11 @@ app.post('/login', async (req, res) => {
             return res.status(400).json({ mensaje: 'Usuario no encontrado' });
         }
 
-        const userData = docSnap.data();
+        let userData = docSnap.data();
         const esCorrecta = await bcrypt.compare(contraseña, userData.contraseñaHash);
 
         if (esCorrecta) {
+            userData = await asegurarMetadataSyncUsuario(email, userData);
             res.status(200).json({ mensaje: 'Inicio de sesión exitoso', usuario: userData });
         } else {
             res.status(400).json({ mensaje: 'Contraseña incorrecta' });
@@ -3142,7 +3205,8 @@ app.post('/get-user', async (req, res) => {
         const docSnap = await getDoc(docRef);
 
         if (docSnap.exists()) {
-            res.status(200).json({ usuario: docSnap.data() });
+            const userData = await asegurarMetadataSyncUsuario(email, docSnap.data());
+            res.status(200).json({ usuario: userData });
         } else {
             res.status(404).json({ mensaje: 'Usuario no encontrado.' });
         }
@@ -3168,36 +3232,16 @@ app.post('/update-user', async (req, res) => {
     }
 
     try {
-        const docRef = doc(db, "users", email);
-        
-        // Log para verificar el documento que se va a actualizar en Firebase
         console.log("Actualizando documento en Firebase para el usuario con email:", email);
         console.log("Datos del usuario para actualizar:", usuario);
-
-        // Actualizar el documento del usuario en Firebase Firestore
-        const docActual = await getDoc(docRef);
-        const datosActuales = docActual.data() || {};
-
-        // PROTECCIÓN DE CARTAS: solo rellenar cuando venga undefined/null.
-        if (!Array.isArray(usuario.cartas)) {
-            usuario.cartas = datosActuales.cartas || [];
+        const resultado = await guardarUsuarioConControlConcurrencia(email, usuario);
+        if (!resultado.ok && resultado.conflict) {
+            return res.status(409).json({
+                mensaje: 'Conflicto de sincronización: tu sesión local está desactualizada. Recarga para continuar.',
+                codigo: 'SYNC_CONFLICT',
+                usuario: resultado.usuario
+            });
         }
-
-        // PROTECCIÓN DE MAZOS: solo rellenar cuando venga undefined/null.
-        if (!Array.isArray(usuario.mazos)) {
-            usuario.mazos = datosActuales.mazos || [];
-        }
-
-        // Fusión de `objetos`: un mapa parcial del cliente no debe borrar otras claves (p. ej. sobres vs mejoras).
-        const objsPrev = datosActuales.objetos && typeof datosActuales.objetos === 'object'
-            ? datosActuales.objetos
-            : {};
-        const objsCli = usuario.objetos && typeof usuario.objetos === 'object'
-            ? usuario.objetos
-            : {};
-        usuario.objetos = { ...objsPrev, ...objsCli };
-
-        await setDoc(docRef, { ...usuario }, { merge: true });
 
         // Log para confirmar que la actualización fue exitosa
         console.log("Datos del usuario actualizados correctamente en Firebase.");
@@ -3210,10 +3254,88 @@ app.post('/update-user', async (req, res) => {
             console.log("El documento no existe después de la actualización.");
         }
 
-        res.status(200).json({ mensaje: 'Datos de usuario actualizados correctamente en Firebase.' });
+        res.status(200).json({
+            mensaje: 'Datos de usuario actualizados correctamente en Firebase.',
+            usuario: resultado.usuario
+        });
     } catch (error) {
         console.error("Error al actualizar los datos del usuario en Firebase:", error.message);
         res.status(500).json({ mensaje: 'Error al actualizar los datos del usuario en Firebase.' });
+    }
+});
+
+app.post('/admin/users/list', async (req, res) => {
+    const requesterEmail = String(req.body?.requesterEmail || '').trim().toLowerCase();
+    if (!esEmailAdmin(requesterEmail)) {
+        return res.status(403).json({ mensaje: 'Acceso denegado.' });
+    }
+    try {
+        const snap = await getDocs(collection(db, "users"));
+        const usuarios = [];
+        snap.forEach((docSnap) => {
+            const data = docSnap.data() || {};
+            usuarios.push({
+                email: docSnap.id,
+                nickname: String(data.nickname || '').trim() || docSnap.id
+            });
+        });
+        usuarios.sort((a, b) => a.email.localeCompare(b.email));
+        return res.status(200).json({ usuarios });
+    } catch (error) {
+        console.error("Error al listar usuarios admin:", error.message);
+        return res.status(500).json({ mensaje: 'No se pudo listar usuarios.' });
+    }
+});
+
+app.post('/admin/user/get', async (req, res) => {
+    const requesterEmail = String(req.body?.requesterEmail || '').trim().toLowerCase();
+    const targetEmail = String(req.body?.targetEmail || '').trim().toLowerCase();
+    if (!esEmailAdmin(requesterEmail)) {
+        return res.status(403).json({ mensaje: 'Acceso denegado.' });
+    }
+    if (!targetEmail) {
+        return res.status(400).json({ mensaje: 'targetEmail no proporcionado.' });
+    }
+    try {
+        const docRef = doc(db, "users", targetEmail);
+        const docSnap = await getDoc(docRef);
+        if (!docSnap.exists()) {
+            return res.status(404).json({ mensaje: 'Usuario no encontrado.' });
+        }
+        const usuario = await asegurarMetadataSyncUsuario(targetEmail, docSnap.data());
+        return res.status(200).json({ usuario });
+    } catch (error) {
+        console.error("Error admin get usuario:", error.message);
+        return res.status(500).json({ mensaje: 'No se pudo obtener el usuario.' });
+    }
+});
+
+app.post('/admin/user/update', async (req, res) => {
+    const requesterEmail = String(req.body?.requesterEmail || '').trim().toLowerCase();
+    const targetEmail = String(req.body?.targetEmail || '').trim().toLowerCase();
+    const usuario = req.body?.usuario;
+    if (!esEmailAdmin(requesterEmail)) {
+        return res.status(403).json({ mensaje: 'Acceso denegado.' });
+    }
+    if (!targetEmail || !usuario || typeof usuario !== 'object') {
+        return res.status(400).json({ mensaje: 'Parámetros inválidos.' });
+    }
+    try {
+        const resultado = await guardarUsuarioConControlConcurrencia(targetEmail, usuario);
+        if (!resultado.ok && resultado.conflict) {
+            return res.status(409).json({
+                mensaje: 'El usuario fue actualizado desde otro cliente. Recarga y reintenta.',
+                codigo: 'SYNC_CONFLICT',
+                usuario: resultado.usuario
+            });
+        }
+        return res.status(200).json({
+            mensaje: 'Usuario actualizado correctamente.',
+            usuario: resultado.usuario
+        });
+    } catch (error) {
+        console.error("Error admin update usuario:", error.message);
+        return res.status(500).json({ mensaje: 'No se pudo actualizar el usuario.' });
     }
 });
 

@@ -5,6 +5,11 @@ let faccionAvatarActiva = 'H';
 let afiliacionAvatarActiva = 'todas';
 let busquedaAvatar = '';
 let cartaAvatarSeleccionada = null;
+let adminUsuariosRegistrados = [];
+let adminUsuarioObjetivo = null;
+let adminUsuarioObjetivoEmail = '';
+let adminCartaObjetivoIndex = -1;
+let adminBusquedaCartas = '';
 const COLOR_PRINCIPAL_DEFAULT = { r: 0, g: 123, b: 255 };
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -16,14 +21,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
     }
 
+    // El panel admin debe mostrarse aunque falle alguna carga secundaria.
+    renderizarPanelAdmin();
+
     try {
         configurarEventos();
         await cargarCatalogoCartas();
         renderizarPerfil();
         renderizarColorPrincipalUI();
-        renderizarPanelAdmin();
+        await inicializarAdminGestionUsuarios();
     } catch (error) {
         console.error(error);
+        renderizarPanelAdmin();
         mostrarMensaje('No se pudo cargar la vista de opciones.', 'danger');
     }
 });
@@ -136,6 +145,22 @@ function configurarEventos() {
     document.getElementById('admin-sumar-puntos-btn')?.addEventListener('click', adminSumarPuntos);
     document.getElementById('admin-obtener-cartas-btn')?.addEventListener('click', adminObtenerTodasCartas);
     document.getElementById('admin-mejorar-cartas-btn')?.addEventListener('click', adminMejorarTodasCartas);
+    document.getElementById('admin-user-load-btn')?.addEventListener('click', cargarUsuarioObjetivoAdmin);
+    document.getElementById('admin-target-save-btn')?.addEventListener('click', guardarUsuarioObjetivoAdmin);
+    document.getElementById('admin-card-add-btn')?.addEventListener('click', adminAgregarCartaObjetivo);
+    document.getElementById('admin-card-remove-btn')?.addEventListener('click', adminEliminarCartaObjetivo);
+    document.getElementById('admin-card-level-up-btn')?.addEventListener('click', () => adminCambiarNivelCartaObjetivo(1));
+    document.getElementById('admin-card-level-down-btn')?.addEventListener('click', () => adminCambiarNivelCartaObjetivo(-1));
+    document.getElementById('admin-card-search-input')?.addEventListener('input', (event) => {
+        adminBusquedaCartas = normalizarNombre(event.target.value);
+        renderizarCartasAdminObjetivo();
+    });
+    document.getElementById('admin-target-puntos')?.addEventListener('input', sincronizarCamposBasicosObjetivoAdmin);
+    document.getElementById('admin-target-mejora')?.addEventListener('input', sincronizarCamposBasicosObjetivoAdmin);
+    document.getElementById('admin-target-mejora-especial')?.addEventListener('input', sincronizarCamposBasicosObjetivoAdmin);
+    obtenerClavesSobreInventarioAdmin().forEach((key) => {
+        document.getElementById(`admin-target-${key}`)?.addEventListener('input', sincronizarCamposBasicosObjetivoAdmin);
+    });
 
     document.getElementById('color-principal-input')?.addEventListener('input', actualizarPreviewColorPrincipal);
     document.getElementById('color-principal-input')?.addEventListener('change', actualizarPreviewColorPrincipal);
@@ -168,7 +193,19 @@ function renderizarPerfil() {
 function renderizarPanelAdmin() {
     const adminPanel = document.getElementById('admin-panel');
     if (!adminPanel) return;
-    adminPanel.style.display = emailActual === 'lorenzopablo93@gmail.com' ? 'flex' : 'none';
+    adminPanel.style.display = esCuentaAdminActual() ? 'flex' : 'none';
+}
+
+function esCuentaAdminActual() {
+    const emailSesion = String(emailActual || '').trim().toLowerCase();
+    const emailUsuario = String(usuarioActual?.email || '').trim().toLowerCase();
+    return emailSesion === 'lorenzopablo93@gmail.com' || emailUsuario === 'lorenzopablo93@gmail.com';
+}
+
+async function inicializarAdminGestionUsuarios() {
+    if (!esCuentaAdminActual()) return;
+    await cargarUsuariosRegistradosAdmin();
+    poblarCatalogoCartasAdmin();
 }
 
 function normalizarCanalRgb(valor, fallback = 0) {
@@ -460,16 +497,23 @@ async function adminObtenerTodasCartas() {
 }
 
 function escalarCartaANivel(carta, nivelObjetivo) {
-    const nivelActual = Number(carta.Nivel || 1);
+    const nivelNormalizado = Math.min(Math.max(Number(nivelObjetivo || 1), 1), 6);
+    const nivelActual = Math.max(1, Number(carta.Nivel || 1));
     const poderActual = Number(carta.Poder || 0);
+    const saludActualBase = Number(carta.SaludMax ?? carta.Salud ?? carta.Poder ?? 0);
     const poderBaseNivel1 = Math.max(0, poderActual - ((nivelActual - 1) * 500));
+    const saludBaseNivel1 = Math.max(1, saludActualBase - ((nivelActual - 1) * 500));
+    const poderEscalado = poderBaseNivel1 + ((nivelNormalizado - 1) * 500);
+    const saludEscalada = saludBaseNivel1 + ((nivelNormalizado - 1) * 500);
     const cartaEscalada = {
         ...carta,
-        Nivel: nivelObjetivo,
-        Poder: poderBaseNivel1 + ((nivelObjetivo - 1) * 500)
+        Nivel: nivelNormalizado,
+        Poder: Math.max(0, poderEscalado),
+        SaludMax: Math.max(1, saludEscalada),
+        Salud: Math.max(1, saludEscalada)
     };
     if (typeof window.recalcularSkillPowerPorNivel === 'function') {
-        window.recalcularSkillPowerPorNivel(cartaEscalada, nivelObjetivo, { rawEsBase: true });
+        window.recalcularSkillPowerPorNivel(cartaEscalada, nivelNormalizado, { rawEsBase: true });
     }
     return cartaEscalada;
 }
@@ -478,6 +522,328 @@ async function adminMejorarTodasCartas() {
     const nivel = Math.min(Math.max(Number(document.getElementById('admin-nivel-cartas').value || 1), 1), 6);
     usuarioActual.cartas = (usuarioActual.cartas || []).map(carta => escalarCartaANivel(carta, nivel));
     await persistirUsuario(`Todas tus cartas se han ajustado a nivel ${nivel}.`, 'success');
+}
+
+function obtenerClavesSobreInventarioAdmin() {
+    if (typeof window.DC_SOBRES_KEYS_INVENTARIO === 'function') {
+        const keys = window.DC_SOBRES_KEYS_INVENTARIO();
+        if (Array.isArray(keys) && keys.length > 0) {
+            return keys;
+        }
+    }
+    return ['sobreH1', 'sobreH2', 'sobreH3', 'sobreV1', 'sobreV2', 'sobreV3'];
+}
+
+function poblarCatalogoCartasAdmin() {
+    const selector = document.getElementById('admin-card-catalog-select');
+    if (!selector) return;
+    selector.innerHTML = '';
+    const optionVacia = document.createElement('option');
+    optionVacia.value = '';
+    optionVacia.textContent = 'Selecciona carta para agregar';
+    selector.appendChild(optionVacia);
+    [...catalogoCartas]
+        .sort((a, b) => String(a?.Nombre || '').localeCompare(String(b?.Nombre || '')))
+        .forEach((carta) => {
+            const option = document.createElement('option');
+            option.value = String(carta?.Nombre || '');
+            option.textContent = String(carta?.Nombre || '(Sin nombre)');
+            selector.appendChild(option);
+        });
+}
+
+function normalizarUsuarioObjetivoAdmin() {
+    if (!adminUsuarioObjetivo || typeof adminUsuarioObjetivo !== 'object') return;
+    adminUsuarioObjetivo.puntos = Math.max(0, Math.floor(Number(adminUsuarioObjetivo.puntos || 0)));
+    adminUsuarioObjetivo.objetos = (adminUsuarioObjetivo.objetos && typeof adminUsuarioObjetivo.objetos === 'object')
+        ? adminUsuarioObjetivo.objetos
+        : {};
+    if (typeof window.DC_SOBRES_MEZCLAR_INVENTARIO === 'function') {
+        adminUsuarioObjetivo.objetos = window.DC_SOBRES_MEZCLAR_INVENTARIO(adminUsuarioObjetivo.objetos);
+    }
+    adminUsuarioObjetivo.objetos.mejoraCarta = Math.max(0, Math.floor(Number(adminUsuarioObjetivo.objetos.mejoraCarta || 0)));
+    adminUsuarioObjetivo.objetos.mejoraEspecial = Math.max(0, Math.floor(Number(adminUsuarioObjetivo.objetos.mejoraEspecial || 0)));
+    obtenerClavesSobreInventarioAdmin().forEach((key) => {
+        adminUsuarioObjetivo.objetos[key] = Math.max(0, Math.floor(Number(adminUsuarioObjetivo.objetos[key] || 0)));
+    });
+    adminUsuarioObjetivo.cartas = Array.isArray(adminUsuarioObjetivo.cartas) ? adminUsuarioObjetivo.cartas : [];
+}
+
+function renderizarCamposBasicosObjetivoAdmin() {
+    const puntosEl = document.getElementById('admin-target-puntos');
+    const mejoraEl = document.getElementById('admin-target-mejora');
+    const mejoraEspEl = document.getElementById('admin-target-mejora-especial');
+    if (!adminUsuarioObjetivo) {
+        if (puntosEl) puntosEl.value = '0';
+        if (mejoraEl) mejoraEl.value = '0';
+        if (mejoraEspEl) mejoraEspEl.value = '0';
+        obtenerClavesSobreInventarioAdmin().forEach((key) => {
+            const el = document.getElementById(`admin-target-${key}`);
+            if (el) el.value = '0';
+        });
+        return;
+    }
+    normalizarUsuarioObjetivoAdmin();
+    if (puntosEl) puntosEl.value = String(adminUsuarioObjetivo.puntos || 0);
+    if (mejoraEl) mejoraEl.value = String(adminUsuarioObjetivo.objetos.mejoraCarta || 0);
+    if (mejoraEspEl) mejoraEspEl.value = String(adminUsuarioObjetivo.objetos.mejoraEspecial || 0);
+    obtenerClavesSobreInventarioAdmin().forEach((key) => {
+        const el = document.getElementById(`admin-target-${key}`);
+        if (el) el.value = String(adminUsuarioObjetivo.objetos[key] || 0);
+    });
+}
+
+function sincronizarCamposBasicosObjetivoAdmin() {
+    if (!adminUsuarioObjetivo) return;
+    const puntosEl = document.getElementById('admin-target-puntos');
+    const mejoraEl = document.getElementById('admin-target-mejora');
+    const mejoraEspEl = document.getElementById('admin-target-mejora-especial');
+    adminUsuarioObjetivo.puntos = Math.max(0, Math.floor(Number(puntosEl?.value || 0)));
+    adminUsuarioObjetivo.objetos = (adminUsuarioObjetivo.objetos && typeof adminUsuarioObjetivo.objetos === 'object')
+        ? adminUsuarioObjetivo.objetos
+        : {};
+    adminUsuarioObjetivo.objetos.mejoraCarta = Math.max(0, Math.floor(Number(mejoraEl?.value || 0)));
+    adminUsuarioObjetivo.objetos.mejoraEspecial = Math.max(0, Math.floor(Number(mejoraEspEl?.value || 0)));
+    obtenerClavesSobreInventarioAdmin().forEach((key) => {
+        const el = document.getElementById(`admin-target-${key}`);
+        adminUsuarioObjetivo.objetos[key] = Math.max(0, Math.floor(Number(el?.value || 0)));
+    });
+}
+
+async function cargarUsuariosRegistradosAdmin() {
+    const selector = document.getElementById('admin-user-select');
+    if (!selector) return;
+    try {
+        const response = await fetch('/admin/users/list', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ requesterEmail: emailActual })
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            throw new Error(data?.mensaje || 'No se pudo cargar usuarios');
+        }
+        adminUsuariosRegistrados = Array.isArray(data?.usuarios) ? data.usuarios : [];
+        selector.innerHTML = '';
+        const vacio = document.createElement('option');
+        vacio.value = '';
+        vacio.textContent = 'Selecciona un usuario';
+        selector.appendChild(vacio);
+        adminUsuariosRegistrados.forEach((u) => {
+            const opt = document.createElement('option');
+            opt.value = String(u.email || '');
+            opt.textContent = `${u.nickname || u.email} (${u.email})`;
+            selector.appendChild(opt);
+        });
+    } catch (error) {
+        console.error(error);
+        mostrarMensaje('No se pudo cargar la lista de usuarios.', 'danger');
+    }
+}
+
+async function cargarUsuarioObjetivoAdmin() {
+    const selector = document.getElementById('admin-user-select');
+    const targetEmail = String(selector?.value || '').trim().toLowerCase();
+    if (!targetEmail) {
+        mostrarMensaje('Selecciona un usuario primero.', 'warning');
+        return;
+    }
+    try {
+        const response = await fetch('/admin/user/get', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ requesterEmail: emailActual, targetEmail })
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            throw new Error(data?.mensaje || 'No se pudo cargar el usuario');
+        }
+        adminUsuarioObjetivoEmail = targetEmail;
+        adminUsuarioObjetivo = data?.usuario || null;
+        adminCartaObjetivoIndex = -1;
+        adminBusquedaCartas = '';
+        const searchInput = document.getElementById('admin-card-search-input');
+        if (searchInput) searchInput.value = '';
+        renderizarCamposBasicosObjetivoAdmin();
+        renderizarCartasAdminObjetivo();
+        mostrarMensaje(`Usuario cargado: ${targetEmail}`, 'success');
+    } catch (error) {
+        console.error(error);
+        mostrarMensaje('No se pudo cargar el usuario objetivo.', 'danger');
+    }
+}
+
+function crearCartaAdminDesdeCatalogo(cartaCatalogo, nivelObjetivo = 1) {
+    const nivel = Math.min(Math.max(Number(nivelObjetivo || 1), 1), 6);
+    const base = {
+        ...cartaCatalogo,
+        Nivel: 1,
+        Poder: Number(cartaCatalogo?.Poder || 0),
+        SaludMax: Number(cartaCatalogo?.SaludMax || cartaCatalogo?.Salud || cartaCatalogo?.Poder || 1),
+        Salud: Number(cartaCatalogo?.Salud || cartaCatalogo?.SaludMax || cartaCatalogo?.Poder || 1)
+    };
+    return escalarCartaANivel(base, nivel);
+}
+
+function crearCardAdminElemento(carta, indexReal) {
+    const card = document.createElement('div');
+    card.className = `admin-card-item ${adminCartaObjetivoIndex === indexReal ? 'selected' : ''}`;
+
+    const visual = document.createElement('div');
+    visual.className = 'admin-card-visual';
+    const img = String(carta?.Imagen_final || carta?.Imagen || carta?.imagen || '').trim();
+    visual.style.backgroundImage = `url(${img || 'img/default-image.jpg'})`;
+
+    const estrellasDiv = document.createElement('div');
+    estrellasDiv.className = 'estrellas-carta';
+    const nivel = Math.min(Math.max(Number(carta?.Nivel || 1), 1), 6);
+    for (let i = 0; i < nivel; i += 1) {
+        const estrella = document.createElement('img');
+        estrella.className = 'estrella';
+        estrella.src = 'https://i.ibb.co/zZt4R3x/star-level.png';
+        estrella.alt = 'star';
+        estrellasDiv.appendChild(estrella);
+    }
+    visual.appendChild(estrellasDiv);
+
+    const habilidad = String(carta?.SkillName || carta?.NombreHabilidad || '').trim();
+    const saludMax = Number(carta?.SaludMax || carta?.Salud || 0);
+    const saludAct = Number(carta?.Salud || saludMax || 0);
+    const overlay = document.createElement('div');
+    overlay.className = 'admin-card-overlay';
+    overlay.innerHTML = `
+        <span class="admin-card-name">${String(carta?.Nombre || '(Sin nombre)')}</span>
+        <span class="admin-card-meta">Nivel ${nivel} | Poder ${Number(carta?.Poder || 0)}</span>
+        <span class="admin-card-meta">Salud ${Math.max(0, saludAct)}/${Math.max(0, saludMax)}</span>
+        <span class="admin-card-meta">${habilidad ? `Hab: ${habilidad}` : 'Sin habilidad'}</span>
+    `;
+    visual.appendChild(overlay);
+    card.appendChild(visual);
+
+    const badgeHabilidad = window.crearBadgeHabilidadCarta ? window.crearBadgeHabilidadCarta(carta) : null;
+    if (badgeHabilidad) card.appendChild(badgeHabilidad);
+    const badgeAfiliacion = window.crearBadgeAfiliacionCarta ? window.crearBadgeAfiliacionCarta(carta) : null;
+    if (badgeAfiliacion) card.appendChild(badgeAfiliacion);
+
+    card.addEventListener('click', () => {
+        adminCartaObjetivoIndex = indexReal;
+        renderizarCartasAdminObjetivo();
+    });
+    return card;
+}
+
+function renderizarCartasAdminObjetivo() {
+    const grid = document.getElementById('admin-cards-grid');
+    const summary = document.getElementById('admin-card-summary');
+    if (!grid) return;
+    grid.innerHTML = '';
+    if (!adminUsuarioObjetivo) {
+        if (summary) summary.textContent = 'Cartas: 0';
+        return;
+    }
+    normalizarUsuarioObjetivoAdmin();
+    const cartas = adminUsuarioObjetivo.cartas;
+    const filtradas = cartas
+        .map((carta, index) => ({ carta, index }))
+        .filter(({ carta }) => {
+            if (!adminBusquedaCartas) return true;
+            return normalizarNombre(carta?.Nombre).includes(adminBusquedaCartas);
+        });
+    filtradas.forEach(({ carta, index }) => {
+        grid.appendChild(crearCardAdminElemento(carta, index));
+    });
+    if (summary) {
+        summary.textContent = `Cartas: ${cartas.length} | Mostrando: ${filtradas.length}`;
+    }
+}
+
+function adminAgregarCartaObjetivo() {
+    if (!adminUsuarioObjetivo) {
+        mostrarMensaje('Carga primero un usuario objetivo.', 'warning');
+        return;
+    }
+    const selector = document.getElementById('admin-card-catalog-select');
+    const nombre = String(selector?.value || '').trim();
+    if (!nombre) {
+        mostrarMensaje('Selecciona una carta del catálogo.', 'warning');
+        return;
+    }
+    const cartaCatalogo = catalogoCartas.find((c) => String(c?.Nombre || '').trim() === nombre);
+    if (!cartaCatalogo) {
+        mostrarMensaje('No se encontró esa carta en catálogo.', 'danger');
+        return;
+    }
+    adminUsuarioObjetivo.cartas.push(crearCartaAdminDesdeCatalogo(cartaCatalogo, 1));
+    adminCartaObjetivoIndex = adminUsuarioObjetivo.cartas.length - 1;
+    renderizarCartasAdminObjetivo();
+}
+
+function adminEliminarCartaObjetivo() {
+    if (!adminUsuarioObjetivo || adminCartaObjetivoIndex < 0) {
+        mostrarMensaje('Selecciona una carta para eliminar.', 'warning');
+        return;
+    }
+    if (!Array.isArray(adminUsuarioObjetivo.cartas) || !adminUsuarioObjetivo.cartas[adminCartaObjetivoIndex]) {
+        return;
+    }
+    adminUsuarioObjetivo.cartas.splice(adminCartaObjetivoIndex, 1);
+    adminCartaObjetivoIndex = -1;
+    renderizarCartasAdminObjetivo();
+}
+
+function adminCambiarNivelCartaObjetivo(delta) {
+    if (!adminUsuarioObjetivo || adminCartaObjetivoIndex < 0) {
+        mostrarMensaje('Selecciona una carta para modificar nivel.', 'warning');
+        return;
+    }
+    const carta = adminUsuarioObjetivo.cartas[adminCartaObjetivoIndex];
+    if (!carta) return;
+    const nivelActual = Math.min(Math.max(Number(carta.Nivel || 1), 1), 6);
+    const nuevoNivel = Math.min(Math.max(nivelActual + Number(delta || 0), 1), 6);
+    adminUsuarioObjetivo.cartas[adminCartaObjetivoIndex] = escalarCartaANivel(carta, nuevoNivel);
+    renderizarCartasAdminObjetivo();
+}
+
+async function guardarUsuarioObjetivoAdmin() {
+    if (!adminUsuarioObjetivo || !adminUsuarioObjetivoEmail) {
+        mostrarMensaje('No hay usuario objetivo cargado.', 'warning');
+        return;
+    }
+    sincronizarCamposBasicosObjetivoAdmin();
+    try {
+        const response = await fetch('/admin/user/update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                requesterEmail: emailActual,
+                targetEmail: adminUsuarioObjetivoEmail,
+                usuario: adminUsuarioObjetivo
+            })
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            if (response.status === 409 && data?.usuario) {
+                adminUsuarioObjetivo = data.usuario;
+                renderizarCamposBasicosObjetivoAdmin();
+                renderizarCartasAdminObjetivo();
+            }
+            throw new Error(data?.mensaje || 'No se pudo guardar usuario objetivo');
+        }
+        adminUsuarioObjetivo = data?.usuario || adminUsuarioObjetivo;
+        renderizarCamposBasicosObjetivoAdmin();
+        renderizarCartasAdminObjetivo();
+        if (normalizarNombre(adminUsuarioObjetivoEmail) === normalizarNombre(emailActual)) {
+            usuarioActual = adminUsuarioObjetivo;
+            localStorage.setItem('usuario', JSON.stringify(usuarioActual));
+            renderizarPerfil();
+            renderizarColorPrincipalUI();
+            window.dispatchEvent(new Event('dc:usuario-actualizado'));
+        }
+        mostrarMensaje('Cambios guardados correctamente en Firebase.', 'success');
+    } catch (error) {
+        console.error(error);
+        mostrarMensaje('No se pudieron guardar los cambios del usuario objetivo.', 'danger');
+    }
 }
 
 async function persistirUsuario(mensajeExito, tipo = 'success') {
@@ -489,9 +855,17 @@ async function persistirUsuario(mensajeExito, tipo = 'success') {
             },
             body: JSON.stringify({ usuario: usuarioActual, email: emailActual })
         });
-
+        const data = await response.json().catch(() => ({}));
         if (!response.ok) {
-            throw new Error('Error al actualizar los datos de usuario.');
+            if (response.status === 409 && data?.usuario) {
+                localStorage.setItem('usuario', JSON.stringify(data.usuario));
+                usuarioActual = data.usuario;
+                window.dispatchEvent(new Event('dc:usuario-actualizado'));
+            }
+            throw new Error(data?.mensaje || 'Error al actualizar los datos de usuario.');
+        }
+        if (data?.usuario) {
+            usuarioActual = data.usuario;
         }
 
         localStorage.setItem('usuario', JSON.stringify(usuarioActual));

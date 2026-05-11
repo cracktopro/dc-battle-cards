@@ -2606,10 +2606,18 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ usuario, email })
         });
+        const data = await response.json().catch(() => ({}));
         if (!response.ok) {
-            throw new Error('No se pudieron guardar los datos del usuario en Firebase.');
+            if (response.status === 409 && data?.usuario) {
+                localStorage.setItem('usuario', JSON.stringify(data.usuario));
+            }
+            throw new Error(data?.mensaje || 'No se pudieron guardar los datos del usuario en Firebase.');
         }
-        return response.json();
+        if (data?.usuario && usuario && typeof usuario === 'object') {
+            Object.keys(usuario).forEach((k) => delete usuario[k]);
+            Object.assign(usuario, data.usuario);
+        }
+        return data;
     }
 
     async function coopObtenerCartasDisponibles() {

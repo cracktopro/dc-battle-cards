@@ -742,7 +742,18 @@ async function persistirUsuarioDesdeColeccion(usuario) {
         },
         body: JSON.stringify({ usuario, email })
     });
-    if (!response.ok) throw new Error('update-user failed');
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+        if (response.status === 409 && data?.usuario) {
+            localStorage.setItem('usuario', JSON.stringify(data.usuario));
+            window.dispatchEvent(new Event('dc:usuario-actualizado'));
+        }
+        throw new Error(data?.mensaje || 'update-user failed');
+    }
+    if (data?.usuario && usuario && typeof usuario === 'object') {
+        Object.keys(usuario).forEach((k) => delete usuario[k]);
+        Object.assign(usuario, data.usuario);
+    }
     localStorage.setItem('usuario', JSON.stringify(usuario));
     if (typeof window.actualizarPanelPerfilTiempoReal === 'function') {
         window.actualizarPanelPerfilTiempoReal();

@@ -1351,12 +1351,18 @@ async function actualizarUsuarioFirebase(usuario, email) {
             },
             body: JSON.stringify({ usuario, email }) // Incluye el email en la solicitud
         });
-
+        const data = await response.json().catch(() => ({}));
         if (!response.ok) {
-            throw new Error('Error en la solicitud de actualización.');
+            if (response.status === 409 && data?.usuario) {
+                localStorage.setItem('usuario', JSON.stringify(data.usuario));
+                window.dispatchEvent(new Event('dc:usuario-actualizado'));
+            }
+            throw new Error(data?.mensaje || 'Error en la solicitud de actualización.');
         }
-
-        const data = await response.json();
+        if (data?.usuario && usuario && typeof usuario === 'object') {
+            Object.keys(usuario).forEach((k) => delete usuario[k]);
+            Object.assign(usuario, data.usuario);
+        }
         console.log('Respuesta de actualización de Firebase:', data);
         return data;
     } catch (error) {

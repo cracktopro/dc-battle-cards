@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.1
+
+- Etiqueta de versión del menú lateral: **`Versión: 1.0.1`** (`public/js/cartas.js`).
+- Sincronización multi-dispositivo: `syncToken` / `syncUpdatedAt` en Firestore; `/update-user` y guardado admin rechazan escrituras obsoletas con **409**; respuesta con `usuario` actualizado; clientes fusionan estado local (`server.js`, `partida.js`, `partidaCoop.js`, `misionesDiarias.js`, `tienda.js`, `coleccion.js`, `mejorarCartas.js`, `mazos.js`, `crearMazos.js`, `opciones.js`, `cartas.js`).
+- Opciones — panel administrador (`lorenzopablo93@gmail.com`): gestión de usuarios (listar, cargar, editar puntos, mejoras, inventario de **sobres** `sobreH1`…`sobreV3`, cartas con vista previa, guardado vía `/admin/*`); layout a ancho completo bajo el resto de paneles; escalado de nivel alinea **poder, salud y skill** con `recalcularSkillPowerPorNivel`; corrección de sintaxis `??`/`||` en `escalarCartaANivel`.
+- Endpoints admin en servidor: `POST /admin/users/list`, `/admin/user/get`, `/admin/user/update` (solo cuenta admin); refactor interno de guardado con control de concurrencia.
+
 ## 1.0.0
 
 - Etiqueta de versión del menú lateral: formato **`Versión: 1.0.0`** (sustituye el esquema anterior `Version: Beta-…-fecha`).

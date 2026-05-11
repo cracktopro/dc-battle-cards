@@ -734,12 +734,18 @@ async function actualizarUsuarioFirebase(usuario, email) {
             },
             body: JSON.stringify({ usuario, email })
         });
-
+        const data = await response.json().catch(() => ({}));
         if (!response.ok) {
-            throw new Error('Error en la solicitud de actualización.');
+            if (response.status === 409 && data?.usuario) {
+                localStorage.setItem('usuario', JSON.stringify(data.usuario));
+            }
+            throw new Error(data?.mensaje || 'Error en la solicitud de actualización.');
         }
-
-        return response.json();
+        if (data?.usuario && usuario && typeof usuario === 'object') {
+            Object.keys(usuario).forEach((k) => delete usuario[k]);
+            Object.assign(usuario, data.usuario);
+        }
+        return data;
     } catch (error) {
         console.error('Error al actualizar el usuario en Firebase:', error);
         throw error;

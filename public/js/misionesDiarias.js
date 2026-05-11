@@ -55,8 +55,16 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ usuario, email })
         });
+        const data = await response.json().catch(() => ({}));
         if (!response.ok) {
-            throw new Error('No se pudo guardar progreso de misiones');
+            if (response.status === 409 && data?.usuario) {
+                escribirUsuario(data.usuario);
+            }
+            throw new Error(data?.mensaje || 'No se pudo guardar progreso de misiones');
+        }
+        if (data?.usuario && usuario && typeof usuario === 'object') {
+            Object.keys(usuario).forEach((k) => delete usuario[k]);
+            Object.assign(usuario, data.usuario);
         }
         escribirUsuario(usuario);
     }

@@ -727,11 +727,23 @@ async function persistirMigracionSkillsUsuario(usuario, email) {
         return;
     }
     try {
-        await fetch('/update-user', {
+        const response = await fetch('/update-user', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ usuario, email })
         });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            if (response.status === 409 && data?.usuario) {
+                localStorage.setItem('usuario', JSON.stringify(data.usuario));
+                window.dispatchEvent(new Event('dc:usuario-actualizado'));
+            }
+            throw new Error(data?.mensaje || 'No se pudo persistir la migración de skills');
+        }
+        if (data?.usuario && usuario && typeof usuario === 'object') {
+            Object.keys(usuario).forEach((k) => delete usuario[k]);
+            Object.assign(usuario, data.usuario);
+        }
     } catch (error) {
         console.warn('No se pudo persistir la migración de skills en backend:', error);
     }
@@ -1151,8 +1163,17 @@ async function persistirUsuarioConRecompensaDiaria(usuario) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ usuario: payloadUsuario, email })
     });
+    const data = await response.json().catch(() => ({}));
     if (!response.ok) {
-        throw new Error('No se pudo actualizar usuario en servidor');
+        if (response.status === 409 && data?.usuario) {
+            localStorage.setItem('usuario', JSON.stringify(data.usuario));
+            window.dispatchEvent(new Event('dc:usuario-actualizado'));
+        }
+        throw new Error(data?.mensaje || 'No se pudo actualizar usuario en servidor');
+    }
+    if (data?.usuario && usuario && typeof usuario === 'object') {
+        Object.keys(usuario).forEach((k) => delete usuario[k]);
+        Object.assign(usuario, data.usuario);
     }
     localStorage.setItem('usuario', JSON.stringify(usuario));
     const tsClaim = Number(usuario?.recompensas?.diariaSobres?.lastClaimAt);
@@ -1373,7 +1394,7 @@ function normalizarMenuLateral() {
         linkMultijugador.removeEventListener('click', bloquearNavegacionMultijugador);
     }
 
-    const versionLabelTexto = 'Versión: 1.0.0';
+    const versionLabelTexto = 'Versión: 1.0.1';
     let versionLabel = menu.querySelector('#menu-version-label');
     if (!versionLabel) {
         versionLabel = document.createElement('div');
