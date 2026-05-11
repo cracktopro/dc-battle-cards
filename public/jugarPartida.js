@@ -663,7 +663,7 @@ function mapearEventoDesdeFila(fila, fallbackIndex) {
         nombre: String(fila.nombre || `Evento ${fallbackIndex + 1}`).trim(),
         descripcion: String(fila.Descripción || fila.descripcion || '').trim(),
         enemigos,
-        boss: String(fila.boss || '').trim() || null,
+        boss: String(fila.boss ?? fila.Boss ?? fila.BOSS ?? '').trim() || null,
         puntos: Number(fila.puntos || 0),
         mejora: Number(fila.mejora || 0),
         mejora_especial: Number(fila.mejora_especial || 0),

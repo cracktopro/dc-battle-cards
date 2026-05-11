@@ -1,6 +1,6 @@
 {
   "name": "dc-battle-cards",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "DC Battle Cards — servidor Express + Socket.IO para Render y local",
   "main": "server.js",
   "scripts": {

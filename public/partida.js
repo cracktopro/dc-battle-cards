@@ -1164,14 +1164,23 @@ function obtenerClaveCarta(nombreCarta) {
 function obtenerDesafioActivo() {
     try {
         const desafio = JSON.parse(localStorage.getItem('desafioActivo') || 'null');
-        if (!desafio || !Array.isArray(desafio.enemigos)) {
+        if (!desafio || typeof desafio !== 'object') {
             return null;
+        }
+        if (!Array.isArray(desafio.enemigos)) {
+            desafio.enemigos = [];
         }
         return desafio;
     } catch (error) {
         console.error('No se pudo leer desafioActivo:', error);
         return null;
     }
+}
+
+/** Nombre del boss en metadatos de desafío/evento (Excel puede usar `boss`, `Boss`, etc.). */
+function leerNombreBossMetaDesafio(meta) {
+    if (!meta || typeof meta !== 'object') return '';
+    return String(meta.boss ?? meta.Boss ?? meta.BOSS ?? '').trim();
 }
 
 function normalizarNombre(nombre) {
@@ -1391,8 +1400,9 @@ async function construirEstadoDesafio(desafio) {
     const gruposPendientes = dividirEnGrupos(enemigosBase, 3);
 
     let bossPendiente = null;
-    if (desafio.boss) {
-        const bossBase = mapaPorNombre.get(normalizarNombre(desafio.boss));
+    const nombreBossDesafio = leerNombreBossMetaDesafio(desafio);
+    if (nombreBossDesafio) {
+        const bossBase = mapaPorNombre.get(normalizarNombre(nombreBossDesafio));
         if (bossBase) {
             const faccionBoss = normalizarFaccion(bossBase.faccion) || mapaCatalogo.get(obtenerClaveCarta(bossBase.Nombre))?.faccion || 'V';
             bossPendiente = escalarBossSegunDificultad({
@@ -2221,6 +2231,13 @@ async function otorgarRecompensasDesafio() {
         throw new Error('No se encontró una sesión de usuario válida para guardar las recompensas del desafío.');
     }
 
+    if (!desafioActivo) {
+        desafioActivo = obtenerDesafioActivo();
+    }
+    if (!desafioActivo) {
+        throw new Error('No hay desafío o evento activo en sesión.');
+    }
+
     const recompensas = estadoDesafio.recompensas || { puntos: 0, mejora: 0, mejoraEspecial: 0 };
 
     // Guardar progreso: eventos y desafios se rastrean por separado para evitar cruces de IDs.
@@ -2309,7 +2326,7 @@ async function otorgarRecompensasDesafio() {
     const enemigosEvento = Array.isArray(desafioActivo?.enemigos)
         ? desafioActivo.enemigos.map(n => String(n || '').trim()).filter(Boolean)
         : [];
-    const bossEvento = String(desafioActivo?.boss || '').trim();
+    const bossEvento = leerNombreBossMetaDesafio(desafioActivo);
     const requiereCatalogoCartas = !esRepeticionDesafio && (
         Boolean(esEvento && (enemigosEvento.length > 0 || bossEvento))
         || (!esEvento && cartasRecompensaDesafio.length > 0)
@@ -2373,14 +2390,15 @@ async function otorgarRecompensasDesafio() {
     await actualizarUsuarioFirebase(usuario, email);
     localStorage.setItem('usuario', JSON.stringify(usuario));
     if (window.DCMisiones?.track) {
+        const cuentaBossMision = Boolean(leerNombreBossMetaDesafio(desafioActivo));
         if (esEvento) {
             // Misión de desafíos excluye eventos.
-            if (String(desafioActivo?.boss || '').trim()) {
+            if (cuentaBossMision) {
                 window.DCMisiones.track('boss', { amount: 1 });
             }
         } else {
             window.DCMisiones.track('desafios', { amount: 1 });
-            if (String(desafioActivo?.boss || '').trim()) {
+            if (cuentaBossMision) {
                 window.DCMisiones.track('boss', { amount: 1 });
             }
         }
@@ -4224,6 +4242,14 @@ async function seleccionarCartaAtacante(slotIndex) {
         return;
     }
 
+    /**
+     * Mientras se resuelve / anima un ataque básico (ambas cartas destacadas), no permitir
+     * otra selección de atacante: evita solapar animaciones y estados.
+     */
+    if (cartaJugadorDestacada !== null && cartaOponenteDestacada !== null) {
+        return;
+    }
+
     if (!cartasJugadorEnJuego[slotIndex]) {
         return;
     }
@@ -4378,10 +4404,22 @@ function quedanAtaquesJugadorDisponiblesTrasConsumir(slotConsumido) {
 }
 
 function seleccionarCartaObjetivo(slotIndex) {
-    if (partidaFinalizada || turnoActual !== 'jugador' || atacanteSeleccionado === null) {
+    if (partidaFinalizada || turnoActual !== 'jugador') {
         return;
     }
     if (ES_MODO_PVP && !esMiTurnoPvp) {
+        return;
+    }
+
+    /**
+     * Un ataque básico ya está en curso (animación / espera a servidor). Ignorar clics extra
+     * sobre el rival u otros objetivos hasta limpiar destacados.
+     */
+    if (cartaJugadorDestacada !== null && cartaOponenteDestacada !== null) {
+        return;
+    }
+
+    if (atacanteSeleccionado === null) {
         return;
     }
 
@@ -4398,6 +4436,15 @@ function seleccionarCartaObjetivo(slotIndex) {
     const slotAtacante = atacanteSeleccionado;
     const cartaAtacante = cartasJugadorEnJuego[slotAtacante];
     const cartaObjetivo = cartasOponenteEnJuego[slotIndex];
+
+    /**
+     * Consumir la selección de atacante al instante: así el tablero deja de registrar clics
+     * de objetivo hasta el próximo render y no se pueden encolar varios ataques en el delay.
+     */
+    atacanteSeleccionado = null;
+    if (ES_MODO_PVP) {
+        emitirSeleccionAtacantePvp(null);
+    }
 
     cartaJugadorDestacada = slotAtacante;
     cartaOponenteDestacada = slotIndex;
@@ -4418,8 +4465,6 @@ function seleccionarCartaObjetivo(slotIndex) {
                 debugTargetName: nombreObjetivo || null
             }
         });
-        atacanteSeleccionado = null;
-        emitirSeleccionAtacantePvp(null);
         escribirLog(`Ataque enviado. Esperando estado oficial del servidor...`);
         renderizarTablero();
         if (!quedanAtaquesJugadorDisponiblesTrasConsumir(slotAtacante)) {

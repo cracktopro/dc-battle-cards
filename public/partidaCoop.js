@@ -2702,7 +2702,7 @@
         const enemigosEvento = Array.isArray(evento?.enemigos)
             ? evento.enemigos.map(n => String(n || '').trim()).filter(Boolean)
             : [];
-        const bossEvento = String(evento?.boss || '').trim();
+        const bossEvento = String(evento?.boss ?? evento?.Boss ?? evento?.BOSS ?? '').trim();
 
         usuario.puntos = Number(usuario.puntos || 0) + puntosEvento;
         usuario.objetos = (usuario.objetos && typeof usuario.objetos === 'object')
@@ -2784,7 +2784,9 @@
             mejorasEspecialesGanadas: mejorasEspecialesEvento,
             cartasGanadas,
             nuevasH,
-            nuevasV
+            nuevasV,
+            /** Misiones diarias (class boss): mismo criterio que recompensa carta 20 % boss. */
+            huboBossMision: Boolean(bossEvento)
         };
     }
 
@@ -2875,7 +2877,7 @@
                 /** Tras persistir recompensas en LS/Firebase para no pisar puntos/cartas con el POST de misiones. */
                 if (window.DCMisiones?.track) {
                     window.DCMisiones.track('evento_coop', { amount: 1 });
-                    if (String(payload?.evento?.boss || '').trim()) {
+                    if (recompensa.huboBossMision) {
                         window.DCMisiones.track('boss', { amount: 1 });
                     }
                     if (Number(recompensa.nuevasH || 0) > 0) window.DCMisiones.track('coleccion_h', { amount: Number(recompensa.nuevasH || 0) });
@@ -3237,9 +3239,14 @@
         if (zona === 'bot' && atacanteSel !== null && atacanteZona === zonaAt) {
             const obj = snapshot.cartasEnJuegoBot[slot];
             if (!cartaViva(obj)) return;
-            coopDebugYo(`confirmar objetivo BOT slot=${slot} desde ${zonaAt}:${atacanteSel}`);
+            const slotAtk = atacanteSel;
+            const zonaAtk = atacanteZona;
+            atacanteSel = null;
+            atacanteZona = null;
+            renderTodo();
+            coopDebugYo(`confirmar objetivo BOT slot=${slot} desde ${zonaAtk}:${slotAtk}`);
             aplicandoAccionCoop = true;
-            void resolverAtaqueHumanoAZona(zonaAt, atacanteSel, 'bot', slot).finally(() => {
+            void resolverAtaqueHumanoAZona(zonaAtk, slotAtk, 'bot', slot).finally(() => {
                 aplicandoAccionCoop = false;
             });
         }

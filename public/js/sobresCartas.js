@@ -197,10 +197,16 @@
         }
         const niveles = generarNivelesParaSobre(def.cantidadCartas, def.garantiaNivel6);
         const salida = [];
+        const facSobre = normalizarFaccionSobre(def.faccion);
         niveles.forEach((nivel) => {
             const base = elegirCartaBaseAleatoria(pool);
             if (base) {
-                salida.push(crearCartaReveladaDesdeCatalogo(base, nivel));
+                const carta = crearCartaReveladaDesdeCatalogo(base, nivel);
+                if (facSobre) {
+                    carta.faccion = facSobre;
+                    carta.Faccion = facSobre;
+                }
+                salida.push(carta);
             }
         });
         return salida;

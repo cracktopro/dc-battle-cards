@@ -61,7 +61,7 @@ async function cargarDesafiosDesdeExcel() {
             .map(nombre => String(nombre || '').trim())
             .filter(Boolean);
 
-        const boss = String(fila.boss || '').trim();
+        const boss = String(fila.boss ?? fila.Boss ?? fila.BOSS ?? '').trim();
 
         return {
             id: Number(fila.ID_desafio ?? fila.id ?? 0),

@@ -922,6 +922,12 @@ function dcNormalizarFaccionHeroeVillano(valor) {
  * Cuenta cartas cuyo nombre no estaba en la colección (solo cuentan como nuevas la primera vez).
  * Usa catálogo opcional si la carta no trae facción explícita (coherente con el resto del juego).
  */
+function dcLeerFaccionHVBruta(obj) {
+    if (!obj || typeof obj !== 'object') return '';
+    const v = obj.faccion ?? obj.Faccion ?? obj.FACCION ?? obj['Facción'];
+    return v != null && String(v).trim() !== '' ? v : '';
+}
+
 function dcContarCartasNuevasPorFaccion(cartasAAñadir, cartasUsuarioPrevias, catalogoOpcional) {
     const prev = new Set((cartasUsuarioPrevias || []).map((c) => dcNormalizarNombreCartaColeccion(c?.Nombre)));
     const mapaCat = Array.isArray(catalogoOpcional) && catalogoOpcional.length > 0
@@ -934,11 +940,11 @@ function dcContarCartasNuevasPorFaccion(cartasAAñadir, cartasUsuarioPrevias, ca
         if (!clave || prev.has(clave)) {
             return;
         }
-        let fac = dcNormalizarFaccionHeroeVillano(carta?.faccion ?? carta?.Faccion);
+        let fac = dcNormalizarFaccionHeroeVillano(dcLeerFaccionHVBruta(carta));
         if (!fac && mapaCat) {
             const base = mapaCat.get(clave);
             if (base) {
-                fac = dcNormalizarFaccionHeroeVillano(base.faccion ?? base.Faccion);
+                fac = dcNormalizarFaccionHeroeVillano(dcLeerFaccionHVBruta(base));
             }
         }
         if (fac === 'H') {
@@ -1394,7 +1400,7 @@ function normalizarMenuLateral() {
         linkMultijugador.removeEventListener('click', bloquearNavegacionMultijugador);
     }
 
-    const versionLabelTexto = 'Versión: 1.0.1';
+    const versionLabelTexto = 'Versión: 1.0.2';
     let versionLabel = menu.querySelector('#menu-version-label');
     if (!versionLabel) {
         versionLabel = document.createElement('div');

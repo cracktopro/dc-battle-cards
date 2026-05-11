@@ -169,7 +169,7 @@
                 enemigos.push(nombreEnemigo);
             }
         }
-        const boss = String(fila.boss || '').trim();
+        const boss = String(fila.boss ?? fila.Boss ?? fila.BOSS ?? '').trim();
         return {
             id: Number(fila.ID_evento_online ?? fila.id ?? fallbackIndex),
             nombre: String(fila.nombre || `Evento ${fallbackIndex + 1}`).trim(),

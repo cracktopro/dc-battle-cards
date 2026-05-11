@@ -1272,7 +1272,7 @@ function construirMazoBotCoopDesdeEvento(filaEvento, mapaCatalogo, dificultad) {
     });
 
     let bossCarta = null;
-    const bossNombre = String(filaEvento?.boss || '').trim();
+    const bossNombre = String(filaEvento?.boss ?? filaEvento?.Boss ?? filaEvento?.BOSS ?? '').trim();
     if (bossNombre) {
         const baseBoss = mapaCatalogo.get(normalizarTexto(bossNombre)) || {
             Nombre: bossNombre,
@@ -1483,7 +1483,7 @@ async function iniciarSesionCoopEventoDesdePrep(prep) {
         const n = String(fila[`enemigo${i}`] || '').trim();
         if (n) nombresEnemigosEvento.push(n);
     }
-    const nombreBossEvento = String(fila.boss || '').trim() || null;
+    const nombreBossEvento = String(fila.boss ?? fila.Boss ?? fila.BOSS ?? '').trim() || null;
     const payloadBase = {
         sessionId,
         partyId: prep.partyId,

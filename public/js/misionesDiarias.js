@@ -397,7 +397,7 @@
         return incs;
     }
 
-    async function track(tipo, payload = {}) {
+    async function aplicarIncrementoTrack(tipo, payload = {}) {
         const usuario = leerUsuario();
         if (!usuario) return;
         const changedWindow = await ensureWindowsActualizadas(usuario);
@@ -418,6 +418,20 @@
         latest.misiones = usuario.misiones;
         await persistirUsuarioDebounced(latest);
         render();
+    }
+
+    /**
+     * Cola FIFO: varias llamadas seguidas (p. ej. sobres + coleccion_h + coleccion_v) no deben
+     * solaparse; cada track lee/persiste en paralelo y la última podía pisar `misiones` en Firebase/LS.
+     */
+    let trackCola = Promise.resolve();
+
+    function track(tipo, payload = {}) {
+        const run = trackCola.then(() => aplicarIncrementoTrack(tipo, payload));
+        trackCola = run.catch((e) => {
+            console.warn('[DCMisiones.track]', tipo, e);
+        });
+        return run;
     }
 
     async function inicializar() {
@@ -446,7 +460,7 @@
     // API global
     window.DCMisiones = {
         init: () => void inicializar(),
-        track: (tipo, payload) => void track(tipo, payload),
+        track,
         refresh: () => void inicializar()
     };
 

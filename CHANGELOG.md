@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.2
+
+- Etiqueta de versión del menú lateral: **`Versión: 1.0.2`** (`public/js/cartas.js`, `package.json`).
+- **Servidor** (`server.js`): corrección de `GET` post-guardado en `POST /update-user` (`docRef` indefinido → 500 tras guardado correcto en Firebase). Lectura de columna **boss** en eventos online con variantes `boss` / `Boss` / `BOSS`; misma idea en construcción de mazo coop desde evento.
+- **Misiones diarias** (`public/js/misionesDiarias.js`): cola **FIFO** para `DCMisiones.track` y evitar condiciones de carrera cuando se encadenan varios eventos (p. ej. sobres + `coleccion_h` + `coleccion_v`) que pisaban el progreso en persistencia.
+- **Colección / sobres** (`public/js/sobresCartas.js`, `public/js/cartas.js`): cartas del sobre llevan **facción H/V** explícita; contador `dcContarCartasNuevasPorFaccion` admite más variantes de campo de facción en carta y catálogo (`dcLeerFaccionHVBruta`).
+- **Misión class boss** (`public/partida.js`, `public/partidaCoop.js`, `public/jugarPartida.js`, `public/desafios.js`, `public/multijugadorEventosCoop.js`): lectura robusta del nombre de boss; rehidratación de `desafioActivo` desde LS al otorgar recompensas; `obtenerDesafioActivo` normaliza `enemigos` a array vacío; coop devuelve `huboBossMision` desde recompensas para `track('boss')`.
+- **Combate** (`public/partida.js`, `public/partidaCoop.js`): al confirmar **ataque básico**, se consume de inmediato la selección de atacante / objetivo y se ignoran clics repetidos mientras hay animación (evita múltiples `resolverAtaque` o doble envío PvP); coop limpia selección de atacante antes de resolver el golpe al BOT.
+- **Recursos Excel** (`public/resources/cartas.xlsx`, `eventos.xlsx`, `eventos_online.xlsx`, `misiones_diarias.xlsx`): datos y misiones actualizados en el repositorio.
+
 ## 1.0.1
 
 - Etiqueta de versión del menú lateral: **`Versión: 1.0.1`** (`public/js/cartas.js`).
