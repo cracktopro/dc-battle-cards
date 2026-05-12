@@ -158,6 +158,8 @@ function configurarEventos() {
     document.getElementById('admin-target-puntos')?.addEventListener('input', sincronizarCamposBasicosObjetivoAdmin);
     document.getElementById('admin-target-mejora')?.addEventListener('input', sincronizarCamposBasicosObjetivoAdmin);
     document.getElementById('admin-target-mejora-especial')?.addEventListener('input', sincronizarCamposBasicosObjetivoAdmin);
+    document.getElementById('admin-target-mejora-suprema')?.addEventListener('input', sincronizarCamposBasicosObjetivoAdmin);
+    document.getElementById('admin-target-mejora-definitiva')?.addEventListener('input', sincronizarCamposBasicosObjetivoAdmin);
     obtenerClavesSobreInventarioAdmin().forEach((key) => {
         document.getElementById(`admin-target-${key}`)?.addEventListener('input', sincronizarCamposBasicosObjetivoAdmin);
     });
@@ -460,7 +462,7 @@ async function reiniciarProgresoCuenta() {
     usuarioActual.puntos = 0;
     usuarioActual.cartas = crearCartasInicialesPorDefecto();
     usuarioActual.mazos = [];
-    usuarioActual.objetos = { mejoraCarta: 0, mejoraEspecial: 0 };
+    usuarioActual.objetos = { mejoraCarta: 0, mejoraEspecial: 0, mejoraSuprema: 0, mejoraDefinitiva: 0 };
     if (typeof window.DC_SOBRES_MEZCLAR_INVENTARIO === 'function') {
         usuarioActual.objetos = window.DC_SOBRES_MEZCLAR_INVENTARIO(usuarioActual.objetos);
     }
@@ -563,6 +565,8 @@ function normalizarUsuarioObjetivoAdmin() {
     }
     adminUsuarioObjetivo.objetos.mejoraCarta = Math.max(0, Math.floor(Number(adminUsuarioObjetivo.objetos.mejoraCarta || 0)));
     adminUsuarioObjetivo.objetos.mejoraEspecial = Math.max(0, Math.floor(Number(adminUsuarioObjetivo.objetos.mejoraEspecial || 0)));
+    adminUsuarioObjetivo.objetos.mejoraSuprema = Math.max(0, Math.floor(Number(adminUsuarioObjetivo.objetos.mejoraSuprema || 0)));
+    adminUsuarioObjetivo.objetos.mejoraDefinitiva = Math.max(0, Math.floor(Number(adminUsuarioObjetivo.objetos.mejoraDefinitiva || 0)));
     obtenerClavesSobreInventarioAdmin().forEach((key) => {
         adminUsuarioObjetivo.objetos[key] = Math.max(0, Math.floor(Number(adminUsuarioObjetivo.objetos[key] || 0)));
     });
@@ -573,10 +577,14 @@ function renderizarCamposBasicosObjetivoAdmin() {
     const puntosEl = document.getElementById('admin-target-puntos');
     const mejoraEl = document.getElementById('admin-target-mejora');
     const mejoraEspEl = document.getElementById('admin-target-mejora-especial');
+    const mejoraSupremaEl = document.getElementById('admin-target-mejora-suprema');
+    const mejoraDefinitivaEl = document.getElementById('admin-target-mejora-definitiva');
     if (!adminUsuarioObjetivo) {
         if (puntosEl) puntosEl.value = '0';
         if (mejoraEl) mejoraEl.value = '0';
         if (mejoraEspEl) mejoraEspEl.value = '0';
+        if (mejoraSupremaEl) mejoraSupremaEl.value = '0';
+        if (mejoraDefinitivaEl) mejoraDefinitivaEl.value = '0';
         obtenerClavesSobreInventarioAdmin().forEach((key) => {
             const el = document.getElementById(`admin-target-${key}`);
             if (el) el.value = '0';
@@ -587,6 +595,8 @@ function renderizarCamposBasicosObjetivoAdmin() {
     if (puntosEl) puntosEl.value = String(adminUsuarioObjetivo.puntos || 0);
     if (mejoraEl) mejoraEl.value = String(adminUsuarioObjetivo.objetos.mejoraCarta || 0);
     if (mejoraEspEl) mejoraEspEl.value = String(adminUsuarioObjetivo.objetos.mejoraEspecial || 0);
+    if (mejoraSupremaEl) mejoraSupremaEl.value = String(adminUsuarioObjetivo.objetos.mejoraSuprema || 0);
+    if (mejoraDefinitivaEl) mejoraDefinitivaEl.value = String(adminUsuarioObjetivo.objetos.mejoraDefinitiva || 0);
     obtenerClavesSobreInventarioAdmin().forEach((key) => {
         const el = document.getElementById(`admin-target-${key}`);
         if (el) el.value = String(adminUsuarioObjetivo.objetos[key] || 0);
@@ -598,12 +608,16 @@ function sincronizarCamposBasicosObjetivoAdmin() {
     const puntosEl = document.getElementById('admin-target-puntos');
     const mejoraEl = document.getElementById('admin-target-mejora');
     const mejoraEspEl = document.getElementById('admin-target-mejora-especial');
+    const mejoraSupremaEl = document.getElementById('admin-target-mejora-suprema');
+    const mejoraDefinitivaEl = document.getElementById('admin-target-mejora-definitiva');
     adminUsuarioObjetivo.puntos = Math.max(0, Math.floor(Number(puntosEl?.value || 0)));
     adminUsuarioObjetivo.objetos = (adminUsuarioObjetivo.objetos && typeof adminUsuarioObjetivo.objetos === 'object')
         ? adminUsuarioObjetivo.objetos
         : {};
     adminUsuarioObjetivo.objetos.mejoraCarta = Math.max(0, Math.floor(Number(mejoraEl?.value || 0)));
     adminUsuarioObjetivo.objetos.mejoraEspecial = Math.max(0, Math.floor(Number(mejoraEspEl?.value || 0)));
+    adminUsuarioObjetivo.objetos.mejoraSuprema = Math.max(0, Math.floor(Number(mejoraSupremaEl?.value || 0)));
+    adminUsuarioObjetivo.objetos.mejoraDefinitiva = Math.max(0, Math.floor(Number(mejoraDefinitivaEl?.value || 0)));
     obtenerClavesSobreInventarioAdmin().forEach((key) => {
         const el = document.getElementById(`admin-target-${key}`);
         adminUsuarioObjetivo.objetos[key] = Math.max(0, Math.floor(Number(el?.value || 0)));

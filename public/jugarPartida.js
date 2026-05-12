@@ -641,11 +641,9 @@ function iniciarTemporizadorRotacionEventos() {
 }
 
 function formatearTiempo(msRestantes) {
-    const totalSegundos = Math.max(0, Math.floor(msRestantes / 1000));
-    const horas = Math.floor(totalSegundos / 3600);
-    const minutos = Math.floor((totalSegundos % 3600) / 60);
-    const segundos = totalSegundos % 60;
-    return `${String(horas).padStart(2, '0')}:${String(minutos).padStart(2, '0')}:${String(segundos).padStart(2, '0')}`;
+    return typeof window.dcFormatearCuentaAtrasMs === 'function'
+        ? window.dcFormatearCuentaAtrasMs(msRestantes)
+        : '0s';
 }
 
 function mapearEventoDesdeFila(fila, fallbackIndex) {

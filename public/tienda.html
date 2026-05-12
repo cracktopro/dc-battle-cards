@@ -66,7 +66,7 @@
 
         .rotacion-timer-valor {
             display: inline-block;
-            width: 8ch;
+            min-width: 0;
             text-align: right;
             font-family: "Consolas", "Courier New", monospace;
             font-variant-numeric: tabular-nums;
@@ -311,6 +311,137 @@
             display: none;
         }
 
+        .tienda-toolbar-pestanas {
+            margin-bottom: 14px;
+        }
+
+        .tienda-wrap-ofertas-dia {
+            width: 100%;
+            margin-bottom: 22px;
+        }
+
+        .tienda-wrap-ofertas-dia .tienda-seccion-cartas-titulo {
+            text-align: center;
+            margin-top: 0;
+        }
+
+        .tienda-ofertas-dia-timer-wrap {
+            width: 100%;
+            max-width: min(420px, 100%);
+            margin: 0 auto 14px;
+        }
+
+        .tienda-ofertas-dia-timer {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: baseline;
+            gap: 8px 10px;
+            color: #9edcff;
+            font-size: 0.88rem;
+            font-weight: 600;
+            text-align: center;
+        }
+
+        .tienda-ofertas-dia-timer-label {
+            color: #ccefff;
+        }
+
+        .tienda-ofertas-dia-timer-valor {
+            font-family: "Consolas", "Courier New", monospace;
+            font-variant-numeric: tabular-nums;
+            font-feature-settings: "tnum";
+            color: #ffd700;
+            font-weight: 800;
+            text-shadow: 0 0 8px rgba(255, 215, 0, 0.4);
+            white-space: nowrap;
+        }
+
+        .tienda-ofertas-dia-barra {
+            margin-top: 8px;
+        }
+
+        .tienda-grid-ofertas-dia {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 240px));
+            justify-content: center;
+            gap: clamp(12px, 3vw, 24px);
+            width: 100%;
+        }
+
+        @media (max-width: 520px) {
+            .tienda-grid-ofertas-dia {
+                grid-template-columns: minmax(0, 240px);
+                justify-items: stretch;
+            }
+        }
+
+        .tienda-seccion-cartas-titulo {
+            margin: 18px 0 10px;
+            color: #ffd700;
+            font-size: 1.05rem;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+        }
+
+        .tienda-seccion-cartas-titulo:first-child {
+            margin-top: 0;
+        }
+
+        .preview-carta-tienda .badge-afiliacion-carta-tablero {
+            top: 6px;
+            right: 6px;
+            left: auto;
+        }
+
+        .preview-carta-tienda.preview-carta-tienda--oferta .estrellas-carta {
+            top: 40px;
+        }
+
+        .tienda-badge-descuento {
+            position: absolute;
+            top: 8px;
+            left: -32px;
+            z-index: 9;
+            padding: 5px 40px;
+            background: linear-gradient(135deg, #ff4444, #c40000);
+            color: #fff;
+            font-weight: 900;
+            font-size: 0.68rem;
+            letter-spacing: 0.12em;
+            transform: rotate(-42deg);
+            transform-origin: center;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.45);
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.65);
+            pointer-events: none;
+        }
+
+        .tienda-precio-original {
+            text-decoration: line-through;
+            opacity: 0.62;
+            margin-right: 8px;
+            font-weight: 600;
+        }
+
+        .tienda-precio-oferta {
+            font-weight: 800;
+            margin-right: 4px;
+        }
+
+        .tienda-precio-moneda {
+            width: 18px;
+            height: 18px;
+            object-fit: contain;
+            vertical-align: text-bottom;
+        }
+
+        .tienda-objetos-grid-mezclas .tienda-objetos-cuadricula {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 16px;
+            align-items: stretch;
+        }
+
         @media (max-width: 899px) {
             .tienda-grid-cartas {
                 grid-template-columns: repeat(auto-fill, minmax(clamp(132px, 42vw, 200px), 1fr));
@@ -350,7 +481,7 @@
                 <div class="rotacion-wrapper">
                     <div id="rotacion-timer" class="rotacion-timer">
                         <span>Nuevas cartas en:</span>
-                        <span id="rotacion-timer-valor" class="rotacion-timer-valor">00:00:00</span>
+                        <span id="rotacion-timer-valor" class="rotacion-timer-valor">0s</span>
                     </div>
                     <div class="rotacion-barra">
                         <div id="rotacion-barra-progreso" class="rotacion-barra-progreso"></div>
@@ -361,14 +492,27 @@
 
         <div id="mensaje-tienda" class="alert"></div>
 
-        <div class="tienda-panel">
-            <h4>Cartas</h4>
-            <div id="tienda-cartas" class="tienda-grid-cartas"></div>
+        <div class="faccion-toolbar tienda-toolbar-pestanas" role="tablist" aria-label="Secciones de la tienda">
+            <div class="faccion-tabs">
+                <button type="button" class="btn faccion-tab active" data-tienda-tab="cartas">Cartas</button>
+                <button type="button" class="btn faccion-tab" data-tienda-tab="objetos">Objetos</button>
+                <button type="button" class="btn faccion-tab" data-tienda-tab="sobres">Sobres</button>
+            </div>
         </div>
 
-        <div class="tienda-panel">
-            <h4>Objetos</h4>
+        <div id="panel-tienda-cartas" class="tienda-panel">
+            <h3 class="mb-3" style="color:#dff8ff;font-size:1.15rem;">Rotación actual</h3>
+            <div id="tienda-cartas"></div>
+        </div>
+
+        <div id="panel-tienda-objetos" class="tienda-panel" hidden>
+            <h3 class="mb-3" style="color:#dff8ff;font-size:1.15rem;">Objetos de mejora</h3>
             <div id="tienda-objetos" class="objetos-grid"></div>
+        </div>
+
+        <div id="panel-tienda-sobres" class="tienda-panel" hidden>
+            <h3 class="mb-3" style="color:#dff8ff;font-size:1.15rem;">Sobres de cartas</h3>
+            <div id="tienda-sobres"></div>
         </div>
     </div>
 

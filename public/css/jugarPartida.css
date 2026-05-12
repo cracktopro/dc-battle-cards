@@ -744,7 +744,7 @@ body {
 
 .rotacion-timer-valor {
     display: inline-block;
-    width: 8ch;
+    min-width: 0;
     text-align: right;
     font-family: "Consolas", "Courier New", monospace;
     font-variant-numeric: tabular-nums;

@@ -313,20 +313,10 @@
         return Math.max(0, next.getTime() - n.getTime());
     }
 
-    function formatHMS(ms) {
-        const s = Math.max(0, Math.floor(ms / 1000));
-        const h = Math.floor(s / 3600);
-        const m = Math.floor((s % 3600) / 60);
-        const sec = s % 60;
-        return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
-    }
-
-    function formatDhM(ms) {
-        const totalMin = Math.max(0, Math.floor(ms / 60000));
-        const dias = Math.floor(totalMin / (24 * 60));
-        const horas = Math.floor((totalMin % (24 * 60)) / 60);
-        const minutos = totalMin % 60;
-        return `${dias}d ${horas}h ${minutos}m`;
+    function formatCuentaAtrasMisiones(ms) {
+        return typeof window.dcFormatearCuentaAtrasMs === 'function'
+            ? window.dcFormatearCuentaAtrasMs(ms)
+            : '0s';
     }
 
     function renderResetTimers() {
@@ -336,8 +326,8 @@
         const wBar = document.getElementById('misiones-semanales-reset-bar');
         const dMs = msHastaProximoDiario();
         const wMs = msHastaProximoSemanal();
-        if (d) d.textContent = `Tiempo restante: ${formatHMS(dMs)}`;
-        if (w) w.textContent = `Tiempo restante: ${formatDhM(wMs)}`;
+        if (d) d.textContent = `Tiempo restante: ${formatCuentaAtrasMisiones(dMs)}`;
+        if (w) w.textContent = `Tiempo restante: ${formatCuentaAtrasMisiones(wMs)}`;
 
         const DAY_MS = 24 * 60 * 60 * 1000;
         const WEEK_MS = 7 * DAY_MS;

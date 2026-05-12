@@ -836,7 +836,9 @@ function obtenerResumenInventarioSesion() {
     const objetos = (usuario?.objetos && typeof usuario.objetos === 'object') ? usuario.objetos : {};
     const mejoras = Math.max(0, Number(objetos?.mejoraCarta || 0));
     const mejorasEspeciales = Math.max(0, Number(objetos?.mejoraEspecial || 0));
-    return { puntos, mejoras, mejorasEspeciales };
+    const mejorasSuprema = Math.max(0, Number(objetos?.mejoraSuprema || 0));
+    const mejorasDefinitiva = Math.max(0, Number(objetos?.mejoraDefinitiva || 0));
+    return { puntos, mejoras, mejorasEspeciales, mejorasSuprema, mejorasDefinitiva };
 }
 
 function obtenerEstadoGrupoSesion() {
@@ -968,6 +970,23 @@ function construirFilaStatMenu({ icono, alt, valor, titulo }) {
     `;
 }
 
+function construirLineaObjetosMejoraMenu(resumen) {
+    const grupos = [
+        { icono: '/resources/icons/mejora.png', alt: 'Mejora', valor: resumen.mejoras, titulo: 'Mejoras de carta' },
+        { icono: '/resources/icons/mejora_especial.png', alt: 'Mejora especial', valor: resumen.mejorasEspeciales, titulo: 'Mejoras especiales' },
+        { icono: '/resources/icons/mejora_suprema.png', alt: 'Mejora suprema', valor: resumen.mejorasSuprema, titulo: 'Mejoras supremas' },
+        { icono: '/resources/icons/mejora_definitiva.png', alt: 'Mejora definitiva', valor: resumen.mejorasDefinitiva, titulo: 'Mejoras definitivas' }
+    ];
+    return grupos.map(({ icono, alt, valor, titulo }) => `
+        <span class="menu-user-objeto-grupo" title="${titulo}">
+            <span class="menu-user-stat-icon-wrap">
+                <img src="${icono}" alt="${alt}" class="menu-user-stat-icon">
+            </span>
+            <span class="menu-user-stat-value">${valor}</span>
+        </span>
+    `).join('');
+}
+
 const RECOMPENSA_DIARIA_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 const RECOMPENSA_DIARIA_CHECK_INTERVAL_MS = 60 * 1000;
 const RECOMPENSA_DIARIA_LOCK_KEY = 'dc_daily_reward_claim_lock_v1';
@@ -993,12 +1012,16 @@ function normalizarObjetosConSobresGlobal(usuario) {
     const base = (usuario.objetos && typeof usuario.objetos === 'object') ? { ...usuario.objetos } : {};
     base.mejoraCarta = Number(base.mejoraCarta || 0);
     base.mejoraEspecial = Number(base.mejoraEspecial || 0);
+    base.mejoraSuprema = Number(base.mejoraSuprema || 0);
+    base.mejoraDefinitiva = Number(base.mejoraDefinitiva || 0);
     if (typeof window.DC_SOBRES_MEZCLAR_INVENTARIO === 'function') {
         usuario.objetos = window.DC_SOBRES_MEZCLAR_INVENTARIO(base);
         return;
     }
     usuario.objetos = {
         ...base,
+        mejoraSuprema: Number(base.mejoraSuprema || 0),
+        mejoraDefinitiva: Number(base.mejoraDefinitiva || 0),
         sobreH1: Number(base.sobreH1 || 0),
         sobreH2: Number(base.sobreH2 || 0),
         sobreH3: Number(base.sobreH3 || 0),
@@ -1008,12 +1031,37 @@ function normalizarObjetosConSobresGlobal(usuario) {
     };
 }
 
+/**
+ * Cuenta atrás legible: omite unidades en cero (p. ej. 16m 47s, 47s, 2h 5s).
+ * Sin ceros a la izquierda en horas/días. Incluye días si dura >= 24h (p. ej. misiones semanales).
+ */
+function dcFormatearCuentaAtrasMs(ms) {
+    const totalSegundos = Math.max(0, Math.floor(Number(ms) / 1000));
+    const dias = Math.floor(totalSegundos / 86400);
+    const resto = totalSegundos % 86400;
+    const h = Math.floor(resto / 3600);
+    const m = Math.floor((resto % 3600) / 60);
+    const s = resto % 60;
+    const parts = [];
+    if (dias > 0) {
+        parts.push(`${dias}d`);
+    }
+    if (h > 0) {
+        parts.push(`${h}h`);
+    }
+    if (m > 0) {
+        parts.push(`${m}m`);
+    }
+    if (s > 0 || parts.length === 0) {
+        parts.push(`${s}s`);
+    }
+    return parts.join(' ');
+}
+
+window.dcFormatearCuentaAtrasMs = dcFormatearCuentaAtrasMs;
+
 function formatearHMSGlobal(ms) {
-    const total = Math.max(0, Math.floor(ms / 1000));
-    const h = Math.floor(total / 3600);
-    const m = Math.floor((total % 3600) / 60);
-    const s = total % 60;
-    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    return dcFormatearCuentaAtrasMs(ms);
 }
 
 function obtenerTimestampUltimaRecompensaDiaria(usuario) {
@@ -1357,11 +1405,10 @@ function normalizarMenuLateral() {
             </button>
             <div id="menu-user-stats" class="menu-user-stats">
                 <div class="menu-user-stat-row" id="menu-user-puntos"></div>
-                <div class="menu-user-stat-row" id="menu-user-mejoras"></div>
-                <div class="menu-user-stat-row" id="menu-user-mejoras-especiales"></div>
+                <div class="menu-user-stat-row menu-user-objetos-mejora-line" id="menu-user-objetos-mejora-line"></div>
             </div>
             <div id="menu-recompensa-diaria" class="menu-recompensa-diaria">
-                <div id="menu-recompensa-diaria-tiempo" class="menu-recompensa-diaria-tiempo">Siguiente recompensa en: 00:00:00</div>
+                <div id="menu-recompensa-diaria-tiempo" class="menu-recompensa-diaria-tiempo">Siguiente recompensa en: 0s</div>
                 <div class="menu-recompensa-diaria-progress">
                     <div id="menu-recompensa-diaria-bar" class="menu-recompensa-diaria-progress-fill"></div>
                 </div>
@@ -1370,11 +1417,18 @@ function normalizarMenuLateral() {
         menu.insertBefore(perfil, menu.firstChild);
     }
 
+    const statsWrap = perfil.querySelector('#menu-user-stats');
+    if (statsWrap) {
+        statsWrap.innerHTML = `
+            <div class="menu-user-stat-row" id="menu-user-puntos"></div>
+            <div class="menu-user-stat-row menu-user-objetos-mejora-line" id="menu-user-objetos-mejora-line"></div>
+        `;
+    }
+
     const avatar = menu.querySelector('#menu-user-avatar');
     const nombre = menu.querySelector('#menu-user-name');
     const puntosEl = menu.querySelector('#menu-user-puntos');
-    const mejorasEl = menu.querySelector('#menu-user-mejoras');
-    const mejorasEspecialesEl = menu.querySelector('#menu-user-mejoras-especiales');
+    const objetosMejoraLineEl = menu.querySelector('#menu-user-objetos-mejora-line');
     const grupoCompanion = menu.querySelector('#menu-group-companion');
     const grupoAvatar = menu.querySelector('#menu-group-avatar');
     const grupoName = menu.querySelector('#menu-group-name');
@@ -1395,21 +1449,8 @@ function normalizarMenuLateral() {
             titulo: 'Puntos'
         });
     }
-    if (mejorasEl) {
-        mejorasEl.innerHTML = construirFilaStatMenu({
-            icono: '/resources/icons/mejora.png',
-            alt: 'Mejora',
-            valor: resumen.mejoras,
-            titulo: 'Mejoras'
-        });
-    }
-    if (mejorasEspecialesEl) {
-        mejorasEspecialesEl.innerHTML = construirFilaStatMenu({
-            icono: '/resources/icons/mejora_especial.png',
-            alt: 'Mejora especial',
-            valor: resumen.mejorasEspeciales,
-            titulo: 'Mejoras especiales'
-        });
+    if (objetosMejoraLineEl) {
+        objetosMejoraLineEl.innerHTML = construirLineaObjetosMejoraMenu(resumen);
     }
     if (grupoCompanion && grupoAvatar && grupoName) {
         const companion = grupoEstado?.companero;
@@ -1464,7 +1505,7 @@ function normalizarMenuLateral() {
         linkMultijugador.removeEventListener('click', bloquearNavegacionMultijugador);
     }
 
-    const versionLabelTexto = 'Versión: 1.0.3';
+    const versionLabelTexto = 'Versión: 1.1.0';
     let versionLabel = menu.querySelector('#menu-version-label');
     if (!versionLabel) {
         versionLabel = document.createElement('div');

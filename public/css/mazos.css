@@ -448,6 +448,21 @@ select:disabled,
     min-width: 0;
 }
 
+.menu-user-stats .menu-user-objetos-mejora-line {
+    flex-wrap: wrap;
+    white-space: normal;
+    justify-content: center;
+    gap: 6px 12px;
+    row-gap: 6px;
+}
+
+.menu-user-objeto-grupo {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    flex: 0 0 auto;
+}
+
 .btn-menu {
     width: 100%;
     margin: 10px 0;
@@ -905,6 +920,73 @@ select:disabled,
     cursor: not-allowed;
     filter: grayscale(0.35);
     box-shadow: none;
+}
+
+/* Resumen objetos + modal elegir objeto (mejorarCartas — Mejoras especiales) */
+.resumen-objetos-mejorar-fila {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px 18px;
+    align-items: center;
+}
+
+.resumen-objeto-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.modal-seleccion-objeto-mejora-inner {
+    width: min(520px, 94vw);
+    max-height: 90vh;
+    overflow-y: auto;
+    background: rgba(12, 20, 36, 0.98);
+    border: 1px solid rgba(0, 209, 255, 0.38);
+    border-radius: 12px;
+    padding: 18px;
+    box-shadow: 0 0 20px rgba(0, 209, 255, 0.25);
+}
+
+.modal-seleccion-objeto-filas {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.modal-seleccion-objeto-fila {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid rgba(0, 209, 255, 0.28);
+    background: rgba(8, 18, 36, 0.88);
+}
+
+.modal-seleccion-objeto-fila-icono img {
+    width: 40px;
+    height: 40px;
+    object-fit: contain;
+}
+
+.modal-seleccion-objeto-fila-texto {
+    flex: 1;
+    min-width: 0;
+}
+
+.modal-seleccion-objeto-fila-texto strong {
+    color: #dff8ff;
+    display: block;
+    font-size: 0.95rem;
+}
+
+.modal-seleccion-objeto-fila-texto small {
+    color: #9edcff;
+}
+
+.modal-seleccion-objeto-fila .btn-usar-objeto {
+    flex-shrink: 0;
+    min-width: 88px;
 }
 
 /* Modal combinar duplicados (mejorarCartas) */

@@ -63,25 +63,30 @@
 
         <div id="seccion-mejoras-objetos" class="mt-4 p-3" style="display:none; background: rgba(8, 18, 36, 0.76); border: 1px solid rgba(0, 209, 255, 0.35); border-radius: 12px;">
             <h3 style="margin-bottom: 12px;">Mejoras con objetos</h3>
-            <div id="resumen-objetos" class="mb-3" style="color:#dff8ff;">
-                <span id="contador-mejora-carta" style="margin-right: 14px;">Mejoras disponibles: 0</span>
-                <span id="contador-mejora-especial">Mejoras especiales: 0</span>
+            <div id="resumen-objetos" class="mb-3 resumen-objetos-mejorar" style="color:#dff8ff;">
+                <div class="resumen-objetos-mejorar-fila">
+                    <span id="contador-mejora-carta" class="resumen-objeto-chip"></span>
+                    <span id="contador-mejora-especial" class="resumen-objeto-chip"></span>
+                </div>
+                <div class="resumen-objetos-mejorar-fila mt-2">
+                    <span id="contador-mejora-suprema" class="resumen-objeto-chip"></span>
+                    <span id="contador-mejora-definitiva" class="resumen-objeto-chip"></span>
+                </div>
             </div>
-
-            <div class="faccion-tabs mb-3">
-                <button id="subtab-mejora-carta" class="btn faccion-tab active" type="button">Mejora de carta (1★ → 4★)</button>
-                <button id="subtab-mejora-especial" class="btn faccion-tab" type="button">Mejora especial (5★ → 6★)</button>
+            <p class="text-muted small mb-2" style="color:#9ecfff !important;">Cartas de 1★ a 5★. Pulsa <strong>Mejorar</strong> y elige el objeto a consumir.</p>
+            <div class="mejoras-objetos-toolbar mb-3">
+                <div class="faccion-tabs mb-2" role="tablist" aria-label="Facción">
+                    <button type="button" id="tab-mejoras-objetos-heroes" class="btn faccion-tab active" data-faccion="H">Héroes</button>
+                    <button type="button" id="tab-mejoras-objetos-villanos" class="btn faccion-tab" data-faccion="V">Villanos</button>
+                </div>
+                <div class="d-flex align-items-center" style="gap:6px; flex-wrap:wrap;">
+                    <div class="d-flex align-items-center" style="gap:6px; padding:6px 10px; border:1px solid rgba(0, 209, 255, 0.35); border-radius:10px; background:rgba(8, 20, 40, 0.55);">
+                        <input id="ordenar-poder-mejoras-objetos" type="checkbox" style="transform:scale(1.08);">
+                        <label for="ordenar-poder-mejoras-objetos" style="margin:0; font-size:0.82rem; color:#dff8ff; white-space:nowrap;">Ordenar por poder</label>
+                    </div>
+                </div>
             </div>
-
-            <div id="panel-subtab-mejora-carta" class="mb-4">
-                <h5><img src="/resources/icons/mejora.png" alt="Mejora" style="width:44px; height:44px; object-fit:contain; margin-right:6px;">Mejora de carta (1★ → 4★)</h5>
-                <div id="contenedor-mejora-carta-objeto" class="contenedor-cartas"></div>
-            </div>
-
-            <div id="panel-subtab-mejora-especial" style="display:none;">
-                <h5><img src="/resources/icons/mejora_especial.png" alt="Mejora especial" style="width:44px; height:44px; object-fit:contain; margin-right:6px;">Mejora especial (5★ → 6★)</h5>
-                <div id="contenedor-mejora-especial-objeto" class="contenedor-cartas"></div>
-            </div>
+            <div id="contenedor-mejoras-objetos-todas" class="contenedor-cartas"></div>
         </div>
     </div>
 
@@ -104,13 +109,13 @@
         </div>
     </div>
 
-    <div id="modal-confirmacion-objeto" class="modal" style="display:none; position:fixed; inset:0; z-index:2000; background:rgba(0,0,0,0.72); justify-content:center; align-items:center;">
-        <div style="width:min(520px,92vw); background: rgba(12, 20, 36, 0.96); border: 1px solid rgba(0, 209, 255, 0.35); border-radius: 12px; padding: 18px; text-align:center;">
-            <h4>Confirmar mejora</h4>
-            <p id="texto-confirmacion-objeto" style="color:#ccefff;"></p>
-            <div class="d-flex justify-content-center" style="gap:10px;">
-                <button id="btn-confirmar-objeto" class="btn btn-primary">Aceptar</button>
-                <button id="btn-cancelar-objeto" class="btn btn-secondary">Cancelar</button>
+    <div id="modal-seleccion-objeto-mejora" class="modal modal-seleccion-objeto-mejora" style="display:none; position:fixed; inset:0; z-index:2000; background:rgba(0,0,0,0.72); justify-content:center; align-items:center;">
+        <div class="modal-seleccion-objeto-mejora-inner">
+            <h4 class="text-center mb-2">Elegir objeto de mejora</h4>
+            <p id="modal-seleccion-objeto-subtitulo" class="text-center small mb-3" style="color:#9edcff;"></p>
+            <div id="modal-seleccion-objeto-filas" class="modal-seleccion-objeto-filas"></div>
+            <div class="text-center mt-3">
+                <button type="button" id="btn-cerrar-seleccion-objeto" class="btn btn-secondary">Cerrar</button>
             </div>
         </div>
     </div>

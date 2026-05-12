@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.1.0
+
+- Etiqueta de versión del menú lateral: **`Versión: 1.1.0`** (`public/js/cartas.js`, `package.json`).
+- **Tienda** (`public/tienda.html`, `public/tienda.js`): objetos de mejora **suprema** y **definitiva** en la sección de objetos; persistencia en `usuario.objetos` (`mejoraSuprema`, `mejoraDefinitiva`); iconos `public/resources/icons/mejora_suprema.png`, `mejora_definitiva.png`.
+- **Mejorar cartas — Mejoras especiales** (`public/mejorarCartas.html`, `public/mejorarCartas.js`, `public/css/mazos.css`): panel unificado de cartas 1★–5★; resumen con cuatro contadores; **modal de elección de objeto** con reglas por nivel (mejora +1 hasta 5★, especial 5→6★, suprema a 5★, definitiva a 6★); antes/después en modal de resultado; normalización de inventario e inventario legacy para las nuevas claves; pestañas **Héroes | Villanos** y checkbox **Ordenar por poder** (por defecto orden alfabético estable).
+- **Menú lateral / perfil** (`public/js/cartas.js`, `public/css/mazos.css`): una sola fila con los **cuatro** objetos de mejora (icono + cantidad).
+- **Opciones — panel administrador** (`public/opciones.html`, `public/opciones.js`): campos numéricos para editar **mejora suprema** y **mejora definitiva** del usuario cargado; reinicio de progreso incluye esas claves.
+- **Cuenta atrás unificada** (`public/js/cartas.js`): helper global `dcFormatearCuentaAtrasMs`; **misiones diarias / semanales**, **rotación de eventos** (`public/jugarPartida.js`, `public/css/jugarPartida.css`) y **rotación coop** (`public/multijugadorEventosCoop.js`, `public/multijugador.html`) reutilizan el mismo formato; textos placeholder en `public/vistaJuego.html` (“Nuevos eventos en:”, `0s`).
+- **Catálogo** (`public/resources/cartas.xlsx`): datos actualizados en repositorio.
+
 ## 1.0.3
 
 - Etiqueta de versión del menú lateral: **`Versión: 1.0.3`** (`public/js/cartas.js`, `package.json`).

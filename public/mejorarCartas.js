@@ -62,11 +62,23 @@ async function enriquecerUsuarioSkillsDesdeCatalogoMejorar() {
     }
 }
 
-let mejoraObjetoPendiente = null;
+let indiceCartaModalObjetos = null;
+let faccionMejorasObjetosActiva = 'H';
+let ordenarPoderMejorasObjetos = false;
+let filtrosMejorasObjetosRegistrados = false;
 let combinacionDuplicadosGrupo = null;
 const seleccionIndicesCombinacion = new Set();
 const ICONO_MEJORA = '/resources/icons/mejora.png';
 const ICONO_MEJORA_ESPECIAL = '/resources/icons/mejora_especial.png';
+const ICONO_MEJORA_SUPREMA = '/resources/icons/mejora_suprema.png';
+const ICONO_MEJORA_DEFINITIVA = '/resources/icons/mejora_definitiva.png';
+
+const OBJETOS_MEJORA_UI = [
+    { key: 'mejoraCarta', nombre: 'Mejora de carta', descripcion: 'Sube 1 nivel (hasta 5★)', icon: ICONO_MEJORA },
+    { key: 'mejoraEspecial', nombre: 'Mejora especial', descripcion: 'Solo en 5★ → 6★', icon: ICONO_MEJORA_ESPECIAL },
+    { key: 'mejoraSuprema', nombre: 'Mejora suprema', descripcion: 'Instantáneo a 5★', icon: ICONO_MEJORA_SUPREMA },
+    { key: 'mejoraDefinitiva', nombre: 'Mejora definitiva', descripcion: 'Instantáneo a 6★', icon: ICONO_MEJORA_DEFINITIVA }
+];
 
 function normalizarFaccion(valor) {
     const faccion = String(valor || '').trim().toUpperCase();
@@ -434,17 +446,23 @@ function normalizarObjetosUsuario(usuario) {
 
     const objetosBase = usuario.objetos && typeof usuario.objetos === 'object'
         ? { ...usuario.objetos }
-        : { mejoraCarta: 0, mejoraEspecial: 0 };
+        : { mejoraCarta: 0, mejoraEspecial: 0, mejoraSuprema: 0, mejoraDefinitiva: 0 };
 
     objetosBase.mejoraCarta = Number(usuario.objetos?.mejoraCarta ?? objetosBase.mejoraCarta ?? 0);
     objetosBase.mejoraEspecial = Number(usuario.objetos?.mejoraEspecial ?? objetosBase.mejoraEspecial ?? 0);
+    objetosBase.mejoraSuprema = Number(usuario.objetos?.mejoraSuprema ?? objetosBase.mejoraSuprema ?? 0);
+    objetosBase.mejoraDefinitiva = Number(usuario.objetos?.mejoraDefinitiva ?? objetosBase.mejoraDefinitiva ?? 0);
 
     if (Array.isArray(usuario.inventarioObjetos)) {
         const legacyMejoraCarta = usuario.inventarioObjetos.find(item => item.id === 'obj-mejora-carta');
         const legacyMejoraEspecial = usuario.inventarioObjetos.find(item => item.id === 'obj-mejora-especial');
+        const legacyMejoraSuprema = usuario.inventarioObjetos.find(item => item.id === 'obj-mejora-suprema');
+        const legacyMejoraDefinitiva = usuario.inventarioObjetos.find(item => item.id === 'obj-mejora-definitiva');
 
         objetosBase.mejoraCarta = Math.max(objetosBase.mejoraCarta, Number(legacyMejoraCarta?.cantidad || 0));
         objetosBase.mejoraEspecial = Math.max(objetosBase.mejoraEspecial, Number(legacyMejoraEspecial?.cantidad || 0));
+        objetosBase.mejoraSuprema = Math.max(objetosBase.mejoraSuprema, Number(legacyMejoraSuprema?.cantidad || 0));
+        objetosBase.mejoraDefinitiva = Math.max(objetosBase.mejoraDefinitiva, Number(legacyMejoraDefinitiva?.cantidad || 0));
     }
 
     if (typeof window.DC_SOBRES_MEZCLAR_INVENTARIO === 'function') {
@@ -515,28 +533,31 @@ function crearElementoCartaSoloVisual(carta, destacarPoder = false, anchoCartaPx
 
 function actualizarContadoresObjetos(usuario) {
     normalizarObjetosUsuario(usuario);
-    const contadorMejora = document.getElementById('contador-mejora-carta');
-    const contadorEspecial = document.getElementById('contador-mejora-especial');
-
-    if (contadorMejora) {
-        contadorMejora.innerHTML = `<img src="${ICONO_MEJORA}" alt="Mejora" style="width:40px; height:40px; object-fit:contain; margin-right:6px;">Mejoras disponibles: ${Number(usuario.objetos.mejoraCarta || 0)}`;
-    }
-
-    if (contadorEspecial) {
-        contadorEspecial.innerHTML = `<img src="${ICONO_MEJORA_ESPECIAL}" alt="Mejora especial" style="width:40px; height:40px; object-fit:contain; margin-right:6px;">Mejoras especiales: ${Number(usuario.objetos.mejoraEspecial || 0)}`;
-    }
+    const mapa = {
+        'contador-mejora-carta': { icon: ICONO_MEJORA, label: 'Mejora de carta', key: 'mejoraCarta' },
+        'contador-mejora-especial': { icon: ICONO_MEJORA_ESPECIAL, label: 'Mejora especial', key: 'mejoraEspecial' },
+        'contador-mejora-suprema': { icon: ICONO_MEJORA_SUPREMA, label: 'Mejora suprema', key: 'mejoraSuprema' },
+        'contador-mejora-definitiva': { icon: ICONO_MEJORA_DEFINITIVA, label: 'Mejora definitiva', key: 'mejoraDefinitiva' }
+    };
+    Object.keys(mapa).forEach((id) => {
+        const el = document.getElementById(id);
+        if (!el) {
+            return;
+        }
+        const { icon, label, key } = mapa[id];
+        const n = Number(usuario.objetos?.[key] || 0);
+        el.innerHTML = `<img src="${icon}" alt="" style="width:40px; height:40px; object-fit:contain;">${label}: <strong>${n}</strong>`;
+    });
 }
 
-function obtenerCartasValidasMejoraObjeto(usuario, tipo) {
+/** Una carta por nombre (mejor nivel/poder); solo niveles 1–5 (la 6★ no usa objetos aquí). */
+function obtenerCartasPanelMejorasObjetos(usuario) {
     const cartas = Array.isArray(usuario?.cartas) ? usuario.cartas : [];
     const candidatos = cartas
         .map((carta, index) => ({ ...carta, originalIndex: index }))
-        .filter(carta => {
+        .filter((carta) => {
             const nivel = Number(carta.Nivel || 1);
-            if (tipo === 'mejoraCarta') {
-                return nivel >= 1 && nivel <= 3;
-            }
-            return nivel === 5;
+            return nivel >= 1 && nivel <= 5;
         });
 
     const mejorPorNombre = new Map();
@@ -565,34 +586,206 @@ function obtenerCartasValidasMejoraObjeto(usuario, tipo) {
         }
     });
 
-    return Array.from(mejorPorNombre.values()).sort((a, b) => {
-        const diffNivel = (a.Nivel || 1) - (b.Nivel || 1);
-        if (diffNivel !== 0) {
-            return diffNivel;
+    return Array.from(mejorPorNombre.values()).sort((a, b) =>
+        String(a.Nombre || '').localeCompare(String(b.Nombre || ''), undefined, { sensitivity: 'base' })
+    );
+}
+
+function obtenerFaccionCartaMejorasObjetos(carta) {
+    return normalizarFaccion(carta?.faccion || carta?.Faccion || '');
+}
+
+function filtrarYOrdenarCartasMejorasObjetos(cartas) {
+    const lista = (Array.isArray(cartas) ? cartas : []).filter((carta) => {
+        return obtenerFaccionCartaMejorasObjetos(carta) === faccionMejorasObjetosActiva;
+    });
+    lista.sort((a, b) => {
+        if (ordenarPoderMejorasObjetos) {
+            const diffPoder = Number(b.Poder || 0) - Number(a.Poder || 0);
+            if (diffPoder !== 0) {
+                return diffPoder;
+            }
         }
-        return String(a.Nombre || '').localeCompare(String(b.Nombre || ''));
+        return String(a.Nombre || '').localeCompare(String(b.Nombre || ''), undefined, { sensitivity: 'base' });
+    });
+    return lista;
+}
+
+function actualizarTabsFaccionMejorasObjetos() {
+    const tabH = document.getElementById('tab-mejoras-objetos-heroes');
+    const tabV = document.getElementById('tab-mejoras-objetos-villanos');
+    if (tabH) {
+        tabH.classList.toggle('active', faccionMejorasObjetosActiva === 'H');
+    }
+    if (tabV) {
+        tabV.classList.toggle('active', faccionMejorasObjetosActiva === 'V');
+    }
+}
+
+function configurarFiltrosMejorasObjetos() {
+    if (filtrosMejorasObjetosRegistrados) {
+        return;
+    }
+    const tabH = document.getElementById('tab-mejoras-objetos-heroes');
+    const tabV = document.getElementById('tab-mejoras-objetos-villanos');
+    const chkPoder = document.getElementById('ordenar-poder-mejoras-objetos');
+    if (!tabH && !tabV && !chkPoder) {
+        return;
+    }
+    filtrosMejorasObjetosRegistrados = true;
+
+    tabH?.addEventListener('click', () => {
+        faccionMejorasObjetosActiva = 'H';
+        actualizarTabsFaccionMejorasObjetos();
+        const usuario = JSON.parse(localStorage.getItem('usuario') || 'null');
+        renderizarSeccionMejorasObjetos(usuario);
+    });
+    tabV?.addEventListener('click', () => {
+        faccionMejorasObjetosActiva = 'V';
+        actualizarTabsFaccionMejorasObjetos();
+        const usuario = JSON.parse(localStorage.getItem('usuario') || 'null');
+        renderizarSeccionMejorasObjetos(usuario);
+    });
+    chkPoder?.addEventListener('change', function () {
+        ordenarPoderMejorasObjetos = Boolean(this.checked);
+        const usuario = JSON.parse(localStorage.getItem('usuario') || 'null');
+        renderizarSeccionMejorasObjetos(usuario);
     });
 }
 
-function renderizarBloqueMejoraObjetos(usuario, tipo, contenedorId) {
-    const contenedor = document.getElementById(contenedorId);
+function puedeUsarObjetoEnCarta(keyObjeto, nivelCarta, cantidadInventario) {
+    const n = Number(nivelCarta || 1);
+    if (cantidadInventario <= 0) {
+        return false;
+    }
+    if (n >= 6) {
+        return false;
+    }
+    if (keyObjeto === 'mejoraCarta') {
+        return n >= 1 && n <= 4;
+    }
+    if (keyObjeto === 'mejoraSuprema') {
+        return n >= 1 && n <= 4;
+    }
+    if (keyObjeto === 'mejoraEspecial') {
+        return n === 5;
+    }
+    if (keyObjeto === 'mejoraDefinitiva') {
+        return n >= 1 && n <= 5;
+    }
+    return false;
+}
+
+function renderizarFilasModalObjetosMejora(usuario, carta) {
+    const wrap = document.getElementById('modal-seleccion-objeto-filas');
+    if (!wrap) {
+        return;
+    }
+    wrap.innerHTML = '';
+    const nivel = Number(carta.Nivel || 1);
+
+    OBJETOS_MEJORA_UI.forEach((def) => {
+        const cant = Number(usuario.objetos?.[def.key] || 0);
+        const habilitado = puedeUsarObjetoEnCarta(def.key, nivel, cant);
+
+        const fila = document.createElement('div');
+        fila.className = 'modal-seleccion-objeto-fila';
+
+        const iconWrap = document.createElement('div');
+        iconWrap.className = 'modal-seleccion-objeto-fila-icono';
+        const img = document.createElement('img');
+        img.src = def.icon;
+        img.alt = def.nombre;
+        iconWrap.appendChild(img);
+
+        const texto = document.createElement('div');
+        texto.className = 'modal-seleccion-objeto-fila-texto';
+        const strong = document.createElement('strong');
+        strong.textContent = def.nombre;
+        const small = document.createElement('small');
+        small.textContent = `${def.descripcion} · En inventario: ${cant}`;
+        texto.appendChild(strong);
+        texto.appendChild(small);
+
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn btn-primary btn-usar-objeto';
+        btn.textContent = 'Usar';
+        btn.disabled = !habilitado;
+        btn.addEventListener('click', () => {
+            void aplicarMejoraObjetoDesdeModal(def.key, carta.originalIndex);
+        });
+
+        fila.appendChild(iconWrap);
+        fila.appendChild(texto);
+        fila.appendChild(btn);
+        wrap.appendChild(fila);
+    });
+}
+
+function abrirModalSeleccionObjetoMejora(indiceCarta) {
+    const usuario = JSON.parse(localStorage.getItem('usuario') || 'null');
+    normalizarObjetosUsuario(usuario);
+    const carta = usuario?.cartas?.[indiceCarta];
+    if (!carta) {
+        mostrarMensaje('No se encontró la carta seleccionada.', 'danger');
+        return;
+    }
+    const nivel = Number(carta.Nivel || 1);
+    if (nivel < 1 || nivel > 5) {
+        mostrarMensaje('Esta carta no admite mejoras con objetos.', 'warning');
+        return;
+    }
+
+    indiceCartaModalObjetos = indiceCarta;
+    const modal = document.getElementById('modal-seleccion-objeto-mejora');
+    const sub = document.getElementById('modal-seleccion-objeto-subtitulo');
+    if (sub) {
+        sub.textContent = `${String(carta.Nombre || '')} · Nivel ${nivel}★`;
+    }
+    renderizarFilasModalObjetosMejora(usuario, { ...carta, originalIndex: indiceCarta });
+    if (modal) {
+        modal.style.display = 'flex';
+    }
+}
+
+function cerrarModalSeleccionObjetoMejora() {
+    const modal = document.getElementById('modal-seleccion-objeto-mejora');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+    indiceCartaModalObjetos = null;
+}
+
+function renderizarSeccionMejorasObjetos(usuario) {
+    actualizarContadoresObjetos(usuario);
+    actualizarTabsFaccionMejorasObjetos();
+    const contenedor = document.getElementById('contenedor-mejoras-objetos-todas');
     if (!contenedor) {
         return;
     }
 
     contenedor.innerHTML = '';
-    const cartas = obtenerCartasValidasMejoraObjeto(usuario, tipo);
-    const cantidadObjetos = Number(usuario.objetos?.[tipo] || 0);
+    const todas = obtenerCartasPanelMejorasObjetos(usuario);
+    const cartas = filtrarYOrdenarCartasMejorasObjetos(todas);
 
-    if (cartas.length === 0) {
+    if (todas.length === 0) {
         const vacio = document.createElement('div');
         vacio.className = 'alert alert-info';
-        vacio.textContent = 'No hay cartas válidas para este tipo de mejora.';
+        vacio.textContent = 'No tienes cartas de nivel 1 a 5 para usar objetos de mejora.';
         contenedor.appendChild(vacio);
         return;
     }
 
-    cartas.forEach(carta => {
+    if (cartas.length === 0) {
+        const vacio = document.createElement('div');
+        vacio.className = 'alert alert-info';
+        vacio.textContent = `No tienes cartas de ${faccionMejorasObjetosActiva === 'H' ? 'héroes' : 'villanos'} de nivel 1 a 5 en esta vista. Prueba la otra facción.`;
+        contenedor.appendChild(vacio);
+        return;
+    }
+
+    cartas.forEach((carta) => {
         const wrapper = document.createElement('div');
         wrapper.className = 'mejora-objeto-fila';
 
@@ -600,19 +793,12 @@ function renderizarBloqueMejoraObjetos(usuario, tipo, contenedorId) {
         const boton = document.createElement('button');
         boton.className = 'btn btn-mejora-objeto';
         boton.textContent = 'Mejorar';
-        boton.disabled = cantidadObjetos <= 0;
-        boton.addEventListener('click', () => abrirModalConfirmacionMejora(tipo, carta.originalIndex));
+        boton.addEventListener('click', () => abrirModalSeleccionObjetoMejora(carta.originalIndex));
 
         wrapper.appendChild(cartaVisual);
         wrapper.appendChild(boton);
         contenedor.appendChild(wrapper);
     });
-}
-
-function renderizarSeccionMejorasObjetos(usuario) {
-    actualizarContadoresObjetos(usuario);
-    renderizarBloqueMejoraObjetos(usuario, 'mejoraCarta', 'contenedor-mejora-carta-objeto');
-    renderizarBloqueMejoraObjetos(usuario, 'mejoraEspecial', 'contenedor-mejora-especial-objeto');
 }
 
 function sincronizarMazosConColeccion(usuario) {
@@ -847,14 +1033,17 @@ function configurarEventos() {
         botonDestruirTodo.onclick = destruirDuplicadosNivel6;
     }
 
-    const btnConfirmarObjeto = document.getElementById('btn-confirmar-objeto');
-    if (btnConfirmarObjeto) {
-        btnConfirmarObjeto.onclick = confirmarMejoraConObjeto;
+    const modalSeleccionObjeto = document.getElementById('modal-seleccion-objeto-mejora');
+    const btnCerrarSeleccionObjeto = document.getElementById('btn-cerrar-seleccion-objeto');
+    if (btnCerrarSeleccionObjeto) {
+        btnCerrarSeleccionObjeto.onclick = cerrarModalSeleccionObjetoMejora;
     }
-
-    const btnCancelarObjeto = document.getElementById('btn-cancelar-objeto');
-    if (btnCancelarObjeto) {
-        btnCancelarObjeto.onclick = cerrarModalConfirmacionObjeto;
+    if (modalSeleccionObjeto) {
+        modalSeleccionObjeto.addEventListener('click', (event) => {
+            if (event.target === modalSeleccionObjeto) {
+                cerrarModalSeleccionObjetoMejora();
+            }
+        });
     }
 
     const btnCerrarResultado = document.getElementById('btn-cerrar-resultado-objeto');
@@ -896,12 +1085,7 @@ function configurarEventos() {
         tabObjetos.onclick = () => cambiarPestanaMejoras('objetos');
     }
 
-    const subtabMejoraCarta = document.getElementById('subtab-mejora-carta');
-    const subtabMejoraEspecial = document.getElementById('subtab-mejora-especial');
-    if (subtabMejoraCarta && subtabMejoraEspecial) {
-        subtabMejoraCarta.onclick = () => cambiarSubpestanaObjetos('mejoraCarta');
-        subtabMejoraEspecial.onclick = () => cambiarSubpestanaObjetos('mejoraEspecial');
-    }
+    configurarFiltrosMejorasObjetos();
 }
 
 function cerrarModalResultadoAuto() {
@@ -998,77 +1182,6 @@ function cambiarPestanaMejoras(pestana) {
     if (seccionObjetos) {
         seccionObjetos.style.display = mostrarObjetos ? 'block' : 'none';
     }
-    if (mostrarObjetos) {
-        cambiarSubpestanaObjetos('mejoraCarta');
-    }
-}
-
-function cambiarSubpestanaObjetos(tipo) {
-    const subtabMejoraCarta = document.getElementById('subtab-mejora-carta');
-    const subtabMejoraEspecial = document.getElementById('subtab-mejora-especial');
-    const panelCarta = document.getElementById('panel-subtab-mejora-carta');
-    const panelEspecial = document.getElementById('panel-subtab-mejora-especial');
-    const esMejoraCarta = tipo === 'mejoraCarta';
-
-    if (subtabMejoraCarta) {
-        subtabMejoraCarta.classList.toggle('active', esMejoraCarta);
-    }
-    if (subtabMejoraEspecial) {
-        subtabMejoraEspecial.classList.toggle('active', !esMejoraCarta);
-    }
-    if (panelCarta) {
-        panelCarta.style.display = esMejoraCarta ? 'block' : 'none';
-    }
-    if (panelEspecial) {
-        panelEspecial.style.display = esMejoraCarta ? 'none' : 'block';
-    }
-}
-
-function abrirModalConfirmacionMejora(tipo, indiceCarta) {
-    const usuario = JSON.parse(localStorage.getItem('usuario'));
-    normalizarObjetosUsuario(usuario);
-    const carta = usuario?.cartas?.[indiceCarta];
-
-    if (!carta) {
-        mostrarMensaje('No se encontró la carta seleccionada.', 'danger');
-        return;
-    }
-
-    if (tipo === 'mejoraCarta') {
-        const nivel = Number(carta.Nivel || 1);
-        if (nivel < 1 || nivel > 3) {
-            mostrarMensaje('La mejora de carta solo aplica a niveles 1 a 3.', 'warning');
-            return;
-        }
-        if (Number(usuario.objetos.mejoraCarta || 0) <= 0) {
-            mostrarMensaje('No tienes mejoras de carta disponibles.', 'warning');
-            return;
-        }
-    } else {
-        if (Number(carta.Nivel || 1) !== 5) {
-            mostrarMensaje('La mejora especial solo aplica a cartas de nivel 5.', 'warning');
-            return;
-        }
-        if (Number(usuario.objetos.mejoraEspecial || 0) <= 0) {
-            mostrarMensaje('No tienes mejoras especiales disponibles.', 'warning');
-            return;
-        }
-    }
-
-    mejoraObjetoPendiente = { tipo, indiceCarta };
-    const modal = document.getElementById('modal-confirmacion-objeto');
-    const texto = document.getElementById('texto-confirmacion-objeto');
-    const etiquetaObjeto = tipo === 'mejoraCarta' ? 'mejora de carta' : 'mejora especial';
-    texto.textContent = `¿Quieres mejorar esta carta usando ${etiquetaObjeto}?`;
-    modal.style.display = 'flex';
-}
-
-function cerrarModalConfirmacionObjeto() {
-    const modal = document.getElementById('modal-confirmacion-objeto');
-    if (modal) {
-        modal.style.display = 'none';
-    }
-    mejoraObjetoPendiente = null;
 }
 
 function cerrarModalResultadoObjeto() {
@@ -1082,23 +1195,25 @@ function crearCartaMejoradaPorObjeto(cartaOriginal, tipo) {
     const original = { ...cartaOriginal };
     const mejorada = { ...cartaOriginal };
     const saludBase = Number((mejorada.SaludMax ?? mejorada.Salud ?? mejorada.Poder) || 0);
+    const nivelInicial = Number(mejorada.Nivel || 1);
+    let nivelFinal = nivelInicial;
 
     if (tipo === 'mejoraCarta') {
-        const nivelInicial = Number(mejorada.Nivel || 1);
-        const nivelFinal = Math.min(nivelInicial + 1, 4);
-        const incrementoNiveles = Math.max(nivelFinal - nivelInicial, 0);
-        mejorada.Nivel = nivelFinal;
-        mejorada.Poder = Number(mejorada.Poder || 0) + (incrementoNiveles * 500);
-        mejorada.SaludMax = saludBase + (incrementoNiveles * 500);
-        mejorada.Salud = mejorada.SaludMax;
-    } else {
-        const nivelInicial = Number(mejorada.Nivel || 1);
-        const incrementoNiveles = Math.max(6 - nivelInicial, 0);
-        mejorada.Nivel = 6;
-        mejorada.Poder = Number(mejorada.Poder || 0) + (incrementoNiveles * 500);
-        mejorada.SaludMax = saludBase + (incrementoNiveles * 500);
-        mejorada.Salud = mejorada.SaludMax;
+        nivelFinal = Math.min(nivelInicial + 1, 5);
+    } else if (tipo === 'mejoraEspecial') {
+        nivelFinal = 6;
+    } else if (tipo === 'mejoraSuprema') {
+        nivelFinal = 5;
+    } else if (tipo === 'mejoraDefinitiva') {
+        nivelFinal = 6;
     }
+
+    const incrementoNiveles = Math.max(nivelFinal - nivelInicial, 0);
+    mejorada.Nivel = nivelFinal;
+    mejorada.Poder = Number(mejorada.Poder || 0) + (incrementoNiveles * 500);
+    mejorada.SaludMax = saludBase + (incrementoNiveles * 500);
+    mejorada.Salud = mejorada.SaludMax;
+
     if (typeof window.recalcularSkillPowerPorNivel === 'function') {
         window.recalcularSkillPowerPorNivel(mejorada, Number(mejorada.Nivel || 1));
     }
@@ -1123,37 +1238,36 @@ function mostrarResultadoMejoraObjeto(cartaOriginal, cartaMejorada) {
     modal.style.display = 'flex';
 }
 
-async function confirmarMejoraConObjeto() {
-    if (!mejoraObjetoPendiente) {
-        return;
-    }
-
-    const usuario = JSON.parse(localStorage.getItem('usuario'));
+async function aplicarMejoraObjetoDesdeModal(tipo, indiceCarta) {
+    const usuario = JSON.parse(localStorage.getItem('usuario') || 'null');
     const email = localStorage.getItem('email');
     normalizarObjetosUsuario(usuario);
 
     if (!usuario || !email) {
         mostrarMensaje('No se pudo validar la sesión del usuario.', 'danger');
-        cerrarModalConfirmacionObjeto();
         return;
     }
 
-    const { tipo, indiceCarta } = mejoraObjetoPendiente;
-    const carta = usuario.cartas[indiceCarta];
+    const carta = usuario.cartas?.[indiceCarta];
     if (!carta) {
         mostrarMensaje('La carta seleccionada ya no está disponible.', 'danger');
-        cerrarModalConfirmacionObjeto();
+        cerrarModalSeleccionObjetoMejora();
         return;
     }
 
+    const nivel = Number(carta.Nivel || 1);
     const stock = Number(usuario.objetos?.[tipo] || 0);
-    if (stock <= 0) {
-        mostrarMensaje('No tienes objetos suficientes para esta mejora.', 'warning');
-        cerrarModalConfirmacionObjeto();
+    if (!puedeUsarObjetoEnCarta(tipo, nivel, stock)) {
+        mostrarMensaje('No puedes usar este objeto en esta carta o no tienes stock.', 'warning');
         return;
     }
 
     const { original, mejorada } = crearCartaMejoradaPorObjeto(carta, tipo);
+    if (Number(mejorada.Nivel || 1) === Number(original.Nivel || 1)) {
+        mostrarMensaje('La carta ya está en el nivel objetivo para este objeto.', 'warning');
+        return;
+    }
+
     const faccionMejorada = normalizarFaccion(mejorada?.faccion || mejorada?.Faccion || '');
     const subeANivel5 = Number(original?.Nivel || 1) < 5 && Number(mejorada?.Nivel || 1) >= 5;
     usuario.cartas[indiceCarta] = mejorada;
@@ -1169,14 +1283,13 @@ async function confirmarMejoraConObjeto() {
             if (subeANivel5) window.DCMisiones.track('mejorar_nivel', { amount: 1 });
         }
         refrescarPanelPerfilLateral();
-        cerrarModalConfirmacionObjeto();
+        cerrarModalSeleccionObjetoMejora();
         cargarCartas();
         mostrarResultadoMejoraObjeto(original, mejorada);
         mostrarMensaje('Mejora con objeto aplicada correctamente.', 'success');
     } catch (error) {
         console.error('Error al aplicar mejora con objeto:', error);
         mostrarMensaje('Error al aplicar mejora con objeto en Firebase.', 'danger');
-        cerrarModalConfirmacionObjeto();
     }
 }
 

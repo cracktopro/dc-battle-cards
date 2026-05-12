@@ -110,14 +110,6 @@
         return `${VERSION_ROTACION_COOP_EVENTOS}-${idVentana}`;
     }
 
-    function formatearTiempoRestanteCoop(msRestantes) {
-        const totalSegundos = Math.max(0, Math.floor(msRestantes / 1000));
-        const horas = Math.floor(totalSegundos / 3600);
-        const minutos = Math.floor((totalSegundos % 3600) / 60);
-        const segundos = totalSegundos % 60;
-        return `${String(horas).padStart(2, '0')}:${String(minutos).padStart(2, '0')}:${String(segundos).padStart(2, '0')}`;
-    }
-
     function actualizarUIRotacionCoopEventos() {
         const timerValorEl = document.getElementById('coop-eventos-rotacion-timer-valor');
         const barraEl = document.getElementById('coop-eventos-rotacion-barra-progreso');
@@ -129,7 +121,9 @@
         const restante = fin - ahora;
         const transcurrido = ahora - inicio;
         const progreso = Math.min(100, Math.max(0, (transcurrido / ROTACION_COOP_EVENTOS_MS) * 100));
-        timerValorEl.textContent = formatearTiempoRestanteCoop(restante);
+        timerValorEl.textContent = typeof window.dcFormatearCuentaAtrasMs === 'function'
+            ? window.dcFormatearCuentaAtrasMs(restante)
+            : '0s';
         barraEl.style.width = `${progreso}%`;
     }
 
