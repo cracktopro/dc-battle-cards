@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.3
+
+- Etiqueta de versión del menú lateral: **`Versión: 1.0.3`** (`public/js/cartas.js`, `package.json`).
+- **Eventos cooperativos online — progreso “completado”** (`public/multijugadorEventosCoop.js`, `public/partidaCoop.js`): clave de rotación en `eventosJugadosPorRotacion` con prefijo propio `event-rotation-coop-online-v1`, separada de los eventos offline (`event-rotation-v1`), para no marcar como jugados eventos coop por IDs cruzados con VS BOT.
+- **Rotación de eventos — siempre 4 paneles** (`public/jugarPartida.js`, `public/multijugadorEventosCoop.js`): ventana circular `start = (idVentana * 4) % N`; si el final del Excel no llena 4 huecos, se reenvuelve al inicio del catálogo (misma hora / `idVentana` y claves de rotación sin cambios).
+- **Recursos Excel** (`public/resources/eventos.xlsx`, `eventos_online.xlsx`): actualización en repositorio.
+
 ## 1.0.2
 
 - Etiqueta de versión del menú lateral: **`Versión: 1.0.2`** (`public/js/cartas.js`, `package.json`).

@@ -578,6 +578,10 @@ function obtenerVentanaRotacionEventos() {
     return { ahora, idVentana, inicio, fin };
 }
 
+/**
+ * Siempre devuelve 4 entradas (salvo lista vacía): ventana circular sobre el catálogo.
+ * Así el último tramo del Excel (p. ej. solo 2 eventos) se completa reenvolviendo al inicio (0,1…).
+ */
 function obtenerEventosRotacionActual() {
     if (!Array.isArray(eventosActivos) || eventosActivos.length === 0) {
         return [];
@@ -585,10 +589,13 @@ function obtenerEventosRotacionActual() {
 
     const { idVentana } = obtenerVentanaRotacionEventos();
     const tamanoLote = 4;
-    const totalLotes = Math.ceil(eventosActivos.length / tamanoLote);
-    const loteActual = totalLotes > 0 ? (idVentana % totalLotes) : 0;
-    const inicio = loteActual * tamanoLote;
-    return eventosActivos.slice(inicio, inicio + tamanoLote);
+    const N = eventosActivos.length;
+    const start = ((idVentana * tamanoLote) % N + N) % N;
+    const salida = [];
+    for (let i = 0; i < tamanoLote; i += 1) {
+        salida.push(eventosActivos[(start + i) % N]);
+    }
+    return salida;
 }
 
 function obtenerClaveRotacionEventos() {

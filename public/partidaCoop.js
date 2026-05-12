@@ -2660,12 +2660,13 @@
     }
 
     /**
-     * Calcula la clave de rotación (mismo formato que `jugarPartida.js`) para
-     * marcar el evento como jugado en `usuario.eventosJugadosPorRotacion`.
+     * Clave de rotación solo para eventos cooperativos online (debe coincidir con
+     * `multijugadorEventosCoop.js`). No usar `event-rotation-v1` de VS BOT: los IDs de
+     * evento offline y online se solapan y compartir bucket marcaba coop como completado por error.
      */
     function coopObtenerClaveRotacionEventos() {
         const ROT_MS = 60 * 60 * 1000;
-        const VERSION = 'event-rotation-v1';
+        const VERSION = 'event-rotation-coop-online-v1';
         const idVentana = Math.floor(Date.now() / ROT_MS);
         return `${VERSION}-${idVentana}`;
     }

@@ -67,7 +67,12 @@
     }
 
     const ROTACION_COOP_EVENTOS_MS = 60 * 60 * 1000;
-    const VERSION_ROTACION_COOP_EVENTOS = 'event-rotation-v1';
+    /**
+     * Prefijo distinto al de eventos offline (`jugarPartida.js` usa `event-rotation-v1`).
+     * Si compartieran clave, los IDs numéricos de `eventos.xlsx` y `eventos_online.xlsx` se
+     * mezclarían y un evento VS BOT completado marcaría como jugado un coop con el mismo ID.
+     */
+    const VERSION_ROTACION_COOP_EVENTOS = 'event-rotation-coop-online-v1';
     /** Lista completa del XLSX; `obtenerEventosRotacionActualCoop` devuelve el lote de 4 vigente. */
     let eventosCoopListaCompleta = [];
     let eventosCoopEnRotacion = [];
@@ -81,16 +86,23 @@
         return { ahora, idVentana, inicio, fin };
     }
 
+    /**
+     * Siempre 4 eventos (salvo catálogo vacío): misma lógica circular que `jugarPartida.js`
+     * para no dejar huecos al final del Excel.
+     */
     function obtenerEventosRotacionActualCoop() {
         if (!Array.isArray(eventosCoopListaCompleta) || eventosCoopListaCompleta.length === 0) {
             return [];
         }
         const { idVentana } = obtenerVentanaRotacionCoopEventos();
         const tamanoLote = 4;
-        const totalLotes = Math.ceil(eventosCoopListaCompleta.length / tamanoLote);
-        const loteActual = totalLotes > 0 ? (idVentana % totalLotes) : 0;
-        const inicio = loteActual * tamanoLote;
-        return eventosCoopListaCompleta.slice(inicio, inicio + tamanoLote);
+        const N = eventosCoopListaCompleta.length;
+        const start = ((idVentana * tamanoLote) % N + N) % N;
+        const salida = [];
+        for (let i = 0; i < tamanoLote; i += 1) {
+            salida.push(eventosCoopListaCompleta[(start + i) % N]);
+        }
+        return salida;
     }
 
     function obtenerClaveRotacionEventosLocal() {
@@ -224,8 +236,7 @@
             catalogo.map((carta) => [normalizarNombre(carta.Nombre), carta])
         );
 
-        /* Mismo criterio que VS BOT: marcar eventos ya jugados en la rotación
-         * actual usando `usuario.eventosJugadosPorRotacion[claveRotacion]`. */
+        /* Progreso coop online aislado: `claveRotacion` usa prefijo propio (no el de VS BOT). */
         const usuario = await obtenerUsuarioActualCoop();
         const claveRotacion = obtenerClaveRotacionEventosLocal();
         const jugadosPorRotacion = (usuario?.eventosJugadosPorRotacion && typeof usuario.eventosJugadosPorRotacion === 'object')
