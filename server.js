@@ -1027,7 +1027,7 @@ function aplicarDotInicioTurnoServidor(cartas = []) {
         let salud = obtenerSaludCartaServidor(carta);
         let escudo = Math.max(0, Number(carta.escudoActual || 0));
         dots.forEach(dot => {
-            let dano = Math.max(0, Number(dot?.danoPorTurno || 0));
+            let dano = Math.max(0, Math.floor(Number(dot?.danoPorTurno || 0)));
             if (dano <= 0) return;
             if (escudo > 0) {
                 const absorbido = Math.min(escudo, dano);
@@ -1042,8 +1042,8 @@ function aplicarDotInicioTurnoServidor(cartas = []) {
         carta.Salud = salud;
         carta.efectosDot = dots
             .map(dot => ({
-                danoPorTurno: Math.max(0, Number(dot?.danoPorTurno || 0)),
-                turnosRestantes: Math.max(0, Number(dot?.turnosRestantes || 0) - 1),
+                danoPorTurno: Math.max(0, Math.floor(Number(dot?.danoPorTurno || 0))),
+                turnosRestantes: Math.max(0, Math.floor(Number(dot?.turnosRestantes || 0)) - 1),
                 skillName: String(dot?.skillName || '').trim()
             }))
             .filter(dot => dot.turnosRestantes > 0 && dot.danoPorTurno > 0);
@@ -1064,7 +1064,7 @@ function aplicarDotInicioTurnoServidorConCementerio(cartas = [], cementerio = []
         let salud = obtenerSaludCartaServidor(carta);
         let escudo = Math.max(0, Number(carta.escudoActual || 0));
         dots.forEach(dot => {
-            let dano = Math.max(0, Number(dot?.danoPorTurno || 0));
+            let dano = Math.max(0, Math.floor(Number(dot?.danoPorTurno || 0)));
             if (dano <= 0) return;
             if (escudo > 0) {
                 const absorbido = Math.min(escudo, dano);
@@ -1079,8 +1079,8 @@ function aplicarDotInicioTurnoServidorConCementerio(cartas = [], cementerio = []
         carta.Salud = salud;
         carta.efectosDot = dots
             .map(dot => ({
-                danoPorTurno: Math.max(0, Number(dot?.danoPorTurno || 0)),
-                turnosRestantes: Math.max(0, Number(dot?.turnosRestantes || 0) - 1),
+                danoPorTurno: Math.max(0, Math.floor(Number(dot?.danoPorTurno || 0))),
+                turnosRestantes: Math.max(0, Math.floor(Number(dot?.turnosRestantes || 0)) - 1),
                 skillName: String(dot?.skillName || '').trim()
             }))
             .filter(dot => dot.turnosRestantes > 0 && dot.danoPorTurno > 0);

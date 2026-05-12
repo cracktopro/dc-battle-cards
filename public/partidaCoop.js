@@ -1649,10 +1649,13 @@
             if (dots.length > 0) {
                 let danoTotal = 0;
                 dots.forEach((fx) => {
-                    danoTotal += Math.max(1, Math.floor(Number(fx?.danoPorTurno || 0)));
+                    const d = Math.max(0, Math.floor(Number(fx?.danoPorTurno || 0)));
+                    danoTotal += d;
                     fx.turnosRestantes = Math.max(0, Math.floor(Number(fx.turnosRestantes || 0)) - 1);
                 });
-                carta.efectosDot = dots.filter((fx) => fx.turnosRestantes > 0);
+                carta.efectosDot = dots.filter((fx) => (
+                    fx.turnosRestantes > 0 && Math.max(0, Math.floor(Number(fx?.danoPorTurno || 0))) > 0
+                ));
                 if (danoTotal > 0 && cartaViva(carta)) {
                     aplicarDanioDirectoSinAnimCoop(carta, zona, idx, danoTotal, snap);
                 }

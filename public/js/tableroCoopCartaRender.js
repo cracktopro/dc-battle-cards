@@ -425,8 +425,10 @@
             saludStack.appendChild(stunChip);
         }
         const dotsActivos = (Array.isArray(carta?.efectosDot) ? carta.efectosDot : [])
-            .filter(dot => Math.max(0, Number(dot?.turnosRestantes || 0)) > 0
-                && Math.max(0, Number(dot?.danoPorTurno || 0)) > 0);
+            .filter(dot => (
+                Math.max(0, Math.floor(Number(dot?.turnosRestantes || 0))) > 0
+                && Math.max(0, Math.floor(Number(dot?.danoPorTurno || 0))) > 0
+            ));
         if (dotsActivos.length > 0) {
             const dotChip = document.createElement('span');
             dotChip.className = 'estado-dot';

@@ -2765,7 +2765,8 @@ function reducirCooldownHabilidadesActivas(propietario) {
 }
 
 function cartaEstaAturdida(carta) {
-    return Math.max(0, Number(carta?.stunRestante || 0)) > 0;
+    const n = Number(carta?.stunRestante);
+    return Number.isFinite(n) && Math.max(0, Math.floor(n)) > 0;
 }
 
 function aplicarEfectosInicioTurno(propietario) {
@@ -2793,7 +2794,7 @@ function aplicarEfectosInicioTurno(propietario) {
         let danoTotalTurno = 0;
 
         dots.forEach(dot => {
-            const danoTick = Math.max(0, Number(dot?.danoPorTurno || 0));
+            const danoTick = Math.max(0, Math.floor(Number(dot?.danoPorTurno || 0)));
             if (danoTick <= 0) {
                 return;
             }
@@ -2811,8 +2812,8 @@ function aplicarEfectosInicioTurno(propietario) {
 
         carta.efectosDot = dots
             .map(dot => ({
-                danoPorTurno: Math.max(0, Number(dot?.danoPorTurno || 0)),
-                turnosRestantes: Math.max(0, Number(dot?.turnosRestantes || 0) - 1),
+                danoPorTurno: Math.max(0, Math.floor(Number(dot?.danoPorTurno || 0))),
+                turnosRestantes: Math.max(0, Math.floor(Number(dot?.turnosRestantes || 0)) - 1),
                 skillName: String(dot?.skillName || '').trim()
             }))
             .filter(dot => dot.turnosRestantes > 0 && dot.danoPorTurno > 0);
@@ -2842,7 +2843,7 @@ function consumirStunFinTurno(propietario) {
         if (!carta) {
             return;
         }
-        const stunActual = Math.max(0, Number(carta.stunRestante || 0));
+        const stunActual = Math.max(0, Math.floor(Number(carta.stunRestante || 0)));
         if (stunActual > 0) {
             carta.stunRestante = Math.max(0, stunActual - 1);
             if (carta.stunRestante === 0) {
@@ -3585,7 +3586,10 @@ function crearCartaElemento(carta, tipo, slotIndex, opciones = {}) {
         saludStack.appendChild(stunChip);
     }
     const dotsActivos = (Array.isArray(carta?.efectosDot) ? carta.efectosDot : [])
-        .filter(dot => Math.max(0, Number(dot?.turnosRestantes || 0)) > 0 && Math.max(0, Number(dot?.danoPorTurno || 0)) > 0);
+        .filter(dot => (
+            Math.max(0, Math.floor(Number(dot?.turnosRestantes || 0))) > 0
+            && Math.max(0, Math.floor(Number(dot?.danoPorTurno || 0))) > 0
+        ));
     if (dotsActivos.length > 0) {
         const dotChip = document.createElement('span');
         dotChip.className = 'estado-dot';
@@ -4189,7 +4193,11 @@ function finalizarTurnoJugador() {
     } else {
         pvpCartasAgotadasConfirmadas = [];
     }
-    consumirStunFinTurno('jugador');
+    // PvP: el servidor ya aplica `consumirStunFinTurnoServidor` al confirmar fin de turno; hacerlo
+    // aquí duplica el tick y el snapshot oficial puede “revivir” el stun al reconciliar revisiones.
+    if (!ES_MODO_PVP) {
+        consumirStunFinTurno('jugador');
+    }
     limpiarDestacados();
     renderizarTablero();
     escribirLog('Tu turno ha terminado.');
@@ -4597,6 +4605,13 @@ async function ejecutarAtaqueBot(indiceSecuencia = 0, atacantes = null) {
         }
 
         const cartaObjetivo = cartasJugadorEnJuego[slotObjetivo];
+        if (!cartaObjetivo) {
+            escribirLog(
+                `${cartaAtacante.Nombre} pierde un golpe: el objetivo ya no está en mesa.`
+            );
+            break;
+        }
+
         cartaOponenteDestacada = slotAtacante;
         cartaJugadorDestacada = slotObjetivo;
         renderizarTablero();
@@ -4606,10 +4621,15 @@ async function ejecutarAtaqueBot(indiceSecuencia = 0, atacantes = null) {
         );
         await esperar(760);
 
-        if (partidaFinalizada || !cartasOponenteEnJuego[slotAtacante] || !cartasJugadorEnJuego[slotObjetivo]) {
+        if (partidaFinalizada) {
             limpiarDestacados();
             renderizarTablero();
             return;
+        }
+        if (!cartasOponenteEnJuego[slotAtacante] || !cartasJugadorEnJuego[slotObjetivo]) {
+            limpiarDestacados();
+            renderizarTablero();
+            break;
         }
 
         await resolverAtaque(
@@ -4659,6 +4679,8 @@ async function iniciarTurnoJugador() {
     } else {
         reducirCooldownHabilidadesActivas('jugador');
     }
+    // PvP: DoT y anuncio de stun viven en el snapshot oficial; `aplicarDotInicioTurnoServidorConCementerio`
+    // corre en el servidor al confirmar fin de turno (misma autoridad que el stun).
     const huboEstados = ES_MODO_PVP ? false : aplicarEfectosInicioTurno('jugador');
 
     actualizarTextoTurno('Tu turno');
