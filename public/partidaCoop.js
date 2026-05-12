@@ -3474,14 +3474,13 @@
                 aplicarInicioDeFaseEnSnapshot(snapshot, 'P1');
                 /**
                  * Cierre de ciclo BOT → nuevo P1: al comienzo del nuevo ciclo ambos humanos
-                 * reponen CUALQUIER hueco que haya dejado el BOT (misma lógica que al inicio
-                 * de turno en VS BOT: `rellenarSlotsVacios` para el equipo que arranca turno).
-                 * BOT rellena sus huecos solo si su mesa quedó completamente vacía (el BOSS
-                 * se evalúa abajo via `intentarDesplegarBossCoop`).
+                 * reponen huecos desde su mazo (misma idea que VS BOT al arrancar turno humano).
+                 *
+                 * No se roba aquí del mazo BOT: si la mesa del BOT quedó sin cartas vivas durante
+                 * la fase BOT (p. ej. daño reflejado), volver a sacar 4 del mazo haría reaparecer
+                 * enemigos derrotados. Las reservas del BOT ya se aplican al entrar en fase BOT
+                 * (`ejecutarTurnoBotSecuencial` inicio) y en turno humano vía `aplicarRobosInicioDeFase*`.
                  */
-                if (mesaTotalmenteVacia(snapshot.cartasEnJuegoBot)) {
-                    await rellenarVaciosDesdeMazoAnimado('bot', 4);
-                }
                 await rellenarVaciosDesdeMazoAnimado('A', 2);
                 await rellenarVaciosDesdeMazoAnimado('B', 2);
                 const refAntesBoss = JSON.parse(JSON.stringify(snapshot));
