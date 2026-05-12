@@ -599,7 +599,9 @@ window.fusionarSkillDesdeFilaCatalogo = fusionarSkillDesdeFilaCatalogo;
 window.extraerSkillRowDeCartaExcel = extraerSkillRowDeCartaExcel;
 
 let _migracionSkillsUsuarioEnCurso = false;
-const VERSION_MIGRACION_SKILLS_USUARIO = 5;
+const VERSION_MIGRACION_SKILLS_USUARIO = 6;
+/** Incremento de Poder/SaludMax por cada nivel por encima de 1★ (coherente con `escalarCartaANivel` / tienda). */
+const DC_INCREMENTO_STATS_POR_NIVEL_CARTA = 500;
 
 function hashTextoSimple(texto) {
     let hash = 5381;
@@ -613,35 +615,52 @@ function hashTextoSimple(texto) {
 
 function construirFirmaCatalogoSkills(cartasExcel = []) {
     const filas = (Array.isArray(cartasExcel) ? cartasExcel : [])
-        .map(carta => ({
-            nombre: String(carta?.Nombre || '').trim().toLowerCase(),
-            skill_name: String(carta?.skill_name || '').trim(),
-            skill_info: String(carta?.skill_info || '').trim(),
-            skill_class: String(carta?.skill_class || '').trim().toLowerCase(),
-            skill_power: String(carta?.skill_power ?? '').trim(),
-            skill_power_base: String(carta?.skill_power ?? '').trim(),
-            skill_trigger: String(carta?.skill_trigger || '').trim().toLowerCase(),
-            imagen: String(carta?.Imagen || carta?.imagen || '').trim(),
-            imagen_final: String(carta?.imagen_final || carta?.Imagen_final || '').trim()
-        }))
-        .filter(fila => Boolean(fila.nombre))
+        .map((carta) => {
+            const nombre = String(carta?.Nombre || '').trim().toLowerCase();
+            if (!nombre) {
+                return null;
+            }
+            const poder = String(Math.max(0, Number(carta?.Poder ?? carta?.poder ?? 0)));
+            const saludRaw = carta?.SaludMax ?? carta?.Salud ?? carta?.salud ?? carta?.Poder ?? carta?.poder;
+            const salud = saludRaw === '' || saludRaw == null ? '' : String(Math.max(0, Number(saludRaw)));
+            const fac = String(dcNormalizarFaccionHeroeVillano(dcLeerFaccionHVBruta(carta)) || '');
+            const afi = String(carta?.Afiliacion ?? carta?.afiliacion ?? '').trim();
+            return {
+                nombre,
+                poder,
+                salud,
+                fac,
+                afi,
+                skill_name: String(carta?.skill_name || '').trim(),
+                skill_info: String(carta?.skill_info || '').trim(),
+                skill_class: String(carta?.skill_class || '').trim().toLowerCase(),
+                skill_power: String(carta?.skill_power ?? '').trim(),
+                skill_trigger: String(carta?.skill_trigger || '').trim().toLowerCase(),
+                imagen: String(carta?.Imagen || carta?.imagen || '').trim(),
+                imagen_final: String(carta?.imagen_final || carta?.Imagen_final || '').trim()
+            };
+        })
+        .filter(Boolean)
         .sort((a, b) => a.nombre.localeCompare(b.nombre));
 
     const textoFirma = filas
-        .map(fila => [
+        .map((fila) => [
             fila.nombre,
+            fila.poder,
+            fila.salud,
+            fila.fac,
+            fila.afi,
             fila.skill_name,
             fila.skill_info,
             fila.skill_class,
             fila.skill_power,
-            fila.skill_power_base,
             fila.skill_trigger,
             fila.imagen,
             fila.imagen_final
         ].join('||'))
         .join('\n');
 
-    return `skills-v2-${hashTextoSimple(textoFirma)}`;
+    return `cartas-sync-v2-${hashTextoSimple(textoFirma)}`;
 }
 
 function skillFilaSerializada(carta) {
@@ -655,6 +674,93 @@ function skillFilaSerializada(carta) {
         Imagen: String(carta?.Imagen || carta?.imagen || '').trim(),
         imagen_final: String(carta?.imagen_final || carta?.Imagen_final || '').trim()
     });
+}
+
+function serializarCartaParaSyncMigracion(carta) {
+    if (!carta || typeof carta !== 'object') {
+        return '';
+    }
+    const skill = JSON.parse(skillFilaSerializada(carta));
+    return JSON.stringify({
+        Nombre: String(carta.Nombre || '').trim(),
+        Nivel: Math.min(6, Math.max(1, Number(carta.Nivel || 1))),
+        Poder: Number(carta.Poder || 0),
+        Salud: Number(carta.Salud ?? ''),
+        SaludMax: Number(carta.SaludMax ?? ''),
+        faccion: String(carta.faccion || carta.Faccion || '').trim().toUpperCase(),
+        Afiliacion: String(carta.Afiliacion || carta.afiliacion || '').trim(),
+        ...skill
+    });
+}
+
+/**
+ * Alinea una carta de usuario con la fila del catálogo (Excel): stats base + escalado por nivel conservado,
+ * habilidades, imágenes y metadatos. No altera el nivel del jugador.
+ */
+function fusionarCartaCompletaDesdeCatalogo(cartaUsuario, filaCatalogo) {
+    if (!cartaUsuario || !filaCatalogo) {
+        return cartaUsuario;
+    }
+    const nivel = Math.min(6, Math.max(1, Number(cartaUsuario.Nivel || 1)));
+    let carta = { ...cartaUsuario };
+
+    const nombreCat = String(filaCatalogo.Nombre || carta.Nombre || '').trim();
+    if (nombreCat) {
+        carta.Nombre = nombreCat;
+    }
+
+    const fac = dcNormalizarFaccionHeroeVillano(dcLeerFaccionHVBruta(filaCatalogo));
+    if (fac) {
+        carta.faccion = fac;
+        carta.Faccion = fac;
+    }
+
+    const afiVal = String(filaCatalogo.Afiliacion ?? filaCatalogo.afiliacion ?? '').trim();
+    carta.Afiliacion = afiVal;
+    carta.afiliacion = afiVal;
+
+    carta = forzarSkillDesdeFilaCatalogo(carta, filaCatalogo);
+
+    let poderBase = Math.max(0, Number(filaCatalogo.Poder ?? filaCatalogo.poder ?? 0));
+    if (poderBase <= 0 && Number(cartaUsuario.Poder) > 0) {
+        poderBase = Math.max(0, Number(cartaUsuario.Poder) - ((nivel - 1) * DC_INCREMENTO_STATS_POR_NIVEL_CARTA));
+    }
+    const saludBaseRaw = filaCatalogo.SaludMax ?? filaCatalogo.Salud ?? filaCatalogo.salud ?? filaCatalogo.Poder ?? filaCatalogo.poder;
+    let saludBase = Number(saludBaseRaw);
+    if (!Number.isFinite(saludBase) || saludBase <= 0) {
+        saludBase = Math.max(1, poderBase || 1);
+    } else {
+        saludBase = Math.max(1, saludBase);
+    }
+    if (saludBase <= 1 && Number(cartaUsuario.SaludMax ?? cartaUsuario.Salud ?? 0) > 0) {
+        const sm = Number(cartaUsuario.SaludMax ?? cartaUsuario.Salud ?? cartaUsuario.Poder);
+        if (Number.isFinite(sm) && sm > 0) {
+            saludBase = Math.max(1, sm - ((nivel - 1) * DC_INCREMENTO_STATS_POR_NIVEL_CARTA));
+        }
+    }
+    const inc = (nivel - 1) * DC_INCREMENTO_STATS_POR_NIVEL_CARTA;
+    const poderNuevo = Math.max(0, poderBase + inc);
+    const saludMaxNuevo = Math.max(1, saludBase + inc);
+
+    const oldMax = Math.max(
+        1,
+        Number(cartaUsuario.SaludMax ?? cartaUsuario.Salud ?? cartaUsuario.Poder ?? 0) || 1
+    );
+    const oldSalud = Number.isFinite(Number(cartaUsuario.Salud))
+        ? Number(cartaUsuario.Salud)
+        : oldMax;
+    const ratio = Math.max(0, Math.min(1, oldSalud / oldMax));
+    const saludNueva = Math.max(1, Math.min(saludMaxNuevo, Math.round(ratio * saludMaxNuevo)));
+
+    carta.Nivel = nivel;
+    carta.Poder = poderNuevo;
+    carta.SaludMax = saludMaxNuevo;
+    carta.Salud = saludNueva;
+
+    if (typeof window.recalcularSkillPowerPorNivel === 'function') {
+        window.recalcularSkillPowerPorNivel(carta, nivel, { rawEsBase: true });
+    }
+    return carta;
 }
 
 function construirMapaCatalogoPorNombre(cartasExcel = []) {
@@ -684,22 +790,15 @@ async function cargarCatalogoCartasExcelParaMigracion() {
 
 function aplicarMigracionSkillsAColeccion(cartasUsuario, mapaCatalogo) {
     let huboCambios = false;
-    const cartasActualizadas = (Array.isArray(cartasUsuario) ? cartasUsuario : []).map(carta => {
+    const cartasActualizadas = (Array.isArray(cartasUsuario) ? cartasUsuario : []).map((carta) => {
         const clave = String(carta?.Nombre || '').trim().toLowerCase();
         const fila = mapaCatalogo.get(clave);
         if (!fila) {
             return carta;
         }
-        const antes = skillFilaSerializada(carta);
-        const despuesCarta = forzarSkillDesdeFilaCatalogo(carta, fila);
-        if (typeof window.recalcularSkillPowerPorNivel === 'function') {
-            window.recalcularSkillPowerPorNivel(
-                despuesCarta,
-                Number(despuesCarta?.Nivel || 1),
-                { rawEsBase: true }
-            );
-        }
-        const despues = skillFilaSerializada(despuesCarta);
+        const antes = serializarCartaParaSyncMigracion(carta);
+        const despuesCarta = fusionarCartaCompletaDesdeCatalogo(carta, fila);
+        const despues = serializarCartaParaSyncMigracion(despuesCarta);
         if (antes !== despues) {
             huboCambios = true;
         }
@@ -960,6 +1059,8 @@ function dcContarCartasNuevasPorFaccion(cartasAAñadir, cartasUsuarioPrevias, ca
 }
 
 window.dcContarCartasNuevasPorFaccion = dcContarCartasNuevasPorFaccion;
+window.fusionarCartaCompletaDesdeCatalogo = fusionarCartaCompletaDesdeCatalogo;
+window.migrarCatalogoCartasDesdeExcel = migrarSkillsUsuarioDesdeCatalogo;
 
 function construirFilaStatMenu({ icono, alt, valor, titulo }) {
     return `
