@@ -62,6 +62,30 @@ const VERSION_TIENDA_GLOBAL = 'global-rotation-v2-shop-tabs';
 const ROTACION_TIENDA_MS = 2 * 60 * 60 * 1000;
 let temporizadorRotacion = null;
 
+/** Alinea token de concurrencia con `localStorage` (p. ej. tras guardar misiones) sin perder cambios en memoria. */
+function mergeSyncUsuarioDesdeLocalStorage(ref) {
+    if (!ref || typeof ref !== 'object') {
+        return;
+    }
+    try {
+        const raw = localStorage.getItem('usuario');
+        const remoto = raw ? JSON.parse(raw) : null;
+        if (!remoto || typeof remoto !== 'object') {
+            return;
+        }
+        const tok = remoto.syncToken;
+        if (tok != null && String(tok).trim() !== '') {
+            ref.syncToken = tok;
+        }
+        const su = Number(remoto.syncUpdatedAt);
+        if (Number.isFinite(su) && su > 0) {
+            ref.syncUpdatedAt = su;
+        }
+    } catch (_e) {
+        /* ignore */
+    }
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
     usuarioActual = JSON.parse(localStorage.getItem('usuario'));
     emailActual = localStorage.getItem('email');
@@ -924,6 +948,7 @@ function obtenerListaOfertasPorSeccion(seccion) {
 }
 
 async function comprarCarta(seccion, indexOferta) {
+    mergeSyncUsuarioDesdeLocalStorage(usuarioActual);
     const lista = obtenerListaOfertasPorSeccion(seccion);
     const oferta = lista ? lista[indexOferta] : null;
 
@@ -963,6 +988,7 @@ async function comprarCarta(seccion, indexOferta) {
         if (tracksMision.length > 0) {
             await Promise.allSettled(tracksMision);
         }
+        mergeSyncUsuarioDesdeLocalStorage(usuarioActual);
         if (typeof window.DCRedDot?.refresh === 'function') {
             window.DCRedDot.refresh();
         }
@@ -975,6 +1001,7 @@ async function comprarCarta(seccion, indexOferta) {
 }
 
 async function comprarObjeto(identificador) {
+    mergeSyncUsuarioDesdeLocalStorage(usuarioActual);
     const objeto = typeof identificador === 'number'
         ? null
         : buscarDefinicionCompraPorId(identificador);
@@ -1029,6 +1056,7 @@ async function comprarObjeto(identificador) {
         if (trackCompra && typeof trackCompra.then === 'function') {
             await Promise.allSettled([trackCompra]);
         }
+        mergeSyncUsuarioDesdeLocalStorage(usuarioActual);
         if (typeof window.DCRedDot?.refresh === 'function') {
             window.DCRedDot.refresh();
         }
@@ -1041,6 +1069,7 @@ async function comprarObjeto(identificador) {
 }
 
 async function persistirUsuario() {
+    mergeSyncUsuarioDesdeLocalStorage(usuarioActual);
     await actualizarUsuarioFirebase(usuarioActual, emailActual);
     localStorage.setItem('usuario', JSON.stringify(usuarioActual));
     if (typeof window.actualizarPanelPerfilTiempoReal === 'function') {

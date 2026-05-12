@@ -12,8 +12,8 @@
 
     let catalogoMisiones = null;
     let renderTimer = null;
-    let saveInFlight = false;
-    let saveQueued = false;
+    /** Serializa guardados de misiones para que `await track()` espere el POST real (evita 409 en la siguiente compra de la tienda). */
+    let persistMisionesChain = Promise.resolve();
 
     function nowMs() {
         return Date.now();
@@ -70,24 +70,13 @@
     }
 
     async function persistirUsuarioDebounced(usuario) {
-        if (saveInFlight) {
-            saveQueued = true;
-            escribirUsuario(usuario);
-            return;
-        }
-        saveInFlight = true;
-        try {
+        const work = async () => {
             await persistirUsuario(usuario);
-        } finally {
-            saveInFlight = false;
-            if (saveQueued) {
-                saveQueued = false;
-                const u = leerUsuario();
-                if (u) {
-                    void persistirUsuarioDebounced(u);
-                }
-            }
-        }
+        };
+        persistMisionesChain = persistMisionesChain.then(work).catch((e) => {
+            console.warn('[misiones persist]', e);
+        });
+        return persistMisionesChain;
     }
 
     function inicioDelDia(d = new Date()) {
@@ -381,7 +370,11 @@
         if (cls === 'boss') incs.push({ classKey: 'boss', amount: Number(payload.amount || 1) });
         if (cls === 'mejorar_cartas_h') incs.push({ classKey: 'mejorar_cartas_h', amount: Number(payload.amount || 1) });
         if (cls === 'mejorar_cartas_v') incs.push({ classKey: 'mejorar_cartas_v', amount: Number(payload.amount || 1) });
-        if (cls === 'mejorar_nivel') incs.push({ classKey: 'mejorar_nivel', amount: Number(payload.amount || 1) });
+        if (cls === 'mejorar_nivel' || cls === 'mejora_nivel') {
+            const amt = Number(payload.amount || 1);
+            incs.push({ classKey: 'mejorar_nivel', amount: amt });
+            incs.push({ classKey: 'mejora_nivel', amount: amt });
+        }
         if (cls === 'coleccion_h') incs.push({ classKey: 'coleccion_h', amount: Number(payload.amount || 1) });
         if (cls === 'coleccion_v') incs.push({ classKey: 'coleccion_v', amount: Number(payload.amount || 1) });
         return incs;

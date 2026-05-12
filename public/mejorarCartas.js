@@ -388,7 +388,7 @@ async function confirmarCombinacionDuplicados() {
     usuario.cartas = resultado.nuevasCartas;
     sincronizarMazosConColeccion(usuario);
     const facFusion = normalizarFaccion(resultado?.cartaMejorada?.faccion || resultado?.cartaMejorada?.Faccion || '');
-    const fusionNivel5 = Number(resultado?.cartaAntes?.Nivel || 1) < 5 && Number(resultado?.cartaMejorada?.Nivel || 1) >= 5;
+    const fusionLlegaNivel6 = Number(resultado?.cartaAntes?.Nivel || 1) < 6 && Number(resultado?.cartaMejorada?.Nivel || 1) === 6;
 
     try {
         await actualizarUsuarioFirebase(usuario, email);
@@ -396,7 +396,7 @@ async function confirmarCombinacionDuplicados() {
         if (window.DCMisiones?.track) {
             if (facFusion === 'H') window.DCMisiones.track('mejorar_cartas_h', { amount: 1 });
             if (facFusion === 'V') window.DCMisiones.track('mejorar_cartas_v', { amount: 1 });
-            if (fusionNivel5) window.DCMisiones.track('mejorar_nivel', { amount: 1 });
+            if (fusionLlegaNivel6) window.DCMisiones.track('mejorar_nivel', { amount: 1 });
         }
         refrescarPanelPerfilLateral();
         const { cartaAntes, cartaMejorada } = resultado;
@@ -1269,7 +1269,7 @@ async function aplicarMejoraObjetoDesdeModal(tipo, indiceCarta) {
     }
 
     const faccionMejorada = normalizarFaccion(mejorada?.faccion || mejorada?.Faccion || '');
-    const subeANivel5 = Number(original?.Nivel || 1) < 5 && Number(mejorada?.Nivel || 1) >= 5;
+    const subeANivel6 = Number(original?.Nivel || 1) < 6 && Number(mejorada?.Nivel || 1) === 6;
     usuario.cartas[indiceCarta] = mejorada;
     usuario.objetos[tipo] = stock - 1;
     sincronizarMazosConColeccion(usuario);
@@ -1280,7 +1280,7 @@ async function aplicarMejoraObjetoDesdeModal(tipo, indiceCarta) {
         if (window.DCMisiones?.track) {
             if (faccionMejorada === 'H') window.DCMisiones.track('mejorar_cartas_h', { amount: 1 });
             if (faccionMejorada === 'V') window.DCMisiones.track('mejorar_cartas_v', { amount: 1 });
-            if (subeANivel5) window.DCMisiones.track('mejorar_nivel', { amount: 1 });
+            if (subeANivel6) window.DCMisiones.track('mejorar_nivel', { amount: 1 });
         }
         refrescarPanelPerfilLateral();
         cerrarModalSeleccionObjetoMejora();
@@ -1318,14 +1318,14 @@ async function mejorarDuplicadosAutomaticamente() {
     sincronizarMazosConColeccion(usuario);
     let mejorasH = 0;
     let mejorasV = 0;
-    let mejorasNivel5 = 0;
+    let mejorasLleganNivel6 = 0;
     analisis.mejoras.forEach((m) => {
         const fac = normalizarFaccion(m?.cartaDespues?.faccion || m?.cartaDespues?.Faccion || '');
         if (fac === 'H') mejorasH++;
         if (fac === 'V') mejorasV++;
         const nA = Number(m?.cartaAntes?.Nivel || 1);
         const nD = Number(m?.cartaDespues?.Nivel || 1);
-        if (nA < 5 && nD >= 5) mejorasNivel5++;
+        if (nA < 6 && nD === 6) mejorasLleganNivel6++;
     });
 
     try {
@@ -1334,7 +1334,7 @@ async function mejorarDuplicadosAutomaticamente() {
         if (window.DCMisiones?.track) {
             if (mejorasH > 0) window.DCMisiones.track('mejorar_cartas_h', { amount: mejorasH });
             if (mejorasV > 0) window.DCMisiones.track('mejorar_cartas_v', { amount: mejorasV });
-            if (mejorasNivel5 > 0) window.DCMisiones.track('mejorar_nivel', { amount: mejorasNivel5 });
+            if (mejorasLleganNivel6 > 0) window.DCMisiones.track('mejorar_nivel', { amount: mejorasLleganNivel6 });
         }
         refrescarPanelPerfilLateral();
         cargarCartas();
