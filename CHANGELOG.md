@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.1
+
+- Etiqueta de versión del menú lateral: **`Versión: 1.1.1`** (`public/js/cartas.js`, `package.json`).
+- **Eventos (offline VS BOT y cooperativo online) — puntos de recompensa** (`public/js/cartas.js`, `public/partida.js`, `public/partidaCoop.js`): los puntos del Excel (`eventos.xlsx` / `eventos_online.xlsx`) se interpretan como el total a **dificultad 6**; a menor dificultad se otorga la parte proporcional `(dificultad / 6) × puntosExcel` (redondeo entero). Cartas y objetos de mejora no cambian.
+
 ## 1.1.0
 
 - Etiqueta de versión del menú lateral: **`Versión: 1.1.0`** (`public/js/cartas.js`, `package.json`).

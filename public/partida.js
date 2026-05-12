@@ -2302,7 +2302,15 @@ async function otorgarRecompensasDesafio() {
         ? 0
         : Number(recompensas.mejoraEspecial || 0);
 
-    usuario.puntos = Number(usuario.puntos || 0) + Number(recompensas.puntos || 0);
+    const puntosExcel = Number(recompensas.puntos || 0);
+    const dificultadJuego = Math.min(6, Math.max(1, Number(desafioActivo?.dificultad || 1)));
+    const puntosRecompensaOtorgados = esEvento
+        ? (typeof window.calcularPuntosRecompensaEventoPorDificultad === 'function'
+            ? window.calcularPuntosRecompensaEventoPorDificultad(puntosExcel, dificultadJuego)
+            : Math.max(0, Math.round((dificultadJuego / 6) * puntosExcel)))
+        : puntosExcel;
+
+    usuario.puntos = Number(usuario.puntos || 0) + puntosRecompensaOtorgados;
     usuario.objetos = (usuario.objetos && typeof usuario.objetos === 'object')
         ? usuario.objetos
         : { mejoraCarta: 0, mejoraEspecial: 0 };
@@ -2408,7 +2416,7 @@ async function otorgarRecompensasDesafio() {
     localStorage.removeItem('desafioActivo');
 
     return {
-        puntosGanados: Number(recompensas.puntos || 0),
+        puntosGanados: puntosRecompensaOtorgados,
         mejorasGanadas: mejoraBruta,
         mejorasEspecialesGanadas: mejoraEspecialBruta,
         cartasGanadas

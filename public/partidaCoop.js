@@ -2686,10 +2686,13 @@
         }
 
         const evento = (payload && typeof payload.evento === 'object') ? payload.evento : null;
-        const puntosEvento = Number(evento?.puntos || 0);
+        const puntosExcel = Number(evento?.puntos || 0);
         const mejorasEvento = Number(evento?.mejora || 0);
         const mejorasEspecialesEventoBase = Number(evento?.mejora_especial || 0);
         const dificultadEvento = Math.min(Math.max(Number(evento?.dificultad || 1), 1), 6);
+        const puntosEvento = typeof window.calcularPuntosRecompensaEventoPorDificultad === 'function'
+            ? window.calcularPuntosRecompensaEventoPorDificultad(puntosExcel, dificultadEvento)
+            : Math.max(0, Math.round((dificultadEvento / 6) * puntosExcel));
         const idEvento = Number(evento?.id);
         /**
          * La mejora especial solo se entrega si la dificultad elegida es 6 o superior.

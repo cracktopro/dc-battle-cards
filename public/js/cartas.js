@@ -1062,6 +1062,18 @@ window.dcContarCartasNuevasPorFaccion = dcContarCartasNuevasPorFaccion;
 window.fusionarCartaCompletaDesdeCatalogo = fusionarCartaCompletaDesdeCatalogo;
 window.migrarCatalogoCartasDesdeExcel = migrarSkillsUsuarioDesdeCatalogo;
 
+/**
+ * Puntos de recompensa de evento (offline / coop): el Excel define el total a dificultad 6;
+ * a menor dificultad se aplica factor (dificultad / 6).
+ */
+function calcularPuntosRecompensaEventoPorDificultad(puntosExcel, dificultadElegida) {
+    const pts = Math.max(0, Number(puntosExcel || 0));
+    const dif = Math.min(6, Math.max(1, Number(dificultadElegida || 1)));
+    return Math.max(0, Math.round((dif / 6) * pts));
+}
+
+window.calcularPuntosRecompensaEventoPorDificultad = calcularPuntosRecompensaEventoPorDificultad;
+
 function construirFilaStatMenu({ icono, alt, valor, titulo }) {
     return `
         <span class="menu-user-stat-icon-wrap" title="${titulo}">
@@ -1606,7 +1618,7 @@ function normalizarMenuLateral() {
         linkMultijugador.removeEventListener('click', bloquearNavegacionMultijugador);
     }
 
-    const versionLabelTexto = 'Versión: 1.1.0';
+    const versionLabelTexto = 'Versión: 1.1.1';
     let versionLabel = menu.querySelector('#menu-version-label');
     if (!versionLabel) {
         versionLabel = document.createElement('div');
