@@ -74,7 +74,7 @@ const ICONO_MEJORA_SUPREMA = '/resources/icons/mejora_suprema.png';
 const ICONO_MEJORA_DEFINITIVA = '/resources/icons/mejora_definitiva.png';
 
 const OBJETOS_MEJORA_UI = [
-    { key: 'mejoraCarta', nombre: 'Mejora de carta', descripcion: 'Sube 1 nivel (hasta 5★)', icon: ICONO_MEJORA },
+    { key: 'mejoraCarta', nombre: 'Mejora de carta', descripcion: 'Solo 1★–3★ (+1 nivel, tope 4★)', icon: ICONO_MEJORA },
     { key: 'mejoraEspecial', nombre: 'Mejora especial', descripcion: 'Solo en 5★ → 6★', icon: ICONO_MEJORA_ESPECIAL },
     { key: 'mejoraSuprema', nombre: 'Mejora suprema', descripcion: 'Instantáneo a 5★', icon: ICONO_MEJORA_SUPREMA },
     { key: 'mejoraDefinitiva', nombre: 'Mejora definitiva', descripcion: 'Instantáneo a 6★', icon: ICONO_MEJORA_DEFINITIVA }
@@ -662,7 +662,7 @@ function puedeUsarObjetoEnCarta(keyObjeto, nivelCarta, cantidadInventario) {
         return false;
     }
     if (keyObjeto === 'mejoraCarta') {
-        return n >= 1 && n <= 4;
+        return n >= 1 && n <= 3;
     }
     if (keyObjeto === 'mejoraSuprema') {
         return n >= 1 && n <= 4;
@@ -1199,7 +1199,7 @@ function crearCartaMejoradaPorObjeto(cartaOriginal, tipo) {
     let nivelFinal = nivelInicial;
 
     if (tipo === 'mejoraCarta') {
-        nivelFinal = Math.min(nivelInicial + 1, 5);
+        nivelFinal = Math.min(nivelInicial + 1, 4);
     } else if (tipo === 'mejoraEspecial') {
         nivelFinal = 6;
     } else if (tipo === 'mejoraSuprema') {
