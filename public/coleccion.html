@@ -55,9 +55,23 @@
         </div>
     </div>
 
-    <!-- Elemento para mostrar el progreso de la colección -->
-    <div id="progreso-coleccion" class="progreso-coleccion">
-        <!-- El texto de progreso se actualizará dinámicamente -->
+    <!-- Progreso: total del catálogo y desglose héroes / villanos -->
+    <div class="coleccion-progreso-envoltorio" aria-label="Progreso de colección">
+        <div class="coleccion-progreso-titulo">Progreso de colección</div>
+        <div class="coleccion-progreso-fila">
+            <div class="coleccion-progreso-bloque">
+                <span class="coleccion-progreso-etiqueta">Total</span>
+                <div id="progreso-coleccion-total" class="progreso-coleccion">0/0</div>
+            </div>
+            <div class="coleccion-progreso-bloque">
+                <span class="coleccion-progreso-etiqueta">Héroes</span>
+                <div id="progreso-coleccion-heroes" class="progreso-coleccion">0/0</div>
+            </div>
+            <div class="coleccion-progreso-bloque">
+                <span class="coleccion-progreso-etiqueta">Villanos</span>
+                <div id="progreso-coleccion-villanos" class="progreso-coleccion">0/0</div>
+            </div>
+        </div>
     </div>
     <div id="contenedor-cartas" class="contenedor-cartas">
         <!-- Cartas / sobres render dinámico -->

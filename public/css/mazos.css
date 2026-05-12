@@ -233,12 +233,62 @@ select:disabled,
 .progreso-coleccion{
     font-size: 25px;
     width: max-content;
+    min-width: 4.2em;
+    min-height: 4.2em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     background-color: rgba(20, 20, 20, 0.7);
     border-right: 2px solid rgba(0, 123, 255, 0.3);
     box-shadow: 0 0 15px rgba(0, 123, 255, 0.5);
     padding: 10px;
     border-radius: 50%;
     text-align: center;
+}
+
+.coleccion-progreso-envoltorio {
+    margin: 0 0 18px;
+    padding: 12px 14px;
+    border-radius: 14px;
+    background: rgba(8, 18, 36, 0.55);
+    border: 1px solid rgba(0, 209, 255, 0.22);
+    box-shadow: 0 0 14px rgba(0, 123, 255, 0.25);
+}
+
+.coleccion-progreso-titulo {
+    font-size: 0.95rem;
+    font-weight: 800;
+    color: #00d1ff;
+    letter-spacing: 0.04em;
+    margin-bottom: 12px;
+    text-shadow: 0 0 10px rgba(0, 209, 255, 0.35);
+}
+
+.coleccion-progreso-fila {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: flex-start;
+    gap: clamp(12px, 2.5vw, 28px);
+}
+
+.coleccion-progreso-bloque {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+
+.coleccion-progreso-etiqueta {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #9ecfff;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.coleccion-progreso-bloque .progreso-coleccion {
+    font-size: clamp(1rem, 2.2vw, 1.35rem);
 }
 
 .form-control{
@@ -1663,8 +1713,8 @@ select:disabled,
         font-size: clamp(0.68rem, 2.4vw, 0.85rem);
     }
 
-    .progreso-coleccion {
-        font-size: clamp(1rem, 4vw, 1.35rem);
+    .coleccion-progreso-bloque .progreso-coleccion {
+        font-size: clamp(0.95rem, 3.8vw, 1.25rem);
     }
 }
 

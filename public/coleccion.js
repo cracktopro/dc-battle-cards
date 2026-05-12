@@ -169,6 +169,43 @@ function sincronizarEstadoUsuarioColeccionDesdeLs() {
     mapaMejorVersionUsuario = construirMapaMejorVersionUsuario(cartasUsuario);
 }
 
+/**
+ * Actualiza los tres contadores (total, héroes, villanos) frente al catálogo cargado.
+ */
+function actualizarTextosProgresoColeccion() {
+    const elTotal = document.getElementById('progreso-coleccion-total');
+    const elH = document.getElementById('progreso-coleccion-heroes');
+    const elV = document.getElementById('progreso-coleccion-villanos');
+    if (!elTotal || !elH || !elV) {
+        return;
+    }
+
+    const nCat = todasLasCartasCatalogo.length;
+    const ownedAll = nombresCartasConseguidas.size;
+    elTotal.textContent = nCat > 0 ? `${ownedAll}/${nCat}` : '0/0';
+
+    const heroesCat = todasLasCartasCatalogo.filter(carta => obtenerFaccionCarta(carta) === 'H');
+    const villCat = todasLasCartasCatalogo.filter(carta => obtenerFaccionCarta(carta) === 'V');
+    const setHero = new Set(heroesCat.map(carta => obtenerClaveCarta(carta.Nombre)));
+    const setVill = new Set(villCat.map(carta => obtenerClaveCarta(carta.Nombre)));
+
+    let ownedH = 0;
+    let ownedV = 0;
+    nombresCartasConseguidas.forEach((clave) => {
+        if (setHero.has(clave)) {
+            ownedH += 1;
+        }
+        if (setVill.has(clave)) {
+            ownedV += 1;
+        }
+    });
+
+    const nh = heroesCat.length;
+    const nv = villCat.length;
+    elH.textContent = nh > 0 ? `${ownedH}/${nh}` : '0/0';
+    elV.textContent = nv > 0 ? `${ownedV}/${nv}` : '0/0';
+}
+
 function deduplicarCatalogoPorNombre(cartas) {
     const mapa = new Map();
     (Array.isArray(cartas) ? cartas : []).forEach((carta) => {
@@ -217,8 +254,7 @@ async function cargarColeccion() {
             imagen_final: carta.imagen_final || ''
         }));
 
-        const progresoTexto = `${nombresCartasConseguidas.size}/${todasLasCartasCatalogo.length}`;
-        document.getElementById('progreso-coleccion').textContent = progresoTexto;
+        actualizarTextosProgresoColeccion();
         actualizarTabsColeccion();
         actualizarIndicadorNuevoSobres();
         actualizarVisibilidadFiltrosCartas();
@@ -717,8 +753,7 @@ async function ejecutarAnimacionYAperturaSobre(inventarioKey) {
     }
 
     sincronizarEstadoUsuarioColeccionDesdeLs();
-    document.getElementById('progreso-coleccion').textContent =
-        `${nombresCartasConseguidas.size}/${todasLasCartasCatalogo.length}`;
+    actualizarTextosProgresoColeccion();
     if (persistOk && vistaColeccionActiva === 'sobres') {
         renderizarPestanyaSobres();
     }

@@ -260,9 +260,21 @@
         r.innerHTML = `Recompensa: ${item.recompensa} <img src="/resources/icons/moneda.png" alt="Moneda" style="width:15px;height:15px;object-fit:contain;vertical-align:text-bottom;margin-left:4px;">`;
 
         const btn = document.createElement('button');
-        btn.className = 'btn btn-primary misiones-btn-claim';
-        btn.textContent = item.claimed ? 'Reclamada' : 'Reclamar recompensa';
-        btn.disabled = item.claimed || !done;
+        btn.type = 'button';
+        btn.className = 'btn misiones-btn-claim';
+        if (item.claimed) {
+            btn.classList.add('misiones-btn-claim--reclamada');
+            btn.textContent = 'Reclamada';
+            btn.disabled = true;
+        } else if (done) {
+            btn.classList.add('misiones-btn-claim--listo');
+            btn.textContent = 'Reclamar';
+            btn.disabled = false;
+        } else {
+            btn.classList.add('btn-primary', 'misiones-btn-claim--pendiente');
+            btn.textContent = 'Reclamar recompensa';
+            btn.disabled = true;
+        }
         btn.addEventListener('click', () => void reclamar(scope, item.uid));
 
         row.appendChild(d);
