@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <title>Asaltos — DC Battle Cards</title>
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+    <link href="css/mazos.css" rel="stylesheet">
+    <link href="css/salud.css" rel="stylesheet">
+    <link href="css/scrollbar.css" rel="stylesheet">
+    <link href="css/app-layout.css" rel="stylesheet">
+    <link href="css/asaltos.css" rel="stylesheet">
+</head>
+<body>
+
+<div class="menu-container">
+    <a href="vistaJuego.html" class="btn btn-menu">Jugar Partida</a>
+    <a href="mazos.html" class="btn btn-menu">Mazos</a>
+    <a href="crearMazos.html" class="btn btn-menu">Crear Mazos</a>
+    <a href="mejorarCartas.html" class="btn btn-menu">Mejorar Cartas</a>
+    <a href="coleccion.html" class="btn btn-menu">Colección</a>
+    <a href="tienda.html" class="btn btn-menu">Tienda</a>
+    <a href="desafios.html" class="btn btn-menu">Desafíos</a>
+    <a href="asaltos.html" class="btn btn-menu">Asaltos</a>
+    <a href="opciones.html" class="btn btn-menu">Opciones</a>
+    <button type="button" onclick="abrirModalLogout()" class="btn btn-logout">Cerrar Sesión</button>
+</div>
+
+<div class="content-container">
+    <div class="asaltos-vista">
+        <div class="asaltos-vista-inner">
+            <h1 class="asaltos-titulo">Asaltos</h1>
+            <p class="asaltos-descripcion">
+                Las barreras entre realidades se han roto.
+                Héroes y villanos de múltiples tierras chocan en combates épicos donde cualquier universo puede desaparecer.
+                Enfréntate a eventos únicos inspirados en grandes crisis del multiverso, supera desafíos especiales y lucha contra
+                las afiliaciones más poderosas del universo en batallas cada vez más peligrosas.
+            </p>
+
+            <div class="asaltos-carrusel-wrap" aria-hidden="true">
+                <span class="asaltos-carrusel-leyenda">Tierras en colisión</span>
+                <div class="asaltos-carrusel-escena">
+                    <div class="asaltos-carrusel-rueda">
+                        <div class="asaltos-carrusel-cara" style="--asaltos-i: 0">
+                            <img src="resources/hud/earth1.png" alt="">
+                        </div>
+                        <div class="asaltos-carrusel-cara" style="--asaltos-i: 1">
+                            <img src="resources/hud/earth2.png" alt="">
+                        </div>
+                        <div class="asaltos-carrusel-cara" style="--asaltos-i: 2">
+                            <img src="resources/hud/earth3.png" alt="">
+                        </div>
+                        <div class="asaltos-carrusel-cara" style="--asaltos-i: 3">
+                            <img src="resources/hud/earth4.png" alt="">
+                        </div>
+                        <div class="asaltos-carrusel-cara" style="--asaltos-i: 4">
+                            <img src="resources/hud/earth5.png" alt="">
+                        </div>
+                        <div class="asaltos-carrusel-cara" style="--asaltos-i: 5">
+                            <img src="resources/hud/earth6.png" alt="">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="js/cartas.js"></script>
+<script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+<script src="js/menu-mobile.js" defer></script>
+</body>
+</html>
