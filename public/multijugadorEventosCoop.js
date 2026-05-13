@@ -186,7 +186,8 @@
             mejora: Number(fila.mejora || 0),
             mejora_especial: Number(fila.mejora_especial || 0),
             cartaRecompensa: String(fila.cartas || fila.carta || '').trim(),
-            dificultadSeleccionada: null
+            dificultadSeleccionada: null,
+            tablero: String(fila.tablero ?? fila.Tablero ?? '').trim()
         };
     }
 
@@ -797,6 +798,11 @@
     function iniciarSesionCoopRedirect(payload = {}) {
         if (typeof window.limpiarEstadoPvpResiduoPartidaLocal === 'function') {
             window.limpiarEstadoPvpResiduoPartidaLocal();
+        }
+        try {
+            sessionStorage.removeItem('dc_tablero_fondo_url');
+        } catch (_e) {
+            /* noop */
         }
         localStorage.setItem('partidaModo', 'coop_evento_online');
         localStorage.setItem('partidaCoopSessionId', String(payload.sessionId || '').trim());

@@ -287,6 +287,11 @@ function iniciarSesionPvp(payload = {}) {
     localStorage.setItem('mazoOponenteBase', JSON.stringify({ Cartas: oponenteMazo }));
     localStorage.removeItem('desafioActivo');
     localStorage.removeItem('dificultad');
+    try {
+        sessionStorage.removeItem('dc_tablero_fondo_url');
+    } catch (_e) {
+        /* noop */
+    }
     const oponente = payload?.oponente || {};
     const nombreOponente = String(oponente?.nombre || '').trim()
         || (String(oponente?.email || '').split('@')[0] || 'Oponente');

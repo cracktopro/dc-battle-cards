@@ -1490,11 +1490,24 @@ function normalizarMenuLateral() {
 
     const linkCentro = menu.querySelector('a[href="vistaJuego.html"]');
     const linkDesafios = menu.querySelector('a[href="desafios.html"]');
+    const linkAsaltos = menu.querySelector('a[href="asaltos.html"]');
     if (linkCentro) {
         linkCentro.textContent = 'Centro de Operaciones';
     }
-    if (linkCentro && linkDesafios && linkDesafios.previousElementSibling !== linkCentro) {
-        menu.insertBefore(linkDesafios, linkCentro.nextElementSibling);
+    /**
+     * Orden fijo: Centro de Operaciones → Asaltos → Desafíos (resto sin cambiar la lógica de Multijugador).
+     */
+    if (linkCentro && linkDesafios) {
+        if (linkAsaltos && linkAsaltos.previousElementSibling !== linkCentro) {
+            menu.insertBefore(linkAsaltos, linkCentro.nextElementSibling);
+        }
+        if (linkAsaltos) {
+            if (linkDesafios.previousElementSibling !== linkAsaltos) {
+                menu.insertBefore(linkDesafios, linkAsaltos.nextElementSibling);
+            }
+        } else if (linkDesafios.previousElementSibling !== linkCentro) {
+            menu.insertBefore(linkDesafios, linkCentro.nextElementSibling);
+        }
     }
 
     let perfil = document.getElementById('menu-user-profile');

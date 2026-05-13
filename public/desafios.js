@@ -74,7 +74,8 @@ async function cargarDesafiosDesdeExcel() {
             mejora: Number(fila.mejora || 0),
             mejora_especial: Number(fila.mejora_especial || 0),
             puntos: Number(fila.puntos || 0),
-            cartas: cartasRecompensa
+            cartas: cartasRecompensa,
+            tablero: String(fila.tablero ?? fila.Tablero ?? '').trim()
         };
     });
 }
@@ -369,6 +370,11 @@ async function renderizarDesafiosGlobal() {
 function iniciarDesafio(desafio, cartasSeleccionadas) {
     if (typeof window.limpiarEstadoPvpResiduoPartidaLocal === 'function') {
         window.limpiarEstadoPvpResiduoPartidaLocal();
+    }
+    try {
+        sessionStorage.removeItem('dc_tablero_fondo_url');
+    } catch (_e) {
+        /* noop */
     }
     localStorage.setItem('desafioActivo', JSON.stringify(desafio));
     localStorage.setItem('dificultad', String(desafio.dificultad));

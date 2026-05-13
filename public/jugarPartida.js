@@ -271,9 +271,14 @@ document.addEventListener('DOMContentLoaded', function () {
                 localStorage.setItem('dificultad', dificultadSeleccionada);
 
                 limpiarEstadoPvpAntesDePartidaVsBot();
-                // Redirigir a tablero.html
-                console.log('Redirigiendo a tablero.html...');
-                window.location.href = 'tablero.html';
+                const irAlTablero = () => {
+                    window.location.href = 'tablero.html';
+                };
+                if (typeof window.dcPrepararFondoTableroVsBot === 'function') {
+                    window.dcPrepararFondoTableroVsBot().then(irAlTablero).catch(irAlTablero);
+                } else {
+                    irAlTablero();
+                }
             } else {
                 console.error('No se pudo encontrar una hoja en el archivo Excel');
             }
@@ -673,7 +678,8 @@ function mapearEventoDesdeFila(fila, fallbackIndex) {
         mejora: Number(fila.mejora || 0),
         mejora_especial: Number(fila.mejora_especial || 0),
         cartaRecompensa: String(fila.cartas || fila.carta || '').trim(),
-        dificultadSeleccionada: null
+        dificultadSeleccionada: null,
+        tablero: String(fila.tablero ?? fila.Tablero ?? '').trim()
     };
 }
 
@@ -1138,6 +1144,12 @@ async function confirmarSeleccionEvento() {
         return;
     }
 
+    try {
+        sessionStorage.removeItem('dc_tablero_fondo_url');
+    } catch (_e) {
+        /* noop */
+    }
+
     const usuario = JSON.parse(localStorage.getItem('usuario'));
     const cartasSeleccionadas = Array.from(seleccionCartasEvento).map(index => ({ ...usuario.cartas[index] }));
     const eventoParaPartida = {
@@ -1152,7 +1164,8 @@ async function confirmarSeleccionEvento() {
         mejora: Number(eventoPendiente.mejora || 0),
         mejora_especial: Number(eventoPendiente.mejora_especial || 0),
         carta_recompensa: eventoPendiente.cartaRecompensa || '',
-        rotacionClave: obtenerClaveRotacionEventos()
+        rotacionClave: obtenerClaveRotacionEventos(),
+        tablero: String(eventoPendiente.tablero || '').trim()
     };
 
     localStorage.setItem('desafioActivo', JSON.stringify(eventoParaPartida));

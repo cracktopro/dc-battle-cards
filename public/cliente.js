@@ -545,6 +545,12 @@ socket.on('redirigirTablero', function (datos) {
         return;
     }
 
+    try {
+        sessionStorage.removeItem('dc_tablero_fondo_url');
+    } catch (_e) {
+        /* noop */
+    }
+
     // Redirigir al tablero
     window.location.href = 'tablero.html';
 });

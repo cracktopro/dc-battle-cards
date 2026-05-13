@@ -1,6 +1,6 @@
 body {
     background-color: #020711;
-    background-image: url('/resources/hud/tablero_background.png');
+    background-image: url('/resources/tableros/tablero_background.png');
     background-repeat: no-repeat;
     background-position: center center;
     background-attachment: fixed;

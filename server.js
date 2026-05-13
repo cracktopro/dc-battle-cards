@@ -7,6 +7,7 @@ const { getFirestore, doc, setDoc, getDoc, collection, getDocs } = require('fire
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
+const fs = require('fs');
 const cors = require('cors');
 
 // Configuración de Firebase
@@ -68,6 +69,20 @@ app.get('/healthz', (_req, res) => {
         ts: Date.now(),
         sesionesPvpActivas: sesionesActivas
     });
+});
+
+/** Imágenes de fondo del tablero (VS BOT aleatorio en cliente). */
+app.get('/api/tableros', (_req, res) => {
+    const dir = path.join(__dirname, 'public/resources/tableros');
+    try {
+        const nombres = fs.readdirSync(dir, { withFileTypes: true })
+            .filter((d) => d.isFile() && /\.(png|jpe?g|webp)$/i.test(d.name))
+            .map((d) => d.name);
+        return res.json({ archivos: nombres });
+    } catch (error) {
+        console.warn('[api/tableros]', error.message);
+        return res.json({ archivos: ['tablero_background.png'] });
+    }
 });
 
 // Lista para usuarios conectados
@@ -1498,7 +1513,8 @@ async function iniciarSesionCoopEventoDesdePrep(prep) {
             cartaRecompensa: String(fila.cartas || fila.carta || '').trim(),
             enemigos: nombresEnemigosEvento,
             boss: nombreBossEvento,
-            dificultad
+            dificultad,
+            tablero: String(fila.tablero ?? fila.Tablero ?? '').trim()
         },
         snapshot: snapshotInicial,
         revision: 0,

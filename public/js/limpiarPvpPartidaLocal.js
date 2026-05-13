@@ -21,6 +21,12 @@ function limpiarEstadoPvpResiduoPartidaLocal() {
             /* noop */
         }
     });
+    /* Fondo VS BOT aleatorio (ver js/tableroFondo.js, clave sessionStorage). */
+    try {
+        sessionStorage.removeItem('dc_tablero_fondo_url');
+    } catch (_) {
+        /* noop */
+    }
 }
 
 window.limpiarEstadoPvpResiduoPartidaLocal = limpiarEstadoPvpResiduoPartidaLocal;

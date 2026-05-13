@@ -22,8 +22,8 @@
     <a href="mejorarCartas.html" class="btn btn-menu">Mejorar Cartas</a>
     <a href="coleccion.html" class="btn btn-menu">Colección</a>
     <a href="tienda.html" class="btn btn-menu">Tienda</a>
-    <a href="desafios.html" class="btn btn-menu">Desafíos</a>
     <a href="asaltos.html" class="btn btn-menu">Asaltos</a>
+    <a href="desafios.html" class="btn btn-menu">Desafíos</a>
     <a href="opciones.html" class="btn btn-menu">Opciones</a>
     <button type="button" onclick="abrirModalLogout()" class="btn btn-logout">Cerrar Sesión</button>
 </div>
@@ -39,27 +39,80 @@
                 las afiliaciones más poderosas del universo en batallas cada vez más peligrosas.
             </p>
 
-            <div class="asaltos-carrusel-wrap" aria-hidden="true">
-                <span class="asaltos-carrusel-leyenda">Tierras en colisión</span>
-                <div class="asaltos-carrusel-escena">
+            <div class="asaltos-carrusel-wrap">
+                <div class="asaltos-rotacion-meta" id="asaltos-rotacion-meta" aria-live="polite">
+                    <div class="asaltos-rotacion-meta-texto">
+                        <span class="asaltos-rotacion-etiqueta">Rotación semanal</span>
+                        <span class="asaltos-rotacion-timer" id="asaltos-rotacion-timer-valor">—</span>
+                    </div>
+                    <div class="asaltos-rotacion-barra-wrap" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="asaltos-rotacion-barra-wrap">
+                        <div class="asaltos-rotacion-barra-progreso" id="asaltos-rotacion-barra-progreso"></div>
+                    </div>
+                </div>
+                <span class="asaltos-carrusel-leyenda">Explora el multiverso</span>
+                <div id="asaltos-carrusel-ancora" class="asaltos-carrusel-controles" role="group" aria-label="Seleccionar asalto">
+                    <button type="button" id="asaltos-flecha-izq" class="asaltos-carrusel-flecha asaltos-carrusel-flecha--izq" aria-label="Asalto anterior">‹</button>
+                    <div id="asaltos-carrusel-escena" class="asaltos-carrusel-escena">
                     <div class="asaltos-carrusel-rueda">
                         <div class="asaltos-carrusel-cara" style="--asaltos-i: 0">
-                            <img src="resources/hud/earth1.png" alt="">
+                            <div class="asaltos-carrusel-cara-billboard">
+                                <img src="resources/hud/earth1.png" alt="">
+                            </div>
                         </div>
                         <div class="asaltos-carrusel-cara" style="--asaltos-i: 1">
-                            <img src="resources/hud/earth2.png" alt="">
+                            <div class="asaltos-carrusel-cara-billboard">
+                                <img src="resources/hud/earth2.png" alt="">
+                            </div>
                         </div>
                         <div class="asaltos-carrusel-cara" style="--asaltos-i: 2">
-                            <img src="resources/hud/earth3.png" alt="">
+                            <div class="asaltos-carrusel-cara-billboard">
+                                <img src="resources/hud/earth3.png" alt="">
+                            </div>
                         </div>
                         <div class="asaltos-carrusel-cara" style="--asaltos-i: 3">
-                            <img src="resources/hud/earth4.png" alt="">
+                            <div class="asaltos-carrusel-cara-billboard">
+                                <img src="resources/hud/earth4.png" alt="">
+                            </div>
                         </div>
                         <div class="asaltos-carrusel-cara" style="--asaltos-i: 4">
-                            <img src="resources/hud/earth5.png" alt="">
+                            <div class="asaltos-carrusel-cara-billboard">
+                                <img src="resources/hud/earth5.png" alt="">
+                            </div>
                         </div>
                         <div class="asaltos-carrusel-cara" style="--asaltos-i: 5">
-                            <img src="resources/hud/earth6.png" alt="">
+                            <div class="asaltos-carrusel-cara-billboard">
+                                <img src="resources/hud/earth6.png" alt="">
+                            </div>
+                        </div>
+                    </div>
+                    </div>
+                    <button type="button" id="asaltos-flecha-der" class="asaltos-carrusel-flecha asaltos-carrusel-flecha--der" aria-label="Siguiente asalto">›</button>
+                </div>
+                <div class="asaltos-frente-stack">
+                    <div class="asaltos-frente-acciones">
+                        <h2 class="asaltos-nombre-frente" id="asaltos-nombre-frente">—</h2>
+                        <button type="button" id="asaltos-btn-toggle-panel" class="asaltos-btn-expand-panel" aria-expanded="false" aria-controls="asaltos-panel-detalle" aria-label="Desplegar detalle del asalto" disabled>
+                            <span class="asaltos-btn-expand-chevron" aria-hidden="true"></span>
+                        </button>
+                    </div>
+                    <div id="asaltos-panel-detalle" class="asaltos-panel-detalle" aria-hidden="true">
+                        <div class="asaltos-panel-detalle-inner">
+                            <div class="asaltos-panel-detalle-grid">
+                                <div class="asaltos-panel-visual">
+                                    <div class="asaltos-panel-marco-img">
+                                        <img id="asaltos-panel-imagen" src="resources/hud/universo.png" alt="" class="asaltos-panel-imagen">
+                                    </div>
+                                </div>
+                                <div class="asaltos-panel-copy">
+                                    <h3 class="asaltos-panel-titulo" id="asaltos-panel-nombre"></h3>
+                                    <div class="asaltos-panel-dificultad-fila">
+                                        <span class="asaltos-panel-dificultad-label">Dificultad</span>
+                                        <div id="asaltos-panel-estrellas" class="estrellas-carta asaltos-panel-estrellas"></div>
+                                    </div>
+                                    <p class="asaltos-panel-descripcion" id="asaltos-panel-descripcion"></p>
+                                    <button type="button" id="asaltos-panel-comenzar" class="asaltos-panel-btn-comenzar">Comenzar</button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -68,7 +121,9 @@
     </div>
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.0/xlsx.full.min.js"></script>
 <script src="js/cartas.js"></script>
+<script src="js/asaltos.js"></script>
 <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
 <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>

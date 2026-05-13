@@ -4856,6 +4856,11 @@ function limpiarEstadoPartidaEnCurso() {
 function abandonarVistaConLimpieza(destino = 'vistaJuego.html') {
     proteccionSalidaActiva = false;
     sessionStorage.removeItem('dc_tablero_abandonado');
+    try {
+        sessionStorage.removeItem('dc_tablero_fondo_url');
+    } catch (_e) {
+        /* noop */
+    }
     limpiarEstadoPartidaEnCurso();
     window.location.replace(destino);
 }
@@ -4915,6 +4920,11 @@ function volverAlMenu() {
         }
         window.location.href = 'multijugador.html';
         return;
+    }
+    try {
+        sessionStorage.removeItem('dc_tablero_fondo_url');
+    } catch (_e) {
+        /* noop */
     }
     const esEventoActivo = Boolean(estadoDesafio.activo && desafioActivo?.tipo === 'evento');
     const esDesafioActivo = Boolean(estadoDesafio.activo && !esEventoActivo);
