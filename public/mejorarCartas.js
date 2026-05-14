@@ -80,6 +80,22 @@ const OBJETOS_MEJORA_UI = [
     { key: 'mejoraDefinitiva', nombre: 'Mejora definitiva', descripcion: 'Instantáneo a 6★', icon: ICONO_MEJORA_DEFINITIVA }
 ];
 
+const ICONO_FRAGMENTO_ELITE_UI = '/resources/icons/mejora_elite.png';
+const ICONO_FRAGMENTO_LEGENDARIA_UI = '/resources/icons/mejora_legendaria.png';
+const ICONO_ANIM_ELITE = '/resources/icons/elite.png';
+const ICONO_ANIM_LEGENDARY = '/resources/icons/legendary.png';
+const COSTO_MEJORA_FRAGMENTOS = 12;
+
+let indiceCartaModalFragmentos = null;
+let faccionFragmentosActiva = 'H';
+let ordenarPoderFragmentos = false;
+let filtrosFragmentosRegistrados = false;
+let fragmentoAnimEnCurso = false;
+
+function esperar(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function normalizarFaccion(valor) {
     const faccion = String(valor || '').trim().toUpperCase();
     return faccion === 'H' || faccion === 'V' ? faccion : '';
@@ -446,12 +462,14 @@ function normalizarObjetosUsuario(usuario) {
 
     const objetosBase = usuario.objetos && typeof usuario.objetos === 'object'
         ? { ...usuario.objetos }
-        : { mejoraCarta: 0, mejoraEspecial: 0, mejoraSuprema: 0, mejoraDefinitiva: 0 };
+        : { mejoraCarta: 0, mejoraEspecial: 0, mejoraSuprema: 0, mejoraDefinitiva: 0, mejoraElite: 0, mejoraLegendaria: 0 };
 
     objetosBase.mejoraCarta = Number(usuario.objetos?.mejoraCarta ?? objetosBase.mejoraCarta ?? 0);
     objetosBase.mejoraEspecial = Number(usuario.objetos?.mejoraEspecial ?? objetosBase.mejoraEspecial ?? 0);
     objetosBase.mejoraSuprema = Number(usuario.objetos?.mejoraSuprema ?? objetosBase.mejoraSuprema ?? 0);
     objetosBase.mejoraDefinitiva = Number(usuario.objetos?.mejoraDefinitiva ?? objetosBase.mejoraDefinitiva ?? 0);
+    objetosBase.mejoraElite = Number(usuario.objetos?.mejoraElite ?? objetosBase.mejoraElite ?? 0);
+    objetosBase.mejoraLegendaria = Number(usuario.objetos?.mejoraLegendaria ?? objetosBase.mejoraLegendaria ?? 0);
 
     if (Array.isArray(usuario.inventarioObjetos)) {
         const legacyMejoraCarta = usuario.inventarioObjetos.find(item => item.id === 'obj-mejora-carta');
@@ -475,7 +493,9 @@ function normalizarObjetosUsuario(usuario) {
 function crearElementoCartaSoloVisual(carta, destacarPoder = false, anchoCartaPx = 210) {
     const cartaDiv = document.createElement('div');
     cartaDiv.classList.add('carta');
-    if (esCartaLegendaria(carta)) {
+    if (typeof window.dcAplicarClasesNivelCartaCompleta === 'function') {
+        window.dcAplicarClasesNivelCartaCompleta(cartaDiv, carta);
+    } else if (esCartaLegendaria(carta)) {
         cartaDiv.classList.add('nivel-legendaria');
     }
     if (Number.isFinite(anchoCartaPx) && anchoCartaPx > 0) {
@@ -508,13 +528,17 @@ function crearElementoCartaSoloVisual(carta, destacarPoder = false, anchoCartaPx
     const estrellasDiv = document.createElement('div');
     estrellasDiv.classList.add('estrellas-carta');
 
-    const nivel = carta.Nivel || 1;
-    for (let i = 0; i < nivel; i++) {
-        const estrella = document.createElement('img');
-        estrella.classList.add('estrella');
-        estrella.src = 'https://i.ibb.co/zZt4R3x/star-level.png';
-        estrella.alt = 'star';
-        estrellasDiv.appendChild(estrella);
+    if (typeof window.dcRellenarEstrellasCartaCompleta === 'function') {
+        window.dcRellenarEstrellasCartaCompleta(estrellasDiv, carta, {});
+    } else {
+        const nivel = carta.Nivel || 1;
+        for (let i = 0; i < nivel; i++) {
+            const estrella = document.createElement('img');
+            estrella.classList.add('estrella');
+            estrella.src = 'https://i.ibb.co/zZt4R3x/star-level.png';
+            estrella.alt = 'star';
+            estrellasDiv.appendChild(estrella);
+        }
     }
 
     cartaDiv.appendChild(detallesDiv);
@@ -801,6 +825,446 @@ function renderizarSeccionMejorasObjetos(usuario) {
     });
 }
 
+function actualizarContadoresFragmentos(usuario) {
+    normalizarObjetosUsuario(usuario);
+    const elite = document.getElementById('contador-fragmento-elite');
+    const leg = document.getElementById('contador-fragmento-legendario');
+    const nElite = Number(usuario.objetos?.mejoraElite || 0);
+    const nLeg = Number(usuario.objetos?.mejoraLegendaria || 0);
+    if (elite) {
+        elite.innerHTML = `<img src="${ICONO_FRAGMENTO_ELITE_UI}" alt="" style="width:40px; height:40px; object-fit:contain;">Fragmentos: <strong>${nElite}</strong>`;
+    }
+    if (leg) {
+        leg.innerHTML = `<img src="${ICONO_FRAGMENTO_LEGENDARIA_UI}" alt="" style="width:40px; height:40px; object-fit:contain;">Fragmentos legendarios: <strong>${nLeg}</strong>`;
+    }
+}
+
+/** Una carta por nombre (mejor nivel/poder); solo niveles 6 y 7 (8★ no se listan aquí). */
+function obtenerCartasPanelFragmentos(usuario) {
+    const cartas = Array.isArray(usuario?.cartas) ? usuario.cartas : [];
+    const candidatos = cartas
+        .map((carta, index) => ({ ...carta, originalIndex: index }))
+        .filter((carta) => {
+            const nivel = Number(carta.Nivel || 1);
+            return nivel === 6 || nivel === 7;
+        });
+
+    const mejorPorNombre = new Map();
+    candidatos.forEach((item) => {
+        const nombre = String(item.Nombre || '').trim().toLowerCase();
+        if (!nombre) {
+            return;
+        }
+        const prev = mejorPorNombre.get(nombre);
+        if (!prev) {
+            mejorPorNombre.set(nombre, item);
+            return;
+        }
+        const nPrev = Number(prev.Nivel || 1);
+        const nCur = Number(item.Nivel || 1);
+        if (nCur > nPrev) {
+            mejorPorNombre.set(nombre, item);
+            return;
+        }
+        if (nCur === nPrev) {
+            const pPrev = Number(prev.Poder || 0);
+            const pCur = Number(item.Poder || 0);
+            if (pCur > pPrev || (pCur === pPrev && item.originalIndex < prev.originalIndex)) {
+                mejorPorNombre.set(nombre, item);
+            }
+        }
+    });
+
+    return Array.from(mejorPorNombre.values()).sort((a, b) =>
+        String(a.Nombre || '').localeCompare(String(b.Nombre || ''), undefined, { sensitivity: 'base' })
+    );
+}
+
+function filtrarYOrdenarCartasFragmentos(cartas) {
+    const lista = (Array.isArray(cartas) ? cartas : []).filter((carta) => {
+        return obtenerFaccionCartaMejorasObjetos(carta) === faccionFragmentosActiva;
+    });
+    lista.sort((a, b) => {
+        if (ordenarPoderFragmentos) {
+            const diffPoder = Number(b.Poder || 0) - Number(a.Poder || 0);
+            if (diffPoder !== 0) {
+                return diffPoder;
+            }
+        }
+        return String(a.Nombre || '').localeCompare(String(b.Nombre || ''), undefined, { sensitivity: 'base' });
+    });
+    return lista;
+}
+
+function actualizarTabsFaccionFragmentos() {
+    const tabH = document.getElementById('tab-fragmentos-heroes');
+    const tabV = document.getElementById('tab-fragmentos-villanos');
+    if (tabH) {
+        tabH.classList.toggle('active', faccionFragmentosActiva === 'H');
+    }
+    if (tabV) {
+        tabV.classList.toggle('active', faccionFragmentosActiva === 'V');
+    }
+}
+
+function configurarFiltrosFragmentos() {
+    if (filtrosFragmentosRegistrados) {
+        return;
+    }
+    const tabH = document.getElementById('tab-fragmentos-heroes');
+    const tabV = document.getElementById('tab-fragmentos-villanos');
+    const chkPoder = document.getElementById('ordenar-poder-fragmentos');
+    if (!tabH && !tabV && !chkPoder) {
+        return;
+    }
+    filtrosFragmentosRegistrados = true;
+
+    tabH?.addEventListener('click', () => {
+        faccionFragmentosActiva = 'H';
+        actualizarTabsFaccionFragmentos();
+        const usuario = JSON.parse(localStorage.getItem('usuario') || 'null');
+        renderizarSeccionFragmentos(usuario);
+    });
+    tabV?.addEventListener('click', () => {
+        faccionFragmentosActiva = 'V';
+        actualizarTabsFaccionFragmentos();
+        const usuario = JSON.parse(localStorage.getItem('usuario') || 'null');
+        renderizarSeccionFragmentos(usuario);
+    });
+    chkPoder?.addEventListener('change', function () {
+        ordenarPoderFragmentos = Boolean(this.checked);
+        const usuario = JSON.parse(localStorage.getItem('usuario') || 'null');
+        renderizarSeccionFragmentos(usuario);
+    });
+}
+
+function construirFilaModalFragmento(opts) {
+    const {
+        descripcion,
+        iconSrc,
+        habilitado,
+        tipoFragmento
+    } = opts;
+
+    const fila = document.createElement('div');
+    fila.className = 'modal-seleccion-objeto-fila';
+
+    const iconWrap = document.createElement('div');
+    iconWrap.className = 'modal-seleccion-objeto-fila-icono';
+    const img = document.createElement('img');
+    img.src = iconSrc;
+    img.alt = '';
+    iconWrap.appendChild(img);
+
+    const texto = document.createElement('div');
+    texto.className = 'modal-seleccion-objeto-fila-texto';
+    const strong = document.createElement('strong');
+    strong.textContent = tipoFragmento === 'elite' ? 'Ascenso a 7★ (Élite)' : 'Ascenso a 8★ (Legendario)';
+    const small = document.createElement('small');
+    small.textContent = descripcion;
+    texto.appendChild(strong);
+    texto.appendChild(small);
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn btn-primary btn-usar-objeto';
+    btn.textContent = 'Usar';
+    btn.disabled = !habilitado;
+    btn.addEventListener('click', () => {
+        void aplicarMejoraFragmentoDesdeModal(tipoFragmento);
+    });
+
+    fila.appendChild(iconWrap);
+    fila.appendChild(texto);
+    fila.appendChild(btn);
+
+    return fila;
+}
+
+function renderizarFilasModalFragmentos(usuario, carta) {
+    const wrap = document.getElementById('modal-fragmentos-filas');
+    if (!wrap) {
+        return;
+    }
+    wrap.innerHTML = '';
+    const nivel = Number(carta.Nivel || 1);
+    const stockElite = Number(usuario.objetos?.mejoraElite || 0);
+    const stockLeg = Number(usuario.objetos?.mejoraLegendaria || 0);
+    const okElite = nivel === 6 && stockElite >= COSTO_MEJORA_FRAGMENTOS;
+    const okLeg = nivel === 7 && stockLeg >= COSTO_MEJORA_FRAGMENTOS;
+
+    const hElite = document.createElement('h5');
+    hElite.className = 'modal-fragmentos-bloque-titulo';
+    hElite.textContent = 'Mejorar a nivel Élite';
+    wrap.appendChild(hElite);
+    wrap.appendChild(construirFilaModalFragmento({
+        descripcion: `Consume ${COSTO_MEJORA_FRAGMENTOS} fragmentos (mejora élite). Solo cartas 6★. En inventario: ${stockElite}.`,
+        iconSrc: ICONO_FRAGMENTO_ELITE_UI,
+        habilitado: okElite,
+        tipoFragmento: 'elite'
+    }));
+
+    const hLeg = document.createElement('h5');
+    hLeg.className = 'modal-fragmentos-bloque-titulo';
+    hLeg.textContent = 'Mejorar a nivel Legendario';
+    wrap.appendChild(hLeg);
+    wrap.appendChild(construirFilaModalFragmento({
+        descripcion: `Consume ${COSTO_MEJORA_FRAGMENTOS} fragmentos legendarios (mejora legendaria). Solo cartas 7★. En inventario: ${stockLeg}.`,
+        iconSrc: ICONO_FRAGMENTO_LEGENDARIA_UI,
+        habilitado: okLeg,
+        tipoFragmento: 'legendario'
+    }));
+}
+
+function abrirModalSeleccionFragmentos(indiceCarta) {
+    const usuario = JSON.parse(localStorage.getItem('usuario') || 'null');
+    normalizarObjetosUsuario(usuario);
+    const carta = usuario?.cartas?.[indiceCarta];
+    if (!carta) {
+        mostrarMensaje('No se encontró la carta seleccionada.', 'danger');
+        return;
+    }
+    const nivel = Number(carta.Nivel || 1);
+    if (nivel !== 6 && nivel !== 7) {
+        mostrarMensaje('Los fragmentos solo aplican a cartas 6★ o 7★.', 'warning');
+        return;
+    }
+
+    indiceCartaModalFragmentos = indiceCarta;
+    const modal = document.getElementById('modal-seleccion-fragmentos-mejora');
+    const sub = document.getElementById('modal-fragmentos-subtitulo');
+    if (sub) {
+        sub.textContent = `${String(carta.Nombre || '')} · Nivel ${nivel}★`;
+    }
+    renderizarFilasModalFragmentos(usuario, { ...carta, originalIndex: indiceCarta });
+    if (modal) {
+        modal.style.display = 'flex';
+    }
+}
+
+function cerrarModalSeleccionFragmentos() {
+    const modal = document.getElementById('modal-seleccion-fragmentos-mejora');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+    indiceCartaModalFragmentos = null;
+}
+
+function renderizarSeccionFragmentos(usuario) {
+    actualizarContadoresFragmentos(usuario);
+    actualizarTabsFaccionFragmentos();
+    const contenedor = document.getElementById('contenedor-fragmentos-todas');
+    if (!contenedor) {
+        return;
+    }
+
+    contenedor.innerHTML = '';
+    const todas = obtenerCartasPanelFragmentos(usuario);
+    const cartas = filtrarYOrdenarCartasFragmentos(todas);
+
+    if (todas.length === 0) {
+        const vacio = document.createElement('div');
+        vacio.className = 'alert alert-info';
+        vacio.textContent = 'No tienes cartas de nivel 6 o 7 para usar fragmentos.';
+        contenedor.appendChild(vacio);
+        return;
+    }
+
+    if (cartas.length === 0) {
+        const vacio = document.createElement('div');
+        vacio.className = 'alert alert-info';
+        vacio.textContent = `No tienes cartas de ${faccionFragmentosActiva === 'H' ? 'héroes' : 'villanos'} de nivel 6 o 7 en esta vista. Prueba la otra facción.`;
+        contenedor.appendChild(vacio);
+        return;
+    }
+
+    cartas.forEach((carta) => {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'mejora-objeto-fila';
+
+        const cartaVisual = crearElementoCartaSoloVisual(carta, false, 0);
+        const boton = document.createElement('button');
+        boton.className = 'btn btn-mejora-objeto';
+        boton.textContent = 'Mejorar';
+        boton.addEventListener('click', () => abrirModalSeleccionFragmentos(carta.originalIndex));
+
+        wrapper.appendChild(cartaVisual);
+        wrapper.appendChild(boton);
+        contenedor.appendChild(wrapper);
+    });
+}
+
+function crearCartaMejoradaPorFragmento(cartaOriginal, tipoFragmento) {
+    const original = { ...cartaOriginal };
+    const mejorada = { ...cartaOriginal };
+    const saludBase = Number((mejorada.SaludMax ?? mejorada.Salud ?? mejorada.Poder) || 0);
+    const nivelInicial = Number(mejorada.Nivel || 1);
+    let nivelFinal = nivelInicial;
+    if (tipoFragmento === 'elite') {
+        nivelFinal = 7;
+    } else if (tipoFragmento === 'legendario') {
+        nivelFinal = 8;
+    }
+    const incrementoNiveles = Math.max(nivelFinal - nivelInicial, 0);
+    mejorada.Nivel = nivelFinal;
+    mejorada.Poder = Number(mejorada.Poder || 0) + (incrementoNiveles * 500);
+    mejorada.SaludMax = saludBase + (incrementoNiveles * 500);
+    mejorada.Salud = mejorada.SaludMax;
+
+    if (typeof window.recalcularSkillPowerPorNivel === 'function') {
+        window.recalcularSkillPowerPorNivel(mejorada, Number(mejorada.Nivel || 1));
+    }
+
+    return { original, mejorada };
+}
+
+function cerrarModalAnimacionFragmento() {
+    const modal = document.getElementById('modal-animacion-fragmento');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+    const flash = document.getElementById('fragmento-anim-flash');
+    flash?.classList.remove('fragmento-anim-flash--on');
+    fragmentoAnimEnCurso = false;
+}
+
+async function ejecutarAnimacionRevelacionFragmento(tipoFragmento, cartaMejorada) {
+    const modal = document.getElementById('modal-animacion-fragmento');
+    const faseIcono = document.getElementById('fragmento-anim-fase-icono');
+    const flash = document.getElementById('fragmento-anim-flash');
+    const resultado = document.getElementById('fragmento-anim-resultado');
+    const btnCerrar = document.getElementById('btn-cerrar-animacion-fragmento');
+    if (!modal || !faseIcono || !flash || !resultado || !btnCerrar) {
+        return;
+    }
+
+    btnCerrar.style.display = 'none';
+    resultado.innerHTML = '';
+    resultado.style.display = 'none';
+    faseIcono.innerHTML = '';
+    faseIcono.style.display = '';
+    flash.classList.remove('fragmento-anim-flash--on');
+    void flash.offsetWidth;
+
+    const imgSrc = tipoFragmento === 'elite' ? ICONO_ANIM_ELITE : ICONO_ANIM_LEGENDARY;
+    const img = document.createElement('img');
+    img.className = 'apertura-sobre-img-envelope';
+    img.src = imgSrc;
+    img.alt = tipoFragmento === 'elite' ? 'Élite' : 'Legendario';
+
+    const envTxt = document.createElement('p');
+    envTxt.className = 'apertura-sobre-texto-estado';
+    envTxt.textContent = tipoFragmento === 'elite' ? 'Forjando nivel élite…' : 'Ascendiendo a legendario…';
+    faseIcono.appendChild(img);
+    faseIcono.appendChild(envTxt);
+
+    modal.style.display = 'flex';
+
+    await esperar(1650);
+
+    flash.classList.add('fragmento-anim-flash--on');
+    await esperar(460);
+    flash.classList.remove('fragmento-anim-flash--on');
+
+    faseIcono.style.display = 'none';
+    resultado.style.display = 'flex';
+    const wrap = document.createElement('div');
+    wrap.className = 'fragmento-anim-resultado-wrap';
+    const cartaEl = crearElementoCartaSoloVisual(cartaMejorada, true, 268);
+    cartaEl.classList.add('apertura-sobre-mini-carta', 'apertura-sobre-carta-resplandor-oro');
+    wrap.appendChild(cartaEl);
+    resultado.appendChild(wrap);
+
+    cartaEl.style.opacity = '0';
+    cartaEl.style.transform = 'translateY(24px) scale(0.92)';
+    requestAnimationFrame(() => {
+        cartaEl.style.transition = 'opacity 0.48s ease, transform 0.55s cubic-bezier(0.22, 0.92, 0.28, 1)';
+        cartaEl.style.opacity = '1';
+        cartaEl.style.transform = 'translateY(0) scale(1)';
+    });
+    await esperar(520);
+    btnCerrar.style.display = 'inline-block';
+}
+
+async function aplicarMejoraFragmentoDesdeModal(tipoFragmento) {
+    if (fragmentoAnimEnCurso) {
+        return;
+    }
+    const usuario = JSON.parse(localStorage.getItem('usuario') || 'null');
+    const email = localStorage.getItem('email');
+    normalizarObjetosUsuario(usuario);
+
+    if (!usuario || !email) {
+        mostrarMensaje('No se pudo validar la sesión del usuario.', 'danger');
+        return;
+    }
+
+    const indiceCarta = indiceCartaModalFragmentos;
+    if (indiceCarta === null || indiceCarta === undefined) {
+        mostrarMensaje('No hay carta seleccionada para fragmentos.', 'warning');
+        return;
+    }
+
+    const carta = usuario.cartas?.[indiceCarta];
+    if (!carta) {
+        mostrarMensaje('La carta seleccionada ya no está disponible.', 'danger');
+        cerrarModalSeleccionFragmentos();
+        return;
+    }
+
+    const nivel = Number(carta.Nivel || 1);
+    const key = tipoFragmento === 'elite' ? 'mejoraElite' : 'mejoraLegendaria';
+    const stock = Number(usuario.objetos?.[key] || 0);
+
+    if (tipoFragmento === 'elite') {
+        if (nivel !== 6 || stock < COSTO_MEJORA_FRAGMENTOS) {
+            mostrarMensaje('Solo cartas 6★ con 12 fragmentos disponibles.', 'warning');
+            return;
+        }
+    } else if (tipoFragmento === 'legendario') {
+        if (nivel !== 7 || stock < COSTO_MEJORA_FRAGMENTOS) {
+            mostrarMensaje('Solo cartas 7★ con 12 fragmentos legendarios disponibles.', 'warning');
+            return;
+        }
+    } else {
+        return;
+    }
+
+    const { original, mejorada } = crearCartaMejoradaPorFragmento(carta, tipoFragmento);
+    if (Number(mejorada.Nivel || 1) === Number(original.Nivel || 1)) {
+        mostrarMensaje('No se pudo calcular la mejora de nivel.', 'warning');
+        return;
+    }
+
+    const faccionMejorada = normalizarFaccion(mejorada?.faccion || mejorada?.Faccion || '');
+    usuario.cartas[indiceCarta] = mejorada;
+    usuario.objetos[key] = stock - COSTO_MEJORA_FRAGMENTOS;
+    sincronizarMazosConColeccion(usuario);
+
+    try {
+        await actualizarUsuarioFirebase(usuario, email);
+        localStorage.setItem('usuario', JSON.stringify(usuario));
+        if (window.DCMisiones?.track) {
+            if (faccionMejorada === 'H') window.DCMisiones.track('mejorar_cartas_h', { amount: 1 });
+            if (faccionMejorada === 'V') window.DCMisiones.track('mejorar_cartas_v', { amount: 1 });
+            window.DCMisiones.track('mejorar_nivel', { amount: 1 });
+        }
+        refrescarPanelPerfilLateral();
+        cerrarModalSeleccionFragmentos();
+        cargarCartas();
+        fragmentoAnimEnCurso = true;
+        try {
+            await ejecutarAnimacionRevelacionFragmento(tipoFragmento, mejorada);
+        } finally {
+            fragmentoAnimEnCurso = false;
+        }
+    } catch (error) {
+        console.error('Error al aplicar mejora con fragmentos:', error);
+        fragmentoAnimEnCurso = false;
+        mostrarMensaje('Error al guardar la mejora con fragmentos.', 'danger');
+    }
+}
+
 function sincronizarMazosConColeccion(usuario) {
     if (!usuario.mazos || !Array.isArray(usuario.mazos)) {
         usuario.mazos = [];
@@ -949,7 +1413,9 @@ function cargarCartas() {
 
             const cartaDiv = document.createElement('div');
             cartaDiv.classList.add('carta');
-            if (esCartaLegendaria(carta)) {
+            if (typeof window.dcAplicarClasesNivelCartaCompleta === 'function') {
+                window.dcAplicarClasesNivelCartaCompleta(cartaDiv, carta);
+            } else if (esCartaLegendaria(carta)) {
                 cartaDiv.classList.add('nivel-legendaria');
             }
             cartaDiv.dataset.keeperIndex = String(grupo.keeperIndex);
@@ -976,13 +1442,17 @@ function cargarCartas() {
             const estrellasDiv = document.createElement('div');
             estrellasDiv.classList.add('estrellas-carta');
 
-            const nivel = carta.Nivel || 1;
-            for (let i = 0; i < nivel; i++) {
-                const estrella = document.createElement('img');
-                estrella.classList.add('estrella');
-                estrella.src = 'https://i.ibb.co/zZt4R3x/star-level.png';
-                estrella.alt = 'star';
-                estrellasDiv.appendChild(estrella);
+            if (typeof window.dcRellenarEstrellasCartaCompleta === 'function') {
+                window.dcRellenarEstrellasCartaCompleta(estrellasDiv, carta, {});
+            } else {
+                const nivel = carta.Nivel || 1;
+                for (let i = 0; i < nivel; i++) {
+                    const estrella = document.createElement('img');
+                    estrella.classList.add('estrella');
+                    estrella.src = 'https://i.ibb.co/zZt4R3x/star-level.png';
+                    estrella.alt = 'star';
+                    estrellasDiv.appendChild(estrella);
+                }
             }
 
             cartaDiv.appendChild(detallesDiv);
@@ -1018,6 +1488,7 @@ function cargarCartas() {
         });
         renderizarSeccionDestruccion(usuario);
         renderizarSeccionMejorasObjetos(usuario);
+        renderizarSeccionFragmentos(usuario);
     } else {
         console.error('No se encontraron cartas para el usuario.');
     }
@@ -1079,13 +1550,48 @@ function configurarEventos() {
     const tabClasica = document.getElementById('tab-mejora-clasica');
     const tabDestruir = document.getElementById('tab-destruir-repetidas');
     const tabObjetos = document.getElementById('tab-mejoras-objetos');
-    if (tabClasica && tabObjetos && tabDestruir) {
+    const tabFragmentos = document.getElementById('tab-fragmentos');
+    if (tabClasica) {
         tabClasica.onclick = () => cambiarPestanaMejoras('clasica');
+    }
+    if (tabDestruir) {
         tabDestruir.onclick = () => cambiarPestanaMejoras('destruir');
+    }
+    if (tabObjetos) {
         tabObjetos.onclick = () => cambiarPestanaMejoras('objetos');
+    }
+    if (tabFragmentos) {
+        tabFragmentos.onclick = () => cambiarPestanaMejoras('fragmentos');
+    }
+
+    const modalSeleccionFragmentos = document.getElementById('modal-seleccion-fragmentos-mejora');
+    const btnCerrarSeleccionFragmentos = document.getElementById('btn-cerrar-seleccion-fragmentos');
+    if (btnCerrarSeleccionFragmentos) {
+        btnCerrarSeleccionFragmentos.onclick = cerrarModalSeleccionFragmentos;
+    }
+    if (modalSeleccionFragmentos) {
+        modalSeleccionFragmentos.addEventListener('click', (event) => {
+            if (event.target === modalSeleccionFragmentos) {
+                cerrarModalSeleccionFragmentos();
+            }
+        });
+    }
+
+    const modalAnimFragmento = document.getElementById('modal-animacion-fragmento');
+    const btnCerrarAnimFragmento = document.getElementById('btn-cerrar-animacion-fragmento');
+    if (btnCerrarAnimFragmento) {
+        btnCerrarAnimFragmento.onclick = cerrarModalAnimacionFragmento;
+    }
+    if (modalAnimFragmento) {
+        modalAnimFragmento.addEventListener('click', (event) => {
+            if (event.target === modalAnimFragmento) {
+                cerrarModalAnimacionFragmento();
+            }
+        });
     }
 
     configurarFiltrosMejorasObjetos();
+    configurarFiltrosFragmentos();
 }
 
 function cerrarModalResultadoAuto() {
@@ -1158,14 +1664,19 @@ function cambiarPestanaMejoras(pestana) {
     const tabClasica = document.getElementById('tab-mejora-clasica');
     const tabDestruir = document.getElementById('tab-destruir-repetidas');
     const tabObjetos = document.getElementById('tab-mejoras-objetos');
+    const tabFragmentos = document.getElementById('tab-fragmentos');
     const seccionClasica = document.getElementById('seccion-mejora-clasica');
     const seccionDestruir = document.getElementById('seccion-destruir-repetidas');
     const seccionObjetos = document.getElementById('seccion-mejoras-objetos');
+    const seccionFragmentos = document.getElementById('seccion-fragmentos');
 
-    const mostrarObjetos = pestana === 'objetos';
+    const mostrarClasica = pestana === 'clasica';
     const mostrarDestruir = pestana === 'destruir';
+    const mostrarObjetos = pestana === 'objetos';
+    const mostrarFragmentos = pestana === 'fragmentos';
+
     if (tabClasica) {
-        tabClasica.classList.toggle('active', !mostrarObjetos && !mostrarDestruir);
+        tabClasica.classList.toggle('active', mostrarClasica);
     }
     if (tabDestruir) {
         tabDestruir.classList.toggle('active', mostrarDestruir);
@@ -1173,14 +1684,33 @@ function cambiarPestanaMejoras(pestana) {
     if (tabObjetos) {
         tabObjetos.classList.toggle('active', mostrarObjetos);
     }
+    if (tabFragmentos) {
+        tabFragmentos.classList.toggle('active', mostrarFragmentos);
+    }
     if (seccionClasica) {
-        seccionClasica.style.display = (!mostrarObjetos && !mostrarDestruir) ? 'block' : 'none';
+        seccionClasica.style.display = mostrarClasica ? 'block' : 'none';
     }
     if (seccionDestruir) {
         seccionDestruir.style.display = mostrarDestruir ? 'block' : 'none';
     }
     if (seccionObjetos) {
         seccionObjetos.style.display = mostrarObjetos ? 'block' : 'none';
+    }
+    if (seccionFragmentos) {
+        seccionFragmentos.style.display = mostrarFragmentos ? 'block' : 'none';
+    }
+
+    if (mostrarObjetos) {
+        const usuario = JSON.parse(localStorage.getItem('usuario') || 'null');
+        if (usuario) {
+            renderizarSeccionMejorasObjetos(usuario);
+        }
+    }
+    if (mostrarFragmentos) {
+        const usuario = JSON.parse(localStorage.getItem('usuario') || 'null');
+        if (usuario) {
+            renderizarSeccionFragmentos(usuario);
+        }
     }
 }
 

@@ -935,9 +935,19 @@ function obtenerResumenInventarioSesion() {
     const objetos = (usuario?.objetos && typeof usuario.objetos === 'object') ? usuario.objetos : {};
     const mejoras = Math.max(0, Number(objetos?.mejoraCarta || 0));
     const mejorasEspeciales = Math.max(0, Number(objetos?.mejoraEspecial || 0));
+    const mejorasElite = Math.max(0, Number(objetos?.mejoraElite || 0));
+    const mejorasLegendaria = Math.max(0, Number(objetos?.mejoraLegendaria || 0));
     const mejorasSuprema = Math.max(0, Number(objetos?.mejoraSuprema || 0));
     const mejorasDefinitiva = Math.max(0, Number(objetos?.mejoraDefinitiva || 0));
-    return { puntos, mejoras, mejorasEspeciales, mejorasSuprema, mejorasDefinitiva };
+    return {
+        puntos,
+        mejoras,
+        mejorasEspeciales,
+        mejorasElite,
+        mejorasLegendaria,
+        mejorasSuprema,
+        mejorasDefinitiva
+    };
 }
 
 function obtenerEstadoGrupoSesion() {
@@ -992,6 +1002,101 @@ function aplicarColorPrincipalDesdeSesion() {
 
 window.aplicarColorPrincipalUsuario = aplicarColorPrincipalUsuario;
 window.aplicarColorPrincipalDesdeSesion = aplicarColorPrincipalDesdeSesion;
+
+/** Estrella clásica (1–5★) en vistas de carta completa. */
+const DC_STAR_CLASSIC_URL = 'https://i.ibb.co/zZt4R3x/star-level.png';
+
+/**
+ * Clases de borde / detalle para cartas completas según nivel 6 / 7 / 8.
+ * No aplica a bosses (usan .boss-carta u otras reglas).
+ */
+function dcAplicarClasesNivelCartaCompleta(cartaDiv, carta) {
+    if (!cartaDiv || !carta || typeof carta !== 'object') {
+        return;
+    }
+    if (Boolean(carta.esBoss)) {
+        return;
+    }
+    const nv = Math.min(8, Math.max(1, Number(carta.Nivel || 1)));
+    cartaDiv.classList.remove('nivel-legendaria', 'nivel-elite-tablero', 'nivel-mitica-tablero');
+    if (nv >= 8) {
+        cartaDiv.classList.add('nivel-mitica-tablero');
+    } else if (nv >= 7) {
+        cartaDiv.classList.add('nivel-elite-tablero');
+    } else if (nv >= 6) {
+        cartaDiv.classList.add('nivel-legendaria');
+    }
+}
+
+/**
+ * Rellena el bloque de nivel (1–5 estrellas o icono 6/7/8) en cartas completas.
+ * @param {HTMLElement} estrellasDiv
+ * @param {object} carta
+ * @param {object} [opts]
+ * @param {boolean} [opts.esCartaBoss]
+ * @param {object|null} [opts.desafioActivo] p. ej. { dificultad: n } para nº de estrellas del boss (1–6)
+ */
+function dcRellenarEstrellasCartaCompleta(estrellasDiv, carta, opts = {}) {
+    if (!estrellasDiv || !carta || typeof carta !== 'object') {
+        return;
+    }
+    const esBoss = Boolean(opts.esCartaBoss || carta.esBoss);
+    estrellasDiv.classList.remove('estrellas-carta--modo-icono');
+    estrellasDiv.innerHTML = '';
+
+    if (esBoss) {
+        const meta = opts.desafioActivo && typeof opts.desafioActivo === 'object' ? opts.desafioActivo : null;
+        let cant = Math.min(6, Math.max(1, Number(carta.Nivel || 1)));
+        if (meta && Number.isFinite(Number(meta.dificultad))) {
+            cant = Math.min(6, Math.max(1, Number(meta.dificultad)));
+        }
+        for (let i = 0; i < cant; i += 1) {
+            const estrella = document.createElement('img');
+            estrella.classList.add('estrella');
+            estrella.src = DC_STAR_CLASSIC_URL;
+            estrella.alt = 'star';
+            estrellasDiv.appendChild(estrella);
+        }
+        return;
+    }
+
+    const nivelUi = Math.min(8, Math.max(1, Number(carta.Nivel || 1)));
+
+    if (nivelUi === 6) {
+        estrellasDiv.classList.add('estrellas-carta--modo-icono');
+        const icono = document.createElement('img');
+        icono.className = 'estrella-icono-nivel estrella-icono-nivel--seis';
+        icono.src = '/resources/icons/star6.png';
+        icono.alt = 'Nivel 6';
+        estrellasDiv.appendChild(icono);
+    } else if (nivelUi === 7) {
+        estrellasDiv.classList.add('estrellas-carta--modo-icono');
+        const icono = document.createElement('img');
+        icono.className = 'estrella-icono-nivel estrella-icono-nivel--elite';
+        icono.src = '/resources/icons/elite_star.png';
+        icono.alt = 'Nivel élite';
+        estrellasDiv.appendChild(icono);
+    } else if (nivelUi === 8) {
+        estrellasDiv.classList.add('estrellas-carta--modo-icono');
+        const icono = document.createElement('img');
+        icono.className = 'estrella-icono-nivel estrella-icono-nivel--legendary';
+        icono.src = '/resources/icons/legendary_star.png';
+        icono.alt = 'Nivel legendario';
+        estrellasDiv.appendChild(icono);
+    } else {
+        const cantidadEstrellas = Math.min(5, Math.max(1, nivelUi));
+        for (let i = 0; i < cantidadEstrellas; i += 1) {
+            const estrella = document.createElement('img');
+            estrella.classList.add('estrella');
+            estrella.src = DC_STAR_CLASSIC_URL;
+            estrella.alt = 'star';
+            estrellasDiv.appendChild(estrella);
+        }
+    }
+}
+
+window.dcAplicarClasesNivelCartaCompleta = dcAplicarClasesNivelCartaCompleta;
+window.dcRellenarEstrellasCartaCompleta = dcRellenarEstrellasCartaCompleta;
 
 /** Clave de nombre para deduplicar cartas en colección / misiones. */
 function dcNormalizarNombreCartaColeccion(nombre) {
@@ -1084,20 +1189,27 @@ function construirFilaStatMenu({ icono, alt, valor, titulo }) {
 }
 
 function construirLineaObjetosMejoraMenu(resumen) {
-    const grupos = [
-        { icono: '/resources/icons/mejora.png', alt: 'Mejora', valor: resumen.mejoras, titulo: 'Mejoras de carta' },
-        { icono: '/resources/icons/mejora_especial.png', alt: 'Mejora especial', valor: resumen.mejorasEspeciales, titulo: 'Mejoras especiales' },
-        { icono: '/resources/icons/mejora_suprema.png', alt: 'Mejora suprema', valor: resumen.mejorasSuprema, titulo: 'Mejoras supremas' },
-        { icono: '/resources/icons/mejora_definitiva.png', alt: 'Mejora definitiva', valor: resumen.mejorasDefinitiva, titulo: 'Mejoras definitivas' }
-    ];
-    return grupos.map(({ icono, alt, valor, titulo }) => `
+    const item = ({ icono, alt, valor, titulo }) => `
         <span class="menu-user-objeto-grupo" title="${titulo}">
             <span class="menu-user-stat-icon-wrap">
                 <img src="${icono}" alt="${alt}" class="menu-user-stat-icon">
             </span>
             <span class="menu-user-stat-value">${valor}</span>
-        </span>
-    `).join('');
+        </span>`;
+    const filaSuperior = [
+        { icono: '/resources/icons/mejora.png', alt: 'Mejora', valor: resumen.mejoras, titulo: 'Mejoras de carta' },
+        { icono: '/resources/icons/mejora_especial.png', alt: 'Mejora especial', valor: resumen.mejorasEspeciales, titulo: 'Mejoras especiales' },
+        { icono: '/resources/icons/mejora_suprema.png', alt: 'Mejora suprema', valor: resumen.mejorasSuprema, titulo: 'Mejoras supremas' },
+    ];
+    const filaInferior = [
+        { icono: '/resources/icons/mejora_definitiva.png', alt: 'Mejora definitiva', valor: resumen.mejorasDefinitiva, titulo: 'Mejoras definitivas' },
+        { icono: '/resources/icons/mejora_elite.png', alt: 'Mejora élite', valor: resumen.mejorasElite, titulo: 'Mejoras élite' },
+        { icono: '/resources/icons/mejora_legendaria.png', alt: 'Mejora legendaria', valor: resumen.mejorasLegendaria, titulo: 'Mejoras legendarias' },
+    ];
+    return `
+        <div class="menu-user-objetos-mejora-fila">${filaSuperior.map(item).join('')}</div>
+        <div class="menu-user-objetos-mejora-fila">${filaInferior.map(item).join('')}</div>
+    `;
 }
 
 const RECOMPENSA_DIARIA_COOLDOWN_MS = 24 * 60 * 60 * 1000;
@@ -1125,6 +1237,8 @@ function normalizarObjetosConSobresGlobal(usuario) {
     const base = (usuario.objetos && typeof usuario.objetos === 'object') ? { ...usuario.objetos } : {};
     base.mejoraCarta = Number(base.mejoraCarta || 0);
     base.mejoraEspecial = Number(base.mejoraEspecial || 0);
+    base.mejoraElite = Number(base.mejoraElite || 0);
+    base.mejoraLegendaria = Number(base.mejoraLegendaria || 0);
     base.mejoraSuprema = Number(base.mejoraSuprema || 0);
     base.mejoraDefinitiva = Number(base.mejoraDefinitiva || 0);
     if (typeof window.DC_SOBRES_MEZCLAR_INVENTARIO === 'function') {
@@ -1135,6 +1249,8 @@ function normalizarObjetosConSobresGlobal(usuario) {
         ...base,
         mejoraSuprema: Number(base.mejoraSuprema || 0),
         mejoraDefinitiva: Number(base.mejoraDefinitiva || 0),
+        mejoraElite: Number(base.mejoraElite || 0),
+        mejoraLegendaria: Number(base.mejoraLegendaria || 0),
         sobreH1: Number(base.sobreH1 || 0),
         sobreH2: Number(base.sobreH2 || 0),
         sobreH3: Number(base.sobreH3 || 0),
@@ -1143,6 +1259,8 @@ function normalizarObjetosConSobresGlobal(usuario) {
         sobreV3: Number(base.sobreV3 || 0)
     };
 }
+
+window.DCNormalizarObjetosUsuario = normalizarObjetosConSobresGlobal;
 
 /**
  * Cuenta atrás legible: omite unidades en cero (p. ej. 16m 47s, 47s, 2h 5s).
@@ -1631,7 +1749,7 @@ function normalizarMenuLateral() {
         linkMultijugador.removeEventListener('click', bloquearNavegacionMultijugador);
     }
 
-    const versionLabelTexto = 'Versión: 1.1.1';
+    const versionLabelTexto = 'Versión: 1.2.0';
     let versionLabel = menu.querySelector('#menu-version-label');
     if (!versionLabel) {
         versionLabel = document.createElement('div');

@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.0
+
+- Etiqueta de versión del menú lateral: **`Versión: 1.2.0`** (`public/js/cartas.js`, `package.json`).
+- Mejora con fragmentos: sin alert Bootstrap de éxito al finalizar (la animación ya confirma el resultado).
+
 ## 1.1.1
 
 - Etiqueta de versión del menú lateral: **`Versión: 1.1.1`** (`public/js/cartas.js`, `package.json`).
