@@ -3059,6 +3059,67 @@ async function asegurarMetadataSyncUsuario(email, userData = {}) {
     return { ...userData, syncToken, syncUpdatedAt };
 }
 
+/**
+ * Evita perder progreso de misiones diarias/semanales si dos clientes o un guardado
+ * intermedio envían distinto `windowId` o distinto avance en la misma ventana.
+ * Misma ventana: por `uid` se toma max(progress) y claimed = OR lógico.
+ * Ventana distinta: gana la ventana con id lexicográfico mayor (YYYY-MM-DD).
+ */
+function fusionarScopeMisionesServidor(scopeServidor, scopeCliente) {
+    const a = scopeServidor && typeof scopeServidor === 'object' ? scopeServidor : { windowId: '', lista: [] };
+    const b = scopeCliente && typeof scopeCliente === 'object' ? scopeCliente : { windowId: '', lista: [] };
+    const wA = String(a.windowId || '');
+    const wB = String(b.windowId || '');
+    const listA = Array.isArray(a.lista) ? a.lista : [];
+    const listB = Array.isArray(b.lista) ? b.lista : [];
+    if (!wB && !wA) {
+        return { windowId: '', lista: [] };
+    }
+    if (!wB) {
+        return { windowId: wA, lista: listA.map((m) => ({ ...m })) };
+    }
+    if (!wA) {
+        return { windowId: wB, lista: listB.map((m) => ({ ...m })) };
+    }
+    if (wA !== wB) {
+        return wB > wA
+            ? { windowId: wB, lista: listB.map((m) => ({ ...m })) }
+            : { windowId: wA, lista: listA.map((m) => ({ ...m })) };
+    }
+    const byUid = new Map();
+    listA.forEach((m) => {
+        if (m && m.uid) {
+            byUid.set(String(m.uid), { ...m });
+        }
+    });
+    listB.forEach((m) => {
+        if (!m || !m.uid) return;
+        const uid = String(m.uid);
+        const prev = byUid.get(uid);
+        if (!prev) {
+            byUid.set(uid, { ...m });
+            return;
+        }
+        byUid.set(uid, {
+            ...prev,
+            ...m,
+            progress: Math.max(Number(prev.progress || 0), Number(m.progress || 0)),
+            claimed: Boolean(prev.claimed) || Boolean(m.claimed),
+        });
+    });
+    return { windowId: wA, lista: Array.from(byUid.values()) };
+}
+
+function fusionarMisionesServidor(misionesServidor, misionesCliente) {
+    const s = misionesServidor && typeof misionesServidor === 'object' ? misionesServidor : {};
+    const c = misionesCliente && typeof misionesCliente === 'object' ? misionesCliente : {};
+    return {
+        version: String(c.version || s.version || 'v1'),
+        diarias: fusionarScopeMisionesServidor(s.diarias, c.diarias),
+        semanales: fusionarScopeMisionesServidor(s.semanales, c.semanales),
+    };
+}
+
 async function guardarUsuarioConControlConcurrencia(email, usuarioPayload = {}) {
     const docRef = doc(db, "users", email);
     const docActual = await getDoc(docRef);
@@ -3088,6 +3149,11 @@ async function guardarUsuarioConControlConcurrencia(email, usuarioPayload = {}) 
         ? usuario.objetos
         : {};
     usuario.objetos = { ...objsPrev, ...objsCli };
+    if (usuario.misiones && typeof usuario.misiones === 'object') {
+        usuario.misiones = fusionarMisionesServidor(datosActuales.misiones || {}, usuario.misiones);
+    } else if (datosActuales.misiones && typeof datosActuales.misiones === 'object') {
+        usuario.misiones = datosActuales.misiones;
+    }
     usuario.syncToken = generarSyncTokenUsuario();
     usuario.syncUpdatedAt = Date.now();
 

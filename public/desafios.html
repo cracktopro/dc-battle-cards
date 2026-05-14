@@ -352,9 +352,20 @@
             border-color: rgba(255, 215, 0, 0.95);
         }
 
-        .carta-mini.nivel-legendaria.seleccionada {
-            border-color: rgba(255, 215, 0, 0.95);
-            box-shadow: 0 0 16px 4px rgba(255, 215, 0, 0.82), 0 0 24px rgba(156, 66, 255, 0.35);
+        .carta-mini.nivel-legendaria.seleccionada,
+        .carta-mini.nivel-elite-tablero.seleccionada,
+        .carta-mini.nivel-mitica-tablero.seleccionada {
+            border-color: rgba(255, 215, 0, 1);
+            box-shadow:
+                0 0 8px 2px rgba(255, 215, 0, 1),
+                0 0 12px rgb(156, 66, 255);
+        }
+
+        .carta-mini.nivel-mitica-tablero.seleccionada {
+            box-shadow:
+                0 0 8px 2px rgba(255, 215, 0, 1),
+                0 0 14px rgb(255, 95, 35),
+                0 0 20px rgb(255, 60, 20);
         }
 
         .carta-mini .detalles-carta {
@@ -363,21 +374,70 @@
         }
 
         .carta-mini.nivel-legendaria {
-            border-color: rgba(172, 96, 255, 0.92);
-            box-shadow: 0 0 14px rgba(156, 66, 255, 0.45), 0 0 26px rgba(128, 0, 255, 0.34);
+            border-color: rgb(168, 98, 255);
+            box-shadow:
+                0 0 5px rgb(168, 65, 255),
+                0 0 9px rgb(132, 0, 255),
+                0 0 14px rgb(210, 145, 255);
         }
 
-        .carta-mini.nivel-legendaria .detalles-carta {
+        .carta-mini.nivel-elite-tablero {
+            border-color: rgba(252, 248, 255, 1);
+            box-shadow:
+                0 0 4px rgb(244, 247, 255),
+                0 0 9px rgb(246, 249, 255),
+                0 0 16px rgb(240, 243, 255),
+                0 0 22px rgb(236, 239, 255);
+        }
+
+        .carta-mini.nivel-mitica-tablero {
+            border-color: rgba(255, 188, 150, 1);
+            box-shadow:
+                0 0 6px rgb(255, 85, 30),
+                0 0 12px rgb(255, 35, 0),
+                0 0 18px rgb(255, 125, 45);
+        }
+
+        .carta-mini.nivel-legendaria .detalles-carta,
+        .carta-mini.nivel-elite-tablero .detalles-carta {
             color: #d5b5ff;
             text-shadow: 0 0 6px rgba(186, 112, 255, 0.75);
             border-top-color: rgba(186, 112, 255, 0.6);
             box-shadow: 0 -2px 8px rgba(156, 66, 255, 0.45);
         }
 
-        .carta-mini.nivel-legendaria .estrellas-carta {
-            background-color: rgba(58, 24, 90, 0.78);
-            border-color: rgba(186, 112, 255, 0.6);
-            box-shadow: 0 0 8px rgba(156, 66, 255, 0.5);
+        .carta-mini.nivel-mitica-tablero .detalles-carta {
+            color: #ffd4c4;
+            text-shadow: 0 0 8px rgba(255, 120, 70, 0.85);
+            border-top-color: rgba(255, 130, 70, 0.7);
+            box-shadow: 0 -2px 10px rgba(255, 90, 40, 0.45);
+        }
+
+        .carta-mini .estrellas-carta.estrellas-carta--modo-icono,
+        .carta-mini.nivel-legendaria .estrellas-carta.estrellas-carta--modo-icono,
+        .carta-mini.nivel-elite-tablero .estrellas-carta.estrellas-carta--modo-icono,
+        .carta-mini.nivel-mitica-tablero .estrellas-carta.estrellas-carta--modo-icono {
+            background-color: transparent;
+            border: none;
+            box-shadow: none;
+            padding: 0;
+            border-radius: 0;
+        }
+
+        .carta-mini .estrella-icono-nivel {
+            width: 40px;
+            height: 40px;
+        }
+
+        .carta-mini .estrella-icono-nivel--seis,
+        .carta-mini .estrella-icono-nivel--elite {
+            width: 42px;
+            height: 42px;
+        }
+
+        .carta-mini .estrella-icono-nivel--legendary {
+            width: 46px;
+            height: 46px;
         }
 
         .modal-footer-desafio {

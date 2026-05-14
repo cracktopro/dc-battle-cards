@@ -15,6 +15,90 @@
     <link href="css/scrollbar.css" rel="stylesheet">
     <link href="css/app-layout.css" rel="stylesheet">
 
+    <style>
+        #modal-animacion-fragmento {
+            position: fixed;
+            inset: 0;
+            z-index: 2350;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.88);
+            padding: 16px;
+        }
+
+        .modal-anim-fragmento-inner {
+            position: relative;
+            width: min(520px, 96vw);
+            min-height: 320px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: rgba(10, 18, 34, 0.96);
+            border: 1px solid rgba(255, 215, 120, 0.35);
+            border-radius: 16px;
+            box-shadow: 0 0 28px rgba(0, 0, 0, 0.55);
+            overflow: hidden;
+        }
+
+        #fragmento-anim-fase-icono {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 14px;
+            padding: 28px 20px;
+            min-height: 260px;
+        }
+
+        #fragmento-anim-flash {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            opacity: 0;
+            background: #fff;
+            z-index: 3;
+        }
+
+        #fragmento-anim-flash.fragmento-anim-flash--on {
+            animation: fragmento-destello 0.48s ease-out forwards;
+        }
+
+        @keyframes fragmento-destello {
+            0% { opacity: 0; }
+            40% { opacity: 0.92; }
+            100% { opacity: 0; }
+        }
+
+        #fragmento-anim-resultado {
+            display: none;
+            width: 100%;
+            flex: 1 1 auto;
+            align-items: center;
+            justify-content: center;
+            padding: 20px 16px 24px;
+        }
+
+        .fragmento-anim-resultado-wrap {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-fragmentos-bloque-titulo {
+            margin: 14px 0 6px;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.95rem;
+            letter-spacing: 0.04em;
+            color: #b8f0ff;
+        }
+
+        .modal-fragmentos-bloque-titulo:first-child {
+            margin-top: 0;
+        }
+    </style>
+
     <!-- Firebase SDK Version 8.x -->
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
@@ -42,6 +126,7 @@
             <button id="tab-mejora-clasica" class="btn faccion-tab active" type="button">Mejora clásica</button>
             <button id="tab-destruir-repetidas" class="btn faccion-tab" type="button">Destruir cartas repetidas</button>
             <button id="tab-mejoras-objetos" class="btn faccion-tab" type="button">Mejoras especiales</button>
+            <button id="tab-fragmentos" class="btn faccion-tab" type="button">Fragmentos</button>
         </div>
         <!-- Mensaje de error o instrucciones -->
         <div id="mensaje" class="alert alert-warning" style="display: none;"></div>
@@ -89,6 +174,30 @@
             </div>
             <div id="contenedor-mejoras-objetos-todas" class="contenedor-cartas"></div>
         </div>
+
+        <div id="seccion-fragmentos" class="mt-4 p-3" style="display:none; background: rgba(8, 18, 36, 0.76); border: 1px solid rgba(255, 200, 120, 0.28); border-radius: 12px;">
+            <h3 style="margin-bottom: 12px;">Fragmentos</h3>
+            <div id="resumen-fragmentos" class="mb-3 resumen-objetos-mejorar" style="color:#dff8ff;">
+                <div class="resumen-objetos-mejorar-fila">
+                    <span id="contador-fragmento-elite" class="resumen-objeto-chip"></span>
+                    <span id="contador-fragmento-legendario" class="resumen-objeto-chip"></span>
+                </div>
+            </div>
+            <p class="text-muted small mb-2" style="color:#9ecfff !important;">Solo cartas <strong>6★</strong> y <strong>7★</strong>. Pulsa <strong>Mejorar</strong> y elige ascender a élite (7★) o legendario (8★).</p>
+            <div class="mejoras-objetos-toolbar mb-3">
+                <div class="faccion-tabs mb-2" role="tablist" aria-label="Facción fragmentos">
+                    <button type="button" id="tab-fragmentos-heroes" class="btn faccion-tab active" data-faccion="H">Héroes</button>
+                    <button type="button" id="tab-fragmentos-villanos" class="btn faccion-tab" data-faccion="V">Villanos</button>
+                </div>
+                <div class="d-flex align-items-center" style="gap:6px; flex-wrap:wrap;">
+                    <div class="d-flex align-items-center" style="gap:6px; padding:6px 10px; border:1px solid rgba(255, 200, 120, 0.35); border-radius:10px; background:rgba(8, 20, 40, 0.55);">
+                        <input id="ordenar-poder-fragmentos" type="checkbox" style="transform:scale(1.08);">
+                        <label for="ordenar-poder-fragmentos" style="margin:0; font-size:0.82rem; color:#dff8ff; white-space:nowrap;">Ordenar por poder</label>
+                    </div>
+                </div>
+            </div>
+            <div id="contenedor-fragmentos-todas" class="contenedor-cartas"></div>
+        </div>
     </div>
 
     <div id="modal-combinar-duplicados" class="modal-combinar-duplicados" style="display:none;">
@@ -117,6 +226,28 @@
             <div id="modal-seleccion-objeto-filas" class="modal-seleccion-objeto-filas"></div>
             <div class="text-center mt-3">
                 <button type="button" id="btn-cerrar-seleccion-objeto" class="btn btn-secondary">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-seleccion-fragmentos-mejora" class="modal modal-seleccion-objeto-mejora" style="display:none; position:fixed; inset:0; z-index:2005; background:rgba(0,0,0,0.72); justify-content:center; align-items:center;">
+        <div class="modal-seleccion-objeto-mejora-inner">
+            <h4 class="text-center mb-2">Mejora con fragmentos</h4>
+            <p id="modal-fragmentos-subtitulo" class="text-center small mb-3" style="color:#9edcff;"></p>
+            <div id="modal-fragmentos-filas" class="modal-seleccion-objeto-filas"></div>
+            <div class="text-center mt-3">
+                <button type="button" id="btn-cerrar-seleccion-fragmentos" class="btn btn-secondary">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-animacion-fragmento" role="dialog" aria-modal="true" aria-label="Revelación de mejora con fragmentos">
+        <div class="modal-anim-fragmento-inner">
+            <div id="fragmento-anim-fase-icono"></div>
+            <div id="fragmento-anim-flash" aria-hidden="true"></div>
+            <div id="fragmento-anim-resultado"></div>
+            <div class="text-center pb-3" style="width:100%;">
+                <button type="button" id="btn-cerrar-animacion-fragmento" class="btn btn-primary" style="display:none;">Cerrar</button>
             </div>
         </div>
     </div>

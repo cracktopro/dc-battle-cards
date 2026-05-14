@@ -12,6 +12,35 @@ let adminCartaObjetivoIndex = -1;
 let adminBusquedaCartas = '';
 const COLOR_PRINCIPAL_DEFAULT = { r: 0, g: 123, b: 255 };
 
+/** Coherente con `jugarPartida.js` / `cartas.js` (combate y colección hasta 8★). */
+const ADMIN_NIVEL_CARTA_MAX = 8;
+/** Misma ventana horaria que eventos VS BOT y eventos coop online (`ROTACION_EVENTOS_MS`). */
+const ADMIN_ROTACION_EVENTOS_MS = 60 * 60 * 1000;
+const ADMIN_VERSION_ROT_EVENTOS = 'event-rotation-v1';
+const ADMIN_VERSION_ROT_EVENTOS_COOP = 'event-rotation-coop-online-v1';
+const ADMIN_VERSION_ROT_ASALTOS = 'asaltos-rotation-v2-monday';
+
+function adminObtenerInicioSemanaLunesLocalMs(ahora = Date.now()) {
+    const t = new Date(ahora);
+    const d = new Date(t.getFullYear(), t.getMonth(), t.getDate());
+    const dow = d.getDay();
+    d.setDate(d.getDate() - ((dow + 6) % 7));
+    d.setHours(0, 0, 0, 0);
+    return d.getTime();
+}
+
+function adminClavesRotacionEventosActivas() {
+    const idVentana = Math.floor(Date.now() / ADMIN_ROTACION_EVENTOS_MS);
+    return [
+        `${ADMIN_VERSION_ROT_EVENTOS}-${idVentana}`,
+        `${ADMIN_VERSION_ROT_EVENTOS_COOP}-${idVentana}`,
+    ];
+}
+
+function adminClaveRotacionAsaltosActual() {
+    return `${ADMIN_VERSION_ROT_ASALTOS}-${adminObtenerInicioSemanaLunesLocalMs()}`;
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
     usuarioActual = JSON.parse(localStorage.getItem('usuario'));
     emailActual = localStorage.getItem('email');
@@ -160,9 +189,14 @@ function configurarEventos() {
     document.getElementById('admin-target-mejora-especial')?.addEventListener('input', sincronizarCamposBasicosObjetivoAdmin);
     document.getElementById('admin-target-mejora-suprema')?.addEventListener('input', sincronizarCamposBasicosObjetivoAdmin);
     document.getElementById('admin-target-mejora-definitiva')?.addEventListener('input', sincronizarCamposBasicosObjetivoAdmin);
+    document.getElementById('admin-target-mejora-elite')?.addEventListener('input', sincronizarCamposBasicosObjetivoAdmin);
+    document.getElementById('admin-target-mejora-legendaria')?.addEventListener('input', sincronizarCamposBasicosObjetivoAdmin);
     obtenerClavesSobreInventarioAdmin().forEach((key) => {
         document.getElementById(`admin-target-${key}`)?.addEventListener('input', sincronizarCamposBasicosObjetivoAdmin);
     });
+    document.getElementById('admin-reset-eventos-btn')?.addEventListener('click', adminReiniciarProgresoEventosRotacionActiva);
+    document.getElementById('admin-reset-asaltos-btn')?.addEventListener('click', adminReiniciarProgresoAsaltosRotacionActiva);
+    document.getElementById('admin-reset-desafios-btn')?.addEventListener('click', adminReiniciarDesafiosCompletados);
 
     document.getElementById('color-principal-input')?.addEventListener('input', actualizarPreviewColorPrincipal);
     document.getElementById('color-principal-input')?.addEventListener('change', actualizarPreviewColorPrincipal);
@@ -499,7 +533,7 @@ async function adminObtenerTodasCartas() {
 }
 
 function escalarCartaANivel(carta, nivelObjetivo) {
-    const nivelNormalizado = Math.min(Math.max(Number(nivelObjetivo || 1), 1), 6);
+    const nivelNormalizado = Math.min(Math.max(Number(nivelObjetivo || 1), 1), ADMIN_NIVEL_CARTA_MAX);
     const nivelActual = Math.max(1, Number(carta.Nivel || 1));
     const poderActual = Number(carta.Poder || 0);
     const saludActualBase = Number(carta.SaludMax ?? carta.Salud ?? carta.Poder ?? 0);
@@ -521,7 +555,7 @@ function escalarCartaANivel(carta, nivelObjetivo) {
 }
 
 async function adminMejorarTodasCartas() {
-    const nivel = Math.min(Math.max(Number(document.getElementById('admin-nivel-cartas').value || 1), 1), 6);
+    const nivel = Math.min(Math.max(Number(document.getElementById('admin-nivel-cartas').value || 1), 1), ADMIN_NIVEL_CARTA_MAX);
     usuarioActual.cartas = (usuarioActual.cartas || []).map(carta => escalarCartaANivel(carta, nivel));
     await persistirUsuario(`Todas tus cartas se han ajustado a nivel ${nivel}.`, 'success');
 }
@@ -567,6 +601,8 @@ function normalizarUsuarioObjetivoAdmin() {
     adminUsuarioObjetivo.objetos.mejoraEspecial = Math.max(0, Math.floor(Number(adminUsuarioObjetivo.objetos.mejoraEspecial || 0)));
     adminUsuarioObjetivo.objetos.mejoraSuprema = Math.max(0, Math.floor(Number(adminUsuarioObjetivo.objetos.mejoraSuprema || 0)));
     adminUsuarioObjetivo.objetos.mejoraDefinitiva = Math.max(0, Math.floor(Number(adminUsuarioObjetivo.objetos.mejoraDefinitiva || 0)));
+    adminUsuarioObjetivo.objetos.mejoraElite = Math.max(0, Math.floor(Number(adminUsuarioObjetivo.objetos.mejoraElite || 0)));
+    adminUsuarioObjetivo.objetos.mejoraLegendaria = Math.max(0, Math.floor(Number(adminUsuarioObjetivo.objetos.mejoraLegendaria || 0)));
     obtenerClavesSobreInventarioAdmin().forEach((key) => {
         adminUsuarioObjetivo.objetos[key] = Math.max(0, Math.floor(Number(adminUsuarioObjetivo.objetos[key] || 0)));
     });
@@ -579,12 +615,16 @@ function renderizarCamposBasicosObjetivoAdmin() {
     const mejoraEspEl = document.getElementById('admin-target-mejora-especial');
     const mejoraSupremaEl = document.getElementById('admin-target-mejora-suprema');
     const mejoraDefinitivaEl = document.getElementById('admin-target-mejora-definitiva');
+    const mejoraEliteEl = document.getElementById('admin-target-mejora-elite');
+    const mejoraLegendariaEl = document.getElementById('admin-target-mejora-legendaria');
     if (!adminUsuarioObjetivo) {
         if (puntosEl) puntosEl.value = '0';
         if (mejoraEl) mejoraEl.value = '0';
         if (mejoraEspEl) mejoraEspEl.value = '0';
         if (mejoraSupremaEl) mejoraSupremaEl.value = '0';
         if (mejoraDefinitivaEl) mejoraDefinitivaEl.value = '0';
+        if (mejoraEliteEl) mejoraEliteEl.value = '0';
+        if (mejoraLegendariaEl) mejoraLegendariaEl.value = '0';
         obtenerClavesSobreInventarioAdmin().forEach((key) => {
             const el = document.getElementById(`admin-target-${key}`);
             if (el) el.value = '0';
@@ -597,6 +637,8 @@ function renderizarCamposBasicosObjetivoAdmin() {
     if (mejoraEspEl) mejoraEspEl.value = String(adminUsuarioObjetivo.objetos.mejoraEspecial || 0);
     if (mejoraSupremaEl) mejoraSupremaEl.value = String(adminUsuarioObjetivo.objetos.mejoraSuprema || 0);
     if (mejoraDefinitivaEl) mejoraDefinitivaEl.value = String(adminUsuarioObjetivo.objetos.mejoraDefinitiva || 0);
+    if (mejoraEliteEl) mejoraEliteEl.value = String(adminUsuarioObjetivo.objetos.mejoraElite || 0);
+    if (mejoraLegendariaEl) mejoraLegendariaEl.value = String(adminUsuarioObjetivo.objetos.mejoraLegendaria || 0);
     obtenerClavesSobreInventarioAdmin().forEach((key) => {
         const el = document.getElementById(`admin-target-${key}`);
         if (el) el.value = String(adminUsuarioObjetivo.objetos[key] || 0);
@@ -610,6 +652,8 @@ function sincronizarCamposBasicosObjetivoAdmin() {
     const mejoraEspEl = document.getElementById('admin-target-mejora-especial');
     const mejoraSupremaEl = document.getElementById('admin-target-mejora-suprema');
     const mejoraDefinitivaEl = document.getElementById('admin-target-mejora-definitiva');
+    const mejoraEliteEl = document.getElementById('admin-target-mejora-elite');
+    const mejoraLegendariaEl = document.getElementById('admin-target-mejora-legendaria');
     adminUsuarioObjetivo.puntos = Math.max(0, Math.floor(Number(puntosEl?.value || 0)));
     adminUsuarioObjetivo.objetos = (adminUsuarioObjetivo.objetos && typeof adminUsuarioObjetivo.objetos === 'object')
         ? adminUsuarioObjetivo.objetos
@@ -618,6 +662,8 @@ function sincronizarCamposBasicosObjetivoAdmin() {
     adminUsuarioObjetivo.objetos.mejoraEspecial = Math.max(0, Math.floor(Number(mejoraEspEl?.value || 0)));
     adminUsuarioObjetivo.objetos.mejoraSuprema = Math.max(0, Math.floor(Number(mejoraSupremaEl?.value || 0)));
     adminUsuarioObjetivo.objetos.mejoraDefinitiva = Math.max(0, Math.floor(Number(mejoraDefinitivaEl?.value || 0)));
+    adminUsuarioObjetivo.objetos.mejoraElite = Math.max(0, Math.floor(Number(mejoraEliteEl?.value || 0)));
+    adminUsuarioObjetivo.objetos.mejoraLegendaria = Math.max(0, Math.floor(Number(mejoraLegendariaEl?.value || 0)));
     obtenerClavesSobreInventarioAdmin().forEach((key) => {
         const el = document.getElementById(`admin-target-${key}`);
         adminUsuarioObjetivo.objetos[key] = Math.max(0, Math.floor(Number(el?.value || 0)));
@@ -688,7 +734,7 @@ async function cargarUsuarioObjetivoAdmin() {
 }
 
 function crearCartaAdminDesdeCatalogo(cartaCatalogo, nivelObjetivo = 1) {
-    const nivel = Math.min(Math.max(Number(nivelObjetivo || 1), 1), 6);
+    const nivel = Math.min(Math.max(Number(nivelObjetivo || 1), 1), ADMIN_NIVEL_CARTA_MAX);
     const base = {
         ...cartaCatalogo,
         Nivel: 1,
@@ -710,15 +756,24 @@ function crearCardAdminElemento(carta, indexReal) {
 
     const estrellasDiv = document.createElement('div');
     estrellasDiv.className = 'estrellas-carta';
-    const nivel = Math.min(Math.max(Number(carta?.Nivel || 1), 1), 6);
-    for (let i = 0; i < nivel; i += 1) {
-        const estrella = document.createElement('img');
-        estrella.className = 'estrella';
-        estrella.src = 'https://i.ibb.co/zZt4R3x/star-level.png';
-        estrella.alt = 'star';
-        estrellasDiv.appendChild(estrella);
+    const nivel = Math.min(ADMIN_NIVEL_CARTA_MAX, Math.max(Number(carta?.Nivel || 1), 1));
+    const cartaNivelUi = { ...carta, Nivel: nivel };
+    if (typeof window.dcRellenarEstrellasCartaCompleta === 'function') {
+        window.dcRellenarEstrellasCartaCompleta(estrellasDiv, cartaNivelUi);
+    } else {
+        const nVis = Math.min(nivel, 6);
+        for (let i = 0; i < nVis; i += 1) {
+            const estrella = document.createElement('img');
+            estrella.className = 'estrella';
+            estrella.src = 'https://i.ibb.co/zZt4R3x/star-level.png';
+            estrella.alt = 'star';
+            estrellasDiv.appendChild(estrella);
+        }
     }
     visual.appendChild(estrellasDiv);
+    if (typeof window.dcAplicarClasesNivelCartaCompleta === 'function') {
+        window.dcAplicarClasesNivelCartaCompleta(visual, cartaNivelUi);
+    }
 
     const habilidad = String(carta?.SkillName || carta?.NombreHabilidad || '').trim();
     const saludMax = Number(carta?.SaludMax || carta?.Salud || 0);
@@ -812,10 +867,58 @@ function adminCambiarNivelCartaObjetivo(delta) {
     }
     const carta = adminUsuarioObjetivo.cartas[adminCartaObjetivoIndex];
     if (!carta) return;
-    const nivelActual = Math.min(Math.max(Number(carta.Nivel || 1), 1), 6);
-    const nuevoNivel = Math.min(Math.max(nivelActual + Number(delta || 0), 1), 6);
+    const nivelActual = Math.min(ADMIN_NIVEL_CARTA_MAX, Math.max(Number(carta.Nivel || 1), 1));
+    const nuevoNivel = Math.min(Math.max(nivelActual + Number(delta || 0), 1), ADMIN_NIVEL_CARTA_MAX);
     adminUsuarioObjetivo.cartas[adminCartaObjetivoIndex] = escalarCartaANivel(carta, nuevoNivel);
     renderizarCartasAdminObjetivo();
+}
+
+function adminReiniciarProgresoEventosRotacionActiva() {
+    if (!adminUsuarioObjetivo) {
+        mostrarMensaje('Carga primero un usuario objetivo.', 'warning');
+        return;
+    }
+    if (!window.confirm('¿Reiniciar eventos VS BOT y eventos cooperativos online ya completados en la rotación actual (ventana de 1 h)? Los demás periodos no se modifican.')) {
+        return;
+    }
+    const prev = (adminUsuarioObjetivo.eventosJugadosPorRotacion && typeof adminUsuarioObjetivo.eventosJugadosPorRotacion === 'object')
+        ? { ...adminUsuarioObjetivo.eventosJugadosPorRotacion }
+        : {};
+    adminClavesRotacionEventosActivas().forEach((k) => {
+        delete prev[k];
+    });
+    adminUsuarioObjetivo.eventosJugadosPorRotacion = prev;
+    mostrarMensaje('Progreso de eventos de la rotación actual borrado en memoria. Pulsa «Guardar en Firebase» para persistir.', 'success');
+}
+
+function adminReiniciarProgresoAsaltosRotacionActiva() {
+    if (!adminUsuarioObjetivo) {
+        mostrarMensaje('Carga primero un usuario objetivo.', 'warning');
+        return;
+    }
+    if (!window.confirm('¿Reiniciar todos los asaltos completados de la semana en curso (lunes–domingo local)? Otras semanas guardadas no se modifican.')) {
+        return;
+    }
+    const k = adminClaveRotacionAsaltosActual();
+    const prev = (adminUsuarioObjetivo.asaltosCompletadosPorRotacion && typeof adminUsuarioObjetivo.asaltosCompletadosPorRotacion === 'object')
+        ? { ...adminUsuarioObjetivo.asaltosCompletadosPorRotacion }
+        : {};
+    delete prev[k];
+    adminUsuarioObjetivo.asaltosCompletadosPorRotacion = prev;
+    mostrarMensaje('Progreso de asaltos de la semana actual borrado en memoria. Pulsa «Guardar en Firebase» para persistir.', 'success');
+}
+
+function adminReiniciarDesafiosCompletados() {
+    if (!adminUsuarioObjetivo) {
+        mostrarMensaje('Carga primero un usuario objetivo.', 'warning');
+        return;
+    }
+    if (!window.confirm('¿Borrar todas las listas de desafíos completados (formato clásico y V2)?')) {
+        return;
+    }
+    adminUsuarioObjetivo.desafiosCompletados = [];
+    adminUsuarioObjetivo.desafiosCompletadosV2 = [];
+    mostrarMensaje('Desafíos completados reiniciados en memoria. Pulsa «Guardar en Firebase» para persistir.', 'success');
 }
 
 async function guardarUsuarioObjetivoAdmin() {

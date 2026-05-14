@@ -376,6 +376,8 @@ function iniciarDesafio(desafio, cartasSeleccionadas) {
     } catch (_e) {
         /* noop */
     }
+    localStorage.removeItem('asaltoActivo');
+    localStorage.removeItem('partidaModo');
     localStorage.setItem('desafioActivo', JSON.stringify(desafio));
     localStorage.setItem('dificultad', String(desafio.dificultad));
     localStorage.setItem('mazoJugador', JSON.stringify({ Cartas: cartasSeleccionadas }));
@@ -550,20 +552,26 @@ function renderizarCartasSeleccionDesafio() {
         const carta = item.carta;
         const cartaDiv = document.createElement('div');
         cartaDiv.className = `carta-mini ${seleccionCartasDesafio.has(item.index) ? 'seleccionada' : ''}`;
-        if (Number(carta.Nivel || 1) >= 6) {
+        if (typeof window.dcAplicarClasesNivelCartaCompleta === 'function') {
+            window.dcAplicarClasesNivelCartaCompleta(cartaDiv, carta);
+        } else if (Number(carta.Nivel || 1) >= 6) {
             cartaDiv.classList.add('nivel-legendaria');
         }
         cartaDiv.style.backgroundImage = `url(${obtenerImagenCarta(carta)})`;
 
         const estrellasDiv = document.createElement('div');
         estrellasDiv.className = 'estrellas-carta';
-        const nivel = Number(carta.Nivel || 1);
-        for (let i = 0; i < nivel; i++) {
-            const estrella = document.createElement('img');
-            estrella.className = 'estrella';
-            estrella.src = 'https://i.ibb.co/zZt4R3x/star-level.png';
-            estrella.alt = 'star';
-            estrellasDiv.appendChild(estrella);
+        if (typeof window.dcRellenarEstrellasCartaCompleta === 'function') {
+            window.dcRellenarEstrellasCartaCompleta(estrellasDiv, carta, {});
+        } else {
+            const nivel = Number(carta.Nivel || 1);
+            for (let i = 0; i < nivel; i++) {
+                const estrella = document.createElement('img');
+                estrella.className = 'estrella';
+                estrella.src = 'https://i.ibb.co/zZt4R3x/star-level.png';
+                estrella.alt = 'star';
+                estrellasDiv.appendChild(estrella);
+            }
         }
 
         const detallesDiv = document.createElement('div');

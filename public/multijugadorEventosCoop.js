@@ -676,18 +676,26 @@
                 const cartaDiv = document.createElement('div');
                 cartaDiv.className = `carta-mini ${seleccionIndices.has(item.index) ? 'seleccionada' : ''}`;
                 if (noDisponible) cartaDiv.classList.add('coop-carta-no-disponible');
-                if (Number(carta.Nivel || 1) >= 6) cartaDiv.classList.add('nivel-legendaria');
+                if (typeof window.dcAplicarClasesNivelCartaCompleta === 'function') {
+                    window.dcAplicarClasesNivelCartaCompleta(cartaDiv, carta);
+                } else if (Number(carta.Nivel || 1) >= 6) {
+                    cartaDiv.classList.add('nivel-legendaria');
+                }
                 cartaDiv.style.backgroundImage = `url(${obtenerImagenCarta(carta)})`;
 
                 const estrellasDiv = document.createElement('div');
                 estrellasDiv.className = 'estrellas-carta';
-                const nivel = Number(carta.Nivel || 1);
-                for (let i = 0; i < nivel; i += 1) {
-                    const estrella = document.createElement('img');
-                    estrella.className = 'estrella';
-                    estrella.src = 'https://i.ibb.co/zZt4R3x/star-level.png';
-                    estrella.alt = 'star';
-                    estrellasDiv.appendChild(estrella);
+                if (typeof window.dcRellenarEstrellasCartaCompleta === 'function') {
+                    window.dcRellenarEstrellasCartaCompleta(estrellasDiv, carta, {});
+                } else {
+                    const nivel = Number(carta.Nivel || 1);
+                    for (let i = 0; i < nivel; i += 1) {
+                        const estrella = document.createElement('img');
+                        estrella.className = 'estrella';
+                        estrella.src = 'https://i.ibb.co/zZt4R3x/star-level.png';
+                        estrella.alt = 'star';
+                        estrellasDiv.appendChild(estrella);
+                    }
                 }
 
                 const detallesDiv = document.createElement('div');

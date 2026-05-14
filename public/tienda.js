@@ -23,35 +23,85 @@ const OBJETOS_MEJORAS_TIENDA = [
         nombre: 'Mejora de carta',
         descripcion: 'Solo usable en cartas nivel 1 a 3. Permite subir hasta nivel 4.',
         precio: 500,
-        icono: '/resources/icons/mejora.png'
+        icono: '/resources/icons/mejora.png',
+        filaTienda: 1
     },
     {
         id: 'obj-mejora-especial',
         nombre: 'Mejora especial',
         descripcion: 'Solo usable en cartas de nivel 5. Eleva la carta a nivel 6.',
         precio: 3000,
-        icono: '/resources/icons/mejora_especial.png'
+        icono: '/resources/icons/mejora_especial.png',
+        filaTienda: 1
     },
     {
         id: 'obj-mejora-suprema',
         nombre: 'Mejora suprema',
         descripcion: 'Mejora cualquier carta de héroe o villano al nivel 5 de forma inmediata.',
         precio: 5000,
-        icono: '/resources/icons/mejora_suprema.png'
+        icono: '/resources/icons/mejora_suprema.png',
+        filaTienda: 1
     },
     {
         id: 'obj-mejora-definitiva',
         nombre: 'Mejora definitiva',
         descripcion: 'Mejora cualquier carta de héroe o villano al nivel 6 de forma inmediata.',
         precio: 10000,
-        icono: '/resources/icons/mejora_definitiva.png'
+        icono: '/resources/icons/mejora_definitiva.png',
+        filaTienda: 1
+    },
+    {
+        id: 'obj-fragmento-mejora-elite',
+        nombre: 'Mejora élite',
+        descripcion: 'Este objeto incluye un único fragmento de mejora élite que puedes utilizar para subir una carta de nivel 6 a nivel Élite.',
+        precio: 0,
+        icono: '/resources/icons/mejora_elite.png',
+        filaTienda: 2,
+        esFragmentoMejora: true,
+        precioMejoraCarta: 10
+    },
+    {
+        id: 'obj-fragmento-mejora-legendaria',
+        nombre: 'Mejora legendaria',
+        descripcion: 'Este objeto incluye un único fragmento de mejora legendaria que puedes utilizar para subir una carta de nivel Élite a nivel Legendario.',
+        precio: 0,
+        icono: '/resources/icons/mejora_legendaria.png',
+        filaTienda: 2,
+        esFragmentoMejora: true,
+        precioMejoraCarta: 20
+    },
+    {
+        id: 'obj-cofre-elite',
+        nombre: 'Cofre élite',
+        descripcion: 'Este cofre contiene 12 fragmentos de mejora que pueden utilizarse para subir de nivel cartas de nivel 6 a nivel Élite.',
+        precio: 0,
+        icono: '/resources/icons/cofre_elite.png',
+        filaTienda: 2,
+        esCofre: true,
+        precioMejoraEspecial: 10
+    },
+    {
+        id: 'obj-cofre-legendario',
+        nombre: 'Cofre legendario',
+        descripcion: 'Este cofre contiene 12 fragmentos de mejora legendaria que pueden utilizarse para subir una carta de nivel Élite a nivel Legendario.',
+        precio: 0,
+        icono: '/resources/icons/cofre_legendario.png',
+        filaTienda: 2,
+        esCofre: true,
+        precioMejoraEspecial: 20
     }
 ];
+const ICONO_MEJORA_ESPECIAL_TIENDA = '/resources/icons/mejora_especial.png';
+const ICONO_MEJORA_CARTA_TIENDA = '/resources/icons/mejora.png';
 const ICONOS_OBJETO_POR_ID = {
     'obj-mejora-carta': '/resources/icons/mejora.png',
     'obj-mejora-especial': '/resources/icons/mejora_especial.png',
     'obj-mejora-suprema': '/resources/icons/mejora_suprema.png',
     'obj-mejora-definitiva': '/resources/icons/mejora_definitiva.png',
+    'obj-fragmento-mejora-elite': '/resources/icons/mejora_elite.png',
+    'obj-fragmento-mejora-legendaria': '/resources/icons/mejora_legendaria.png',
+    'obj-cofre-elite': '/resources/icons/cofre_elite.png',
+    'obj-cofre-legendario': '/resources/icons/cofre_legendario.png',
     ...(typeof window.DC_SOBRES_ICONOS_POR_ID === 'object' && window.DC_SOBRES_ICONOS_POR_ID ? window.DC_SOBRES_ICONOS_POR_ID : {})
 };
 const ICONO_MONEDA = '/resources/icons/moneda.png';
@@ -103,6 +153,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     usuarioActual.objetos.mejoraEspecial = Number(usuarioActual.objetos.mejoraEspecial || 0);
     usuarioActual.objetos.mejoraSuprema = Number(usuarioActual.objetos.mejoraSuprema || 0);
     usuarioActual.objetos.mejoraDefinitiva = Number(usuarioActual.objetos.mejoraDefinitiva || 0);
+    usuarioActual.objetos.mejoraElite = Number(usuarioActual.objetos.mejoraElite || 0);
+    usuarioActual.objetos.mejoraLegendaria = Number(usuarioActual.objetos.mejoraLegendaria || 0);
     if (typeof window.DC_SOBRES_MEZCLAR_INVENTARIO === 'function') {
         usuarioActual.objetos = window.DC_SOBRES_MEZCLAR_INVENTARIO(usuarioActual.objetos);
     }
@@ -490,18 +542,21 @@ function actualizarFechaUI() {
     // Reemplazado por temporizador de rotación.
 }
 
-function crearEstrellasNivel(nivel) {
+function crearEstrellasDesdeCartaTienda(carta) {
     const estrellasDiv = document.createElement('div');
     estrellasDiv.classList.add('estrellas-carta');
-
-    for (let i = 0; i < nivel; i++) {
-        const estrella = document.createElement('img');
-        estrella.classList.add('estrella');
-        estrella.src = 'https://i.ibb.co/zZt4R3x/star-level.png';
-        estrella.alt = 'star';
-        estrellasDiv.appendChild(estrella);
+    if (typeof window.dcRellenarEstrellasCartaCompleta === 'function') {
+        window.dcRellenarEstrellasCartaCompleta(estrellasDiv, carta, {});
+    } else {
+        const nivel = Math.max(1, Number(carta?.Nivel || 1));
+        for (let i = 0; i < nivel; i++) {
+            const estrella = document.createElement('img');
+            estrella.classList.add('estrella');
+            estrella.src = 'https://i.ibb.co/zZt4R3x/star-level.png';
+            estrella.alt = 'star';
+            estrellasDiv.appendChild(estrella);
+        }
     }
-
     return estrellasDiv;
 }
 
@@ -579,7 +634,9 @@ function crearItemOfertaCartaTienda(oferta, seccionLista, indice) {
 
     const preview = document.createElement('div');
     preview.className = 'preview-carta preview-carta-tienda';
-    if (Number(oferta.carta.Nivel || 1) >= 6) {
+    if (typeof window.dcAplicarClasesNivelCartaCompleta === 'function') {
+        window.dcAplicarClasesNivelCartaCompleta(preview, oferta.carta);
+    } else if (Number(oferta.carta.Nivel || 1) >= 6) {
         preview.classList.add('nivel-legendaria');
     }
     preview.style.backgroundImage = `url(${obtenerImagenCarta(oferta.carta)})`;
@@ -592,7 +649,7 @@ function crearItemOfertaCartaTienda(oferta, seccionLista, indice) {
         preview.appendChild(ribbon);
     }
 
-    preview.appendChild(crearEstrellasNivel(oferta.nivel));
+    preview.appendChild(crearEstrellasDesdeCartaTienda(oferta.carta));
     preview.appendChild(crearDetallesCarta(oferta.carta));
 
     const badgeAfiliacion = window.crearBadgeAfiliacionCarta
@@ -707,13 +764,27 @@ function renderizarObjetosTienda() {
     contenedorPadre.classList.add('tienda-objetos-grid-mezclas');
 
     const lista = obtenerListaObjetosMejoras();
-    const grid = document.createElement('div');
-    grid.className = 'tienda-objetos-fila tienda-objetos-mejoras tienda-objetos-cuadricula';
+    const filaSuperior = lista.filter((o) => Number(o.filaTienda) !== 2);
+    const filaInferior = lista.filter((o) => Number(o.filaTienda) === 2);
 
-    lista.forEach((objeto) => {
-        grid.appendChild(crearTarjetaObjetoTienda(objeto));
+    const wrap = document.createElement('div');
+    wrap.className = 'tienda-objetos-dos-filas';
+
+    const gridSup = document.createElement('div');
+    gridSup.className = 'tienda-objetos-fila tienda-objetos-fila-superior tienda-objetos-cuadricula';
+    filaSuperior.forEach((objeto) => {
+        gridSup.appendChild(crearTarjetaObjetoTienda(objeto));
     });
-    contenedorPadre.appendChild(grid);
+
+    const gridInf = document.createElement('div');
+    gridInf.className = 'tienda-objetos-fila tienda-objetos-fila-inferior tienda-objetos-cuadricula';
+    filaInferior.forEach((objeto) => {
+        gridInf.appendChild(crearTarjetaObjetoTienda(objeto));
+    });
+
+    wrap.appendChild(gridSup);
+    wrap.appendChild(gridInf);
+    contenedorPadre.appendChild(wrap);
 }
 
 function renderizarSobresTienda() {
@@ -759,63 +830,157 @@ function renderizarSobresTienda() {
 
 function crearTarjetaObjetoTienda(objeto) {
     const esSobre = objeto.id && String(objeto.id).startsWith('obj-sobre-');
+    const esCofre = Boolean(objeto.esCofre);
+    const esFragmento = Boolean(objeto.esFragmentoMejora);
     const item = document.createElement('div');
-    item.className = esSobre ? 'objeto-tienda objeto-tienda-sobre' : 'objeto-tienda objeto-tienda-mejora';
-
-    if (!esSobre) {
-        const header = document.createElement('div');
-        header.className = 'objeto-tienda-mejora-cabecera';
-
-        const icono = document.createElement('img');
-        icono.className = 'objeto-tienda-mejora-icono';
-        icono.src = objeto.icono || '';
-        icono.alt = objeto.nombre;
-
-        const titWrap = document.createElement('div');
-        titWrap.className = 'objeto-tienda-mejora-texto-top';
-        const nombre = document.createElement('h5');
-        nombre.textContent = objeto.nombre;
-        titWrap.appendChild(nombre);
-
-        header.appendChild(icono);
-        header.appendChild(titWrap);
-        item.appendChild(header);
-
-        const descripcion = document.createElement('p');
-        descripcion.className = 'objeto-tienda-desc';
-        descripcion.textContent = objeto.descripcion;
-        item.appendChild(descripcion);
+    if (esSobre) {
+        item.className = 'objeto-tienda objeto-tienda-sobre objeto-tienda--pie-alineado';
+    } else if (esCofre) {
+        item.className = 'objeto-tienda objeto-tienda-mejora objeto-tienda-cofre objeto-tienda--pie-alineado';
+    } else if (esFragmento) {
+        item.className = 'objeto-tienda objeto-tienda-mejora objeto-tienda-fragmento-mejora objeto-tienda--pie-alineado';
     } else {
+        item.className = 'objeto-tienda objeto-tienda-mejora objeto-tienda-mejora-catalogo objeto-tienda--pie-alineado';
+    }
+
+    if (esCofre) {
+        const wrapImg = document.createElement('div');
+        wrapImg.className = 'objeto-tienda-cofre-imagen-wrap';
+        const imgCofre = document.createElement('img');
+        imgCofre.className = 'objeto-tienda-cofre-imagen';
+        imgCofre.src = objeto.icono || '';
+        imgCofre.alt = objeto.nombre;
+        wrapImg.appendChild(imgCofre);
+        item.appendChild(wrapImg);
+
+        const cuerpo = document.createElement('div');
+        cuerpo.className = 'objeto-tienda-cuerpo-principal';
+        const nombreCofre = document.createElement('h5');
+        nombreCofre.textContent = objeto.nombre;
+        const descripcionCofre = document.createElement('p');
+        descripcionCofre.className = 'objeto-tienda-desc';
+        descripcionCofre.textContent = objeto.descripcion;
+        cuerpo.appendChild(nombreCofre);
+        cuerpo.appendChild(descripcionCofre);
+        item.appendChild(cuerpo);
+    } else if (esFragmento) {
+        const wrapImg = document.createElement('div');
+        wrapImg.className = 'objeto-tienda-fragmento-imagen-wrap';
+        const imgFrag = document.createElement('img');
+        imgFrag.className = 'objeto-tienda-fragmento-imagen';
+        imgFrag.src = objeto.icono || '';
+        imgFrag.alt = objeto.nombre;
+        wrapImg.appendChild(imgFrag);
+        item.appendChild(wrapImg);
+
+        const cuerpoFrag = document.createElement('div');
+        cuerpoFrag.className = 'objeto-tienda-cuerpo-principal';
+        const nombreFrag = document.createElement('h5');
+        nombreFrag.textContent = objeto.nombre;
+        const descripcionFrag = document.createElement('p');
+        descripcionFrag.className = 'objeto-tienda-desc';
+        descripcionFrag.textContent = objeto.descripcion;
+        cuerpoFrag.appendChild(nombreFrag);
+        cuerpoFrag.appendChild(descripcionFrag);
+        item.appendChild(cuerpoFrag);
+    } else if (!esSobre) {
+        const wrapImg = document.createElement('div');
+        wrapImg.className = 'objeto-tienda-mejora-catalogo-imagen-wrap';
+        const imgCat = document.createElement('img');
+        imgCat.className = 'objeto-tienda-mejora-catalogo-imagen';
+        imgCat.src = objeto.icono || '';
+        imgCat.alt = objeto.nombre;
+        wrapImg.appendChild(imgCat);
+        item.appendChild(wrapImg);
+
+        const cuerpoCat = document.createElement('div');
+        cuerpoCat.className = 'objeto-tienda-cuerpo-principal';
+        const nombreCat = document.createElement('h5');
+        nombreCat.textContent = objeto.nombre;
+        const descripcionCat = document.createElement('p');
+        descripcionCat.className = 'objeto-tienda-desc';
+        descripcionCat.textContent = objeto.descripcion;
+        cuerpoCat.appendChild(nombreCat);
+        cuerpoCat.appendChild(descripcionCat);
+        item.appendChild(cuerpoCat);
+    } else {
+        const wrapSobre = document.createElement('div');
+        wrapSobre.className = 'objeto-tienda-sobre-imagen-wrap';
         const preview = document.createElement('div');
         preview.className = 'preview-sobre-tienda';
         const url = objeto.icono || '';
         preview.style.backgroundImage = url ? `url(${url})` : 'none';
+        wrapSobre.appendChild(preview);
+        item.appendChild(wrapSobre);
 
+        const cuerpoSobre = document.createElement('div');
+        cuerpoSobre.className = 'objeto-tienda-cuerpo-principal';
         const nombre = document.createElement('h5');
         nombre.className = 'objeto-tienda-nombre-sobre';
         nombre.textContent = objeto.nombre;
-
         const descripcion = document.createElement('p');
         descripcion.className = 'objeto-tienda-desc objeto-tienda-desc-sobre';
         descripcion.textContent = objeto.descripcion;
-
-        item.appendChild(preview);
-        item.appendChild(nombre);
-        item.appendChild(descripcion);
+        cuerpoSobre.appendChild(nombre);
+        cuerpoSobre.appendChild(descripcion);
+        item.appendChild(cuerpoSobre);
     }
 
     const precio = document.createElement('div');
     precio.className = 'precio-item';
-    precio.innerHTML = `Precio: ${objeto.precio} <img src="${ICONO_MONEDA}" alt="Moneda" style="width:18px;height:18px;object-fit:contain;vertical-align:text-bottom;margin-left:4px;">`;
+    const costeEspecial = Number(objeto.precioMejoraEspecial);
+    const costeMejoraCarta = Number(objeto.precioMejoraCarta);
+    if (Number.isFinite(costeEspecial) && costeEspecial > 0) {
+        precio.classList.add('precio-item--mejora-especial');
+        const linea = document.createElement('span');
+        linea.className = 'tienda-precio-objeto-linea';
+        linea.appendChild(document.createTextNode('Precio: '));
+        const iconoCoste = document.createElement('img');
+        iconoCoste.src = ICONO_MEJORA_ESPECIAL_TIENDA;
+        iconoCoste.alt = 'Mejora especial';
+        iconoCoste.className = 'tienda-precio-mejora-especial-icono';
+        const cantTxt = document.createElement('strong');
+        cantTxt.textContent = `×${costeEspecial}`;
+        linea.appendChild(iconoCoste);
+        linea.appendChild(cantTxt);
+        precio.appendChild(linea);
+    } else if (Number.isFinite(costeMejoraCarta) && costeMejoraCarta > 0) {
+        precio.classList.add('precio-item--mejora-carta');
+        const linea = document.createElement('span');
+        linea.className = 'tienda-precio-objeto-linea';
+        linea.appendChild(document.createTextNode('Precio: '));
+        const iconoCoste = document.createElement('img');
+        iconoCoste.src = ICONO_MEJORA_CARTA_TIENDA;
+        iconoCoste.alt = 'Mejora de carta';
+        iconoCoste.className = 'tienda-precio-mejora-carta-icono';
+        const cantTxt = document.createElement('strong');
+        cantTxt.textContent = `×${costeMejoraCarta}`;
+        linea.appendChild(iconoCoste);
+        linea.appendChild(cantTxt);
+        precio.appendChild(linea);
+    } else {
+        precio.innerHTML = `Precio: ${objeto.precio} <img src="${ICONO_MONEDA}" alt="Moneda" style="width:18px;height:18px;object-fit:contain;vertical-align:text-bottom;margin-left:4px;">`;
+    }
 
     const boton = document.createElement('button');
     boton.className = 'btn btn-primary';
     boton.textContent = 'Comprar';
-    boton.disabled = usuarioActual.puntos < objeto.precio;
+    if (Number.isFinite(costeEspecial) && costeEspecial > 0) {
+        const disp = Number(usuarioActual.objetos?.mejoraEspecial || 0);
+        boton.disabled = disp < costeEspecial;
+    } else if (Number.isFinite(costeMejoraCarta) && costeMejoraCarta > 0) {
+        const disp = Number(usuarioActual.objetos?.mejoraCarta || 0);
+        boton.disabled = disp < costeMejoraCarta;
+    } else {
+        boton.disabled = usuarioActual.puntos < objeto.precio;
+    }
     boton.addEventListener('click', () => comprarObjeto(objeto.id));
 
-    item.appendChild(precio);
-    item.appendChild(boton);
+    const pie = document.createElement('div');
+    pie.className = 'objeto-tienda-pie-compra';
+    pie.appendChild(precio);
+    pie.appendChild(boton);
+    item.appendChild(pie);
     return item;
 }
 
@@ -1010,17 +1175,47 @@ async function comprarObjeto(identificador) {
         return;
     }
 
-    if (usuarioActual.puntos < objeto.precio) {
+    const costeEspecial = Number(objeto.precioMejoraEspecial);
+    const costeMejoraCarta = Number(objeto.precioMejoraCarta);
+    const pagaConMejoraEspecial = Number.isFinite(costeEspecial) && costeEspecial > 0;
+    const pagaConMejoraCarta = Number.isFinite(costeMejoraCarta) && costeMejoraCarta > 0;
+
+    if (pagaConMejoraEspecial) {
+        const disp = Number(usuarioActual.objetos?.mejoraEspecial || 0);
+        if (disp < costeEspecial) {
+            mostrarMensaje('No tienes suficientes mejoras especiales para comprar este objeto.', 'danger');
+            return;
+        }
+    } else if (pagaConMejoraCarta) {
+        const disp = Number(usuarioActual.objetos?.mejoraCarta || 0);
+        if (disp < costeMejoraCarta) {
+            mostrarMensaje('No tienes suficientes mejoras de carta para comprar este objeto.', 'danger');
+            return;
+        }
+    } else if (usuarioActual.puntos < objeto.precio) {
         mostrarMensaje('No tienes suficientes puntos para comprar este objeto.', 'danger');
         return;
     }
 
-    const confirmar = await pedirConfirmacionCompra(objeto.nombre, objeto.precio);
+    let confirmar;
+    if (pagaConMejoraEspecial) {
+        confirmar = await pedirConfirmacionCompra(objeto.nombre, costeEspecial, { moneda: 'mejoraEspecial' });
+    } else if (pagaConMejoraCarta) {
+        confirmar = await pedirConfirmacionCompra(objeto.nombre, costeMejoraCarta, { moneda: 'mejoraCarta' });
+    } else {
+        confirmar = await pedirConfirmacionCompra(objeto.nombre, objeto.precio);
+    }
     if (!confirmar) {
         return;
     }
 
-    usuarioActual.puntos -= objeto.precio;
+    if (pagaConMejoraEspecial) {
+        usuarioActual.objetos.mejoraEspecial = Math.max(0, Number(usuarioActual.objetos.mejoraEspecial || 0) - costeEspecial);
+    } else if (pagaConMejoraCarta) {
+        usuarioActual.objetos.mejoraCarta = Math.max(0, Number(usuarioActual.objetos.mejoraCarta || 0) - costeMejoraCarta);
+    } else {
+        usuarioActual.puntos -= objeto.precio;
+    }
     usuarioActual.objetos = (usuarioActual.objetos && typeof usuarioActual.objetos === 'object')
         ? { ...usuarioActual.objetos }
         : {};
@@ -1028,6 +1223,8 @@ async function comprarObjeto(identificador) {
     usuarioActual.objetos.mejoraEspecial = Number(usuarioActual.objetos.mejoraEspecial || 0);
     usuarioActual.objetos.mejoraSuprema = Number(usuarioActual.objetos.mejoraSuprema || 0);
     usuarioActual.objetos.mejoraDefinitiva = Number(usuarioActual.objetos.mejoraDefinitiva || 0);
+    usuarioActual.objetos.mejoraElite = Number(usuarioActual.objetos.mejoraElite || 0);
+    usuarioActual.objetos.mejoraLegendaria = Number(usuarioActual.objetos.mejoraLegendaria || 0);
     if (typeof window.DC_SOBRES_MEZCLAR_INVENTARIO === 'function') {
         usuarioActual.objetos = window.DC_SOBRES_MEZCLAR_INVENTARIO(usuarioActual.objetos);
     }
@@ -1043,6 +1240,14 @@ async function comprarObjeto(identificador) {
         usuarioActual.objetos.mejoraSuprema = Number(usuarioActual.objetos.mejoraSuprema || 0) + 1;
     } else if (objeto.id === 'obj-mejora-definitiva') {
         usuarioActual.objetos.mejoraDefinitiva = Number(usuarioActual.objetos.mejoraDefinitiva || 0) + 1;
+    } else if (objeto.id === 'obj-cofre-elite') {
+        usuarioActual.objetos.mejoraElite = Number(usuarioActual.objetos.mejoraElite || 0) + 12;
+    } else if (objeto.id === 'obj-cofre-legendario') {
+        usuarioActual.objetos.mejoraLegendaria = Number(usuarioActual.objetos.mejoraLegendaria || 0) + 12;
+    } else if (objeto.id === 'obj-fragmento-mejora-elite') {
+        usuarioActual.objetos.mejoraElite = Number(usuarioActual.objetos.mejoraElite || 0) + 1;
+    } else if (objeto.id === 'obj-fragmento-mejora-legendaria') {
+        usuarioActual.objetos.mejoraLegendaria = Number(usuarioActual.objetos.mejoraLegendaria || 0) + 1;
     }
 
     try {
@@ -1113,7 +1318,7 @@ function mostrarMensaje(mensaje, tipo = 'warning') {
     }, 2600);
 }
 
-function pedirConfirmacionCompra(nombre, precio) {
+function pedirConfirmacionCompra(nombre, precio, opcionesPrecio) {
     return new Promise(resolve => {
         const modal = document.getElementById('modal-confirmacion');
         const texto = document.getElementById('texto-confirmacion');
@@ -1130,23 +1335,63 @@ function pedirConfirmacionCompra(nombre, precio) {
         const nombreStrong = document.createElement('strong');
         nombreStrong.textContent = String(nombre || '');
         const t2 = document.createTextNode(' por ');
-        const precioStrong = document.createElement('strong');
-        precioStrong.textContent = String(precio || 0);
-        const moneda = document.createElement('img');
-        moneda.src = ICONO_MONEDA;
-        moneda.alt = 'Moneda';
-        moneda.style.width = '18px';
-        moneda.style.height = '18px';
-        moneda.style.objectFit = 'contain';
-        moneda.style.verticalAlign = 'text-bottom';
-        const t3 = document.createTextNode('?');
         texto.appendChild(t1);
         texto.appendChild(nombreStrong);
         texto.appendChild(t2);
-        texto.appendChild(precioStrong);
-        texto.appendChild(document.createTextNode(' '));
-        texto.appendChild(moneda);
-        texto.appendChild(t3);
+        if (opcionesPrecio && opcionesPrecio.moneda === 'mejoraEspecial') {
+            const cant = Math.max(0, Number(precio || 0));
+            const precioStrong = document.createElement('strong');
+            precioStrong.textContent = String(cant);
+            const iconoEsp = document.createElement('img');
+            iconoEsp.src = ICONO_MEJORA_ESPECIAL_TIENDA;
+            iconoEsp.alt = 'Mejora especial';
+            iconoEsp.style.width = '20px';
+            iconoEsp.style.height = '20px';
+            iconoEsp.style.objectFit = 'contain';
+            iconoEsp.style.verticalAlign = 'text-bottom';
+            iconoEsp.style.margin = '0 5px';
+            const tMul = document.createTextNode('×');
+            const tFin = document.createTextNode(' Mejora especial?');
+            texto.appendChild(precioStrong);
+            texto.appendChild(document.createTextNode(' '));
+            texto.appendChild(tMul);
+            texto.appendChild(iconoEsp);
+            texto.appendChild(tFin);
+        } else if (opcionesPrecio && opcionesPrecio.moneda === 'mejoraCarta') {
+            const cant = Math.max(0, Number(precio || 0));
+            const precioStrong = document.createElement('strong');
+            precioStrong.textContent = String(cant);
+            const iconoMc = document.createElement('img');
+            iconoMc.src = ICONO_MEJORA_CARTA_TIENDA;
+            iconoMc.alt = 'Mejora de carta';
+            iconoMc.style.width = '20px';
+            iconoMc.style.height = '20px';
+            iconoMc.style.objectFit = 'contain';
+            iconoMc.style.verticalAlign = 'text-bottom';
+            iconoMc.style.margin = '0 5px';
+            const tMul = document.createTextNode('×');
+            const tFin = document.createTextNode(' Mejora de carta?');
+            texto.appendChild(precioStrong);
+            texto.appendChild(document.createTextNode(' '));
+            texto.appendChild(tMul);
+            texto.appendChild(iconoMc);
+            texto.appendChild(tFin);
+        } else {
+            const precioStrong = document.createElement('strong');
+            precioStrong.textContent = String(precio || 0);
+            const moneda = document.createElement('img');
+            moneda.src = ICONO_MONEDA;
+            moneda.alt = 'Moneda';
+            moneda.style.width = '18px';
+            moneda.style.height = '18px';
+            moneda.style.objectFit = 'contain';
+            moneda.style.verticalAlign = 'text-bottom';
+            const t3 = document.createTextNode('?');
+            texto.appendChild(precioStrong);
+            texto.appendChild(document.createTextNode(' '));
+            texto.appendChild(moneda);
+            texto.appendChild(t3);
+        }
         modal.style.display = 'block';
 
         const limpiar = () => {

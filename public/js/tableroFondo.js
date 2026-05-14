@@ -38,6 +38,23 @@
         return `/resources/tableros/${withExt}`;
     }
 
+    function fondoDesdeAsaltoActivoLs() {
+        try {
+            if (String(localStorage.getItem('partidaModo') || '').trim().toLowerCase() !== 'asalto') {
+                return null;
+            }
+            const raw = localStorage.getItem('asaltoActivo');
+            if (!raw || raw === 'null' || raw === 'undefined') return null;
+            const d = JSON.parse(raw);
+            if (!d || typeof d !== 'object') return null;
+            const t = String(d.tablero || '').trim();
+            if (!t) return null;
+            return urlDesdeCampoExcel(t) || DEFAULT_TABLERO_URL;
+        } catch (_e) {
+            return null;
+        }
+    }
+
     function fondoDesdeDesafioActivoLs() {
         try {
             const raw = localStorage.getItem('desafioActivo');
@@ -84,6 +101,11 @@
     }
 
     function aplicarInicialTableroClasico() {
+        const fa = fondoDesdeAsaltoActivoLs();
+        if (fa) {
+            aplicarFondo(fa);
+            return;
+        }
         const fd = fondoDesdeDesafioActivoLs();
         if (fd) {
             aplicarFondo(fd);

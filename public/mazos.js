@@ -363,7 +363,9 @@ function renderizarPoderTotal(cartasMazo) {
 function crearCartaMazoElemento(carta, indiceCarta) {
     const cartaDiv = document.createElement('div');
     cartaDiv.classList.add('carta', 'carta-modificable');
-    if (Number(carta?.Nivel || 1) >= 6) {
+    if (typeof window.dcAplicarClasesNivelCartaCompleta === 'function') {
+        window.dcAplicarClasesNivelCartaCompleta(cartaDiv, carta);
+    } else if (Number(carta?.Nivel || 1) >= 6) {
         cartaDiv.classList.add('nivel-legendaria');
     }
 
@@ -388,16 +390,18 @@ function crearCartaMazoElemento(carta, indiceCarta) {
 
     const estrellasDiv = document.createElement('div');
     estrellasDiv.classList.add('estrellas-carta');
-    const nivel = Number(carta?.Nivel || 1);
-    for (let i = 0; i < nivel; i++) {
-        const estrella = document.createElement('img');
-        estrella.classList.add('estrella');
-        estrella.src = 'https://i.ibb.co/zZt4R3x/star-level.png';
-        estrella.alt = 'star';
-        estrellasDiv.appendChild(estrella);
+    if (typeof window.dcRellenarEstrellasCartaCompleta === 'function') {
+        window.dcRellenarEstrellasCartaCompleta(estrellasDiv, carta, {});
+    } else {
+        const nivel = Number(carta?.Nivel || 1);
+        for (let i = 0; i < nivel; i++) {
+            const estrella = document.createElement('img');
+            estrella.classList.add('estrella');
+            estrella.src = 'https://i.ibb.co/zZt4R3x/star-level.png';
+            estrella.alt = 'star';
+            estrellasDiv.appendChild(estrella);
+        }
     }
-
-    cartaDiv.appendChild(detallesDiv);
     const badgeHabilidad = window.crearBadgeHabilidadCarta ? window.crearBadgeHabilidadCarta(carta) : null;
     if (badgeHabilidad) {
         cartaDiv.appendChild(badgeHabilidad);
@@ -466,7 +470,9 @@ function obtenerCartasCandidatasReemplazo() {
 function crearCartaReemplazoElemento(carta) {
     const item = document.createElement('div');
     item.classList.add('carta', 'item-carta-reemplazo');
-    if (Number(carta?.Nivel || 1) >= 6) {
+    if (typeof window.dcAplicarClasesNivelCartaCompleta === 'function') {
+        window.dcAplicarClasesNivelCartaCompleta(item, carta);
+    } else if (Number(carta?.Nivel || 1) >= 6) {
         item.classList.add('nivel-legendaria');
     }
 
@@ -491,13 +497,17 @@ function crearCartaReemplazoElemento(carta) {
 
     const estrellasDiv = document.createElement('div');
     estrellasDiv.classList.add('estrellas-carta');
-    const nivel = Number(carta?.Nivel || 1);
-    for (let i = 0; i < nivel; i++) {
-        const estrella = document.createElement('img');
-        estrella.classList.add('estrella');
-        estrella.src = 'https://i.ibb.co/zZt4R3x/star-level.png';
-        estrella.alt = 'star';
-        estrellasDiv.appendChild(estrella);
+    if (typeof window.dcRellenarEstrellasCartaCompleta === 'function') {
+        window.dcRellenarEstrellasCartaCompleta(estrellasDiv, carta, {});
+    } else {
+        const nivel = Number(carta?.Nivel || 1);
+        for (let i = 0; i < nivel; i++) {
+            const estrella = document.createElement('img');
+            estrella.classList.add('estrella');
+            estrella.src = 'https://i.ibb.co/zZt4R3x/star-level.png';
+            estrella.alt = 'star';
+            estrellasDiv.appendChild(estrella);
+        }
     }
 
     item.appendChild(detallesDiv);

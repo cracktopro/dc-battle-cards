@@ -179,6 +179,188 @@
             margin-top: 14px;
         }
 
+        .admin-panel-root {
+            gap: 14px;
+            border: 1px solid rgba(255, 215, 90, 0.22);
+            box-shadow:
+                0 0 0 1px rgba(0, 0, 0, 0.35),
+                0 8px 28px rgba(0, 0, 0, 0.45),
+                inset 0 1px 0 rgba(255, 255, 255, 0.06);
+        }
+
+        .admin-panel-header {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid rgba(120, 190, 255, 0.22);
+        }
+
+        .admin-panel-title {
+            margin: 0;
+            font-family: 'Orbitron', sans-serif;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            color: #fff8e6;
+            text-shadow: 0 0 12px rgba(255, 200, 100, 0.35);
+        }
+
+        .admin-panel-tagline {
+            margin: 4px 0 0;
+            font-size: 0.86rem;
+            color: #9ecfff;
+            max-width: 52ch;
+        }
+
+        .admin-section {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .admin-section-title {
+            margin: 0;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.95rem;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: #7ee8ff;
+            border-left: 3px solid rgba(126, 232, 255, 0.85);
+            padding-left: 10px;
+        }
+
+        .admin-subtitle {
+            margin: 12px 0 0;
+            font-size: 0.82rem;
+            font-weight: 700;
+            color: #c8f0ff;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .admin-label {
+            margin: 0;
+            font-size: 0.88rem;
+            color: #dff8ff;
+        }
+
+        .admin-label--muted {
+            color: #9ec8e8;
+            font-size: 0.82rem;
+        }
+
+        .admin-help-text {
+            margin: 0;
+            font-size: 0.8rem;
+            color: #8eb8d8;
+        }
+
+        .admin-hr {
+            border: none;
+            border-top: 1px solid rgba(120, 190, 255, 0.28);
+            margin: 4px 0;
+        }
+
+        .admin-gestion-wrap {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr));
+            gap: 14px;
+            align-items: start;
+        }
+
+        .admin-column {
+            background: rgba(4, 12, 26, 0.55);
+            border: 1px solid rgba(100, 170, 255, 0.2);
+            border-radius: 12px;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .admin-btn-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .admin-btn-row--danger {
+            margin-top: 4px;
+        }
+
+        .admin-btn-outline-danger {
+            color: #ffb4b4;
+            border: 1px solid rgba(255, 100, 100, 0.55);
+            background: rgba(40, 8, 12, 0.55);
+            font-size: 0.88rem;
+        }
+
+        .admin-btn-outline-danger:hover {
+            color: #fff;
+            background: rgba(120, 20, 28, 0.75);
+            border-color: rgba(255, 140, 140, 0.85);
+        }
+
+        .admin-btn-save {
+            margin-top: 8px;
+            font-weight: 700;
+            letter-spacing: 0.03em;
+        }
+
+        .admin-select-nivel {
+            width: auto !important;
+            min-width: 160px;
+            max-width: 100%;
+        }
+
+        .admin-select-user {
+            min-width: 200px;
+            flex: 1 1 200px;
+        }
+
+        .admin-mejoras-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 8px;
+        }
+
+        .admin-inline--wrap {
+            flex-wrap: wrap;
+        }
+
+        /* Nivel 6–8 en miniaturas admin: iconos más pequeños que en tablero completo */
+        .admin-card-visual .estrella-icono-nivel {
+            width: 38px;
+            height: 38px;
+        }
+
+        .admin-card-visual.nivel-legendaria .estrellas-carta.estrellas-carta--modo-icono,
+        .admin-card-visual.nivel-elite-tablero .estrellas-carta.estrellas-carta--modo-icono,
+        .admin-card-visual.nivel-mitica-tablero .estrellas-carta.estrellas-carta--modo-icono {
+            background-color: transparent;
+            border: none;
+            box-shadow: none;
+        }
+
+        .admin-card-visual.nivel-legendaria {
+            box-shadow: inset 0 0 0 1px rgba(186, 112, 255, 0.35);
+        }
+
+        .admin-card-visual.nivel-elite-tablero {
+            box-shadow:
+                inset 0 0 0 1px rgba(252, 248, 255, 0.25),
+                0 0 10px rgba(236, 239, 255, 0.2);
+        }
+
+        .admin-card-visual.nivel-mitica-tablero {
+            box-shadow:
+                inset 0 0 0 1px rgba(255, 140, 80, 0.35),
+                0 0 12px rgba(255, 90, 40, 0.22);
+        }
+
         .color-principal-preview-wrap {
             display: flex;
             align-items: center;
@@ -349,55 +531,79 @@
 
         </div>
 
-        <section id="admin-panel" class="opcion-panel" style="display:none;">
-            <h4>Opciones de Administrador</h4>
-            <div class="admin-badge">Solo administrador</div>
-            <button id="admin-sumar-puntos-btn" class="btn btn-primary" type="button">Obtener 5000 puntos</button>
-            <button id="admin-obtener-cartas-btn" class="btn btn-primary" type="button">Obtener todas las cartas</button>
-            <div class="d-flex" style="gap:8px; flex-wrap:wrap;">
-                <select id="admin-nivel-cartas" class="form-control" style="width:auto; min-width:170px;">
-                    <option value="1">Nivel 1</option>
-                    <option value="2">Nivel 2</option>
-                    <option value="3">Nivel 3</option>
-                    <option value="4">Nivel 4</option>
-                    <option value="5">Nivel 5</option>
-                    <option value="6">Nivel 6</option>
-                </select>
-                <button id="admin-mejorar-cartas-btn" class="btn btn-warning" type="button">Mejorar todas las cartas</button>
+        <section id="admin-panel" class="opcion-panel admin-panel-root" style="display:none;">
+            <header class="admin-panel-header">
+                <div>
+                    <h4 class="admin-panel-title">Panel de administración</h4>
+                    <p class="admin-panel-tagline">Gestión de cuentas, inventario y progreso por rotación. Los reinicios solo afectan la ventana temporal actual (salvo desafíos, que borran todas las listas completadas).</p>
+                </div>
+                <span class="admin-badge">Solo administrador</span>
+            </header>
+
+            <div class="admin-section admin-section--cuenta">
+                <h5 class="admin-section-title">Tu cuenta (sesión actual)</h5>
+                <div class="admin-btn-row">
+                    <button id="admin-sumar-puntos-btn" class="btn btn-primary" type="button">+5000 puntos</button>
+                    <button id="admin-obtener-cartas-btn" class="btn btn-primary" type="button">Obtener todas las cartas</button>
+                </div>
+                <div class="admin-inline admin-inline--wrap">
+                    <select id="admin-nivel-cartas" class="form-control admin-select-nivel" aria-label="Nivel para todas las cartas">
+                        <option value="1">Nivel 1</option>
+                        <option value="2">Nivel 2</option>
+                        <option value="3">Nivel 3</option>
+                        <option value="4">Nivel 4</option>
+                        <option value="5">Nivel 5</option>
+                        <option value="6">Nivel 6</option>
+                        <option value="7">Nivel 7 (élite)</option>
+                        <option value="8">Nivel 8 (legendario)</option>
+                    </select>
+                    <button id="admin-mejorar-cartas-btn" class="btn btn-warning" type="button">Mejorar todas las cartas</button>
+                </div>
             </div>
 
-            <hr style="border-color:rgba(120,190,255,0.35); margin:8px 0;">
-            <h5 style="margin:0; color:#dff8ff;">Gestión de usuarios</h5>
-            <div class="admin-grid">
-                <div class="admin-subpanel">
-                    <label for="admin-user-select" style="margin:0;">Usuario registrado</label>
+            <hr class="admin-hr">
+
+            <div class="admin-gestion-wrap">
+                <div class="admin-column">
+                    <h5 class="admin-section-title">Usuario objetivo</h5>
+                    <label class="admin-label" for="admin-user-select">Cuenta registrada</label>
                     <div class="admin-inline">
-                        <select id="admin-user-select" class="form-control" style="min-width:220px; flex:1 1 220px;"></select>
-                        <button id="admin-user-load-btn" class="btn btn-info" type="button">Cargar usuario</button>
+                        <select id="admin-user-select" class="form-control admin-select-user"></select>
+                        <button id="admin-user-load-btn" class="btn btn-info" type="button">Cargar</button>
                     </div>
-                    <label for="admin-target-puntos" style="margin:0;">Puntos</label>
+
+                    <h6 class="admin-subtitle">Economía e inventario</h6>
+                    <label class="admin-label" for="admin-target-puntos">Puntos</label>
                     <input id="admin-target-puntos" class="form-control" type="number" min="0" step="1" value="0">
-                    <div class="admin-inline">
-                        <div style="flex:1 1 160px;">
-                            <label for="admin-target-mejora" style="margin:0;">Mejora</label>
+
+                    <div class="admin-mejoras-grid">
+                        <div>
+                            <label class="admin-label" for="admin-target-mejora">Mejora</label>
                             <input id="admin-target-mejora" class="form-control" type="number" min="0" step="1" value="0">
                         </div>
-                        <div style="flex:1 1 160px;">
-                            <label for="admin-target-mejora-especial" style="margin:0;">Mejora especial</label>
+                        <div>
+                            <label class="admin-label" for="admin-target-mejora-especial">Mejora especial</label>
                             <input id="admin-target-mejora-especial" class="form-control" type="number" min="0" step="1" value="0">
                         </div>
-                    </div>
-                    <div class="admin-inline">
-                        <div style="flex:1 1 160px;">
-                            <label for="admin-target-mejora-suprema" style="margin:0;">Mejora suprema</label>
+                        <div>
+                            <label class="admin-label" for="admin-target-mejora-suprema">Mejora suprema</label>
                             <input id="admin-target-mejora-suprema" class="form-control" type="number" min="0" step="1" value="0">
                         </div>
-                        <div style="flex:1 1 160px;">
-                            <label for="admin-target-mejora-definitiva" style="margin:0;">Mejora definitiva</label>
+                        <div>
+                            <label class="admin-label" for="admin-target-mejora-definitiva">Mejora definitiva</label>
                             <input id="admin-target-mejora-definitiva" class="form-control" type="number" min="0" step="1" value="0">
                         </div>
+                        <div>
+                            <label class="admin-label" for="admin-target-mejora-elite">Mejora élite <span class="admin-label--muted">(mejoraElite)</span></label>
+                            <input id="admin-target-mejora-elite" class="form-control" type="number" min="0" step="1" value="0">
+                        </div>
+                        <div>
+                            <label class="admin-label" for="admin-target-mejora-legendaria">Mejora legendaria <span class="admin-label--muted">(mejoraLegendaria)</span></label>
+                            <input id="admin-target-mejora-legendaria" class="form-control" type="number" min="0" step="1" value="0">
+                        </div>
                     </div>
-                    <label style="margin:4px 0 0; color:#b8ecff; font-size:0.88rem;">Sobres (claves en <code>objetos</code>: <code>sobreH1</code>…; HUD <code>sobre_H1</code>…)</label>
+
+                    <label class="admin-label admin-label--muted" style="margin-top:6px;">Sobres en <code>objetos</code> (claves <code>sobreH1</code>…; HUD <code>sobre_H1</code>…)</label>
                     <div class="admin-sobres-grid">
                         <div>
                             <label for="admin-target-sobreH1" style="margin:0; font-size:0.82rem;">sobre_H1</label>
@@ -424,20 +630,31 @@
                             <input id="admin-target-sobreV3" class="form-control" type="number" min="0" step="1" value="0">
                         </div>
                     </div>
-                    <button id="admin-target-save-btn" class="btn btn-success" type="button">Guardar cambios en Firebase</button>
+
+                    <h6 class="admin-subtitle">Progreso por rotación</h6>
+                    <p class="admin-help-text">Eventos: rotación de 1 h (VS BOT + coop online). Asaltos: semana local (lunes). Desafíos: se borran todas las IDs completadas (V1 y V2). Pulsa guardar después.</p>
+                    <div class="admin-btn-row admin-btn-row--danger">
+                        <button id="admin-reset-eventos-btn" class="btn admin-btn-outline-danger" type="button">Reiniciar todos los eventos</button>
+                        <button id="admin-reset-asaltos-btn" class="btn admin-btn-outline-danger" type="button">Reiniciar todos los asaltos</button>
+                        <button id="admin-reset-desafios-btn" class="btn admin-btn-outline-danger" type="button">Reiniciar todos los desafíos</button>
+                    </div>
+
+                    <button id="admin-target-save-btn" class="btn btn-success admin-btn-save" type="button">Guardar en Firebase</button>
                 </div>
 
-                <div class="admin-subpanel">
+                <div class="admin-column">
+                    <h5 class="admin-section-title">Colección del usuario</h5>
                     <div class="admin-inline">
-                        <select id="admin-card-catalog-select" class="form-control" style="min-width:220px; flex:1 1 220px;"></select>
+                        <select id="admin-card-catalog-select" class="form-control admin-select-user"></select>
                         <button id="admin-card-add-btn" class="btn btn-primary" type="button">Agregar carta</button>
                     </div>
                     <div class="admin-inline">
                         <button id="admin-card-remove-btn" class="btn btn-danger" type="button">Eliminar seleccionada</button>
-                        <button id="admin-card-level-down-btn" class="btn btn-secondary" type="button">Nivel -1</button>
+                        <button id="admin-card-level-down-btn" class="btn btn-secondary" type="button">Nivel −1</button>
                         <button id="admin-card-level-up-btn" class="btn btn-warning" type="button">Nivel +1</button>
                     </div>
-                    <input id="admin-card-search-input" class="form-control" type="text" placeholder="Buscar carta del usuario...">
+                    <label class="admin-label" for="admin-card-search-input">Buscar en la colección</label>
+                    <input id="admin-card-search-input" class="form-control" type="text" placeholder="Nombre de carta…">
                     <small id="admin-card-summary" style="color:#b8ecff;">Cartas: 0</small>
                 </div>
             </div>

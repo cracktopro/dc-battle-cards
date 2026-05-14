@@ -26,6 +26,10 @@ let estadoDesafio = {
 };
 const ICONO_MEJORA = '/resources/icons/mejora.png';
 const ICONO_MEJORA_ESPECIAL = '/resources/icons/mejora_especial.png';
+const ICONO_MEJORA_SUPREMA = '/resources/icons/mejora_suprema.png';
+const ICONO_MEJORA_DEFINITIVA = '/resources/icons/mejora_definitiva.png';
+const ICONO_MEJORA_ELITE = '/resources/icons/mejora_elite.png';
+const ICONO_MEJORA_LEGENDARIA = '/resources/icons/mejora_legendaria.png';
 const ICONO_MONEDA = '/resources/icons/moneda.png';
 const COOLDOWN_HABILIDAD_ACTIVA_TURNOS = 2;
 const PVP_SESSION_ID = String(localStorage.getItem('partidaPvpSessionId') || '').trim();
@@ -42,6 +46,27 @@ const ES_MODO_PVP = !HAY_DESAFIO_ACTIVO_STORAGE
         String(localStorage.getItem('partidaModo') || '').trim().toLowerCase() === 'pvp'
         || Boolean(PVP_SESSION_ID)
     );
+/** Nivel máximo de carta en combate (asaltos élite/legendario = 7 u 8). VS BOT clásico sigue usando 1–6. */
+const DC_NIVEL_COMBATE_MAX = 8;
+const ASALTO_ACTIVO_BRUTO_LS = (() => {
+    try {
+        return localStorage.getItem('asaltoActivo');
+    } catch (_e) {
+        return null;
+    }
+})();
+let asaltoActivoPartida = null;
+try {
+    if (ASALTO_ACTIVO_BRUTO_LS && ASALTO_ACTIVO_BRUTO_LS !== 'null' && ASALTO_ACTIVO_BRUTO_LS !== 'undefined') {
+        asaltoActivoPartida = JSON.parse(ASALTO_ACTIVO_BRUTO_LS);
+    }
+} catch (_e) {
+    asaltoActivoPartida = null;
+}
+const ES_MODO_ASALTO = !HAY_DESAFIO_ACTIVO_STORAGE && !ES_MODO_PVP
+    && String(localStorage.getItem('partidaModo') || '').trim().toLowerCase() === 'asalto'
+    && asaltoActivoPartida && typeof asaltoActivoPartida === 'object'
+    && String(asaltoActivoPartida.tipo || '').trim().toLowerCase() === 'asalto';
 const EMAIL_SESION_ACTUAL = String(localStorage.getItem('email') || '').trim().toLowerCase();
 const ROL_PVP = String(localStorage.getItem('partidaPvpRol') || 'A').trim().toUpperCase() === 'B' ? 'B' : 'A';
 const PVP_DEBUG_UI = String(localStorage.getItem('pvpDebugUI') || 'false').trim().toLowerCase() === 'true';
@@ -1377,6 +1402,48 @@ async function enriquecerCartasConDatosCatalogo(cartas) {
     });
 }
 
+/**
+ * Mazo del rival en asalto: nombres del Excel (carta1…12) + nivel 6/7/8 según dificultad elegida en la vista Asaltos.
+ */
+async function construirMazoOponenteDesdeAsaltoActivo(asalto) {
+    const cartasCatalogo = await obtenerCartasDisponibles();
+    const nombres = (Array.isArray(asalto?.enemigos) ? asalto.enemigos : [])
+        .map((n) => String(n || '').trim())
+        .filter(Boolean);
+    const nivelRival = Math.min(DC_NIVEL_COMBATE_MAX, Math.max(6, Number(asalto?.dificultad || 6)));
+    const mapa = new Map();
+    cartasCatalogo.forEach((c) => {
+        const cl = obtenerClaveCarta(c?.Nombre);
+        if (cl && !mapa.has(cl)) {
+            mapa.set(cl, c);
+        }
+    });
+    const salida = [];
+    for (let i = 0; i < nombres.length && salida.length < 12; i += 1) {
+        const fila = mapa.get(obtenerClaveCarta(nombres[i]));
+        if (!fila) {
+            console.warn(`Asalto: carta no encontrada en catálogo: "${nombres[i]}"`);
+            continue;
+        }
+        const stub = {
+            Nombre: String(fila.Nombre || nombres[i] || '').trim(),
+            Nivel: 1,
+            Poder: 0,
+            Salud: 0,
+            SaludMax: 0,
+            faccion: fila.faccion || fila.Faccion,
+            Faccion: fila.Faccion || fila.faccion,
+            Afiliacion: fila.Afiliacion || fila.afiliacion || '',
+        };
+        let base = typeof window.fusionarCartaCompletaDesdeCatalogo === 'function'
+            ? window.fusionarCartaCompletaDesdeCatalogo(stub, fila)
+            : { ...fila, ...stub };
+        base = escalarCartaSegunDificultad(base, nivelRival);
+        salida.push(base);
+    }
+    return salida;
+}
+
 async function construirEstadoDesafio(desafio) {
     const mapaCatalogo = await obtenerMapaDatosCartasCatalogo();
     const cartasCatalogo = await obtenerCartasDisponibles();
@@ -2052,7 +2119,7 @@ function calcularPuntosVictoria(dificultad) {
 function escalarCartaSegunDificultad(carta, dificultad) {
     const cartaEscalada = { ...carta };
     const nivelBase = Number(cartaEscalada.Nivel || 1);
-    const dificultadObjetivo = Math.min(Math.max(dificultad, 1), 6);
+    const dificultadObjetivo = Math.min(Math.max(dificultad, 1), DC_NIVEL_COMBATE_MAX);
     const incrementoNiveles = Math.max(dificultadObjetivo - nivelBase, 0);
     const saludBase = obtenerSaludMaxCarta(cartaEscalada);
 
@@ -2070,7 +2137,7 @@ function escalarCartaSegunDificultad(carta, dificultad) {
 function escalarBossSegunDificultad(carta, dificultad) {
     const cartaBoss = { ...carta };
     const nivelBase = Number(cartaBoss.Nivel || 1);
-    const dificultadObjetivo = Math.min(Math.max(dificultad, 1), 6);
+    const dificultadObjetivo = Math.min(Math.max(dificultad, 1), DC_NIVEL_COMBATE_MAX);
     const incrementoNiveles = Math.max(dificultadObjetivo - nivelBase, 0);
     const incrementoPorNivel = incrementoNiveles * 500;
     const saludBase = obtenerSaludMaxCarta(cartaBoss);
@@ -2423,6 +2490,202 @@ async function otorgarRecompensasDesafio() {
     };
 }
 
+function probabilidadDropAsaltoDesdeExcel(val) {
+    let s = String(val ?? '').trim().replace(/\s+/g, '').replace(',', '.');
+    if (s.endsWith('%')) {
+        s = s.slice(0, -1);
+    }
+    const n = Number(s);
+    if (!Number.isFinite(n) || !(n > 0)) {
+        return 0;
+    }
+    /** Menor que 1 = fraccion (ej. 0.25). Mayor o igual que 1 = porcentaje sobre 100 (ej. 1 = 1%). */
+    if (n < 1) {
+        return Math.min(1, n);
+    }
+    return Math.min(1, n / 100);
+}
+
+function conteosObjetosGarantizadosAsalto(estrellasRival) {
+    const s = Math.min(8, Math.max(6, Number(estrellasRival || 6)));
+    if (s >= 8) {
+        return { mejoraElite: 8, mejoraLegendaria: 4 };
+    }
+    if (s >= 7) {
+        return { mejoraElite: 4, mejoraLegendaria: 2 };
+    }
+    return { mejoraElite: 2, mejoraLegendaria: 0 };
+}
+
+function puntosRecompensaAsaltoPorDificultad(puntosBase, estrellasRival) {
+    const b = Math.max(0, Number(puntosBase || 0));
+    const s = Math.min(8, Math.max(6, Number(estrellasRival || 6)));
+    const mult = 1 + 0.25 * (s - 6);
+    return Math.max(0, Math.round(b * mult));
+}
+
+/**
+ * Una carta aleatoria del pool del asalto (carta1…12), siempre nivel 5.
+ */
+async function fabricarCartaRecompensaAsaltoNivel5(asalto) {
+    const nombres = (Array.isArray(asalto?.enemigos) ? asalto.enemigos : [])
+        .map((n) => String(n || '').trim())
+        .filter(Boolean);
+    if (!nombres.length) {
+        throw new Error('El asalto no define cartas para el pool de recompensa.');
+    }
+    const elegido = nombres[Math.floor(Math.random() * nombres.length)];
+    const cartasCatalogo = await obtenerCartasDisponibles();
+    const mapa = new Map();
+    cartasCatalogo.forEach((c) => {
+        const cl = obtenerClaveCarta(c?.Nombre);
+        if (cl && !mapa.has(cl)) {
+            mapa.set(cl, c);
+        }
+    });
+    const fila = mapa.get(obtenerClaveCarta(elegido));
+    if (!fila) {
+        throw new Error(`No se encontró en el catálogo la carta del asalto: "${elegido}".`);
+    }
+    const stub = {
+        Nombre: String(fila.Nombre || elegido || '').trim(),
+        Nivel: 1,
+        Poder: 0,
+        Salud: 0,
+        SaludMax: 0,
+        faccion: fila.faccion || fila.Faccion,
+        Faccion: fila.Faccion || fila.faccion,
+        Afiliacion: fila.Afiliacion || fila.afiliacion || '',
+    };
+    let base = typeof window.fusionarCartaCompletaDesdeCatalogo === 'function'
+        ? window.fusionarCartaCompletaDesdeCatalogo(stub, fila)
+        : { ...fila, ...stub };
+    base = escalarCartaSegunDificultad(base, 5);
+    base.tipoRecompensa = 'asalto';
+    return base;
+}
+
+/** Alineado con `public/js/asaltos.js`: lunes 00:00 local + versión de rotación. */
+function dcClaveRotacionAsaltoActual() {
+    const VERSION_ROTACION_ASALTOS = 'asaltos-rotation-v2-monday';
+    const t = Date.now();
+    const d = new Date(t.getFullYear(), t.getMonth(), t.getDate());
+    const dow = d.getDay();
+    d.setDate(d.getDate() - ((dow + 6) % 7));
+    d.setHours(0, 0, 0, 0);
+    const inicio = d.getTime();
+    return `${VERSION_ROTACION_ASALTOS}-${inicio}`;
+}
+
+async function otorgarRecompensasAsalto() {
+    const usuario = JSON.parse(localStorage.getItem('usuario') || 'null');
+    const email = localStorage.getItem('email');
+    if (!usuario || !email) {
+        throw new Error('No se encontró una sesión de usuario válida para guardar las recompensas del asalto.');
+    }
+    const asalto = asaltoActivoPartida;
+    if (!asalto || String(asalto.tipo || '').trim().toLowerCase() !== 'asalto') {
+        throw new Error('No hay datos de asalto activo.');
+    }
+    const estrellasRival = Math.min(DC_NIVEL_COMBATE_MAX, Math.max(6, Number(asalto.dificultad || 6)));
+    const puntosOtorg = puntosRecompensaAsaltoPorDificultad(asalto.puntos, estrellasRival);
+    const gar = conteosObjetosGarantizadosAsalto(estrellasRival);
+
+    const cartaPremio = await fabricarCartaRecompensaAsaltoNivel5(asalto);
+    const cartasPremio = [cartaPremio];
+
+    const mejorasAleatorias = {
+        mejoraCarta: Math.random() < probabilidadDropAsaltoDesdeExcel(asalto.mejora) ? 1 : 0,
+        mejoraEspecial: Math.random() < probabilidadDropAsaltoDesdeExcel(asalto.mejora_especial) ? 1 : 0,
+        mejoraSuprema: Math.random() < probabilidadDropAsaltoDesdeExcel(asalto.mejora_suprema) ? 1 : 0,
+        mejoraDefinitiva: Math.random() < probabilidadDropAsaltoDesdeExcel(asalto.mejora_definitiva) ? 1 : 0,
+    };
+
+    usuario.cartas = Array.isArray(usuario.cartas) ? usuario.cartas : [];
+    const snapshotPrevias = usuario.cartas.slice();
+    usuario.cartas.push(...cartasPremio);
+
+    usuario.puntos = Number(usuario.puntos || 0) + puntosOtorg;
+    usuario.objetos = (usuario.objetos && typeof usuario.objetos === 'object')
+        ? usuario.objetos
+        : {};
+    usuario.objetos.mejoraElite = Number(usuario.objetos.mejoraElite || 0) + gar.mejoraElite;
+    usuario.objetos.mejoraLegendaria = Number(usuario.objetos.mejoraLegendaria || 0) + gar.mejoraLegendaria;
+    usuario.objetos.mejoraCarta = Number(usuario.objetos.mejoraCarta || 0) + mejorasAleatorias.mejoraCarta;
+    usuario.objetos.mejoraEspecial = Number(usuario.objetos.mejoraEspecial || 0) + mejorasAleatorias.mejoraEspecial;
+    usuario.objetos.mejoraSuprema = Number(usuario.objetos.mejoraSuprema || 0) + mejorasAleatorias.mejoraSuprema;
+    usuario.objetos.mejoraDefinitiva = Number(usuario.objetos.mejoraDefinitiva || 0) + mejorasAleatorias.mejoraDefinitiva;
+
+    const claveRot = String(asalto.rotacionClave || '').trim() || dcClaveRotacionAsaltoActual();
+    const aid = Number(asalto.id ?? asalto.asalto_ID);
+    const estrellasVictoria = Math.min(DC_NIVEL_COMBATE_MAX, Math.max(6, Number(asalto.dificultad || 6)));
+    if (claveRot && Number.isFinite(aid)) {
+        usuario.asaltosCompletadosPorRotacion = (usuario.asaltosCompletadosPorRotacion && typeof usuario.asaltosCompletadosPorRotacion === 'object')
+            ? { ...usuario.asaltosCompletadosPorRotacion }
+            : {};
+        const rawPrev = usuario.asaltosCompletadosPorRotacion[claveRot];
+        let porAsalto = {};
+        if (Array.isArray(rawPrev)) {
+            rawPrev.forEach((idRaw) => {
+                const idNum = Number(idRaw);
+                if (Number.isFinite(idNum)) {
+                    porAsalto[String(idNum)] = [6, 7, 8];
+                }
+            });
+        } else if (rawPrev && typeof rawPrev === 'object') {
+            porAsalto = { ...rawPrev };
+        }
+        const key = String(aid);
+        const arrPrev = Array.isArray(porAsalto[key])
+            ? porAsalto[key].map((x) => Number(x)).filter((n) => n === 6 || n === 7 || n === 8)
+            : [];
+        if (!arrPrev.includes(estrellasVictoria)) {
+            arrPrev.push(estrellasVictoria);
+        }
+        arrPrev.sort((a, b) => a - b);
+        porAsalto[key] = arrPrev;
+        usuario.asaltosCompletadosPorRotacion[claveRot] = porAsalto;
+    }
+
+    const cartasDisponibles = await obtenerCartasDisponibles();
+    const conteo = typeof window.dcContarCartasNuevasPorFaccion === 'function'
+        ? window.dcContarCartasNuevasPorFaccion(cartasPremio, snapshotPrevias, cartasDisponibles)
+        : { nuevasH: 0, nuevasV: 0 };
+
+    await actualizarUsuarioFirebase(usuario, email);
+    if (typeof window.DCNormalizarObjetosUsuario === 'function') {
+        window.DCNormalizarObjetosUsuario(usuario);
+    }
+    localStorage.setItem('usuario', JSON.stringify(usuario));
+    try {
+        window.dispatchEvent(new Event('dc:usuario-actualizado'));
+    } catch (_e) {
+        /* noop */
+    }
+
+    if (window.DCMisiones?.track) {
+        window.DCMisiones.track('bot', { amount: 1 });
+        window.DCMisiones.track('bot_defeat', { amount: 1 });
+        if (conteo.nuevasH > 0) window.DCMisiones.track('coleccion_h', { amount: conteo.nuevasH });
+        if (conteo.nuevasV > 0) window.DCMisiones.track('coleccion_v', { amount: conteo.nuevasV });
+    }
+
+    try {
+        localStorage.removeItem('asaltoActivo');
+        localStorage.removeItem('partidaModo');
+    } catch (_e) {
+        /* noop */
+    }
+
+    return {
+        puntosGanados: puntosOtorg,
+        mejoraElite: gar.mejoraElite,
+        mejoraLegendaria: gar.mejoraLegendaria,
+        mejorasAleatorias,
+        cartasGanadas: cartasPremio,
+    };
+}
+
 function calcularPoderTotal(cartas) {
     return cartas.reduce((total, carta) => total + obtenerPoderCartaFinal(carta), 0);
 }
@@ -2436,6 +2699,11 @@ function crearCartaRecompensaElemento(carta) {
         etiquetaBonus.classList.add('etiqueta-recompensa-bonus');
         etiquetaBonus.textContent = 'Carta Bonus';
         contenedor.appendChild(etiquetaBonus);
+    } else if (carta.tipoRecompensa === 'asalto') {
+        const etiquetaAsalto = document.createElement('div');
+        etiquetaAsalto.classList.add('etiqueta-recompensa-bonus');
+        etiquetaAsalto.textContent = 'Carta de asalto';
+        contenedor.appendChild(etiquetaAsalto);
     }
 
     contenedor.appendChild(crearCartaElemento(carta, 'recompensa', -1).root);
@@ -2443,6 +2711,16 @@ function crearCartaRecompensaElemento(carta) {
 }
 
 function crearEtiquetaObjetoRecompensa(tipo, cantidad) {
+    const mapaIconos = {
+        mejoraCarta: { src: ICONO_MEJORA, alt: 'Mejora' },
+        mejoraEspecial: { src: ICONO_MEJORA_ESPECIAL, alt: 'Mejora especial' },
+        mejoraSuprema: { src: ICONO_MEJORA_SUPREMA, alt: 'Mejora suprema' },
+        mejoraDefinitiva: { src: ICONO_MEJORA_DEFINITIVA, alt: 'Mejora definitiva' },
+        mejoraElite: { src: ICONO_MEJORA_ELITE, alt: 'Mejora élite' },
+        mejoraLegendaria: { src: ICONO_MEJORA_LEGENDARIA, alt: 'Mejora legendaria' },
+    };
+    const meta = mapaIconos[tipo] || mapaIconos.mejoraCarta;
+
     const badge = document.createElement('div');
     badge.style.display = 'inline-flex';
     badge.style.alignItems = 'center';
@@ -2456,8 +2734,8 @@ function crearEtiquetaObjetoRecompensa(tipo, cantidad) {
     badge.style.fontSize = '0.84rem';
 
     const icono = document.createElement('img');
-    icono.src = tipo === 'mejoraEspecial' ? ICONO_MEJORA_ESPECIAL : ICONO_MEJORA;
-    icono.alt = tipo === 'mejoraEspecial' ? 'Mejora especial' : 'Mejora';
+    icono.src = meta.src;
+    icono.alt = meta.alt;
     icono.style.width = '40px';
     icono.style.height = '40px';
     icono.style.objectFit = 'contain';
@@ -3437,8 +3715,17 @@ function crearCartaElemento(carta, tipo, slotIndex, opciones = {}) {
     if (soloVista) {
         cartaDiv.classList.add('carta-solo-vista');
     }
-    if (Number(carta?.Nivel || 1) >= 6) {
-        cartaDiv.classList.add('nivel-legendaria');
+    const nivelVisual = Number(carta?.Nivel || 1);
+    if (typeof window.dcAplicarClasesNivelCartaCompleta === 'function') {
+        window.dcAplicarClasesNivelCartaCompleta(cartaDiv, carta);
+    } else if (!esCartaBoss(carta)) {
+        if (nivelVisual >= 8) {
+            cartaDiv.classList.add('nivel-mitica-tablero');
+        } else if (nivelVisual >= 7) {
+            cartaDiv.classList.add('nivel-elite-tablero');
+        } else if (nivelVisual >= 6) {
+            cartaDiv.classList.add('nivel-legendaria');
+        }
     }
     if (esCartaBoss(carta)) {
         cartaDiv.classList.add('boss-carta');
@@ -3609,16 +3896,53 @@ function crearCartaElemento(carta, tipo, slotIndex, opciones = {}) {
 
     const estrellasDiv = document.createElement('div');
     estrellasDiv.classList.add('estrellas-carta');
-
-    const cantidadEstrellas = esCartaBoss(carta)
-        ? Math.min(Math.max(Number(desafioActivo?.dificultad || 1), 1), 6)
-        : Number(carta.Nivel || 1);
-    for (let i = 0; i < cantidadEstrellas; i++) {
-        const estrella = document.createElement('img');
-        estrella.classList.add('estrella');
-        estrella.src = 'https://i.ibb.co/zZt4R3x/star-level.png';
-        estrella.alt = 'star';
-        estrellasDiv.appendChild(estrella);
+    if (typeof window.dcRellenarEstrellasCartaCompleta === 'function') {
+        window.dcRellenarEstrellasCartaCompleta(estrellasDiv, carta, {
+            esCartaBoss: esCartaBoss(carta),
+            desafioActivo
+        });
+    } else {
+        const nivelCartaUi = Number(carta?.Nivel || 1);
+        if (esCartaBoss(carta)) {
+            const cantidadEstrellas = Math.min(Math.max(Number(desafioActivo?.dificultad || 1), 1), 6);
+            for (let i = 0; i < cantidadEstrellas; i++) {
+                const estrella = document.createElement('img');
+                estrella.classList.add('estrella');
+                estrella.src = 'https://i.ibb.co/zZt4R3x/star-level.png';
+                estrella.alt = 'star';
+                estrellasDiv.appendChild(estrella);
+            }
+        } else if (nivelCartaUi === 6) {
+            estrellasDiv.classList.add('estrellas-carta--modo-icono');
+            const icono = document.createElement('img');
+            icono.className = 'estrella-icono-nivel estrella-icono-nivel--seis';
+            icono.src = '/resources/icons/star6.png';
+            icono.alt = 'Nivel 6';
+            estrellasDiv.appendChild(icono);
+        } else if (nivelCartaUi === 7) {
+            estrellasDiv.classList.add('estrellas-carta--modo-icono');
+            const icono = document.createElement('img');
+            icono.className = 'estrella-icono-nivel estrella-icono-nivel--elite';
+            icono.src = '/resources/icons/elite_star.png';
+            icono.alt = 'Nivel élite';
+            estrellasDiv.appendChild(icono);
+        } else if (nivelCartaUi === 8) {
+            estrellasDiv.classList.add('estrellas-carta--modo-icono');
+            const icono = document.createElement('img');
+            icono.className = 'estrella-icono-nivel estrella-icono-nivel--legendary';
+            icono.src = '/resources/icons/legendary_star.png';
+            icono.alt = 'Nivel legendario';
+            estrellasDiv.appendChild(icono);
+        } else {
+            const cantidadEstrellas = Math.min(5, Math.max(1, nivelCartaUi));
+            for (let i = 0; i < cantidadEstrellas; i++) {
+                const estrella = document.createElement('img');
+                estrella.classList.add('estrella');
+                estrella.src = 'https://i.ibb.co/zZt4R3x/star-level.png';
+                estrella.alt = 'star';
+                estrellasDiv.appendChild(estrella);
+            }
+        }
     }
 
     cartaDiv.appendChild(detallesDiv);
@@ -3893,6 +4217,14 @@ async function cargarCartasIniciales() {
         if (desafioActivo) {
             estadoDesafio = await construirEstadoDesafio(desafioActivo);
             mazoOponente = [];
+        } else if (ES_MODO_ASALTO) {
+            mazoOponente = await construirMazoOponenteDesdeAsaltoActivo(asaltoActivoPartida);
+            mazoOponente = await enriquecerCartasConDatosCatalogo(mazoOponente);
+            try {
+                localStorage.setItem('mazoOponenteBase', JSON.stringify({ Cartas: mazoOponente }));
+            } catch (_e) {
+                /* noop */
+            }
         } else if (ES_MODO_PVP) {
             // PvP online: ambos mazos vienen de la sesión (jugador real vs jugador real).
             // No usar esMazoBotValido/generarMazoBot: un mazo de jugador no cumple reglas de bot
@@ -4029,6 +4361,7 @@ async function mostrarVentanaFinPartida(ganador) {
 
     const esEventoActivo = Boolean(estadoDesafio.activo && desafioActivo?.tipo === 'evento');
     const esPvp = ES_MODO_PVP;
+    const esAsalto = ES_MODO_ASALTO;
 
     tituloFinPartida.textContent = ganador === 'jugador' ? 'Has ganado' : 'Has perdido';
     mensajeFinPartida.textContent = ganador === 'jugador'
@@ -4041,7 +4374,9 @@ async function mostrarVentanaFinPartida(ganador) {
     botonVolverMenu.onclick = volverAlMenu;
     botonVolverMenu.textContent = esPvp
         ? 'Volver al multijugador'
-        : (esEventoActivo ? 'Terminar Evento' : (estadoDesafio.activo ? 'Terminar Desafío' : 'Volver al menú'));
+        : (esAsalto
+            ? 'Volver a Asaltos'
+            : (esEventoActivo ? 'Terminar Evento' : (estadoDesafio.activo ? 'Terminar Desafío' : 'Volver al menú')));
 
     if (esPvp) {
         if (window.DCMisiones?.track) {
@@ -4055,7 +4390,7 @@ async function mostrarVentanaFinPartida(ganador) {
     }
 
     if (ganador !== 'jugador') {
-        if (!esPvp && !estadoDesafio.activo && window.DCMisiones?.track) {
+        if (!esPvp && !estadoDesafio.activo && !esAsalto && window.DCMisiones?.track) {
             window.DCMisiones.track('bot', { amount: 1 });
         }
         return;
@@ -4112,6 +4447,50 @@ async function mostrarVentanaFinPartida(ganador) {
                     rejillaRecompensasEvento.appendChild(crearCartaRecompensaElemento(carta));
                 });
                 recompensasContainer.appendChild(rejillaRecompensasEvento);
+            }
+        } else if (esAsalto) {
+            const r = await otorgarRecompensasAsalto();
+            const resumen = document.createElement('p');
+            resumen.classList.add('texto-recompensa-resumen');
+            resumen.innerHTML = `Recompensas del asalto: ${formatoPuntosConMoneda(r.puntosGanados)}.`;
+            recompensasContainer.appendChild(resumen);
+
+            const filaObjetos = document.createElement('div');
+            filaObjetos.style.display = 'flex';
+            filaObjetos.style.justifyContent = 'center';
+            filaObjetos.style.gap = '10px';
+            filaObjetos.style.flexWrap = 'wrap';
+            filaObjetos.style.marginBottom = '10px';
+            if (Number(r.mejoraElite || 0) > 0) {
+                filaObjetos.appendChild(crearEtiquetaObjetoRecompensa('mejoraElite', r.mejoraElite));
+            }
+            if (Number(r.mejoraLegendaria || 0) > 0) {
+                filaObjetos.appendChild(crearEtiquetaObjetoRecompensa('mejoraLegendaria', r.mejoraLegendaria));
+            }
+            const alea = r.mejorasAleatorias || {};
+            if (Number(alea.mejoraCarta || 0) > 0) {
+                filaObjetos.appendChild(crearEtiquetaObjetoRecompensa('mejoraCarta', alea.mejoraCarta));
+            }
+            if (Number(alea.mejoraEspecial || 0) > 0) {
+                filaObjetos.appendChild(crearEtiquetaObjetoRecompensa('mejoraEspecial', alea.mejoraEspecial));
+            }
+            if (Number(alea.mejoraSuprema || 0) > 0) {
+                filaObjetos.appendChild(crearEtiquetaObjetoRecompensa('mejoraSuprema', alea.mejoraSuprema));
+            }
+            if (Number(alea.mejoraDefinitiva || 0) > 0) {
+                filaObjetos.appendChild(crearEtiquetaObjetoRecompensa('mejoraDefinitiva', alea.mejoraDefinitiva));
+            }
+            if (filaObjetos.childElementCount > 0) {
+                recompensasContainer.appendChild(filaObjetos);
+            }
+
+            if (Array.isArray(r.cartasGanadas) && r.cartasGanadas.length > 0) {
+                const rejillaAsalto = document.createElement('div');
+                rejillaAsalto.classList.add('recompensas-grid');
+                r.cartasGanadas.forEach((carta) => {
+                    rejillaAsalto.appendChild(crearCartaRecompensaElemento(carta));
+                });
+                recompensasContainer.appendChild(rejillaAsalto);
             }
         } else {
             const recompensa = await otorgarRecompensasVictoria();
@@ -4799,7 +5178,13 @@ function abandonarPartida() {
         if (ES_MODO_PVP && socketPvp && PVP_SESSION_ID) {
             socketPvp.emit('multiplayer:pvp:abandonar', { sessionId: PVP_SESSION_ID });
         }
-        abandonarVistaConLimpieza(ES_MODO_PVP ? 'multijugador.html' : 'vistaJuego.html');
+        let destinoTrasAbandono = 'vistaJuego.html';
+        if (ES_MODO_PVP) {
+            destinoTrasAbandono = 'multijugador.html';
+        } else if (ES_MODO_ASALTO) {
+            destinoTrasAbandono = 'asaltos.html';
+        }
+        abandonarVistaConLimpieza(destinoTrasAbandono);
     });
 }
 
@@ -4841,6 +5226,7 @@ function limpiarEstadoPartidaEnCurso() {
     localStorage.removeItem('mazoOponente');
     localStorage.removeItem('mazoOponenteBase');
     localStorage.removeItem('desafioActivo');
+    localStorage.removeItem('asaltoActivo');
     localStorage.removeItem('partidaRecompensada');
     localStorage.removeItem('partidaModo');
     localStorage.removeItem('partidaPvpSessionId');
@@ -4898,6 +5284,18 @@ function reiniciarPartida() {
         window.location.href = 'multijugador.html';
         return;
     }
+    if (ES_MODO_ASALTO) {
+        try {
+            const raw = localStorage.getItem('asaltoActivo');
+            if (!raw || raw === 'null') {
+                window.location.href = 'asaltos.html';
+                return;
+            }
+        } catch (_e) {
+            window.location.href = 'asaltos.html';
+            return;
+        }
+    }
     const mazoJugadorBase = localStorage.getItem('mazoJugadorBase');
     const mazoOponenteBase = localStorage.getItem('mazoOponenteBase');
 
@@ -4928,6 +5326,15 @@ function volverAlMenu() {
     }
     const esEventoActivo = Boolean(estadoDesafio.activo && desafioActivo?.tipo === 'evento');
     const esDesafioActivo = Boolean(estadoDesafio.activo && !esEventoActivo);
+    if (ES_MODO_ASALTO) {
+        try {
+            sessionStorage.removeItem('dc_tablero_fondo_url');
+        } catch (_e) {
+            /* noop */
+        }
+        window.location.href = 'asaltos.html';
+        return;
+    }
     if (esDesafioActivo) {
         window.location.href = 'desafios.html';
         return;

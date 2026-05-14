@@ -44,7 +44,63 @@
         window.dispatchEvent(new Event('dc:usuario-actualizado'));
     }
 
-    async function persistirUsuario(usuario) {
+    /** Paridad con server.js: max(progress), claimed OR, ventana más reciente si difiere. */
+    function fusionarScopeMisionesCliente(scopeServidor, scopeCliente) {
+        const a = scopeServidor && typeof scopeServidor === 'object' ? scopeServidor : { windowId: '', lista: [] };
+        const b = scopeCliente && typeof scopeCliente === 'object' ? scopeCliente : { windowId: '', lista: [] };
+        const wA = String(a.windowId || '');
+        const wB = String(b.windowId || '');
+        const listA = Array.isArray(a.lista) ? a.lista : [];
+        const listB = Array.isArray(b.lista) ? b.lista : [];
+        if (!wB && !wA) {
+            return { windowId: '', lista: [] };
+        }
+        if (!wB) {
+            return { windowId: wA, lista: listA.map((m) => ({ ...m })) };
+        }
+        if (!wA) {
+            return { windowId: wB, lista: listB.map((m) => ({ ...m })) };
+        }
+        if (wA !== wB) {
+            return wB > wA
+                ? { windowId: wB, lista: listB.map((m) => ({ ...m })) }
+                : { windowId: wA, lista: listA.map((m) => ({ ...m })) };
+        }
+        const byUid = new Map();
+        listA.forEach((m) => {
+            if (m && m.uid) {
+                byUid.set(String(m.uid), { ...m });
+            }
+        });
+        listB.forEach((m) => {
+            if (!m || !m.uid) return;
+            const uid = String(m.uid);
+            const prev = byUid.get(uid);
+            if (!prev) {
+                byUid.set(uid, { ...m });
+                return;
+            }
+            byUid.set(uid, {
+                ...prev,
+                ...m,
+                progress: Math.max(Number(prev.progress || 0), Number(m.progress || 0)),
+                claimed: Boolean(prev.claimed) || Boolean(m.claimed),
+            });
+        });
+        return { windowId: wA, lista: Array.from(byUid.values()) };
+    }
+
+    function fusionarMisionesCliente(misionesServidor, misionesCliente) {
+        const s = misionesServidor && typeof misionesServidor === 'object' ? misionesServidor : {};
+        const c = misionesCliente && typeof misionesCliente === 'object' ? misionesCliente : {};
+        return {
+            version: String(c.version || s.version || 'v1'),
+            diarias: fusionarScopeMisionesCliente(s.diarias, c.diarias),
+            semanales: fusionarScopeMisionesCliente(s.semanales, c.semanales),
+        };
+    }
+
+    async function persistirUsuario(usuario, reintento409 = false) {
         const email = leerEmail();
         if (!email) {
             escribirUsuario(usuario);
@@ -58,6 +114,12 @@
         const data = await response.json().catch(() => ({}));
         if (!response.ok) {
             if (response.status === 409 && data?.usuario) {
+                if (!reintento409 && usuario?.misiones && typeof usuario.misiones === 'object') {
+                    const merged = { ...data.usuario };
+                    merged.misiones = fusionarMisionesCliente(data.usuario.misiones || {}, usuario.misiones);
+                    escribirUsuario(merged);
+                    return persistirUsuario(merged, true);
+                }
                 escribirUsuario(data.usuario);
             }
             throw new Error(data?.mensaje || 'No se pudo guardar progreso de misiones');
@@ -393,25 +455,25 @@
     }
 
     async function aplicarIncrementoTrack(tipo, payload = {}) {
-        const usuario = leerUsuario();
-        if (!usuario) return;
-        const changedWindow = await ensureWindowsActualizadas(usuario);
         const incs = mapearEventoAIncrementos(tipo, payload);
+        if (incs.length === 0) return;
+
+        const latest = leerUsuario();
+        if (!latest) return;
+
+        const changedWindow = await ensureWindowsActualizadas(latest);
         let changed = changedWindow;
         incs.forEach((inc) => {
             const pred = (k) => normalizarClase(k) === normalizarClase(inc.classKey);
-            if (incrementarMisionLista(usuario.misiones.diarias.lista, pred, inc.amount)) changed = true;
-            if (incrementarMisionLista(usuario.misiones.semanales.lista, pred, inc.amount)) changed = true;
+            if (incrementarMisionLista(latest.misiones.diarias.lista, pred, inc.amount)) changed = true;
+            if (incrementarMisionLista(latest.misiones.semanales.lista, pred, inc.amount)) changed = true;
         });
         if (!changed) return;
-        /**
-         * Releer `usuario` desde localStorage antes de persistir: si otro flujo (p. ej. recompensas coop)
-         * acaba de guardar puntos/cartas/objetos, evitamos machacarlos en Firebase con esta copia antigua.
-         */
-        const latest = leerUsuario();
-        if (!latest) return;
-        latest.misiones = usuario.misiones;
-        await persistirUsuarioDebounced(latest);
+
+        const fresh = leerUsuario();
+        if (!fresh) return;
+        fresh.misiones = fusionarMisionesCliente(fresh.misiones || {}, latest.misiones);
+        await persistirUsuarioDebounced(fresh);
         render();
     }
 

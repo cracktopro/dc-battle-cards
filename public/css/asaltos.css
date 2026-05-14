@@ -193,6 +193,13 @@ body > .content-container:has(.asaltos-vista) {
     transform: rotateY(calc(var(--asaltos-i) * 60deg)) translateZ(var(--asaltos-radio));
     transform-style: preserve-3d;
     backface-visibility: visible;
+    /* Solo la cara en frente recibe puntero (clic abre panel); el resto no tapa la escena. */
+    pointer-events: none;
+}
+
+.asaltos-carrusel-escena--earth-clickeable .asaltos-carrusel-cara--frente {
+    pointer-events: auto;
+    cursor: pointer;
 }
 
 .asaltos-carrusel-cara-billboard {
@@ -204,6 +211,39 @@ body > .content-container:has(.asaltos-vista) {
     transform-style: preserve-3d;
     transform: rotateY(calc((var(--asaltos-spin) - var(--asaltos-i)) * 60deg));
     transition: transform 0.45s cubic-bezier(0.25, 0.85, 0.3, 1);
+}
+
+/* Tick de asalto completado (centro de la tierra, encima del PNG). */
+.asaltos-earth-completado-badge {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 2;
+    width: clamp(36px, 9.5vw, 52px);
+    height: clamp(36px, 9.5vw, 52px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    filter:
+        drop-shadow(0 0 6px rgba(0, 255, 160, 0.55))
+        drop-shadow(0 0 14px rgba(0, 220, 120, 0.35))
+        drop-shadow(0 0 22px rgba(0, 180, 100, 0.2));
+}
+
+.asaltos-earth-completado-svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+.asaltos-earth-completado-ring {
+    filter: drop-shadow(0 0 3px rgba(80, 255, 180, 0.45));
+}
+
+.asaltos-earth-completado-tick {
+    filter: drop-shadow(0 0 4px rgba(120, 255, 200, 0.5));
 }
 
 .asaltos-carrusel-cara img {
@@ -230,6 +270,18 @@ body > .content-container:has(.asaltos-vista) {
     filter: var(--asaltos-img-sombra) brightness(1);
 }
 
+/* Tierra al frente: hover solo en la imagen (drop-shadow sigue el alpha del PNG; sin box-shadow en el billboard 3D = sin cuadrado). */
+.asaltos-carrusel-escena--earth-clickeable .asaltos-carrusel-cara--frente:hover img {
+    transform: scale(1.2);
+    filter:
+        var(--asaltos-img-sombra)
+        brightness(1.14)
+        saturate(1.12)
+        drop-shadow(0 0 5px rgba(255, 255, 255, 0.42))
+        drop-shadow(0 0 10px rgba(0, 230, 255, 0.32))
+        drop-shadow(0 0 16px rgba(120, 210, 255, 0.22));
+}
+
 @media (prefers-reduced-motion: reduce) {
     .asaltos-carrusel-rueda,
     .asaltos-carrusel-cara-billboard {
@@ -238,6 +290,11 @@ body > .content-container:has(.asaltos-vista) {
 
     .asaltos-carrusel-cara img {
         transition: none;
+    }
+
+    .asaltos-carrusel-escena--earth-clickeable .asaltos-carrusel-cara--frente:hover img {
+        transform: scale(1.12);
+        filter: var(--asaltos-img-sombra) brightness(1);
     }
 }
 
@@ -343,6 +400,14 @@ body > .content-container:has(.asaltos-vista) {
         0 0 20px rgba(0, 200, 255, 0.35),
         0 2px 0 rgba(0, 30, 60, 0.9);
     letter-spacing: 0.04em;
+}
+
+.asaltos-nombre-frente--completado {
+    color: #8cffc4 !important;
+    text-shadow:
+        0 0 18px rgba(0, 255, 140, 0.42),
+        0 0 28px rgba(0, 200, 110, 0.22),
+        0 2px 0 rgba(0, 36, 24, 0.85);
 }
 
 .asaltos-btn-expand-panel {
@@ -498,12 +563,22 @@ body > .content-container:has(.asaltos-vista) {
         radial-gradient(ellipse 120% 80% at 20% 0%, rgba(0, 120, 200, 0.18), transparent 55%),
         linear-gradient(165deg, rgba(6, 14, 36, 0.97) 0%, rgba(3, 8, 22, 0.98) 100%);
     border: 1px solid rgba(0, 200, 255, 0.22);
+    /* Evita que la columna izquierda encoja al variar el contenido de recompensas. */
+    align-items: start;
+    min-height: min(520px, 78vh);
 }
 
 .asaltos-panel-visual {
     display: flex;
     align-items: stretch;
     justify-content: center;
+}
+
+.asaltos-panel-visual--stack {
+    flex-direction: column;
+    align-items: center;
+    gap: clamp(8px, 1.4vh, 12px);
+    width: 100%;
 }
 
 .asaltos-panel-marco-img {
@@ -519,6 +594,12 @@ body > .content-container:has(.asaltos-vista) {
         0 12px 36px rgba(0, 0, 0, 0.55);
     aspect-ratio: 16 / 10;
     background: #020814;
+}
+
+/* Imagen del panel: un poco más ancha; el bloque de recompensas sigue debajo. */
+.asaltos-panel-marco-img--compacta {
+    max-width: min(280px, 58vw);
+    aspect-ratio: 16 / 10;
 }
 
 .asaltos-panel-marco-img::after {
@@ -557,44 +638,320 @@ body > .content-container:has(.asaltos-vista) {
     padding-bottom: 10px;
 }
 
-.asaltos-panel-dificultad-fila {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 10px 14px;
-}
-
-.asaltos-panel-dificultad-label {
-    font-size: 0.72rem;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
-    color: rgba(160, 210, 255, 0.85);
-}
-
-.asaltos-panel-estrellas.estrellas-carta {
-    position: relative;
-    top: auto;
-    left: auto;
-    display: inline-flex;
-    padding: 6px 10px;
-    gap: 4px;
-    border-radius: 999px;
-}
-
-.asaltos-panel-estrellas .estrella {
-    width: 16px;
-    height: 16px;
-}
-
 .asaltos-panel-descripcion {
     margin: 0;
     font-size: clamp(0.86rem, 1.8vw, 0.98rem);
     line-height: 1.65;
     color: #c8e8ff;
     flex: 1 1 auto;
-    max-height: min(42vh, 280px);
+    max-height: min(22vh, 120px);
     overflow-y: auto;
     padding-right: 6px;
+}
+
+/* Carrusel 3D de modo (normal / élite / legendario); 3 caras → 120deg, sin marco extra en las imágenes. */
+.asaltos-panel-modo-bloque {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: clamp(10px, 2vh, 16px);
+    width: 100%;
+    margin-top: 4px;
+    flex: 0 0 auto;
+}
+
+.asaltos-panel-modo-label {
+    font-size: 0.72rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: rgba(160, 210, 255, 0.85);
+    text-align: center;
+}
+
+.asaltos-panel-dif-controles {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: clamp(6px, 2vw, 20px);
+    width: 100%;
+    max-width: min(520px, 100%);
+}
+
+.asaltos-panel-dif-escena {
+    --asaltos-dif-spin: 0;
+    flex: 1 1 auto;
+    min-width: 0;
+    width: 100%;
+    max-width: min(360px, 100%);
+    height: clamp(120px, 18vh, 180px);
+    perspective: 800px;
+    perspective-origin: 50% 40%;
+    position: relative;
+    overflow: visible;
+    --asaltos-dif-cara-w: clamp(88px, 16vw, 140px);
+    --asaltos-dif-cara-h: clamp(88px, 16vw, 140px);
+    --asaltos-dif-radio: min(118px, 22vw);
+}
+
+.asaltos-panel-dif-rueda {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: var(--asaltos-dif-cara-w);
+    height: var(--asaltos-dif-cara-h);
+    margin-left: calc(-0.5 * var(--asaltos-dif-cara-w));
+    margin-top: calc(-0.5 * var(--asaltos-dif-cara-h));
+    transform: rotateY(calc(var(--asaltos-dif-spin) * -120deg));
+    transform-style: preserve-3d;
+    transition: transform 0.45s cubic-bezier(0.25, 0.85, 0.3, 1);
+}
+
+.asaltos-panel-dif-cara {
+    position: absolute;
+    inset: 0;
+    transform-origin: center center;
+    transform: rotateY(calc(var(--asaltos-dif-i) * 120deg)) translateZ(var(--asaltos-dif-radio));
+    transform-style: preserve-3d;
+    backface-visibility: visible;
+}
+
+.asaltos-panel-dif-cara-billboard {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transform-style: preserve-3d;
+    transform: rotateY(calc((var(--asaltos-dif-spin) - var(--asaltos-dif-i)) * 120deg));
+    transition: transform 0.45s cubic-bezier(0.25, 0.85, 0.3, 1);
+}
+
+/* Tick solo en el panel: dificultad ya completada en esta rotación. */
+.asaltos-dif-completado-badge {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 2;
+    width: clamp(26px, 6.5vw, 38px);
+    height: clamp(26px, 6.5vw, 38px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    filter:
+        drop-shadow(0 0 5px rgba(0, 255, 160, 0.5))
+        drop-shadow(0 0 12px rgba(0, 220, 120, 0.32));
+}
+
+.asaltos-dif-completado-svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+.asaltos-panel-dif-cara img {
+    --asaltos-dif-img-sombra: drop-shadow(0 8px 24px rgba(0, 0, 0, 0.45));
+    display: block;
+    max-width: min(100%, var(--asaltos-dif-cara-w));
+    max-height: min(100%, var(--asaltos-dif-cara-h));
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    object-position: center;
+    pointer-events: none;
+    user-select: none;
+    backface-visibility: visible;
+    transform: scale(1);
+    filter: var(--asaltos-dif-img-sombra) brightness(0.58);
+    transition:
+        transform 0.48s cubic-bezier(0.25, 0.85, 0.3, 1),
+        filter 0.48s ease;
+}
+
+.asaltos-panel-dif-cara--frente img {
+    transform: scale(1.12);
+    filter: var(--asaltos-dif-img-sombra) brightness(1);
+}
+
+.asaltos-panel-comenzar-centro {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+}
+
+.asaltos-panel-comenzar-centro .asaltos-panel-btn-comenzar {
+    align-self: center;
+}
+
+/* Selector de mazo + poder en línea (compacto). */
+.asaltos-panel-mazo-seccion {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    width: 100%;
+    max-width: min(520px, 100%);
+    margin-top: clamp(6px, 1.2vh, 12px);
+}
+
+.asaltos-panel-mazo-label {
+    font-size: 0.72rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: rgba(160, 210, 255, 0.88);
+    text-align: center;
+}
+
+.asaltos-panel-mazo-fila {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-width: 0;
+}
+
+.asaltos-panel-select-mazo {
+    flex: 1 1 auto;
+    min-width: 0;
+    width: auto;
+    max-width: none;
+    background: rgba(6, 14, 32, 0.92);
+    border: 1px solid rgba(0, 209, 255, 0.38);
+    color: #dff8ff;
+    border-radius: 10px;
+    padding: 7px 10px;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.78rem;
+}
+
+.asaltos-panel-select-mazo:focus {
+    outline: none;
+    border-color: rgba(0, 240, 255, 0.75);
+    box-shadow: 0 0 12px rgba(0, 200, 255, 0.35);
+}
+
+.asaltos-panel-poder-inline {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 1px;
+    min-width: 4.2em;
+}
+
+.asaltos-panel-poder-mini-label {
+    font-size: 0.58rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: rgba(160, 210, 255, 0.75);
+    line-height: 1;
+}
+
+/* Número pequeño al lado del select; mantiene clases de tier de mazos.css con brillo suavizado. */
+.asaltos-panel-poder-num {
+    font-size: clamp(0.68rem, 2.4vw, 0.8rem) !important;
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+}
+
+.asaltos-panel-poder-num.poder-bajo,
+.asaltos-panel-poder-num.poder-medio,
+.asaltos-panel-poder-num.poder-alto {
+    text-shadow: 0 0 4px rgba(0, 200, 255, 0.35);
+}
+
+.asaltos-panel-poder-num.poder-legendario {
+    animation-duration: 1.2s;
+}
+
+/* Modal aviso poder / sin mazos */
+.asaltos-modal-poder {
+    position: fixed;
+    inset: 0;
+    z-index: 5000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: rgba(2, 6, 18, 0.75);
+    backdrop-filter: blur(6px);
+    box-sizing: border-box;
+}
+
+.asaltos-modal-poder[hidden] {
+    display: none !important;
+}
+
+.asaltos-modal-poder-caja {
+    width: min(420px, 100%);
+    padding: clamp(22px, 4vw, 30px);
+    border-radius: 16px;
+    border: 1px solid rgba(0, 200, 255, 0.35);
+    background: linear-gradient(165deg, rgba(8, 18, 42, 0.98) 0%, rgba(4, 10, 28, 0.99) 100%);
+    box-shadow:
+        0 0 40px rgba(0, 120, 200, 0.2),
+        0 16px 48px rgba(0, 0, 0, 0.55);
+    text-align: center;
+}
+
+.asaltos-modal-poder-titulo {
+    font-family: 'Orbitron', sans-serif;
+    font-size: clamp(1rem, 2.8vw, 1.2rem);
+    color: #e8fbff;
+    margin: 0 0 14px;
+    letter-spacing: 0.06em;
+    text-shadow: 0 0 14px rgba(0, 200, 255, 0.35);
+}
+
+.asaltos-modal-poder-mensaje {
+    margin: 0 0 22px;
+    font-size: clamp(0.9rem, 2.2vw, 1rem);
+    line-height: 1.55;
+    color: #c8e8ff;
+    text-align: center;
+}
+
+.asaltos-modal-poder-mensaje .asaltos-modal-poder-linea {
+    margin: 0 0 12px;
+}
+
+.asaltos-modal-poder-mensaje .asaltos-modal-poder-linea:last-child {
+    margin-bottom: 0;
+}
+
+.asaltos-modal-poder-requerido-num {
+    font-family: 'Orbitron', sans-serif;
+    font-weight: 700;
+    font-size: 1.08em;
+    letter-spacing: 0.04em;
+    color: var(--dc-accent-user, rgb(0, 123, 255));
+    text-shadow:
+        0 0 10px rgba(var(--dc-accent-user-rgb, 0, 123, 255), 0.55),
+        0 0 18px rgba(var(--dc-accent-user-rgb, 0, 123, 255), 0.35);
+}
+
+.asaltos-modal-poder-btn {
+    font-family: 'Orbitron', sans-serif;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 10px 28px;
+    border-radius: 10px;
+    border: 2px solid rgba(0, 255, 220, 0.55);
+    cursor: pointer;
+    color: #e8ffff;
+    background: linear-gradient(180deg, rgba(0, 90, 120, 0.95), rgba(0, 40, 70, 0.98));
+    box-shadow: 0 0 16px rgba(0, 200, 255, 0.22);
+}
+
+.asaltos-modal-poder-btn:hover {
+    border-color: rgba(0, 255, 255, 0.9);
 }
 
 .asaltos-panel-btn-comenzar {
@@ -630,14 +987,184 @@ body > .content-container:has(.asaltos-vista) {
     transform: translateY(2px);
 }
 
+.asaltos-panel-btn-comenzar--completado,
+.asaltos-panel-btn-comenzar--completado:disabled {
+    cursor: not-allowed;
+    opacity: 0.72;
+    color: #c4ffe0 !important;
+    border-color: rgba(72, 235, 160, 0.72) !important;
+    background: linear-gradient(180deg, rgba(0, 88, 52, 0.96), rgba(0, 32, 26, 0.99)) !important;
+    box-shadow:
+        0 0 18px rgba(0, 255, 150, 0.28),
+        0 4px 0 rgba(0, 28, 20, 0.92) !important;
+    transform: none !important;
+}
+
+.asaltos-panel-btn-comenzar--completado:hover,
+.asaltos-panel-btn-comenzar--completado:active {
+    transform: none !important;
+    border-color: rgba(72, 235, 160, 0.72) !important;
+    box-shadow:
+        0 0 18px rgba(0, 255, 150, 0.28),
+        0 4px 0 rgba(0, 28, 20, 0.92) !important;
+}
+
+/* --- Panel recompensas (debajo de la imagen del asalto) --- */
+.asaltos-panel-recompensas-root {
+    width: 100%;
+    max-width: min(340px, 100%);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    /* Altura estable al cambiar dificultad (1 vs 2 filas de objetos garantizados). */
+    min-height: clamp(300px, 36vh, 400px);
+}
+
+.asaltos-recomp-bloque {
+    border-radius: 12px;
+    padding: 10px 12px;
+    background: rgba(0, 24, 48, 0.55);
+    border: 1px solid rgba(0, 200, 255, 0.22);
+}
+
+.asaltos-recomp-bloque-titulo {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.68rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: rgba(160, 220, 255, 0.95);
+    margin: 0 0 8px;
+    text-align: center;
+}
+
+.asaltos-recomp-garant-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+}
+
+.asaltos-recomp-carta-linea {
+    margin: 0;
+    padding: 8px 10px;
+    text-align: center;
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #dff4ff;
+    letter-spacing: 0.04em;
+    border-radius: 10px;
+    border: 1px solid rgba(0, 200, 255, 0.28);
+    background: rgba(0, 40, 72, 0.45);
+}
+
+.asaltos-recomp-garant-datos {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 0.78rem;
+    color: #dff4ff;
+}
+
+.asaltos-recomp-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    justify-content: center;
+    min-height: 44px;
+}
+
+.asaltos-recomp-moneda-icon {
+    width: 36px;
+    height: 36px;
+    object-fit: contain;
+    flex-shrink: 0;
+}
+
+.asaltos-recomp-dif-tag {
+    color: rgba(255, 215, 120, 0.95);
+    font-size: 0.72rem;
+}
+
+.asaltos-recomp-objs-g {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: center;
+    justify-content: center;
+    /* Reserva espacio para 2 filas de iconos 52px (élite + legendaria) sin redimensionar el panel. */
+    min-height: 140px;
+}
+
+.asaltos-recomp-fila-obj {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    justify-content: center;
+}
+
+.asaltos-recomp-obj-icon {
+    width: 52px;
+    height: 52px;
+    object-fit: contain;
+    flex-shrink: 0;
+}
+
+.asaltos-recomp-obj-txt {
+    font-weight: 600;
+    font-size: 0.82rem;
+}
+
+.asaltos-recomp-alea-desc {
+    margin: 0 0 8px;
+    font-size: 0.66rem;
+    line-height: 1.45;
+    color: rgba(190, 220, 255, 0.82);
+    text-align: center;
+}
+
+.asaltos-recomp-drops-row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px 14px;
+}
+
+.asaltos-recomp-drop-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    min-width: 64px;
+}
+
+.asaltos-recomp-drop-pct {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #9ef5c8;
+}
+
 @media (max-width: 719px) {
     .asaltos-panel-detalle-grid {
         grid-template-columns: 1fr;
+        min-height: min(440px, 72vh);
     }
 
     .asaltos-panel-marco-img {
         max-width: none;
         aspect-ratio: 16 / 9;
+    }
+
+    .asaltos-panel-marco-img--compacta {
+        max-width: min(300px, 78vw);
+    }
+
+    .asaltos-panel-dif-escena {
+        height: clamp(108px, 20vh, 160px);
+        --asaltos-dif-radio: min(100px, 36vw);
+    }
+
+    .asaltos-panel-recompensas-root {
+        min-height: clamp(260px, 34vh, 360px);
     }
 }
 
@@ -661,6 +1188,15 @@ body > .content-container:has(.asaltos-vista) {
     }
 
     .asaltos-rotacion-barra-progreso {
+        transition: none;
+    }
+
+    .asaltos-panel-dif-rueda,
+    .asaltos-panel-dif-cara-billboard {
+        transition: none;
+    }
+
+    .asaltos-panel-dif-cara img {
         transition: none;
     }
 }

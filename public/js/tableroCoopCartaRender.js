@@ -293,7 +293,11 @@
         const cartaDiv = document.createElement('div');
         cartaDiv.classList.add('carta');
         if (soloVista) cartaDiv.classList.add('carta-solo-vista');
-        if (Number(carta?.Nivel || 1) >= 6) cartaDiv.classList.add('nivel-legendaria');
+        if (typeof window.dcAplicarClasesNivelCartaCompleta === 'function') {
+            window.dcAplicarClasesNivelCartaCompleta(cartaDiv, carta);
+        } else if (Number(carta?.Nivel || 1) >= 6) {
+            cartaDiv.classList.add('nivel-legendaria');
+        }
 
         if (esCartaBoss(carta)) {
             cartaDiv.classList.add('boss-carta');
@@ -441,15 +445,24 @@
         const estrellasDiv = document.createElement('div');
         estrellasDiv.classList.add('estrellas-carta');
         const dificultadBoss = Number(opciones.dificultadEvento || opciones.dificultadBoss || 1);
-        const cantidadEstrellas = esCartaBoss(carta)
-            ? Math.min(Math.max(dificultadBoss, 1), 6)
-            : Number(carta.Nivel || 1);
-        for (let i = 0; i < cantidadEstrellas; i += 1) {
-            const estrella = document.createElement('img');
-            estrella.classList.add('estrella');
-            estrella.src = 'https://i.ibb.co/zZt4R3x/star-level.png';
-            estrella.alt = 'star';
-            estrellasDiv.appendChild(estrella);
+        if (typeof window.dcRellenarEstrellasCartaCompleta === 'function') {
+            window.dcRellenarEstrellasCartaCompleta(estrellasDiv, carta, {
+                esCartaBoss: esCartaBoss(carta),
+                desafioActivo: esCartaBoss(carta)
+                    ? { dificultad: Math.min(6, Math.max(1, dificultadBoss)) }
+                    : null
+            });
+        } else {
+            const cantidadEstrellas = esCartaBoss(carta)
+                ? Math.min(Math.max(dificultadBoss, 1), 6)
+                : Number(carta.Nivel || 1);
+            for (let i = 0; i < cantidadEstrellas; i += 1) {
+                const estrella = document.createElement('img');
+                estrella.classList.add('estrella');
+                estrella.src = 'https://i.ibb.co/zZt4R3x/star-level.png';
+                estrella.alt = 'star';
+                estrellasDiv.appendChild(estrella);
+            }
         }
 
         cartaDiv.appendChild(detallesDiv);

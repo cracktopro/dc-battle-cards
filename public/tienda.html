@@ -121,13 +121,39 @@
         }
 
         .preview-carta.nivel-legendaria {
-            border-color: rgba(172, 96, 255, 0.92);
-            box-shadow: 0 0 14px rgba(156, 66, 255, 0.45), 0 0 24px rgba(112, 39, 199, 0.34);
+            border-color: rgb(168, 98, 255);
+            box-shadow:
+                0 0 5px rgb(168, 65, 255),
+                0 0 9px rgb(132, 0, 255),
+                0 0 14px rgb(210, 145, 255);
         }
 
-        .preview-carta.nivel-legendaria .detalles-carta {
+        .preview-carta.nivel-elite-tablero {
+            border-color: rgba(252, 248, 255, 1);
+            box-shadow:
+                0 0 4px rgb(244, 247, 255),
+                0 0 9px rgb(246, 249, 255),
+                0 0 16px rgb(240, 243, 255),
+                0 0 22px rgb(236, 239, 255);
+        }
+
+        .preview-carta.nivel-mitica-tablero {
+            border-color: rgba(255, 188, 150, 1);
+            box-shadow:
+                0 0 6px rgb(255, 85, 30),
+                0 0 12px rgb(255, 35, 0),
+                0 0 18px rgb(255, 125, 45);
+        }
+
+        .preview-carta.nivel-legendaria .detalles-carta,
+        .preview-carta.nivel-elite-tablero .detalles-carta {
             color: #d5b5ff;
             text-shadow: 0 0 6px rgba(186, 112, 255, 0.75);
+        }
+
+        .preview-carta.nivel-mitica-tablero .detalles-carta {
+            color: #ffd4c4;
+            text-shadow: 0 0 8px rgba(255, 120, 70, 0.85);
         }
 
         .preview-carta .detalles-carta {
@@ -437,9 +463,193 @@
 
         .tienda-objetos-grid-mezclas .tienda-objetos-cuadricula {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
             gap: 16px;
             align-items: stretch;
+        }
+
+        .tienda-objetos-dos-filas {
+            display: flex;
+            flex-direction: column;
+            gap: 22px;
+            width: 100%;
+        }
+
+        .tienda-objetos-fila-superior.tienda-objetos-cuadricula {
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+
+        .tienda-objetos-fila-inferior.tienda-objetos-cuadricula {
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+
+        @media (max-width: 1100px) {
+            .tienda-objetos-fila-superior.tienda-objetos-cuadricula,
+            .tienda-objetos-fila-inferior.tienda-objetos-cuadricula {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
+        .objeto-tienda--pie-alineado {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            min-height: 100%;
+            text-align: center;
+        }
+
+        .objeto-tienda-cuerpo-principal {
+            flex: 1 1 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            min-height: 0;
+            text-align: center;
+        }
+
+        .objeto-tienda-cuerpo-principal .objeto-tienda-desc {
+            flex: 1 1 auto;
+            line-height: 1.45;
+        }
+
+        .objeto-tienda-pie-compra {
+            margin-top: auto;
+            padding-top: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            align-items: stretch;
+            width: 100%;
+        }
+
+        .objeto-tienda-pie-compra .precio-item {
+            justify-content: center;
+        }
+
+        .objeto-tienda-pie-compra .btn {
+            width: 100%;
+        }
+
+        .objeto-tienda-fragmento-imagen-wrap,
+        .objeto-tienda-mejora-catalogo-imagen-wrap {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: clamp(160px, 26vh, 240px);
+            padding: 12px 8px 8px;
+        }
+
+        .objeto-tienda-fragmento-imagen,
+        .objeto-tienda-mejora-catalogo-imagen {
+            width: auto;
+            height: auto;
+            max-width: min(300px, 94%);
+            max-height: clamp(200px, 36vw, 300px);
+            object-fit: contain;
+            filter:
+                drop-shadow(0 12px 32px rgba(0, 0, 0, 0.5))
+                drop-shadow(0 0 16px rgba(var(--dc-accent-user-rgb, 0, 123, 255), 0.36));
+        }
+
+        .objeto-tienda-mejora-catalogo h5 {
+            text-align: center;
+            font-size: 1.06rem;
+            letter-spacing: 0.02em;
+        }
+
+        .objeto-tienda-sobre-imagen-wrap {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: clamp(160px, 26vh, 240px);
+            padding: 12px 8px 8px;
+        }
+
+        .objeto-tienda-sobre-imagen-wrap .preview-sobre-tienda {
+            width: min(180px, 88%);
+            max-height: clamp(210px, 34vw, 300px);
+            aspect-ratio: 6.3 / 8.8;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .objeto-tienda-fragmento-mejora h5 {
+            text-align: center;
+            font-size: 1.06rem;
+            letter-spacing: 0.02em;
+        }
+
+        .precio-item--mejora-carta {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .tienda-precio-mejora-carta-icono {
+            width: 26px;
+            height: 26px;
+            object-fit: contain;
+            vertical-align: middle;
+            filter: drop-shadow(0 0 8px rgba(120, 200, 255, 0.4));
+        }
+
+        .objeto-tienda-cofre {
+            text-align: center;
+        }
+
+        .objeto-tienda-cofre-imagen-wrap {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: clamp(160px, 26vh, 240px);
+            padding: 10px 6px 6px;
+        }
+
+        .objeto-tienda-cofre-imagen {
+            width: auto;
+            height: auto;
+            max-width: min(300px, 94%);
+            max-height: clamp(160px, 28vw, 240px);
+            object-fit: contain;
+            filter:
+                drop-shadow(0 12px 32px rgba(0, 0, 0, 0.5))
+                drop-shadow(0 0 18px rgba(var(--dc-accent-user-rgb, 0, 123, 255), 0.38));
+        }
+
+        .objeto-tienda-cofre h5 {
+            text-align: center;
+            font-size: 1.08rem;
+            letter-spacing: 0.02em;
+        }
+
+        .objeto-tienda-cofre .objeto-tienda-desc {
+            text-align: center;
+        }
+
+        .precio-item--mejora-especial {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .tienda-precio-objeto-linea {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 6px;
+            font-weight: 600;
+        }
+
+        .tienda-precio-mejora-especial-icono {
+            width: 26px;
+            height: 26px;
+            object-fit: contain;
+            vertical-align: middle;
+            filter: drop-shadow(0 0 8px rgba(255, 200, 120, 0.45));
         }
 
         @media (max-width: 899px) {
@@ -451,6 +661,10 @@
                 padding: 8px;
             }
             .tienda-objetos-fila.tienda-objetos-mejoras {
+                grid-template-columns: 1fr;
+            }
+            .tienda-objetos-fila-superior.tienda-objetos-cuadricula,
+            .tienda-objetos-fila-inferior.tienda-objetos-cuadricula {
                 grid-template-columns: 1fr;
             }
             .tienda-objetos-fila.tienda-objetos-sobres-heroes,

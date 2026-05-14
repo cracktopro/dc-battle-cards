@@ -360,7 +360,9 @@ function crearCartaColeccionElemento(carta, estaObtenida) {
 
     const cartaDiv = document.createElement('div');
     cartaDiv.classList.add('carta', 'carta-coleccion');
-    if (Number(cartaVisual.Nivel || 1) >= 6) {
+    if (typeof window.dcAplicarClasesNivelCartaCompleta === 'function') {
+        window.dcAplicarClasesNivelCartaCompleta(cartaDiv, cartaVisual);
+    } else if (Number(cartaVisual.Nivel || 1) >= 6) {
         cartaDiv.classList.add('nivel-legendaria');
     }
 
@@ -392,13 +394,17 @@ function crearCartaColeccionElemento(carta, estaObtenida) {
 
     const estrellasDiv = document.createElement('div');
     estrellasDiv.classList.add('estrellas-carta');
-    const nivel = Number(cartaVisual.Nivel || 1);
-    for (let i = 0; i < nivel; i++) {
-        const estrella = document.createElement('img');
-        estrella.classList.add('estrella');
-        estrella.src = 'https://i.ibb.co/zZt4R3x/star-level.png';
-        estrella.alt = 'star';
-        estrellasDiv.appendChild(estrella);
+    if (typeof window.dcRellenarEstrellasCartaCompleta === 'function') {
+        window.dcRellenarEstrellasCartaCompleta(estrellasDiv, cartaVisual, {});
+    } else {
+        const nivel = Number(cartaVisual.Nivel || 1);
+        for (let i = 0; i < nivel; i++) {
+            const estrella = document.createElement('img');
+            estrella.classList.add('estrella');
+            estrella.src = 'https://i.ibb.co/zZt4R3x/star-level.png';
+            estrella.alt = 'star';
+            estrellasDiv.appendChild(estrella);
+        }
     }
 
     const estadoDiv = document.createElement('div');
@@ -538,8 +544,13 @@ function crearTarjetaRevelacionSobre(carta) {
     const nivelNum = Number(carta.Nivel || 1);
     const cartaDiv = document.createElement('div');
     cartaDiv.classList.add('carta', 'apertura-sobre-mini-carta');
+    if (typeof window.dcAplicarClasesNivelCartaCompleta === 'function') {
+        window.dcAplicarClasesNivelCartaCompleta(cartaDiv, carta);
+    } else if (nivelNum >= 6) {
+        cartaDiv.classList.add('nivel-legendaria');
+    }
     if (nivelNum >= 6) {
-        cartaDiv.classList.add('nivel-legendaria', 'apertura-sobre-carta-resplandor-oro');
+        cartaDiv.classList.add('apertura-sobre-carta-resplandor-oro');
     }
 
     const imagenUrl = obtenerImagenCarta(carta);
@@ -566,12 +577,16 @@ function crearTarjetaRevelacionSobre(carta) {
 
     const estrellasDiv = document.createElement('div');
     estrellasDiv.classList.add('estrellas-carta');
-    for (let i = 0; i < nivelNum; i++) {
-        const estrella = document.createElement('img');
-        estrella.classList.add('estrella');
-        estrella.src = 'https://i.ibb.co/zZt4R3x/star-level.png';
-        estrella.alt = 'star';
-        estrellasDiv.appendChild(estrella);
+    if (typeof window.dcRellenarEstrellasCartaCompleta === 'function') {
+        window.dcRellenarEstrellasCartaCompleta(estrellasDiv, carta, {});
+    } else {
+        for (let i = 0; i < nivelNum; i++) {
+            const estrella = document.createElement('img');
+            estrella.classList.add('estrella');
+            estrella.src = 'https://i.ibb.co/zZt4R3x/star-level.png';
+            estrella.alt = 'star';
+            estrellasDiv.appendChild(estrella);
+        }
     }
 
     cartaDiv.appendChild(estrellasDiv);

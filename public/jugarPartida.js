@@ -220,8 +220,9 @@ document.addEventListener('DOMContentLoaded', function () {
             return;  // Verificar si se seleccionaron ambos
         }
 
-        // 🔥 LIMPIAR MODO DESAFÍO
+        // 🔥 LIMPIAR MODO DESAFÍO / ASALTO (no mezclar con VS BOT)
         localStorage.removeItem('desafioActivo');
+        localStorage.removeItem('asaltoActivo');
 
         const mazoJugador = JSON.parse(localStorage.getItem('mazoJugador')).Cartas;
         console.log('Mazo jugador:', mazoJugador);
@@ -1052,20 +1053,26 @@ function renderizarCartasSeleccionEvento() {
         const carta = item.carta;
         const cartaDiv = document.createElement('div');
         cartaDiv.className = `carta-mini ${seleccionCartasEvento.has(item.index) ? 'seleccionada' : ''}`;
-        if (Number(carta.Nivel || 1) >= 6) {
+        if (typeof window.dcAplicarClasesNivelCartaCompleta === 'function') {
+            window.dcAplicarClasesNivelCartaCompleta(cartaDiv, carta);
+        } else if (Number(carta.Nivel || 1) >= 6) {
             cartaDiv.classList.add('nivel-legendaria');
         }
         cartaDiv.style.backgroundImage = `url(${obtenerImagenCarta(carta)})`;
 
         const estrellasDiv = document.createElement('div');
         estrellasDiv.className = 'estrellas-carta';
-        const nivel = Number(carta.Nivel || 1);
-        for (let i = 0; i < nivel; i++) {
-            const estrella = document.createElement('img');
-            estrella.className = 'estrella';
-            estrella.src = 'https://i.ibb.co/zZt4R3x/star-level.png';
-            estrella.alt = 'star';
-            estrellasDiv.appendChild(estrella);
+        if (typeof window.dcRellenarEstrellasCartaCompleta === 'function') {
+            window.dcRellenarEstrellasCartaCompleta(estrellasDiv, carta, {});
+        } else {
+            const nivel = Number(carta.Nivel || 1);
+            for (let i = 0; i < nivel; i++) {
+                const estrella = document.createElement('img');
+                estrella.className = 'estrella';
+                estrella.src = 'https://i.ibb.co/zZt4R3x/star-level.png';
+                estrella.alt = 'star';
+                estrellasDiv.appendChild(estrella);
+            }
         }
 
         const detallesDiv = document.createElement('div');
@@ -1168,6 +1175,8 @@ async function confirmarSeleccionEvento() {
         tablero: String(eventoPendiente.tablero || '').trim()
     };
 
+    localStorage.removeItem('asaltoActivo');
+    localStorage.removeItem('partidaModo');
     localStorage.setItem('desafioActivo', JSON.stringify(eventoParaPartida));
     localStorage.setItem('dificultad', String(dificultadEventoSeleccionada));
     localStorage.setItem('mazoJugador', JSON.stringify({ Cartas: cartasSeleccionadas }));

@@ -266,8 +266,26 @@ body {
 .tablero-container .slot .carta.nivel-legendaria:hover {
     transform: none !important;
     box-shadow:
-        0 0 20px rgba(186, 112, 255, 0.68),
-        0 0 34px rgba(156, 66, 255, 0.55);
+        0 0 10px rgb(188, 88, 255),
+        0 0 18px rgb(145, 30, 255),
+        0 0 26px rgb(220, 160, 255);
+}
+
+.tablero-container .slot .carta.nivel-elite-tablero:hover {
+    transform: none !important;
+    box-shadow:
+        0 0 8px rgb(244, 247, 255),
+        0 0 15px rgb(246, 249, 255),
+        0 0 24px rgb(238, 242, 255),
+        0 0 33px rgb(234, 238, 255);
+}
+
+.tablero-container .slot .carta.nivel-mitica-tablero:hover {
+    transform: none !important;
+    box-shadow:
+        0 0 10px rgb(255, 105, 40),
+        0 0 18px rgb(255, 50, 10),
+        0 0 26px rgb(255, 140, 60);
 }
 
 .tablero-container .carta-recompensa-slot .carta,
@@ -285,8 +303,24 @@ body {
 
 .tablero-container .carta-recompensa-slot .carta.nivel-legendaria:hover {
     box-shadow:
-        0 0 20px rgba(186, 112, 255, 0.68),
-        0 0 34px rgba(156, 66, 255, 0.55);
+        0 0 10px rgb(188, 88, 255),
+        0 0 18px rgb(145, 30, 255),
+        0 0 26px rgb(220, 160, 255);
+}
+
+.tablero-container .carta-recompensa-slot .carta.nivel-elite-tablero:hover {
+    box-shadow:
+        0 0 8px rgb(244, 247, 255),
+        0 0 15px rgb(246, 249, 255),
+        0 0 24px rgb(238, 242, 255),
+        0 0 33px rgb(234, 238, 255);
+}
+
+.tablero-container .carta-recompensa-slot .carta.nivel-mitica-tablero:hover {
+    box-shadow:
+        0 0 10px rgb(255, 105, 40),
+        0 0 18px rgb(255, 50, 10),
+        0 0 26px rgb(255, 140, 60);
 }
 
 /* Modal de objetivo (tablero.html): mismas reglas; el modal está fuera de .tablero-container */
@@ -309,8 +343,26 @@ body {
 #modal-seleccion-habilidad .modal-habilidad-carta-slot .carta.nivel-legendaria:hover {
     transform: none !important;
     box-shadow:
-        0 0 20px rgba(186, 112, 255, 0.68),
-        0 0 34px rgba(156, 66, 255, 0.55);
+        0 0 10px rgb(188, 88, 255),
+        0 0 18px rgb(145, 30, 255),
+        0 0 26px rgb(220, 160, 255);
+}
+
+#modal-seleccion-habilidad .modal-habilidad-carta-slot .carta.nivel-elite-tablero:hover {
+    transform: none !important;
+    box-shadow:
+        0 0 8px rgb(244, 247, 255),
+        0 0 15px rgb(246, 249, 255),
+        0 0 24px rgb(238, 242, 255),
+        0 0 33px rgb(234, 238, 255);
+}
+
+#modal-seleccion-habilidad .modal-habilidad-carta-slot .carta.nivel-mitica-tablero:hover {
+    transform: none !important;
+    box-shadow:
+        0 0 10px rgb(255, 105, 40),
+        0 0 18px rgb(255, 50, 10),
+        0 0 26px rgb(255, 140, 60);
 }
 
 .slot:hover {
@@ -332,8 +384,35 @@ body {
     will-change: filter, box-shadow;
 }
 
+.carta.nivel-legendaria,
+.carta.nivel-elite-tablero,
+.carta.nivel-mitica-tablero {
+    box-sizing: border-box;
+}
+
 .carta.nivel-legendaria {
-    box-shadow: 0 0 16px rgba(156, 66, 255, 0.5), 0 0 26px rgba(112, 39, 199, 0.4);
+    border: 2px solid rgb(168, 98, 255);
+    box-shadow:
+        0 0 8px rgb(168, 65, 255),
+        0 0 14px rgb(132, 0, 255),
+        0 0 22px rgb(210, 145, 255);
+}
+
+.carta.nivel-elite-tablero {
+    border: 2px solid rgba(252, 248, 255, 1);
+    box-shadow:
+        0 0 6px rgb(244, 247, 255),
+        0 0 13px rgb(246, 249, 255),
+        0 0 20px rgb(240, 243, 255),
+        0 0 28px rgb(236, 239, 255);
+}
+
+.carta.nivel-mitica-tablero {
+    border: 2px solid rgba(255, 188, 150, 1);
+    box-shadow:
+        0 0 8px rgb(255, 85, 30),
+        0 0 15px rgb(255, 35, 0),
+        0 0 23px rgb(255, 125, 45);
 }
 
 .carta-seleccionada {
