@@ -1413,7 +1413,10 @@ async function enriquecerCartasConDatosCatalogo(cartas) {
             return carta;
         }
 
-        const datosCatalogo = mapaCatalogo.get(obtenerClaveCarta(carta.Nombre));
+        const nombreParentCatalogo = typeof window.DCSkinsCartas !== 'undefined' && typeof window.DCSkinsCartas.obtenerNombreParentCarta === 'function'
+            ? window.DCSkinsCartas.obtenerNombreParentCarta(carta)
+            : String(carta.Nombre || '');
+        const datosCatalogo = mapaCatalogo.get(obtenerClaveCarta(nombreParentCatalogo));
         if (!datosCatalogo) {
             return carta;
         }
@@ -1443,9 +1446,9 @@ async function enriquecerCartasConDatosCatalogo(cartas) {
             skill_power: skillPower,
             skill_power_base: skillPowerBaseCatalogo,
             skill_trigger: skillTrigger,
-            Imagen: datosCatalogo.Imagen || carta.Imagen || carta.imagen || '',
-            imagen: datosCatalogo.Imagen || carta.imagen || carta.Imagen || '',
-            imagen_final: datosCatalogo.imagen_final || carta.imagen_final || carta.Imagen_final || '',
+            Imagen: carta.Imagen || carta.imagen || datosCatalogo.Imagen || '',
+            imagen: carta.imagen || carta.Imagen || datosCatalogo.Imagen || '',
+            imagen_final: carta.imagen_final || carta.Imagen_final || datosCatalogo.imagen_final || '',
             SaludMax: saludEscalada,
             Salud: saludNormalizada,
             escudoActual: Math.max(0, Number(carta.escudoActual || 0)),
@@ -1484,13 +1487,19 @@ async function construirMazoOponenteDesdeAsaltoActivo(asalto) {
     });
     const salida = [];
     for (let i = 0; i < nombres.length && salida.length < 12; i += 1) {
-        const fila = mapa.get(obtenerClaveCarta(nombres[i]));
+        const nombreRef = nombres[i];
+        let fila = null;
+        if (typeof window.DCSkinsCartas !== 'undefined' && typeof window.DCSkinsCartas.resolverFilaCatalogoConSkin === 'function') {
+            fila = await window.DCSkinsCartas.resolverFilaCatalogoConSkin(nombreRef, mapa);
+        } else {
+            fila = mapa.get(obtenerClaveCarta(nombreRef));
+        }
         if (!fila) {
-            console.warn(`Asalto: carta no encontrada en catálogo: "${nombres[i]}"`);
+            console.warn(`Asalto: carta no encontrada en catálogo: "${nombreRef}"`);
             continue;
         }
         const stub = {
-            Nombre: String(fila.Nombre || nombres[i] || '').trim(),
+            Nombre: String(fila.Nombre || nombreRef || '').trim(),
             Nivel: 1,
             Poder: 0,
             Salud: 0,
@@ -1517,25 +1526,39 @@ async function construirEstadoDesafio(desafio) {
     });
 
     const dificultadDesafio = Math.min(Math.max(Number(desafio.dificultad || 1), 1), 6);
-    const enemigosBase = (desafio.enemigos || [])
-        .map(nombre => mapaPorNombre.get(normalizarNombre(nombre)))
-        .filter(Boolean)
-        .map(carta => {
-            const faccion = normalizarFaccion(carta.faccion) || mapaCatalogo.get(obtenerClaveCarta(carta.Nombre))?.faccion || 'V';
-            return escalarCartaSegunDificultad({
-                ...carta,
-                faccion
-            }, dificultadDesafio);
-        });
+    const enemigosBase = [];
+    for (const nombreRef of (desafio.enemigos || [])) {
+        let fila = null;
+        if (typeof window.DCSkinsCartas !== 'undefined' && typeof window.DCSkinsCartas.resolverFilaCatalogoConSkin === 'function') {
+            fila = await window.DCSkinsCartas.resolverFilaCatalogoConSkin(nombreRef, mapaPorNombre);
+        } else {
+            fila = mapaPorNombre.get(normalizarNombre(nombreRef));
+        }
+        if (!fila) {
+            continue;
+        }
+        const claveFaccion = obtenerClaveCarta(fila.skinParentNombre || fila.Nombre);
+        const faccion = normalizarFaccion(fila.faccion) || mapaCatalogo.get(claveFaccion)?.faccion || 'V';
+        enemigosBase.push(escalarCartaSegunDificultad({
+            ...fila,
+            faccion
+        }, dificultadDesafio));
+    }
 
     const gruposPendientes = dividirEnGrupos(enemigosBase, 3);
 
     let bossPendiente = null;
     const nombreBossDesafio = leerNombreBossMetaDesafio(desafio);
     if (nombreBossDesafio) {
-        const bossBase = mapaPorNombre.get(normalizarNombre(nombreBossDesafio));
+        let bossBase = null;
+        if (typeof window.DCSkinsCartas !== 'undefined' && typeof window.DCSkinsCartas.resolverFilaCatalogoConSkin === 'function') {
+            bossBase = await window.DCSkinsCartas.resolverFilaCatalogoConSkin(nombreBossDesafio, mapaPorNombre);
+        } else {
+            bossBase = mapaPorNombre.get(normalizarNombre(nombreBossDesafio));
+        }
         if (bossBase) {
-            const faccionBoss = normalizarFaccion(bossBase.faccion) || mapaCatalogo.get(obtenerClaveCarta(bossBase.Nombre))?.faccion || 'V';
+            const claveFaccionBoss = obtenerClaveCarta(bossBase.skinParentNombre || bossBase.Nombre);
+            const faccionBoss = normalizarFaccion(bossBase.faccion) || mapaCatalogo.get(claveFaccionBoss)?.faccion || 'V';
             bossPendiente = escalarBossSegunDificultad({
                 ...bossBase,
                 faccion: faccionBoss
@@ -2504,55 +2527,81 @@ async function otorgarRecompensasDesafio() {
      * Si la opción sorteada no está disponible (sin enemigos o sin BOSS) cae en la otra
      * disponible. Si no hay ni enemigos ni BOSS no se entrega carta.
      */
-    const enemigosEvento = Array.isArray(desafioActivo?.enemigos)
-        ? desafioActivo.enemigos.map(n => String(n || '').trim()).filter(Boolean)
+    const enemigosEventoRaw = Array.isArray(desafioActivo?.enemigos)
+        ? desafioActivo.enemigos.map((n) => String(n || '').trim()).filter(Boolean)
         : [];
-    const bossEvento = leerNombreBossMetaDesafio(desafioActivo);
+    const bossEventoRaw = leerNombreBossMetaDesafio(desafioActivo);
+    const skinsApiDesafio = typeof window.DCSkinsCartas !== 'undefined' ? window.DCSkinsCartas : null;
+    const hayCartaCatalogoEnDesafio = cartasRecompensaDesafio.some((raw) => {
+        const texto = String(raw || '').trim();
+        return texto && !(skinsApiDesafio?.esReferenciaRecompensaSkin?.(texto));
+    });
     const requiereCatalogoCartas = !esRepeticionDesafio && (
-        Boolean(esEvento && (enemigosEvento.length > 0 || bossEvento))
-        || (!esEvento && cartasRecompensaDesafio.length > 0)
+        Boolean(esEvento && (enemigosEventoRaw.length > 0 || bossEventoRaw))
+        || (!esEvento && hayCartaCatalogoEnDesafio)
     );
     const cartasDisponibles = requiereCatalogoCartas ? await obtenerCartasDisponibles() : [];
 
-    if (!esRepeticionDesafio && esEvento && (enemigosEvento.length > 0 || bossEvento)) {
+    if (!esRepeticionDesafio && esEvento && (enemigosEventoRaw.length > 0 || bossEventoRaw)) {
         const tirada = Math.random();
-        const sortearEnemigo = () => enemigosEvento[Math.floor(Math.random() * enemigosEvento.length)];
-        let nombreElegido = '';
-        if (tirada < 0.8 && enemigosEvento.length > 0) {
-            nombreElegido = sortearEnemigo();
-        } else if (bossEvento) {
-            nombreElegido = bossEvento;
-        } else if (enemigosEvento.length > 0) {
-            nombreElegido = sortearEnemigo();
+        const sortearEnemigo = () => enemigosEventoRaw[Math.floor(Math.random() * enemigosEventoRaw.length)];
+        let nombreElegidoRaw = '';
+        if (tirada < 0.8 && enemigosEventoRaw.length > 0) {
+            nombreElegidoRaw = sortearEnemigo();
+        } else if (bossEventoRaw) {
+            nombreElegidoRaw = bossEventoRaw;
+        } else if (enemigosEventoRaw.length > 0) {
+            nombreElegidoRaw = sortearEnemigo();
         }
-        if (nombreElegido) {
-            const cartaEvento = cartasDisponibles.find(
-                carta => normalizarNombre(carta?.Nombre) === normalizarNombre(nombreElegido)
-            );
-            if (cartaEvento) {
-                const dificultadEvento = Math.min(Math.max(Number(desafioActivo.dificultad || 1), 1), 6);
-                cartasGanadas.push({
-                    ...escalarCartaSegunDificultad(cartaEvento, dificultadEvento),
-                    tipoRecompensa: 'evento'
-                });
+        if (nombreElegidoRaw) {
+            if (skinsApiDesafio?.esReferenciaRecompensaSkin?.(nombreElegidoRaw)) {
+                const skinRec = await skinsApiDesafio.construirRecompensaSkinDesdeReferencia(nombreElegidoRaw);
+                if (skinRec) {
+                    cartasGanadas.push(skinRec);
+                }
+            } else {
+                const nombreElegido = skinsApiDesafio?.obtenerNombreCatalogoDesdeReferencia
+                    ? skinsApiDesafio.obtenerNombreCatalogoDesdeReferencia(nombreElegidoRaw)
+                    : nombreElegidoRaw;
+                const cartaEvento = cartasDisponibles.find(
+                    (carta) => normalizarNombre(carta?.Nombre) === normalizarNombre(nombreElegido)
+                );
+                if (cartaEvento) {
+                    const dificultadEvento = Math.min(Math.max(Number(desafioActivo.dificultad || 1), 1), 6);
+                    cartasGanadas.push({
+                        ...escalarCartaSegunDificultad(cartaEvento, dificultadEvento),
+                        tipoRecompensa: 'evento'
+                    });
+                }
             }
         }
     }
     if (!esRepeticionDesafio && !esEvento && cartasRecompensaDesafio.length > 0) {
         const dificultadDesafio = Math.min(Math.max(Number(desafioActivo?.dificultad || 1), 1), 6);
-        const nombresUnicos = Array.from(new Set(cartasRecompensaDesafio.map(normalizarNombre)));
-        nombresUnicos.forEach(nombreNormalizado => {
+        for (const rawNombre of cartasRecompensaDesafio) {
+            const texto = String(rawNombre || '').trim();
+            if (!texto) {
+                continue;
+            }
+            if (skinsApiDesafio?.esReferenciaRecompensaSkin?.(texto)) {
+                const skinRec = await skinsApiDesafio.construirRecompensaSkinDesdeReferencia(texto);
+                if (skinRec) {
+                    cartasGanadas.push(skinRec);
+                }
+                continue;
+            }
+            const nombreNormalizado = normalizarNombre(texto);
             const cartaBase = cartasDisponibles.find(
-                carta => normalizarNombre(carta?.Nombre) === nombreNormalizado
+                (carta) => normalizarNombre(carta?.Nombre) === nombreNormalizado
             );
             if (!cartaBase) {
-                return;
+                continue;
             }
             cartasGanadas.push({
                 ...escalarCartaSegunDificultad(cartaBase, dificultadDesafio),
                 tipoRecompensa: 'desafio'
             });
-        });
+        }
     }
 
     let nuevasH = 0;
@@ -2560,12 +2609,20 @@ async function otorgarRecompensasDesafio() {
     if (cartasGanadas.length > 0) {
         usuario.cartas = Array.isArray(usuario.cartas) ? usuario.cartas : [];
         const snapshotPrevias = usuario.cartas.slice();
-        const conteo = typeof window.dcContarCartasNuevasPorFaccion === 'function'
-            ? window.dcContarCartasNuevasPorFaccion(cartasGanadas, snapshotPrevias, cartasDisponibles)
-            : { nuevasH: 0, nuevasV: 0 };
-        nuevasH = conteo.nuevasH;
-        nuevasV = conteo.nuevasV;
-        usuario.cartas.push(...cartasGanadas);
+        const separado = skinsApiDesafio?.separarRecompensasCartasYSkins
+            ? skinsApiDesafio.separarRecompensasCartasYSkins(cartasGanadas)
+            : { cartas: cartasGanadas, skins: [] };
+        if (separado.skins.length && skinsApiDesafio?.persistirSkinsRecompensaEnUsuario) {
+            skinsApiDesafio.persistirSkinsRecompensaEnUsuario(usuario, separado.skins);
+        }
+        if (separado.cartas.length > 0) {
+            const conteo = typeof window.dcContarCartasNuevasPorFaccion === 'function'
+                ? window.dcContarCartasNuevasPorFaccion(separado.cartas, snapshotPrevias, cartasDisponibles)
+                : { nuevasH: 0, nuevasV: 0 };
+            nuevasH = conteo.nuevasH;
+            nuevasV = conteo.nuevasV;
+            usuario.cartas.push(...separado.cartas);
+        }
     }
 
     await actualizarUsuarioFirebase(usuario, email);
@@ -2641,6 +2698,13 @@ async function fabricarCartaRecompensaAsaltoNivel5(asalto) {
         throw new Error('El asalto no define cartas para el pool de recompensa.');
     }
     const elegido = nombres[Math.floor(Math.random() * nombres.length)];
+    const skinsApi = typeof window.DCSkinsCartas !== 'undefined' ? window.DCSkinsCartas : null;
+    if (skinsApi?.esReferenciaRecompensaSkin?.(elegido)) {
+        return skinsApi.construirRecompensaSkinDesdeReferencia(elegido);
+    }
+    const nombreCatalogo = skinsApi?.obtenerNombreCatalogoDesdeReferencia
+        ? skinsApi.obtenerNombreCatalogoDesdeReferencia(elegido)
+        : elegido;
     const cartasCatalogo = await obtenerCartasDisponibles();
     const mapa = new Map();
     cartasCatalogo.forEach((c) => {
@@ -2649,12 +2713,12 @@ async function fabricarCartaRecompensaAsaltoNivel5(asalto) {
             mapa.set(cl, c);
         }
     });
-    const fila = mapa.get(obtenerClaveCarta(elegido));
+    const fila = mapa.get(obtenerClaveCarta(nombreCatalogo));
     if (!fila) {
         throw new Error(`No se encontró en el catálogo la carta del asalto: "${elegido}".`);
     }
     const stub = {
-        Nombre: String(fila.Nombre || elegido || '').trim(),
+        Nombre: String(fila.Nombre || nombreCatalogo || '').trim(),
         Nivel: 1,
         Poder: 0,
         Salud: 0,
@@ -2699,6 +2763,7 @@ async function otorgarRecompensasAsalto() {
 
     const cartaPremio = await fabricarCartaRecompensaAsaltoNivel5(asalto);
     const cartasPremio = [cartaPremio];
+    const esRecompensaSkin = cartaPremio?.tipoRecompensa === 'skin';
 
     const mejorasAleatorias = {
         mejoraCarta: Math.random() < probabilidadDropAsaltoDesdeExcel(asalto.mejora) ? 1 : 0,
@@ -2709,7 +2774,11 @@ async function otorgarRecompensasAsalto() {
 
     usuario.cartas = Array.isArray(usuario.cartas) ? usuario.cartas : [];
     const snapshotPrevias = usuario.cartas.slice();
-    usuario.cartas.push(...cartasPremio);
+    if (esRecompensaSkin && typeof window.DCSkinsCartas !== 'undefined') {
+        window.DCSkinsCartas.persistirSkinsRecompensaEnUsuario(usuario, cartasPremio);
+    } else {
+        usuario.cartas.push(...cartasPremio);
+    }
 
     usuario.puntos = Number(usuario.puntos || 0) + puntosOtorg;
     usuario.objetos = (usuario.objetos && typeof usuario.objetos === 'object')
@@ -2754,8 +2823,9 @@ async function otorgarRecompensasAsalto() {
     }
 
     const cartasDisponibles = await obtenerCartasDisponibles();
+    const cartasParaMision = esRecompensaSkin ? [] : cartasPremio;
     const conteo = typeof window.dcContarCartasNuevasPorFaccion === 'function'
-        ? window.dcContarCartasNuevasPorFaccion(cartasPremio, snapshotPrevias, cartasDisponibles)
+        ? window.dcContarCartasNuevasPorFaccion(cartasParaMision, snapshotPrevias, cartasDisponibles)
         : { nuevasH: 0, nuevasV: 0 };
 
     await actualizarUsuarioFirebase(usuario, email);
@@ -2797,6 +2867,15 @@ function calcularPoderTotal(cartas) {
 }
 
 function crearCartaRecompensaElemento(carta) {
+    if (carta?.tipoRecompensa === 'skin'
+        && typeof window.DCSkinsCartas !== 'undefined'
+        && typeof window.DCSkinsCartas.crearElementoRecompensaSkin === 'function') {
+        const elSkin = window.DCSkinsCartas.crearElementoRecompensaSkin(carta);
+        if (elSkin) {
+            return elSkin;
+        }
+    }
+
     const contenedor = document.createElement('div');
     contenedor.classList.add('carta-recompensa-slot');
 
@@ -3288,9 +3367,11 @@ async function usarHabilidadActiva(carta, propietario, slotCarta) {
     }
     escribirDebug('SKILL_USAR_INTENTO', { propietario, slot: slotCarta, carta: carta.Nombre, clase: meta.clase, skill: meta.nombre });
 
-    const valor = Math.max(0, Number(obtenerValorNumericoSkillPower(carta, 0)));
     const aliados = obtenerSlotsAliados(propietario);
     const enemigos = obtenerSlotsEnemigos(propietario);
+    const { cartasConBonus: aliadosConBonusCast } = aplicarBonusAfiliaciones(aliados, enemigos);
+    const cartaCaster = aliadosConBonusCast[slotCarta] || carta;
+    const valor = Math.max(0, Number(obtenerValorNumericoSkillPower(cartaCaster, 0)));
     const tipoObjetivoEnemigo = obtenerTipoObjetivoPorPropietario(propietario === 'jugador' ? 'oponente' : 'jugador');
 
     if (meta.clase === 'heal') {
@@ -3365,10 +3446,9 @@ async function usarHabilidadActiva(carta, propietario, slotCarta) {
         escribirLog(`${carta.Nombre} usa ${meta.nombre} y revive a ${cartaRevive.Nombre} al mazo.`);
     } else if (meta.clase === 'shield') {
         if (valor <= 0) return false;
-        const { cartasConBonus: aliadosConBonusShield } = aplicarBonusAfiliaciones(aliados, enemigos);
         const disponibles = obtenerIndicesCartasDisponibles(aliados).map(index => ({
             index,
-            carta: aliadosConBonusShield[index]
+            carta: aliadosConBonusCast[index]
         }));
         if (disponibles.length === 0) return false;
         const idx = propietario === 'jugador'

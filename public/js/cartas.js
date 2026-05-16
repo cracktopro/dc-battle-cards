@@ -21,7 +21,10 @@ function registrarImagenesCatalogoEnMemoria(cartasExcel = []) {
 }
 
 function resolverImagenesCartaDesdeCatalogo(carta) {
-    const clave = obtenerClaveCartaImagen(carta?.Nombre);
+    const nombreClave = (typeof window !== 'undefined' && window.DCSkinsCartas?.obtenerNombreParentCarta)
+        ? window.DCSkinsCartas.obtenerNombreParentCarta(carta)
+        : carta?.Nombre;
+    const clave = obtenerClaveCartaImagen(nombreClave);
     if (!clave || !_mapaImagenesCatalogoPorNombre?.has(clave)) {
         return null;
     }
@@ -32,6 +35,18 @@ function obtenerImagenCarta(carta) {
     if (!carta) return 'img/default-image.jpg';
 
     const nivel = Number(carta.Nivel || 1);
+    const tieneSkinActivo = carta.skinActivoId !== null && carta.skinActivoId !== undefined;
+    if (tieneSkinActivo) {
+        const imagenFinalSkin = String(carta.imagen_final || carta.Imagen_final || carta.imagenFinal || '').trim();
+        if (nivel === 6 && imagenFinalSkin) {
+            return imagenFinalSkin;
+        }
+        const imagenSkin = String(carta.Imagen || carta.imagen || '').trim();
+        if (imagenSkin) {
+            return imagenSkin;
+        }
+    }
+
     const imagenesCatalogo = resolverImagenesCartaDesdeCatalogo(carta);
     const imagenBase = (imagenesCatalogo?.Imagen || String(carta.Imagen || carta.imagen || '').trim());
     const imagenFinal = (imagenesCatalogo?.imagen_final || String(carta.imagen_final || carta.Imagen_final || carta.imagenFinal || '').trim());
@@ -1919,6 +1934,9 @@ function normalizarMenuLateral() {
     const grupoEstado = obtenerEstadoGrupoSesion();
     if (avatar) {
         avatar.src = obtenerAvatarSesion();
+        if (typeof window.DCPerfilModal?.enlazarAvatarMenu === 'function') {
+            window.DCPerfilModal.enlazarAvatarMenu();
+        }
     }
     if (nombre) {
         nombre.textContent = obtenerNombreVisibleSesion();
@@ -1987,7 +2005,7 @@ function normalizarMenuLateral() {
         linkMultijugador.removeEventListener('click', bloquearNavegacionMultijugador);
     }
 
-    const versionLabelTexto = 'Versión: 1.2.1';
+    const versionLabelTexto = 'Versión: 1.2.2';
     let versionLabel = menu.querySelector('#menu-version-label');
     if (!versionLabel) {
         versionLabel = document.createElement('div');
@@ -2070,9 +2088,38 @@ window.abrirModalLogout = abrirModalLogout;
 window.cerrarModalLogout = cerrarModalLogout;
 window.confirmarLogoutSistema = confirmarLogoutSistema;
 
+function cargarRecursosPerfilModal() {
+    if (document.querySelector('link[data-dc-perfil-modal-css]')) {
+        if (typeof window.DCPerfilModal?.init === 'function') {
+            window.DCPerfilModal.init();
+        }
+        return;
+    }
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = 'css/perfil-modal.css';
+    link.dataset.dcPerfilModalCss = '1';
+    document.head.appendChild(link);
+
+    const script = document.createElement('script');
+    script.src = 'js/perfilModal.js';
+    script.defer = true;
+    script.dataset.dcPerfilModalJs = '1';
+    script.onload = () => {
+        if (typeof window.DCPerfilModal?.init === 'function') {
+            window.DCPerfilModal.init();
+        }
+        if (typeof window.DCPerfilModal?.enlazarAvatarMenu === 'function') {
+            window.DCPerfilModal.enlazarAvatarMenu();
+        }
+    };
+    document.body.appendChild(script);
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
     aplicarColorPrincipalDesdeSesion();
     normalizarMenuLateral();
+    cargarRecursosPerfilModal();
     asegurarModalLogout();
     await migrarSkillsUsuarioDesdeCatalogo();
     iniciarTimerRecompensaDiariaMenu();
@@ -2084,6 +2131,9 @@ window.addEventListener('dc:usuario-actualizado', () => {
     aplicarColorPrincipalDesdeSesion();
     actualizarPanelPerfilTiempoReal();
     renderTimerRecompensaDiariaMenu();
+    if (typeof window.DCPerfilModal?.enlazarAvatarMenu === 'function') {
+        window.DCPerfilModal.enlazarAvatarMenu();
+    }
 });
 
 window.addEventListener('dc:grupo-actualizado', () => {

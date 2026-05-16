@@ -10,6 +10,7 @@ const path = require('path');
 const fs = require('fs');
 const cors = require('cors');
 const DCHealDebuff = require(path.join(__dirname, 'public', 'js', 'healDebuffCombat.js'));
+const DCSkinsCartas = require(path.join(__dirname, 'public', 'js', 'skinsCartas.js'));
 
 // Configuración de Firebase
 const firebaseConfig = {
@@ -940,7 +941,7 @@ function aplicarHabilidadCanonicaSnapshot(snapshot, ladoActor, slotAtacante, slo
     const poderBaseAtacante = Math.max(0, Number(obtenerPoderCartaServidor(atacante)));
     const poderConBonosAtacante = Math.max(0, Math.round(obtenerPoderCartaConBonosServidor(atacante, mesaActor, mesaObjetivo)));
     const valorSkill = Math.max(0, Number(obtenerValorSkillServidor(atacante, 0, {
-        poder: (clase === 'aoe' || clase === 'extra_attack') ? poderConBonosAtacante : poderBaseAtacante,
+        poder: poderConBonosAtacante,
         salud: obtenerSaludCartaServidor(atacante)
     })));
     if (clase === 'tank') {
@@ -1382,27 +1383,27 @@ function construirMazoBotCoopDesdeEvento(filaEvento, mapaCatalogo, dificultad) {
         }
     }
     const cartasNormales = nombresNormales.map(nombre => {
-        const base = mapaCatalogo.get(normalizarTexto(nombre)) || {
-            Nombre: nombre,
+        const base = DCSkinsCartas.resolverFilaCatalogoConSkinServidor(nombre, mapaCatalogo, path, __dirname) || {
+            Nombre: DCSkinsCartas.obtenerNombreCatalogoDesdeReferencia(nombre) || nombre,
             Nivel: 1,
             Poder: 500,
             Salud: 500,
             SaludMax: 500
         };
-        return escalarCartaEnemigoCoopServidor({ ...base, Nombre: nombre }, dificultad);
+        return escalarCartaEnemigoCoopServidor({ ...base }, dificultad);
     });
 
     let bossCarta = null;
     const bossNombre = String(filaEvento?.boss ?? filaEvento?.Boss ?? filaEvento?.BOSS ?? '').trim();
     if (bossNombre) {
-        const baseBoss = mapaCatalogo.get(normalizarTexto(bossNombre)) || {
-            Nombre: bossNombre,
+        const baseBoss = DCSkinsCartas.resolverFilaCatalogoConSkinServidor(bossNombre, mapaCatalogo, path, __dirname) || {
+            Nombre: DCSkinsCartas.obtenerNombreCatalogoDesdeReferencia(bossNombre) || bossNombre,
             Nivel: 1,
             Poder: 500,
             Salud: 500,
             SaludMax: 500
         };
-        bossCarta = escalarBossSegunDificultadServidor({ ...baseBoss, Nombre: bossNombre }, dificultad);
+        bossCarta = escalarBossSegunDificultadServidor({ ...baseBoss }, dificultad);
     }
 
     return { cartasNormales, bossCarta };
@@ -2596,7 +2597,7 @@ io.on('connection', (socket) => {
         io.to(socket.id).emit('coop:evento:preparacion', { ...basePayload, rolCoop: 'B' });
     });
 
-    socket.on('coop:evento:preparacion:listo', async ({ prepId, indicesCartas }) => {
+    socket.on('coop:evento:preparacion:listo', async ({ prepId, indicesCartas, skinsPorIndice }) => {
         const prepIdNorm = String(prepId || '').trim();
         const prep = preparacionesCoopEvento.get(prepIdNorm);
         if (!prep || prep.estado !== 'seleccion') {
@@ -2611,11 +2612,34 @@ io.on('connection', (socket) => {
             io.to(socket.id).emit('grupo:notificacion', { tipo: 'error', mensaje: 'No perteneces a esta preparación.' });
             return;
         }
-        const cartas = await extraerCartasUsuarioPorIndicesCoop(usuario.email, indicesCartas);
+        let cartas = await extraerCartasUsuarioPorIndicesCoop(usuario.email, indicesCartas);
         if (!cartas) {
             console.error(`[coop] preparacion:listo: cartas inválidas para ${usuario.email} (indices=${JSON.stringify(indicesCartas)})`);
             io.to(socket.id).emit('grupo:notificacion', { tipo: 'error', mensaje: 'Debes elegir exactamente 6 cartas válidas de tu colección.' });
             return;
+        }
+        if (skinsPorIndice && typeof skinsPorIndice === 'object') {
+            try {
+                const mapaCatalogoCoop = mapaCatalogoPorNombreCoop();
+                DCSkinsCartas.asegurarSkinsCargadosServidor(path.join, path.dirname);
+                const indices = Array.isArray(indicesCartas) ? indicesCartas.map((n) => Number(n)) : [];
+                cartas = cartas.map((carta, i) => {
+                    const ix = indices[i];
+                    const skinRaw = skinsPorIndice[ix] ?? skinsPorIndice[String(ix)];
+                    if (skinRaw === undefined || skinRaw === null || skinRaw === '') {
+                        return carta;
+                    }
+                    const skinId = Number(skinRaw);
+                    if (!Number.isFinite(skinId)) {
+                        return carta;
+                    }
+                    const parent = DCSkinsCartas.obtenerNombreParentCarta(carta);
+                    const filaParent = mapaCatalogoCoop.get(normalizarTexto(parent)) || null;
+                    return DCSkinsCartas.construirVistaCartaJugadorConSkin(carta, skinId, filaParent);
+                });
+            } catch (errSkinCoop) {
+                console.warn('[coop] no se pudieron aplicar skins de selección:', errSkinCoop.message);
+            }
         }
         if (esA && prep.listoA) {
             io.to(socket.id).emit('grupo:notificacion', { tipo: 'info', mensaje: 'Ya enviaste tu selección de cartas.' });
@@ -3253,6 +3277,11 @@ async function guardarUsuarioConControlConcurrencia(email, usuarioPayload = {}) 
     }
     if (!Array.isArray(usuario.mazos)) {
         usuario.mazos = datosActuales.mazos || [];
+    }
+    if (!Array.isArray(usuario.skinsObtenidos)) {
+        usuario.skinsObtenidos = Array.isArray(datosActuales.skinsObtenidos)
+            ? datosActuales.skinsObtenidos
+            : [];
     }
     const objsPrev = datosActuales.objetos && typeof datosActuales.objetos === 'object'
         ? datosActuales.objetos

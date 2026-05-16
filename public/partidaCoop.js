@@ -1322,9 +1322,23 @@
         };
     }
 
+    function obtenerPoderCartaFinalCoop(carta) {
+        if (!carta) return 0;
+        const finalNum = Number(carta.poderFinalAfiliacion);
+        if (Number.isFinite(finalNum)) {
+            return Math.max(0, Math.round(finalNum));
+        }
+        const baseAf = Number(carta.poderBaseAfiliacion);
+        const bonAf = Number(carta.bonusAfiliacion || 0);
+        if (Number.isFinite(baseAf)) {
+            return Math.max(0, baseAf + (Number.isFinite(bonAf) ? bonAf : 0));
+        }
+        return Math.max(0, Number(carta.Poder || 0));
+    }
+
     function obtenerValorNumericoSkillPower(carta, fallback = 0) {
         if (typeof window.obtenerSkillPowerNumericoCarta === 'function') {
-            const poder = Math.max(1, Number(carta?.Poder || 0));
+            const poder = obtenerPoderCartaFinalCoop(carta);
             const salud = obtenerSaludActualCarta(carta);
             return window.obtenerSkillPowerNumericoCarta(carta, { fallback, poder, salud });
         }
@@ -1794,9 +1808,16 @@
         const coopReplayFloats = [];
         let coopReplayExtraAttack = null;
 
-        const valor = Math.max(0, Number(obtenerValorNumericoSkillPower(carta, 0)));
         const aliados = ctx.aliados;
         const enemigos = ctx.enemigos;
+        let cartaCaster = carta;
+        const uiBonus = window.tableroCoopCartaUi;
+        if (uiBonus && typeof uiBonus.calcularMesasConBonus === 'function' && snapshot) {
+            const { mesaBot, mesaA, mesaB } = uiBonus.calcularMesasConBonus(snapshot);
+            const mesaCaster = zonaActor === 'bot' ? mesaBot : zonaActor === 'A' ? mesaA : mesaB;
+            cartaCaster = mesaCaster?.[slotCarta] || carta;
+        }
+        const valor = Math.max(0, Number(obtenerValorNumericoSkillPower(cartaCaster, 0)));
 
         if (meta.clase === 'heal') {
             if (valor <= 0) return false;
@@ -2892,16 +2913,28 @@
             }
             if (nombreElegido) {
                 try {
-                    const catalogo = await coopObtenerCartasDisponibles();
-                    catalogoCoopParaMision = catalogo;
-                    const cartaBase = catalogo.find((c) => coopNormalizarNombre(c?.Nombre) === coopNormalizarNombre(nombreElegido));
-                    if (cartaBase) {
-                        const cartaEscalada = coopEscalarCartaSegunDificultad(cartaBase, dificultadEvento);
-                        cartaEscalada.tipoRecompensa = 'evento';
-                        cartasGanadas.push(cartaEscalada);
-                        usuario.cartas.push(cartaEscalada);
+                    const skinsApi = typeof window.DCSkinsCartas !== 'undefined' ? window.DCSkinsCartas : null;
+                    if (skinsApi?.esReferenciaRecompensaSkin?.(nombreElegido)) {
+                        const skinRec = await skinsApi.construirRecompensaSkinDesdeReferencia(nombreElegido);
+                        if (skinRec) {
+                            skinsApi.persistirSkinsRecompensaEnUsuario(usuario, [skinRec]);
+                            cartasGanadas.push(skinRec);
+                        }
                     } else {
-                        console.warn('[coop] carta de recompensa sorteada no encontrada en catálogo:', nombreElegido);
+                        const nombreCatalogo = skinsApi?.obtenerNombreCatalogoDesdeReferencia
+                            ? skinsApi.obtenerNombreCatalogoDesdeReferencia(nombreElegido)
+                            : nombreElegido;
+                        const catalogo = await coopObtenerCartasDisponibles();
+                        catalogoCoopParaMision = catalogo;
+                        const cartaBase = catalogo.find((c) => coopNormalizarNombre(c?.Nombre) === coopNormalizarNombre(nombreCatalogo));
+                        if (cartaBase) {
+                            const cartaEscalada = coopEscalarCartaSegunDificultad(cartaBase, dificultadEvento);
+                            cartaEscalada.tipoRecompensa = 'evento';
+                            cartasGanadas.push(cartaEscalada);
+                            usuario.cartas.push(cartaEscalada);
+                        } else {
+                            console.warn('[coop] carta de recompensa sorteada no encontrada en catálogo:', nombreElegido);
+                        }
                     }
                 } catch (errCarta) {
                     console.error('[coop] no se pudo añadir carta recompensa:', errCarta);
@@ -2909,9 +2942,13 @@
             }
         }
 
-        if (cartasGanadas.length > 0 && typeof window.dcContarCartasNuevasPorFaccion === 'function') {
+        const skinsApiCoop = typeof window.DCSkinsCartas !== 'undefined' ? window.DCSkinsCartas : null;
+        const separadoCoop = skinsApiCoop?.separarRecompensasCartasYSkins
+            ? skinsApiCoop.separarRecompensasCartasYSkins(cartasGanadas)
+            : { cartas: cartasGanadas, skins: [] };
+        if (separadoCoop.cartas.length > 0 && typeof window.dcContarCartasNuevasPorFaccion === 'function') {
             const c = window.dcContarCartasNuevasPorFaccion(
-                cartasGanadas,
+                separadoCoop.cartas,
                 cartasUsuarioAntesRecompensa,
                 catalogoCoopParaMision
             );
@@ -2967,6 +3004,14 @@
     }
 
     function coopCrearCartaRecompensaElemento(carta) {
+        if (carta?.tipoRecompensa === 'skin'
+            && typeof window.DCSkinsCartas !== 'undefined'
+            && typeof window.DCSkinsCartas.crearElementoRecompensaSkin === 'function') {
+            const elSkin = window.DCSkinsCartas.crearElementoRecompensaSkin(carta);
+            if (elSkin) {
+                return elSkin;
+            }
+        }
         const contenedor = document.createElement('div');
         contenedor.classList.add('carta-recompensa-slot');
         const ui = window.tableroCoopCartaUi;

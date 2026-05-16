@@ -4,9 +4,24 @@ document.addEventListener('DOMContentLoaded', async function () {
 });
 
 const cartasSeleccionadas = new Set();
+/** id índice colección → carta con apariencia para este mazo nuevo */
+const cartasVistaSeleccionCrearMazo = new Map();
 let faccionVistaActiva = 'H';
 let mapaDatosCartasCatalogo = null;
 let afiliacionFiltroActiva = 'todas';
+let busquedaCrearMazo = '';
+
+function obtenerCartaDisplayCrearMazo(idCarta, usuario) {
+    const id = String(idCarta);
+    if (cartasVistaSeleccionCrearMazo.has(id)) {
+        return cartasVistaSeleccionCrearMazo.get(id);
+    }
+    const raw = usuario?.cartas?.[idCarta];
+    if (typeof window.DCSeleccionCartaApariencia?.obtenerCartaComoParent === 'function') {
+        return window.DCSeleccionCartaApariencia.obtenerCartaComoParent(raw, mapaDatosCartasCatalogo);
+    }
+    return raw;
+}
 
 function normalizarFaccion(valor) {
     if (!valor) {
@@ -32,8 +47,8 @@ function normalizarAfiliacion(afi) {
 function calcularPoderTotalMazo(usuario) {
     let total = 0;
 
-    cartasSeleccionadas.forEach(id => {
-        const carta = usuario.cartas[id];
+    cartasSeleccionadas.forEach((id) => {
+        const carta = cartasVistaSeleccionCrearMazo.get(String(id)) || usuario.cartas[id];
         if (carta) {
             total += Number(carta.Poder || 0);
         }
@@ -181,6 +196,34 @@ function asegurarSelectorAfiliacion() {
     toolbar.appendChild(wrapper);
 
     return selector;
+}
+
+function asegurarBusquedaCrearMazo() {
+    let input = document.getElementById('busqueda-crear-mazo');
+    if (input) {
+        return input;
+    }
+    const toolbar = document.querySelector('.faccion-toolbar');
+    if (!toolbar) {
+        return null;
+    }
+    input = document.createElement('input');
+    input.type = 'search';
+    input.id = 'busqueda-crear-mazo';
+    input.className = 'form-control busqueda-seleccion-cartas';
+    input.placeholder = 'Buscar carta...';
+    input.autocomplete = 'off';
+    input.style.flex = '1';
+    input.style.minWidth = '180px';
+    input.addEventListener('input', () => {
+        busquedaCrearMazo = String(input.value || '').trim().toLowerCase();
+        const usuario = JSON.parse(localStorage.getItem('usuario'));
+        if (usuario) {
+            actualizarSeleccionUI(usuario);
+        }
+    });
+    toolbar.appendChild(input);
+    return input;
 }
 
 function actualizarSelectorAfiliacion(usuario) {
@@ -371,9 +414,27 @@ function aplicarFiltroFaccion(usuario) {
         const coincideAfiliacion = afiliacionFiltroNormalizada === 'todas'
             ? true
             : afiliacionesCarta.includes(afiliacionFiltroNormalizada);
-        const debeMostrarse = faccionCarta === faccionVistaActiva && coincideAfiliacion;
+        const cartaDatos = obtenerCartaDisplayCrearMazo(idCarta, usuario);
+        const coincideBusqueda = !busquedaCrearMazo
+            || (typeof window.DCSeleccionCartaApariencia?.cartaCoincideBusqueda === 'function'
+                ? window.DCSeleccionCartaApariencia.cartaCoincideBusqueda(cartaDatos, busquedaCrearMazo)
+                : String(cartaDatos?.Nombre || '').toLowerCase().includes(busquedaCrearMazo));
+        const debeMostrarse = faccionCarta === faccionVistaActiva && coincideAfiliacion && coincideBusqueda;
 
         cartaDiv.classList.toggle('oculta-por-faccion', !debeMostrarse);
+
+        const cartaVisual = obtenerCartaDisplayCrearMazo(idCarta, usuario);
+        if (cartaVisual && typeof obtenerImagenCarta === 'function') {
+            cartaDiv.style.backgroundImage = `url(${obtenerImagenCarta(cartaVisual)})`;
+        }
+        const nombreEl = cartaDiv.querySelector('.nombre-carta');
+        const poderEl = cartaDiv.querySelector('.poder-carta');
+        if (nombreEl && cartaVisual) {
+            nombreEl.textContent = cartaVisual.Nombre;
+        }
+        if (poderEl && cartaVisual) {
+            poderEl.textContent = cartaVisual.Poder;
+        }
 
         if (!debeMostrarse) {
             return;
@@ -449,6 +510,8 @@ async function cargarCartas() {
             return a.carta.Nombre.localeCompare(b.carta.Nombre);
         });
 
+    await obtenerMapaDatosCartasCatalogo();
+
     cartasOrdenadas.forEach(({ carta, index }) => {
         const faccionCarta = normalizarFaccion(carta.faccion);
 
@@ -456,16 +519,20 @@ async function cargarCartas() {
             return;
         }
 
+        const cartaVista = typeof window.DCSeleccionCartaApariencia?.obtenerCartaComoParent === 'function'
+            ? window.DCSeleccionCartaApariencia.obtenerCartaComoParent(carta, mapaDatosCartasCatalogo)
+            : carta;
+
         const cartaDiv = document.createElement('div');
         cartaDiv.classList.add('carta');
         if (typeof window.dcAplicarClasesNivelCartaCompleta === 'function') {
-            window.dcAplicarClasesNivelCartaCompleta(cartaDiv, carta);
-        } else if (Number(carta.Nivel || 1) >= 6) {
+            window.dcAplicarClasesNivelCartaCompleta(cartaDiv, cartaVista);
+        } else if (Number(cartaVista.Nivel || 1) >= 6) {
             cartaDiv.classList.add('nivel-legendaria');
         }
         cartaDiv.dataset.id = index;
 
-        const imagenUrl = obtenerImagenCarta(carta);
+        const imagenUrl = obtenerImagenCarta(cartaVista);
         cartaDiv.style.backgroundImage = `url(${imagenUrl})`;
         cartaDiv.style.backgroundSize = 'cover';
         cartaDiv.style.backgroundPosition = 'center top';
@@ -475,11 +542,11 @@ async function cargarCartas() {
 
         const nombreSpan = document.createElement('span');
         nombreSpan.classList.add('nombre-carta');
-        nombreSpan.textContent = carta.Nombre;
+        nombreSpan.textContent = cartaVista.Nombre;
 
         const poderSpan = document.createElement('span');
         poderSpan.classList.add('poder-carta');
-        poderSpan.textContent = carta.Poder;
+        poderSpan.textContent = cartaVista.Poder;
 
         detallesDiv.appendChild(nombreSpan);
         detallesDiv.appendChild(poderSpan);
@@ -488,9 +555,9 @@ async function cargarCartas() {
         estrellasDiv.classList.add('estrellas-carta');
 
         if (typeof window.dcRellenarEstrellasCartaCompleta === 'function') {
-            window.dcRellenarEstrellasCartaCompleta(estrellasDiv, carta, {});
+            window.dcRellenarEstrellasCartaCompleta(estrellasDiv, cartaVista, {});
         } else {
-            const nivel = carta.Nivel || 1;
+            const nivel = cartaVista.Nivel || 1;
             for (let i = 0; i < nivel; i++) {
                 const estrella = document.createElement('img');
                 estrella.classList.add('estrella');
@@ -501,21 +568,22 @@ async function cargarCartas() {
         }
 
         cartaDiv.appendChild(detallesDiv);
-        const badgeHabilidad = window.crearBadgeHabilidadCarta ? window.crearBadgeHabilidadCarta(carta) : null;
+        const badgeHabilidad = window.crearBadgeHabilidadCarta ? window.crearBadgeHabilidadCarta(cartaVista) : null;
         if (badgeHabilidad) {
             cartaDiv.appendChild(badgeHabilidad);
         }
-        const badgeAfiliacion = window.crearBadgeAfiliacionCarta ? window.crearBadgeAfiliacionCarta(carta) : null;
+        const badgeAfiliacion = window.crearBadgeAfiliacionCarta ? window.crearBadgeAfiliacionCarta(cartaVista) : null;
         if (badgeAfiliacion) {
             cartaDiv.appendChild(badgeAfiliacion);
         }
-        cartaDiv.appendChild(crearBarraSaludElemento(carta));
+        cartaDiv.appendChild(crearBarraSaludElemento(cartaVista));
         cartaDiv.appendChild(estrellasDiv);
         cartaDiv.onclick = () => seleccionarCarta(cartaDiv);
 
         contenedorCartas.appendChild(cartaDiv);
     });
 
+    asegurarBusquedaCrearMazo();
     actualizarSeleccionUI(usuario);
 }
 
@@ -599,7 +667,7 @@ function actualizarSeleccionUI(usuario) {
 
 }
 
-function seleccionarCarta(cartaDiv) {
+async function seleccionarCarta(cartaDiv) {
     const usuario = JSON.parse(localStorage.getItem('usuario'));
     const idCarta = cartaDiv.dataset.id;
     const carta = usuario?.cartas?.[idCarta];
@@ -619,6 +687,7 @@ function seleccionarCarta(cartaDiv) {
 
     if (cartasSeleccionadas.has(idCarta)) {
         cartasSeleccionadas.delete(idCarta);
+        cartasVistaSeleccionCrearMazo.delete(String(idCarta));
         actualizarSeleccionUI(usuario);
         return;
     }
@@ -633,6 +702,20 @@ function seleccionarCarta(cartaDiv) {
         return;
     }
 
+    let cartaFinal = { ...carta };
+    if (typeof window.DCSeleccionCartaApariencia !== 'undefined') {
+        await obtenerMapaDatosCartasCatalogo();
+        const conSkin = await window.DCSeleccionCartaApariencia.seleccionarCartaConAparienciaOpcional({
+            carta,
+            usuario,
+            mapaCatalogo: mapaDatosCartasCatalogo
+        });
+        if (!conSkin) {
+            return;
+        }
+        cartaFinal = conSkin;
+    }
+    cartasVistaSeleccionCrearMazo.set(String(idCarta), cartaFinal);
     cartasSeleccionadas.add(idCarta);
     faccionVistaActiva = faccionCarta;
     actualizarSeleccionUI(usuario);
@@ -644,6 +727,7 @@ function deseleccionarTodasLasCartas() {
         return;
     }
     cartasSeleccionadas.clear();
+    cartasVistaSeleccionCrearMazo.clear();
     actualizarSeleccionUI(usuario);
 }
 
@@ -698,7 +782,13 @@ async function guardarMazo() {
         usuario.mazos = [];
     }
 
-    const cartasSeleccionadasArray = Array.from(cartasSeleccionadas).map(id => usuario.cartas[id]);
+    const cartasSeleccionadasArray = Array.from(cartasSeleccionadas).map((id) => {
+        const vista = cartasVistaSeleccionCrearMazo.get(String(id));
+        if (vista) {
+            return { ...vista };
+        }
+        return usuario.cartas[id];
+    });
     const faccionesMazo = new Set(cartasSeleccionadasArray.map(carta => normalizarFaccion(carta?.faccion)).filter(Boolean));
 
     if (cartasSeleccionadasArray.length !== 12) {

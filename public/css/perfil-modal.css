@@ -1,0 +1,269 @@
+/* Modal de perfil del jugador */
+#perfil-jugador-modal.modal-dc {
+    z-index: 2350;
+}
+
+.perfil-modal-content {
+    width: min(960px, 96vw);
+    max-height: 92vh;
+    display: flex;
+    flex-direction: column;
+    padding: clamp(16px, 2vw, 22px);
+}
+
+.perfil-modal-content h4 {
+    margin: 0 0 14px;
+    text-align: center;
+    font-family: 'Orbitron', sans-serif;
+    color: #dff8ff;
+    letter-spacing: 0.06em;
+}
+
+.perfil-modal-scroll {
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-right: 4px;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.perfil-modal-header {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 18px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid rgba(0, 209, 255, 0.28);
+}
+
+.perfil-modal-avatar {
+    width: 88px;
+    height: 88px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid rgba(var(--dc-accent-user-rgb), 0.75);
+    box-shadow: 0 0 18px rgba(var(--dc-accent-user-rgb), 0.45);
+}
+
+.perfil-modal-nombre {
+    font-family: 'Orbitron', sans-serif;
+    font-size: clamp(1rem, 2.4vw, 1.25rem);
+    font-weight: 700;
+    color: #dff8ff;
+    text-align: center;
+    text-shadow: 0 0 10px rgba(var(--dc-accent-user-rgb), 0.4);
+}
+
+.menu-user-avatar.perfil-avatar-btn {
+    cursor: pointer;
+    transition: box-shadow 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+
+.menu-user-avatar.perfil-avatar-btn:hover,
+.menu-user-avatar.perfil-avatar-btn:focus-visible {
+    outline: none;
+    border-color: rgba(var(--dc-accent-user-rgb), 1);
+    box-shadow: 0 0 16px rgba(var(--dc-accent-user-rgb), 0.75), 0 0 24px rgba(0, 209, 255, 0.35);
+    transform: scale(1.03);
+}
+
+.perfil-seccion {
+    margin-bottom: 20px;
+}
+
+.perfil-seccion-titulo {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #9fd6ff;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin: 0 0 10px;
+    text-shadow: 0 0 8px rgba(0, 123, 255, 0.35);
+}
+
+.perfil-coleccion-stats {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.perfil-coleccion-stat {
+    text-align: center;
+    padding: 10px 8px;
+    border-radius: 10px;
+    border: 1px solid rgba(0, 209, 255, 0.32);
+    background: rgba(8, 20, 40, 0.65);
+}
+
+.perfil-coleccion-stat-label {
+    display: block;
+    font-size: 0.68rem;
+    color: #8eb8d4;
+    margin-bottom: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.perfil-coleccion-stat-valor {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 1rem;
+    font-weight: 700;
+    color: #ffd86f;
+}
+
+.perfil-coleccion-barra {
+    margin-top: 10px;
+    height: 8px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.12);
+    overflow: hidden;
+}
+
+.perfil-coleccion-barra-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #00d1ff 0%, #ffd86f 100%);
+    box-shadow: 0 0 10px rgba(0, 209, 255, 0.45);
+    transition: width 0.35s ease;
+}
+
+.perfil-mazo-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.perfil-mazo-nombre {
+    font-weight: 700;
+    color: #dff8ff;
+    font-size: 0.95rem;
+}
+
+.perfil-mazo-poder {
+    font-family: 'Orbitron', sans-serif;
+    color: #ffd86f;
+    font-size: 0.9rem;
+    font-weight: 700;
+}
+
+.perfil-mazo-cartas {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+    gap: 10px;
+}
+
+.perfil-mazo-vacio {
+    color: #8eb8d4;
+    font-size: 0.9rem;
+    padding: 12px;
+    text-align: center;
+    border: 1px dashed rgba(0, 209, 255, 0.3);
+    border-radius: 10px;
+}
+
+.perfil-mazo-carta {
+    aspect-ratio: 6.3 / 8.8;
+    cursor: default;
+}
+
+.perfil-mazo-carta .detalles-carta {
+    font-size: 0.62rem;
+    min-height: 24px;
+}
+
+.perfil-mazo-carta .estrellas-carta .estrella {
+    width: 9px;
+    height: 9px;
+}
+
+.perfil-inventario-grid {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-rows: repeat(8, minmax(0, 1fr));
+    gap: 8px;
+    padding: 10px;
+    border-radius: 12px;
+    border: 1px solid rgba(0, 209, 255, 0.28);
+    background:
+        linear-gradient(180deg, rgba(6, 16, 32, 0.92) 0%, rgba(4, 12, 26, 0.98) 100%);
+    box-shadow: inset 0 0 24px rgba(0, 0, 0, 0.35);
+}
+
+.perfil-inventario-slot {
+    position: relative;
+    aspect-ratio: 1;
+    border-radius: 10px;
+    border: 1px solid rgba(0, 209, 255, 0.22);
+    background: rgba(12, 24, 44, 0.75);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.perfil-inventario-slot.tiene-item {
+    border-color: rgba(0, 209, 255, 0.45);
+    background: linear-gradient(145deg, rgba(16, 36, 64, 0.9), rgba(8, 18, 36, 0.95));
+    box-shadow: 0 0 10px rgba(0, 123, 255, 0.15);
+}
+
+.perfil-inventario-slot.vacio {
+    opacity: 0.35;
+}
+
+.perfil-inventario-icono {
+    width: 72%;
+    height: 72%;
+    object-fit: contain;
+    filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.45));
+    pointer-events: none;
+}
+
+.perfil-inventario-slot.sin-stock .perfil-inventario-icono {
+    filter: grayscale(0.85) brightness(0.55) drop-shadow(0 1px 3px rgba(0, 0, 0, 0.4));
+    opacity: 0.65;
+}
+
+.perfil-inventario-cantidad {
+    position: absolute;
+    right: 4px;
+    bottom: 3px;
+    min-width: 18px;
+    padding: 1px 5px;
+    border-radius: 8px;
+    background: rgba(8, 14, 28, 0.92);
+    border: 1px solid rgba(255, 216, 111, 0.55);
+    color: #ffe9a8;
+    font-size: 0.72rem;
+    font-weight: 800;
+    line-height: 1.2;
+    text-align: center;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+    pointer-events: none;
+}
+
+.perfil-modal-actions {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(0, 209, 255, 0.28);
+}
+
+@media (max-width: 720px) {
+    .perfil-coleccion-stats {
+        grid-template-columns: 1fr;
+    }
+
+    .perfil-inventario-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        grid-template-rows: repeat(12, minmax(0, 1fr));
+    }
+
+    .perfil-mazo-cartas {
+        grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    }
+}

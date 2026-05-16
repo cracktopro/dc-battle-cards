@@ -12,6 +12,19 @@
         return String(nombre || '').trim().toLowerCase();
     }
 
+    function resolverCartaEnemigoVistaSync(nombreRef, mapaCatalogo) {
+        if (typeof window.DCSkinsCartas !== 'undefined' && typeof window.DCSkinsCartas.resolverFilaCatalogoConSkinSync === 'function') {
+            const resuelta = window.DCSkinsCartas.resolverFilaCatalogoConSkinSync(nombreRef, mapaCatalogo);
+            if (resuelta) {
+                return resuelta;
+            }
+        }
+        const nombreCatalogo = typeof window.DCSkinsCartas !== 'undefined' && typeof window.DCSkinsCartas.obtenerNombreCatalogoDesdeReferencia === 'function'
+            ? window.DCSkinsCartas.obtenerNombreCatalogoDesdeReferencia(nombreRef)
+            : nombreRef;
+        return mapaCatalogo.get(normalizarNombre(nombreCatalogo)) || { Nombre: nombreRef, Nivel: 1 };
+    }
+
     /* Helpers locales aislados (replican `crearMazos.js` / `partida.js`) para no
      * acoplar este módulo coop a esos ficheros, que no se cargan en multijugador.html.
      */
@@ -230,6 +243,9 @@
         const mapaCatalogo = new Map(
             catalogo.map((carta) => [normalizarNombre(carta.Nombre), carta])
         );
+        if (typeof window.DCSkinsCartas !== 'undefined' && typeof window.DCSkinsCartas.asegurarSkinsCargados === 'function') {
+            await window.DCSkinsCartas.asegurarSkinsCargados();
+        }
 
         /* Progreso coop online aislado: `claveRotacion` usa prefijo propio (no el de VS BOT). */
         const usuario = await obtenerUsuarioActualCoop();
@@ -270,14 +286,14 @@
 
             rivales.forEach((rival) => {
                 const nombreEnemigo = rival.nombre;
-                const cartaBase = mapaCatalogo.get(normalizarNombre(nombreEnemigo)) || { Nombre: nombreEnemigo, Nivel: 1 };
+                const cartaBase = resolverCartaEnemigoVistaSync(nombreEnemigo, mapaCatalogo);
                 const enemigoCard = document.createElement('div');
                 enemigoCard.className = `evento-enemigo-card ${rival.boss ? 'boss' : ''}`;
                 enemigoCard.style.backgroundImage = `url(${typeof obtenerImagenCarta === 'function' ? obtenerImagenCarta(cartaBase) : ''})`;
 
                 const etiqueta = document.createElement('div');
                 etiqueta.className = 'evento-enemigo-nombre';
-                etiqueta.textContent = nombreEnemigo;
+                etiqueta.textContent = cartaBase.Nombre || nombreEnemigo;
                 enemigoCard.appendChild(etiqueta);
                 enemigosEl.appendChild(enemigoCard);
             });
@@ -445,7 +461,20 @@
     let ultimoDetalleEstadoPrepCoop = null;
     let usuarioCartasSeleccion = [];
     let seleccionIndices = new Set();
+    let cartasVistaSeleccionCoop = new Map();
+    let mapaCatalogoSeleccionCoop = null;
+    let busquedaSeleccionCoop = '';
     let faccionEventoCoopActiva = 'H';
+
+    function obtenerCartaDisplaySeleccionCoop(item) {
+        if (cartasVistaSeleccionCoop.has(item.index)) {
+            return cartasVistaSeleccionCoop.get(item.index);
+        }
+        if (typeof window.DCSeleccionCartaApariencia?.obtenerCartaComoParent === 'function') {
+            return window.DCSeleccionCartaApariencia.obtenerCartaComoParent(item.carta, mapaCatalogoSeleccionCoop);
+        }
+        return item.carta;
+    }
     let afiliacionEventoCoopActiva = 'todas';
 
     /**
@@ -474,6 +503,13 @@
         } catch (_e) { /* noop */ }
 
         const catalogo = await obtenerCatalogoCartas();
+        mapaCatalogoSeleccionCoop = new Map();
+        catalogo.forEach((carta) => {
+            const clave = normalizarNombre(carta.Nombre);
+            if (clave) {
+                mapaCatalogoSeleccionCoop.set(clave, carta);
+            }
+        });
         const mapaFaccion = new Map();
         catalogo.forEach((carta) => {
             mapaFaccion.set(normalizarNombre(carta.Nombre), {
@@ -516,6 +552,8 @@
         }
 
         seleccionIndices = new Set();
+        cartasVistaSeleccionCoop = new Map();
+        busquedaSeleccionCoop = '';
         faccionEventoCoopActiva = 'H';
         afiliacionEventoCoopActiva = 'todas';
 
@@ -538,6 +576,7 @@
                         <button type="button" class="btn faccion-tab" data-coop-tab="V">Villanos</button>
                     </div>
                     <select class="form-control" data-coop-filtro-afi style="width:auto; min-width:220px;"></select>
+                    <input type="search" class="form-control busqueda-seleccion-cartas" data-coop-busqueda placeholder="Buscar carta..." autocomplete="off" style="flex:1; min-width:180px;">
                 </div>
                 <div class="cartas-seleccion-grid" data-coop-grid></div>
                 <div class="modal-footer-desafio">
@@ -551,6 +590,7 @@
         const grid = modal.querySelector('[data-coop-grid]');
         const estadoEl = modal.querySelector('[data-coop-estado]');
         const filtroAfi = modal.querySelector('[data-coop-filtro-afi]');
+        const inputBusqueda = modal.querySelector('[data-coop-busqueda]');
         const btnTabH = modal.querySelector('[data-coop-tab="H"]');
         const btnTabV = modal.querySelector('[data-coop-tab="V"]');
         const btnCancelar = modal.querySelector('[data-coop-cancelar]');
@@ -668,10 +708,17 @@
                     if (afiliacionEventoCoopActiva === 'todas') return true;
                     const afis = obtenerAfiliacionesCartaLocal(item.carta).map(normalizarAfiliacionLocal);
                     return afis.includes(afiliacionEventoCoopActiva);
+                })
+                .filter((item) => {
+                    if (!busquedaSeleccionCoop) return true;
+                    const cartaBusqueda = obtenerCartaDisplaySeleccionCoop(item);
+                    return typeof window.DCSeleccionCartaApariencia?.cartaCoincideBusqueda === 'function'
+                        ? window.DCSeleccionCartaApariencia.cartaCoincideBusqueda(cartaBusqueda, busquedaSeleccionCoop)
+                        : String(cartaBusqueda?.Nombre || '').toLowerCase().includes(busquedaSeleccionCoop);
                 });
 
             cartasFiltradas.forEach((item) => {
-                const carta = item.carta;
+                const carta = obtenerCartaDisplaySeleccionCoop(item);
                 const noDisponible = esCartaNoDisponibleParaB(item);
                 const cartaDiv = document.createElement('div');
                 cartaDiv.className = `carta-mini ${seleccionIndices.has(item.index) ? 'seleccionada' : ''}`;
@@ -725,19 +772,35 @@
                     cartaDiv.appendChild(badgeNd);
                 }
 
-                cartaDiv.onclick = () => {
+                cartaDiv.onclick = async () => {
                     if (noDisponible) {
                         return;
                     }
                     if (seleccionIndices.has(item.index)) {
                         seleccionIndices.delete(item.index);
-                    } else {
-                        if (seleccionIndices.size >= 6) {
-                            mostrarMensajeCoop('Solo puedes seleccionar 6 cartas.', 'warning');
+                        cartasVistaSeleccionCoop.delete(item.index);
+                        actualizarEstado();
+                        renderizarGrid();
+                        return;
+                    }
+                    if (seleccionIndices.size >= 6) {
+                        mostrarMensajeCoop('Solo puedes seleccionar 6 cartas.', 'warning');
+                        return;
+                    }
+                    let cartaFinal = { ...item.carta };
+                    if (typeof window.DCSeleccionCartaApariencia !== 'undefined') {
+                        const conSkin = await window.DCSeleccionCartaApariencia.seleccionarCartaConAparienciaOpcional({
+                            carta: item.carta,
+                            usuario,
+                            mapaCatalogo: mapaCatalogoSeleccionCoop
+                        });
+                        if (!conSkin) {
                             return;
                         }
-                        seleccionIndices.add(item.index);
+                        cartaFinal = conSkin;
                     }
+                    cartasVistaSeleccionCoop.set(item.index, cartaFinal);
+                    seleccionIndices.add(item.index);
                     actualizarEstado();
                     renderizarGrid();
                 };
@@ -763,6 +826,12 @@
             afiliacionEventoCoopActiva = normalizarAfiliacionLocal(filtroAfi.value || 'todas');
             renderizarGrid();
         });
+        if (inputBusqueda) {
+            inputBusqueda.addEventListener('input', () => {
+                busquedaSeleccionCoop = String(inputBusqueda.value || '').trim().toLowerCase();
+                renderizarGrid();
+            });
+        }
 
         btnCancelar.addEventListener('click', () => {
             cerrarPrepCoop();
@@ -780,10 +849,18 @@
                 }
             }
             const indicesCartas = Array.from(seleccionIndices);
+            const skinsPorIndice = {};
+            indicesCartas.forEach((ix) => {
+                const vista = cartasVistaSeleccionCoop.get(ix);
+                if (vista && vista.skinActivoId !== null && vista.skinActivoId !== undefined) {
+                    skinsPorIndice[ix] = vista.skinActivoId;
+                }
+            });
             if (typeof window.emitCoopEventoPreparacionListo === 'function') {
                 window.emitCoopEventoPreparacionListo({
                     prepId: prepContext.prepId,
-                    indicesCartas
+                    indicesCartas,
+                    skinsPorIndice
                 });
             }
             /* Mantener el modal cerrado pero con un aviso (mismo patrón que la

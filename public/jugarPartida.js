@@ -7,7 +7,20 @@ let eventoPendiente = null;
 let dificultadEventoSeleccionada = null;
 let usuarioCartasEvento = [];
 let seleccionCartasEvento = new Set();
+let cartasVistaSeleccionEvento = new Map();
+let mapaCatalogoSeleccionEvento = null;
+let busquedaSeleccionEvento = '';
 let faccionEventoActiva = 'H';
+
+function obtenerCartaDisplaySeleccionEvento(item) {
+    if (cartasVistaSeleccionEvento.has(item.index)) {
+        return cartasVistaSeleccionEvento.get(item.index);
+    }
+    if (typeof window.DCSeleccionCartaApariencia?.obtenerCartaComoParent === 'function') {
+        return window.DCSeleccionCartaApariencia.obtenerCartaComoParent(item.carta, mapaCatalogoSeleccionEvento);
+    }
+    return item.carta;
+}
 let afiliacionEventoActiva = 'todas';
 let catalogoCartasCache = null;
 let eventosEnRotacion = [];
@@ -467,6 +480,19 @@ function normalizarNombre(nombre) {
     return String(nombre || '').trim().toLowerCase();
 }
 
+function resolverCartaEnemigoVistaSync(nombreRef, mapaCatalogo) {
+    if (typeof window.DCSkinsCartas !== 'undefined' && typeof window.DCSkinsCartas.resolverFilaCatalogoConSkinSync === 'function') {
+        const resuelta = window.DCSkinsCartas.resolverFilaCatalogoConSkinSync(nombreRef, mapaCatalogo);
+        if (resuelta) {
+            return resuelta;
+        }
+    }
+    const nombreCatalogo = typeof window.DCSkinsCartas !== 'undefined' && typeof window.DCSkinsCartas.obtenerNombreCatalogoDesdeReferencia === 'function'
+        ? window.DCSkinsCartas.obtenerNombreCatalogoDesdeReferencia(nombreRef)
+        : nombreRef;
+    return mapaCatalogo.get(normalizarNombre(nombreCatalogo)) || { Nombre: nombreRef, Nivel: 1 };
+}
+
 function seleccionarCartasAleatorias(cartas, cantidad) {
     const cartasAleatorias = [];
     while (cartasAleatorias.length < cantidad) {
@@ -705,6 +731,9 @@ async function renderizarEventosActivos() {
     const mapaCatalogo = new Map(
         catalogo.map(carta => [normalizarNombre(carta.Nombre), carta])
     );
+    if (typeof window.DCSkinsCartas !== 'undefined' && typeof window.DCSkinsCartas.asegurarSkinsCargados === 'function') {
+        await window.DCSkinsCartas.asegurarSkinsCargados();
+    }
 
     const usuario = JSON.parse(localStorage.getItem('usuario')) || {};
     const claveRotacion = obtenerClaveRotacionEventos();
@@ -739,14 +768,14 @@ async function renderizarEventosActivos() {
 
         rivales.forEach(rival => {
             const nombreEnemigo = rival.nombre;
-            const cartaBase = mapaCatalogo.get(normalizarNombre(nombreEnemigo)) || { Nombre: nombreEnemigo, Nivel: 1 };
+            const cartaBase = resolverCartaEnemigoVistaSync(nombreEnemigo, mapaCatalogo);
             const enemigoCard = document.createElement('div');
             enemigoCard.className = `evento-enemigo-card ${rival.boss ? 'boss' : ''}`;
             enemigoCard.style.backgroundImage = `url(${obtenerImagenCarta(cartaBase)})`;
 
             const etiqueta = document.createElement('div');
             etiqueta.className = 'evento-enemigo-nombre';
-            etiqueta.textContent = nombreEnemigo;
+            etiqueta.textContent = cartaBase.Nombre || nombreEnemigo;
             enemigoCard.appendChild(etiqueta);
             enemigos.appendChild(enemigoCard);
         });
@@ -889,6 +918,14 @@ function configurarModalEvento() {
         renderizarCartasSeleccionEvento();
     };
 
+    const inputBusqueda = document.getElementById('busqueda-seleccion-evento');
+    if (inputBusqueda) {
+        inputBusqueda.addEventListener('input', function () {
+            busquedaSeleccionEvento = String(this.value || '').trim().toLowerCase();
+            renderizarCartasSeleccionEvento();
+        });
+    }
+
     btnH.onclick = () => {
         faccionEventoActiva = 'H';
         afiliacionEventoActiva = 'todas';
@@ -942,6 +979,15 @@ async function abrirModalSeleccionEvento(evento) {
     }
 
     const catalogo = await obtenerCatalogoCartas();
+    mapaCatalogoSeleccionEvento = new Map();
+    catalogo.forEach((carta) => {
+        const clave = typeof obtenerClaveCarta === 'function'
+            ? obtenerClaveCarta(carta.Nombre)
+            : normalizarNombre(carta.Nombre);
+        if (clave) {
+            mapaCatalogoSeleccionEvento.set(clave, carta);
+        }
+    });
     const mapaFaccionAfiliacion = new Map();
     catalogo.forEach(carta => {
         mapaFaccionAfiliacion.set(normalizarNombre(carta.Nombre), {
@@ -991,6 +1037,12 @@ async function abrirModalSeleccionEvento(evento) {
     faccionEventoActiva = 'H';
     afiliacionEventoActiva = 'todas';
     seleccionCartasEvento = new Set();
+    cartasVistaSeleccionEvento.clear();
+    busquedaSeleccionEvento = '';
+    const inputBusqueda = document.getElementById('busqueda-seleccion-evento');
+    if (inputBusqueda) {
+        inputBusqueda.value = '';
+    }
     actualizarBotonesFaccionEvento();
     renderizarFiltroAfiliacionEvento();
     renderizarCartasSeleccionEvento();
@@ -1047,10 +1099,19 @@ function renderizarCartasSeleccionEvento() {
             }
             const afiliaciones = obtenerAfiliacionesCarta(item.carta).map(normalizarAfiliacion);
             return afiliaciones.includes(afiliacionEventoActiva);
+        })
+        .filter((item) => {
+            if (!busquedaSeleccionEvento) {
+                return true;
+            }
+            const cartaBusqueda = obtenerCartaDisplaySeleccionEvento(item);
+            return typeof window.DCSeleccionCartaApariencia?.cartaCoincideBusqueda === 'function'
+                ? window.DCSeleccionCartaApariencia.cartaCoincideBusqueda(cartaBusqueda, busquedaSeleccionEvento)
+                : String(cartaBusqueda?.Nombre || '').toLowerCase().includes(busquedaSeleccionEvento);
         });
 
     cartasFiltradas.forEach(item => {
-        const carta = item.carta;
+        const carta = obtenerCartaDisplaySeleccionEvento(item);
         const cartaDiv = document.createElement('div');
         cartaDiv.className = `carta-mini ${seleccionCartasEvento.has(item.index) ? 'seleccionada' : ''}`;
         if (typeof window.dcAplicarClasesNivelCartaCompleta === 'function') {
@@ -1097,22 +1158,42 @@ function renderizarCartasSeleccionEvento() {
             cartaDiv.appendChild(badgeAfiliacion);
         }
         cartaDiv.appendChild(crearBarraSaludElemento(carta));
-        cartaDiv.onclick = () => toggleSeleccionCartaEvento(item.index);
+        cartaDiv.onclick = () => { toggleSeleccionCartaEvento(item.index); };
         grid.appendChild(cartaDiv);
     });
 }
 
-function toggleSeleccionCartaEvento(indexCarta) {
+async function toggleSeleccionCartaEvento(indexCarta) {
     if (seleccionCartasEvento.has(indexCarta)) {
         seleccionCartasEvento.delete(indexCarta);
-    } else {
-        if (seleccionCartasEvento.size >= 6) {
-            mostrarMensajeEventos('Solo puedes seleccionar 6 cartas.', 'warning');
+        cartasVistaSeleccionEvento.delete(indexCarta);
+        actualizarEstadoSeleccionEvento();
+        renderizarCartasSeleccionEvento();
+        return;
+    }
+    if (seleccionCartasEvento.size >= 6) {
+        mostrarMensajeEventos('Solo puedes seleccionar 6 cartas.', 'warning');
+        return;
+    }
+    const item = usuarioCartasEvento.find((x) => x.index === indexCarta);
+    if (!item) {
+        return;
+    }
+    const usuario = JSON.parse(localStorage.getItem('usuario') || 'null');
+    let cartaFinal = { ...item.carta };
+    if (typeof window.DCSeleccionCartaApariencia !== 'undefined') {
+        const conSkin = await window.DCSeleccionCartaApariencia.seleccionarCartaConAparienciaOpcional({
+            carta: item.carta,
+            usuario,
+            mapaCatalogo: mapaCatalogoSeleccionEvento
+        });
+        if (!conSkin) {
             return;
         }
-        seleccionCartasEvento.add(indexCarta);
+        cartaFinal = conSkin;
     }
-
+    cartasVistaSeleccionEvento.set(indexCarta, cartaFinal);
+    seleccionCartasEvento.add(indexCarta);
     actualizarEstadoSeleccionEvento();
     renderizarCartasSeleccionEvento();
 }
@@ -1128,6 +1209,8 @@ function cerrarModalSeleccionEvento() {
     document.getElementById('modal-seleccion-evento').style.display = 'none';
     eventoPendiente = null;
     seleccionCartasEvento = new Set();
+    cartasVistaSeleccionEvento.clear();
+    busquedaSeleccionEvento = '';
 }
 
 function limpiarEstadoPvpAntesDePartidaVsBot() {
@@ -1158,7 +1241,13 @@ async function confirmarSeleccionEvento() {
     }
 
     const usuario = JSON.parse(localStorage.getItem('usuario'));
-    const cartasSeleccionadas = Array.from(seleccionCartasEvento).map(index => ({ ...usuario.cartas[index] }));
+    const cartasSeleccionadas = Array.from(seleccionCartasEvento).map((index) => {
+        const vista = cartasVistaSeleccionEvento.get(index);
+        if (vista) {
+            return { ...vista };
+        }
+        return { ...usuario.cartas[index] };
+    });
     const eventoParaPartida = {
         tipo: 'evento',
         id: eventoPendiente.id,

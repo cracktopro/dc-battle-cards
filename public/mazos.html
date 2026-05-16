@@ -83,10 +83,39 @@
     </div>
 </div>
 
+<div id="acciones-carta-modal" class="modal-dc" style="display:none;">
+    <div class="modal-dc-content modal-acciones-carta">
+        <h4>Acciones</h4>
+        <div class="modal-acciones-botones">
+            <button id="btn-sustituir-carta" type="button" class="btn btn-primary btn-accion-carta">Sustituir carta</button>
+            <button id="btn-apariencias-carta" type="button" class="btn btn-info btn-accion-carta" disabled>Apariencias</button>
+        </div>
+        <div class="modal-dc-actions">
+            <button id="cancelar-acciones-carta-btn" type="button" class="btn btn-secondary">Cancelar</button>
+        </div>
+    </div>
+</div>
+
+<div id="apariencias-carta-modal" class="modal-dc" style="display:none;">
+    <div class="modal-dc-content modal-apariencias-carta">
+        <h4>Apariencias</h4>
+        <p id="apariencias-carta-subtitulo" class="apariencias-carta-subtitulo"></p>
+        <div id="lista-apariencias-carta" class="lista-apariencias-carta"></div>
+        <div class="modal-dc-actions">
+            <button id="confirmar-apariencia-btn" type="button" class="btn btn-primary">Aplicar</button>
+            <button id="cancelar-apariencia-btn" type="button" class="btn btn-secondary">Cancelar</button>
+        </div>
+    </div>
+</div>
+
 <div id="cambiar-carta-modal" class="modal-dc" style="display:none;">
     <div class="modal-dc-content modal-cambio-carta">
         <h4 id="titulo-cambiar-carta">Cambiar carta</h4>
         <p id="carta-a-reemplazar-texto"></p>
+        <div id="reemplazo-barra-filtros" class="reemplazo-barra-filtros">
+            <input id="busqueda-reemplazo-mazo" type="text" class="form-control" placeholder="Buscar carta...">
+            <select id="selector-afiliacion-reemplazo" class="form-control"></select>
+        </div>
         <div id="lista-cartas-reemplazo" class="lista-cartas-reemplazo"></div>
         <div class="modal-dc-actions">
             <button id="confirmar-cambio-carta-btn" class="btn btn-primary">Cambiar carta</button>
@@ -108,6 +137,7 @@
 <!-- Scripts -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.0/xlsx.full.min.js"></script>
 <script src="js/cartas.js"></script>
+<script src="js/skinsCartas.js"></script>
 <script src="mazos.js"></script>
 <!-- Bootstrap JS and dependencies -->
 <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>

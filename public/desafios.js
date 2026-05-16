@@ -18,7 +18,21 @@ document.addEventListener('DOMContentLoaded', async () => {
 let desafioPendiente = null;
 let usuarioCartasSeleccion = [];
 let seleccionCartasDesafio = new Set();
+/** index colección → carta con apariencia elegida para esta partida */
+let cartasVistaSeleccionDesafio = new Map();
+let mapaCatalogoSeleccionDesafio = null;
+let busquedaSeleccionDesafio = '';
 let faccionFiltroActiva = 'H';
+
+function obtenerCartaDisplaySeleccionDesafio(item) {
+    if (cartasVistaSeleccionDesafio.has(item.index)) {
+        return cartasVistaSeleccionDesafio.get(item.index);
+    }
+    if (typeof window.DCSeleccionCartaApariencia?.obtenerCartaComoParent === 'function') {
+        return window.DCSeleccionCartaApariencia.obtenerCartaComoParent(item.carta, mapaCatalogoSeleccionDesafio);
+    }
+    return item.carta;
+}
 let afiliacionFiltroActiva = 'todas';
 let faccionCaminoActiva = 'H';
 let faccionFijadaModalDesafio = null;
@@ -30,6 +44,19 @@ const ICONO_MONEDA = '/resources/icons/moneda.png';
 
 function normalizarNombre(nombre) {
     return String(nombre || '').trim().toLowerCase();
+}
+
+function resolverCartaEnemigoVistaSync(nombreRef, mapaCatalogo) {
+    if (typeof window.DCSkinsCartas !== 'undefined' && typeof window.DCSkinsCartas.resolverFilaCatalogoConSkinSync === 'function') {
+        const resuelta = window.DCSkinsCartas.resolverFilaCatalogoConSkinSync(nombreRef, mapaCatalogo);
+        if (resuelta) {
+            return resuelta;
+        }
+    }
+    const nombreCatalogo = typeof window.DCSkinsCartas !== 'undefined' && typeof window.DCSkinsCartas.obtenerNombreCatalogoDesdeReferencia === 'function'
+        ? window.DCSkinsCartas.obtenerNombreCatalogoDesdeReferencia(nombreRef)
+        : nombreRef;
+    return mapaCatalogo.get(normalizarNombre(nombreCatalogo)) || { Nombre: nombreRef, Nivel: 1 };
 }
 
 function normalizarFaccionCamino(valor) {
@@ -246,6 +273,9 @@ async function renderizarDesafiosGlobal() {
     const mapaCatalogo = new Map(
         catalogo.map(carta => [normalizarNombre(carta.Nombre), carta])
     );
+    if (typeof window.DCSkinsCartas !== 'undefined' && typeof window.DCSkinsCartas.asegurarSkinsCargados === 'function') {
+        await window.DCSkinsCartas.asegurarSkinsCargados();
+    }
 
     if (desafiosVisibles.length === 0) {
         const vacio = document.createElement('div');
@@ -286,14 +316,14 @@ async function renderizarDesafiosGlobal() {
         ];
 
         rivales.forEach(rival => {
-            const cartaBase = mapaCatalogo.get(normalizarNombre(rival.nombre)) || { Nombre: rival.nombre, Nivel: 1 };
+            const cartaBase = resolverCartaEnemigoVistaSync(rival.nombre, mapaCatalogo);
             const enemigoCard = document.createElement('div');
             enemigoCard.className = `desafio-enemigo-card ${rival.boss ? 'boss' : ''}`;
             enemigoCard.style.backgroundImage = `url(${obtenerImagenCarta(cartaBase)})`;
 
             const etiqueta = document.createElement('div');
             etiqueta.className = 'desafio-enemigo-nombre';
-            etiqueta.textContent = rival.nombre;
+            etiqueta.textContent = cartaBase.Nombre || rival.nombre;
             enemigoCard.appendChild(etiqueta);
             composicion.appendChild(enemigoCard);
         });
@@ -470,6 +500,14 @@ function configurarModalSeleccion() {
         renderizarCartasSeleccionDesafio();
     };
 
+    const inputBusqueda = document.getElementById('busqueda-seleccion-desafio');
+    if (inputBusqueda) {
+        inputBusqueda.addEventListener('input', function () {
+            busquedaSeleccionDesafio = String(this.value || '').trim().toLowerCase();
+            renderizarCartasSeleccionDesafio();
+        });
+    }
+
     btnH.onclick = () => {
         if (faccionFijadaModalDesafio && faccionFijadaModalDesafio !== 'H') return;
         faccionFiltroActiva = 'H';
@@ -546,10 +584,19 @@ function renderizarCartasSeleccionDesafio() {
             }
             const afiliaciones = obtenerAfiliacionesCarta(item.carta).map(normalizarAfiliacion);
             return afiliaciones.includes(afiliacionFiltroActiva);
+        })
+        .filter((item) => {
+            if (!busquedaSeleccionDesafio) {
+                return true;
+            }
+            const cartaBusqueda = obtenerCartaDisplaySeleccionDesafio(item);
+            return typeof window.DCSeleccionCartaApariencia?.cartaCoincideBusqueda === 'function'
+                ? window.DCSeleccionCartaApariencia.cartaCoincideBusqueda(cartaBusqueda, busquedaSeleccionDesafio)
+                : String(cartaBusqueda?.Nombre || '').toLowerCase().includes(busquedaSeleccionDesafio);
         });
 
     cartasFiltradas.forEach(item => {
-        const carta = item.carta;
+        const carta = obtenerCartaDisplaySeleccionDesafio(item);
         const cartaDiv = document.createElement('div');
         cartaDiv.className = `carta-mini ${seleccionCartasDesafio.has(item.index) ? 'seleccionada' : ''}`;
         if (typeof window.dcAplicarClasesNivelCartaCompleta === 'function') {
@@ -596,23 +643,43 @@ function renderizarCartasSeleccionDesafio() {
             cartaDiv.appendChild(badgeAfiliacion);
         }
         cartaDiv.appendChild(crearBarraSaludElemento(carta));
-        cartaDiv.onclick = () => toggleSeleccionCartaDesafio(item.index);
+        cartaDiv.onclick = () => { toggleSeleccionCartaDesafio(item.index); };
 
         grid.appendChild(cartaDiv);
     });
 }
 
-function toggleSeleccionCartaDesafio(indexCarta) {
+async function toggleSeleccionCartaDesafio(indexCarta) {
     if (seleccionCartasDesafio.has(indexCarta)) {
         seleccionCartasDesafio.delete(indexCarta);
-    } else {
-        if (seleccionCartasDesafio.size >= 6) {
-            mostrarMensaje('Solo puedes seleccionar 6 cartas.', 'warning');
+        cartasVistaSeleccionDesafio.delete(indexCarta);
+        actualizarEstadoSeleccion();
+        renderizarCartasSeleccionDesafio();
+        return;
+    }
+    if (seleccionCartasDesafio.size >= 6) {
+        mostrarMensaje('Solo puedes seleccionar 6 cartas.', 'warning');
+        return;
+    }
+    const item = usuarioCartasSeleccion.find((x) => x.index === indexCarta);
+    if (!item) {
+        return;
+    }
+    const usuario = JSON.parse(localStorage.getItem('usuario') || 'null');
+    let cartaFinal = { ...item.carta };
+    if (typeof window.DCSeleccionCartaApariencia !== 'undefined') {
+        const conSkin = await window.DCSeleccionCartaApariencia.seleccionarCartaConAparienciaOpcional({
+            carta: item.carta,
+            usuario,
+            mapaCatalogo: mapaCatalogoSeleccionDesafio
+        });
+        if (!conSkin) {
             return;
         }
-        seleccionCartasDesafio.add(indexCarta);
+        cartaFinal = conSkin;
     }
-
+    cartasVistaSeleccionDesafio.set(indexCarta, cartaFinal);
+    seleccionCartasDesafio.add(indexCarta);
     actualizarEstadoSeleccion();
     renderizarCartasSeleccionDesafio();
 }
@@ -640,6 +707,15 @@ async function abrirModalSeleccionDesafio(desafio) {
     }
 
     const catalogo = await cargarCatalogoCartas();
+    mapaCatalogoSeleccionDesafio = new Map();
+    catalogo.forEach((carta) => {
+        const clave = typeof obtenerClaveCarta === 'function'
+            ? obtenerClaveCarta(carta.Nombre)
+            : normalizarNombre(carta.Nombre);
+        if (clave) {
+            mapaCatalogoSeleccionDesafio.set(clave, carta);
+        }
+    });
     const mapaFaccionAfiliacion = new Map();
     catalogo.forEach(carta => {
         mapaFaccionAfiliacion.set(normalizarNombre(carta.Nombre), {
@@ -687,6 +763,12 @@ async function abrirModalSeleccionDesafio(desafio) {
     faccionFiltroActiva = faccionFijadaModalDesafio;
     afiliacionFiltroActiva = 'todas';
     seleccionCartasDesafio.clear();
+    cartasVistaSeleccionDesafio.clear();
+    busquedaSeleccionDesafio = '';
+    const inputBusqueda = document.getElementById('busqueda-seleccion-desafio');
+    if (inputBusqueda) {
+        inputBusqueda.value = '';
+    }
     const tabsFaccion = document.getElementById('filtro-faccion-tabs-desafio');
     if (tabsFaccion) {
         tabsFaccion.style.display = 'none';
@@ -722,6 +804,8 @@ function cerrarModalSeleccionDesafio() {
     desafioPendiente = null;
     faccionFijadaModalDesafio = null;
     seleccionCartasDesafio.clear();
+    cartasVistaSeleccionDesafio.clear();
+    busquedaSeleccionDesafio = '';
 }
 
 function confirmarSeleccionDesafio() {
@@ -730,7 +814,13 @@ function confirmarSeleccionDesafio() {
     }
 
     const usuario = JSON.parse(localStorage.getItem('usuario'));
-    const cartasSeleccionadas = Array.from(seleccionCartasDesafio).map(index => ({ ...usuario.cartas[index] }));
+    const cartasSeleccionadas = Array.from(seleccionCartasDesafio).map((index) => {
+        const vista = cartasVistaSeleccionDesafio.get(index);
+        if (vista) {
+            return { ...vista };
+        }
+        return { ...usuario.cartas[index] };
+    });
     iniciarDesafio(desafioPendiente, cartasSeleccionadas);
 }
 
