@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.1
+
+- Etiqueta de versión del menú lateral: **`Versión: 1.2.1`** (`public/js/cartas.js`, `package.json`).
+- Habilidades y `skill_power`: fórmulas con `poder`/`salud` y aritmética; `aoe`/`extra_attack` con poder efectivo y tooltips; buff/debuff/bonus_buff sin escalar por bonos de mesa; tienda sincroniza ofertas con el Excel al abrir.
+
 ## 1.2.0
 
 - Etiqueta de versión del menú lateral: **`Versión: 1.2.0`** (`public/js/cartas.js`, `package.json`).

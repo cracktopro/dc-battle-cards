@@ -52,6 +52,15 @@ function normalizarTextoHabilidad(valor) {
 
 const SKILL_CLASSES_ESCALABLES = new Set(['buff', 'debuff', 'heal', 'shield', 'heal_all', 'bonus_buff']);
 
+/** Pasivas de mesa: el valor de la habilidad no usa poder/salud con buffs de combate ajenos ni propios. */
+const SKILL_CLASSES_CONTEXTO_BASE = new Set(['buff', 'debuff', 'bonus_buff']);
+
+/** Clases que pueden usar fórmulas en skill_power (poder, salud, *, /). */
+const SKILL_CLASSES_CON_FORMULA = new Set([
+    'buff', 'debuff', 'heal', 'shield', 'aoe', 'heal_all', 'bonus_buff',
+    'tank', 'extra_attack', 'dot', 'life_steal'
+]);
+
 function normalizarClaseSkill(carta) {
     const claseRaw = String(carta?.skill_class || '').trim().toLowerCase();
     if (claseRaw === 'heall_all') {
@@ -113,13 +122,17 @@ function parsearNumeroSeguro(valor) {
     return Number.isFinite(num) ? num : null;
 }
 
-function evaluarFormulaSkillPower(formulaRaw, contexto = {}) {
+/**
+ * Convierte skill_power con variables a expresión aritmética segura.
+ * Soporta: poder, salud, saludenemigo, +, -, *, /, paréntesis y decimales (0.25 o 0,25).
+ * Ejemplos: poder/2, (poder/3)*2, poder+poder*0.25, salud*3-(poder/4)
+ */
+function prepararFormulaSkillPowerParaEvaluacion(formulaRaw, contexto = {}) {
     const formula = String(formulaRaw || '').trim().toLowerCase();
     if (!formula) {
         return null;
     }
 
-    // Solo permitimos aritmética simple y variables conocidas para evitar expresiones arbitrarias.
     const formulaSegura = formula
         .replace(/saludenemigo/g, String(Number(contexto.saludEnemigo || 0)))
         .replace(/\bsalud\b/g, String(Number(contexto.salud || 0)))
@@ -127,7 +140,32 @@ function evaluarFormulaSkillPower(formulaRaw, contexto = {}) {
         .replace(/,/g, '.')
         .replace(/\s+/g, '');
 
-    if (!/^[0-9+\-*/().]+$/.test(formulaSegura)) {
+    if (!formulaSegura || !/^[0-9+\-*/().]+$/.test(formulaSegura)) {
+        return null;
+    }
+
+    let profundidad = 0;
+    for (let i = 0; i < formulaSegura.length; i += 1) {
+        const ch = formulaSegura[i];
+        if (ch === '(') {
+            profundidad += 1;
+        } else if (ch === ')') {
+            profundidad -= 1;
+            if (profundidad < 0) {
+                return null;
+            }
+        }
+    }
+    if (profundidad !== 0) {
+        return null;
+    }
+
+    return formulaSegura;
+}
+
+function evaluarFormulaSkillPower(formulaRaw, contexto = {}) {
+    const formulaSegura = prepararFormulaSkillPowerParaEvaluacion(formulaRaw, contexto);
+    if (!formulaSegura) {
         return null;
     }
 
@@ -137,6 +175,58 @@ function evaluarFormulaSkillPower(formulaRaw, contexto = {}) {
         return Number.isFinite(Number(resultado)) ? Number(resultado) : null;
     } catch (_error) {
         return null;
+    }
+}
+
+function esSkillPowerFormula(raw) {
+    const texto = String(raw ?? '').trim();
+    if (!texto) {
+        return false;
+    }
+    if (parsearNumeroSeguro(texto) !== null) {
+        return false;
+    }
+    return prepararFormulaSkillPowerParaEvaluacion(texto, { poder: 100, salud: 100, saludEnemigo: 100 }) !== null;
+}
+
+function normalizarValorSkillPowerPorClase(clase, valor) {
+    const n = Number(valor);
+    if (!Number.isFinite(n)) {
+        return 0;
+    }
+    const claseNorm = normalizarClaseSkill({ skill_class: clase });
+    switch (claseNorm) {
+        case 'aoe':
+        case 'extra_attack':
+        case 'dot':
+            return Math.max(1, Math.floor(n));
+        case 'tank':
+            return Math.max(0, Math.round(n));
+        default:
+            return Math.max(0, Math.floor(n));
+    }
+}
+
+/** Valores por defecto si skill_power está vacío (cartas legacy sin Excel actualizado). */
+function obtenerSkillPowerFallbackPorClase(clase, contexto = {}, fallback = 0) {
+    const claseNorm = normalizarClaseSkill({ skill_class: clase });
+    const poder = Math.max(0, Number(contexto.poder || 0));
+    const salud = Math.max(0, Number(contexto.salud || 0));
+    const saludEnemigo = Math.max(0, Number(contexto.saludEnemigo || 0));
+    switch (claseNorm) {
+        case 'aoe':
+            return Math.max(1, Math.floor(poder / 2));
+        case 'extra_attack':
+            return Math.max(1, Math.floor(poder));
+        case 'tank':
+            return Math.max(0, Math.round(salud * 2));
+        case 'heal_debuff':
+            if (saludEnemigo > 0) {
+                return Math.max(1, Math.floor(saludEnemigo * 0.75));
+            }
+            return Number(fallback || 0);
+        default:
+            return Number(fallback || 0);
     }
 }
 
@@ -159,48 +249,186 @@ function obtenerMetaHabilidadCarta(carta) {
     };
 }
 
+/** skill_power efectivo (base × nivel) para clases que escalan por nivel. */
+/**
+ * Contexto para evaluar skill_power: buff/debuff/bonus_buff usan solo stats base de la carta (Poder/SaludMax + nivel).
+ */
+function obtenerContextoSkillPowerCarta(carta, opciones = {}) {
+    const clase = normalizarClaseSkill(carta);
+    if (SKILL_CLASSES_CONTEXTO_BASE.has(clase)) {
+        const poder = Math.max(0, Number(carta?.Poder ?? 0));
+        const salud = Math.max(
+            0,
+            Number(carta?.SaludMax ?? carta?.Salud ?? carta?.Poder ?? poder)
+        );
+        return {
+            poder,
+            salud,
+            saludEnemigo: Math.max(0, Number(opciones.saludEnemigo ?? 0))
+        };
+    }
+    return {
+        poder: Number(opciones.poder ?? carta?.Poder ?? 0),
+        salud: Number(opciones.salud ?? carta?.Salud ?? carta?.SaludMax ?? carta?.Poder ?? 0),
+        saludEnemigo: Number(opciones.saludEnemigo ?? 0)
+    };
+}
+
+function obtenerSkillPowerEscaladoPorNivel(carta) {
+    if (!carta || typeof carta !== 'object') {
+        return null;
+    }
+    const clase = normalizarClaseSkill(carta);
+    if (!SKILL_CLASSES_ESCALABLES.has(clase)) {
+        return null;
+    }
+    const copia = { ...carta };
+    recalcularSkillPowerPorNivel(copia, obtenerNivelCartaSeguro(carta), { rawEsBase: true });
+    return parsearNumeroSeguro(copia.skill_power);
+}
+
 function obtenerSkillPowerNumericoCarta(carta, opciones = {}) {
     const clase = normalizarClaseSkill(carta);
     const fallback = Number(opciones.fallback ?? 0);
-    const poder = Number(opciones.poder ?? carta?.Poder ?? 0);
-    const salud = Number(opciones.salud ?? carta?.Salud ?? carta?.SaludMax ?? poder ?? 0);
-    const saludEnemigo = Number(opciones.saludEnemigo ?? 0);
+    const contexto = obtenerContextoSkillPowerCarta(carta, opciones);
     const bruto = carta?.skill_power;
 
-    // Clases con comportamiento fijo (no escalan por skill_power numérico).
     if (clase === 'revive') {
         return 1;
-    }
-    if (clase === 'aoe') {
-        return Math.max(1, Math.floor(poder / 2));
-    }
-    if (clase === 'tank') {
-        return Math.max(0, Math.round(salud * 2));
-    }
-    if (clase === 'heal_debuff') {
-        if (saludEnemigo > 0) {
-            return Math.max(1, Math.floor(saludEnemigo * 0.75));
-        }
-        return fallback;
-    }
-    if (clase === 'extra_attack') {
-        return Math.max(1, Math.floor(poder));
     }
     if (clase === 'bonus_debuff') {
         return fallback;
     }
+    if (clase === 'heal_debuff') {
+        if (esSkillPowerFormula(bruto)) {
+            const v = evaluarFormulaSkillPower(bruto, contexto);
+            if (v !== null) {
+                return normalizarValorSkillPowerPorClase(clase, v);
+            }
+        }
+        return normalizarValorSkillPowerPorClase(
+            clase,
+            obtenerSkillPowerFallbackPorClase(clase, contexto, fallback)
+        );
+    }
 
+    // 1) Fórmula del Excel — se evalúa en tiempo real (poder/salud actuales en partida o de la carta fuera de ella).
+    if (SKILL_CLASSES_CON_FORMULA.has(clase) && esSkillPowerFormula(bruto)) {
+        const formulaEvaluada = evaluarFormulaSkillPower(bruto, contexto);
+        if (formulaEvaluada !== null) {
+            return normalizarValorSkillPowerPorClase(clase, formulaEvaluada);
+        }
+    }
+
+    // 2) Literal escalable × nivel (buff, heal, etc.).
+    const escaladoPorNivel = obtenerSkillPowerEscaladoPorNivel(carta);
+    if (escaladoPorNivel !== null) {
+        return normalizarValorSkillPowerPorClase(clase, escaladoPorNivel);
+    }
+
+    // 3) Literal fijo del Excel.
     const numeroDirecto = parsearNumeroSeguro(bruto);
     if (numeroDirecto !== null) {
-        return numeroDirecto;
+        return normalizarValorSkillPowerPorClase(clase, numeroDirecto);
     }
 
-    const formulaEvaluada = evaluarFormulaSkillPower(bruto, { poder, salud, saludEnemigo });
-    if (formulaEvaluada !== null) {
-        return formulaEvaluada;
+    // 4) Compatibilidad: skill_power vacío → comportamiento legacy por clase.
+    if (SKILL_CLASSES_CON_FORMULA.has(clase) || clase === 'aoe' || clase === 'tank' || clase === 'extra_attack') {
+        return normalizarValorSkillPowerPorClase(
+            clase,
+            obtenerSkillPowerFallbackPorClase(clase, contexto, fallback)
+        );
     }
 
-    return fallback;
+    return normalizarValorSkillPowerPorClase(clase, fallback);
+}
+
+/** Poder de referencia para colorear tooltips: stat impreso de la carta (sin buffs/debuffs de combate en mesa). */
+function obtenerPoderBaseReferenciaCarta(carta) {
+    if (!carta) return 0;
+    const poderImpreso = Number(carta.Poder || 0);
+    const enMesa = Number.isFinite(Number(carta.poderFinalAfiliacion))
+        || Number.isFinite(Number(carta.poderBaseAfiliacion));
+    if (enMesa) {
+        return Math.max(0, poderImpreso);
+    }
+    const mod = Number(carta.poderModHabilidadVisual ?? carta.poderModHabilidad ?? 0);
+    return Math.max(0, poderImpreso + (Number.isFinite(mod) ? mod : 0));
+}
+
+/** Poder efectivo actual (con bonus de afiliación en tablero si aplica). */
+function obtenerPoderActualCarta(carta, opciones = {}) {
+    if (opciones && Number.isFinite(Number(opciones.poder))) {
+        return Math.max(0, Number(opciones.poder));
+    }
+    if (!carta) return 0;
+    const finalNum = Number(carta.poderFinalAfiliacion);
+    if (Number.isFinite(finalNum)) {
+        return Math.max(0, finalNum);
+    }
+    const baseAf = Number(carta.poderBaseAfiliacion);
+    const bonAf = Number(carta.bonusAfiliacion || 0);
+    if (Number.isFinite(baseAf)) {
+        return Math.max(0, baseAf + (Number.isFinite(bonAf) ? bonAf : 0));
+    }
+    const poder = Number(carta.Poder || 0);
+    const modVis = Number(carta.poderModHabilidadVisual);
+    if (Number.isFinite(modVis)) {
+        const bon = Number(carta.bonusAfiliacion || 0);
+        return Math.max(0, poder + modVis + (Number.isFinite(bon) ? bon : 0));
+    }
+    return Math.max(0, poder);
+}
+
+function calcularDanioSkillDesdePoder(claseSkill, poderActual, carta = null, opciones = {}) {
+    if (carta && typeof carta === 'object') {
+        return obtenerSkillPowerNumericoCarta(carta, {
+            ...opciones,
+            poder: poderActual,
+            salud: Number(
+                opciones.salud
+                ?? carta?.Salud
+                ?? carta?.SaludMax
+                ?? poderActual
+                ?? 0
+            )
+        });
+    }
+    const clase = normalizarClaseSkill({ skill_class: claseSkill });
+    const poder = Math.max(0, Number(poderActual) || 0);
+    return normalizarValorSkillPowerPorClase(
+        clase,
+        obtenerSkillPowerFallbackPorClase(clase, { poder, salud: poder }, 0)
+    );
+}
+
+/**
+ * Valor y color del @skill_power en tooltip para habilidades de daño según poder actual en mesa.
+ */
+function resolverPresentacionSkillPowerTooltip(carta, meta = {}, opciones = {}) {
+    const clase = normalizarClaseSkill({ skill_class: meta?.clase || carta?.skill_class || '' });
+    const poderBase = obtenerPoderBaseReferenciaCarta(carta);
+    const poderActual = obtenerPoderActualCarta(carta, opciones);
+
+    const saludContexto = Number(opciones.salud ?? carta?.Salud ?? carta?.SaludMax ?? carta?.Poder ?? 0);
+    const valorMostrar = obtenerSkillPowerNumericoCarta(carta, {
+        ...opciones,
+        poder: poderActual,
+        salud: saludContexto
+    });
+
+    let claseColor = CLASE_COLOR_SKILL_POWER_TOOLTIP[clase] || 'tooltip-skill-power--default';
+    const usaPoderEnFormula = esSkillPowerFormula(carta?.skill_power)
+        && /\bpoder\b/i.test(String(carta?.skill_power || ''));
+    if (clase === 'aoe' || clase === 'extra_attack' || usaPoderEnFormula) {
+        if (poderActual > poderBase) {
+            claseColor = 'tooltip-skill-power--power-buff';
+        } else if (poderActual < poderBase) {
+            claseColor = 'tooltip-skill-power--power-debuff';
+        }
+    }
+
+    return { valor: valorMostrar, claseColor, poderActual, poderBase };
 }
 
 function formatearSkillPowerParaTexto(valor) {
@@ -222,8 +450,9 @@ function interpolarSkillInfoConValores(carta, infoTemplate = '', opciones = {}) 
     if (!/@skill_power/gi.test(texto)) {
         return texto;
     }
-    const valorSkill = obtenerSkillPowerNumericoCarta(carta, opciones);
-    return texto.replace(/@skill_power/gi, formatearSkillPowerParaTexto(valorSkill));
+    const meta = obtenerMetaHabilidadCarta(carta);
+    const presentacion = resolverPresentacionSkillPowerTooltip(carta, meta, opciones);
+    return texto.replace(/@skill_power/gi, formatearSkillPowerParaTexto(presentacion.valor));
 }
 
 function escaparHtml(texto) {
@@ -242,8 +471,9 @@ function construirInfoTooltipHabilidadHtml(carta, meta = {}, opciones = {}) {
     }
 
     const claseSkill = normalizarClaseSkill({ skill_class: meta?.clase || carta?.skill_class || '' });
-    const claseColor = CLASE_COLOR_SKILL_POWER_TOOLTIP[claseSkill] || 'tooltip-skill-power--default';
-    const valor = formatearSkillPowerParaTexto(obtenerSkillPowerNumericoCarta(carta, opciones));
+    const presentacion = resolverPresentacionSkillPowerTooltip(carta, meta, opciones);
+    const claseColor = presentacion.claseColor;
+    const valor = formatearSkillPowerParaTexto(presentacion.valor);
     const marcador = '___DC_SKILL_POWER___';
 
     let htmlSeguro = escaparHtml(template).replace(/\r\n|\r|\n/g, '<br>');
@@ -455,16 +685,15 @@ function crearBadgeHabilidadCarta(carta) {
     }
     badge.textContent = `${meta.trigger === 'auto' ? 'Pasiva' : 'Activa'}: ${meta.nombre}`;
     badge.removeAttribute('title');
+    const poderActual = obtenerPoderActualCarta(carta);
+    const opcionesSkill = {
+        poder: poderActual,
+        salud: Number(carta?.Salud ?? carta?.SaludMax ?? carta?.Poder ?? 0)
+    };
     enlazarTooltipHabilidadABadge(badge, {
         ...meta,
-        info: interpolarSkillInfoConValores(carta, meta.info, {
-            poder: Number(carta?.Poder || 0),
-            salud: Number(carta?.Salud ?? carta?.SaludMax ?? carta?.Poder ?? 0)
-        }),
-        infoHtml: construirInfoTooltipHabilidadHtml(carta, meta, {
-            poder: Number(carta?.Poder || 0),
-            salud: Number(carta?.Salud ?? carta?.SaludMax ?? carta?.Poder ?? 0)
-        })
+        info: interpolarSkillInfoConValores(carta, meta.info, opcionesSkill),
+        infoHtml: construirInfoTooltipHabilidadHtml(carta, meta, opcionesSkill)
     });
     return badge;
 }
@@ -533,6 +762,15 @@ window.crearBadgeHabilidadCarta = crearBadgeHabilidadCarta;
 window.aplicarPrefijoAfiliacionNombreCarta = aplicarPrefijoAfiliacionNombreCarta;
 window.crearBadgeAfiliacionCarta = crearBadgeAfiliacionCarta;
 window.obtenerSkillPowerNumericoCarta = obtenerSkillPowerNumericoCarta;
+window.obtenerContextoSkillPowerCarta = obtenerContextoSkillPowerCarta;
+window.evaluarFormulaSkillPower = evaluarFormulaSkillPower;
+window.prepararFormulaSkillPowerParaEvaluacion = prepararFormulaSkillPowerParaEvaluacion;
+window.esSkillPowerFormula = esSkillPowerFormula;
+window.obtenerSkillPowerEscaladoPorNivel = obtenerSkillPowerEscaladoPorNivel;
+window.obtenerPoderActualCarta = obtenerPoderActualCarta;
+window.obtenerPoderBaseReferenciaCarta = obtenerPoderBaseReferenciaCarta;
+window.calcularDanioSkillDesdePoder = calcularDanioSkillDesdePoder;
+window.resolverPresentacionSkillPowerTooltip = resolverPresentacionSkillPowerTooltip;
 window.recalcularSkillPowerPorNivel = recalcularSkillPowerPorNivel;
 window.interpolarSkillInfoConValores = interpolarSkillInfoConValores;
 
@@ -1749,7 +1987,7 @@ function normalizarMenuLateral() {
         linkMultijugador.removeEventListener('click', bloquearNavegacionMultijugador);
     }
 
-    const versionLabelTexto = 'Versión: 1.2.0';
+    const versionLabelTexto = 'Versión: 1.2.1';
     let versionLabel = menu.querySelector('#menu-version-label');
     if (!versionLabel) {
         versionLabel = document.createElement('div');

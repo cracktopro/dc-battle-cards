@@ -26,6 +26,7 @@
     const EJECUTOR_BOT_EMAIL = String(payload.ejecutorBotEmail || EMAIL_LEADER || '').trim().toLowerCase();
 
     let snapshot = payload.snapshot ? JSON.parse(JSON.stringify(payload.snapshot)) : null;
+    const coopHealDebuffFactors = { A: 1, B: 1, bot: 1 };
     /** Revisión confirmada por el servidor (eco de `multiplayer:coop:estado`). */
     let revisionConfirmada = Number(payload.revision ?? snapshot?.revision ?? 0);
 
@@ -47,6 +48,13 @@
         carta.stunSkillName = String(carta.stunSkillName || '').trim();
         carta.tankActiva = Boolean(carta.tankActiva);
         carta.lifeStealActiva = Boolean(carta.lifeStealActiva);
+        if (typeof window.recalcularSkillPowerPorNivel === 'function' && carta.skill_class) {
+            const baseCatalogo = carta.skill_power_base ?? carta.skill_power;
+            if (carta.skill_power_base === undefined || carta.skill_power_base === null || String(carta.skill_power_base).trim() === '') {
+                carta.skill_power_base = baseCatalogo;
+            }
+            window.recalcularSkillPowerPorNivel(carta, Number(carta.Nivel || 1), { rawEsBase: true });
+        }
         carta.efectosDot = Array.isArray(carta.efectosDot)
             ? carta.efectosDot
                 .map((fx) => {
@@ -260,10 +268,55 @@
      * `soloAnuncio`: solo mensaje central (p. ej. `extra_attack` antes del diff de daño en el observador).
      * `omitirAnuncio`: no repetir el mensaje (p. ej. tras mostrarlo ya antes del daño).
      */
+    async function animarBarraImpactoCoopDesdeFloat(snapAntes, snapDespues, f) {
+        if (!f || typeof f !== 'object' || !snapAntes || !snapDespues) return;
+        const clase = String(f.claseVisual || '').trim();
+        if (clase !== 'escudo' && clase !== 'cura') return;
+        const zona = f.zona;
+        const slot = Number(f.slot);
+        if ((zona !== 'A' && zona !== 'B' && zona !== 'bot') || !Number.isFinite(slot)) return;
+
+        const prevMesa = obtenerMesaEnSnapshot(snapAntes, zona);
+        const proxMesa = obtenerMesaEnSnapshot(snapDespues, zona);
+        const c0 = prevMesa[slot];
+        const c1 = proxMesa[slot];
+        const live = obtenerMesaPorZona(zona)[slot];
+        if (!c0 || !live) return;
+
+        const salHpIni = obtenerSaludActualCarta(c0);
+        const salHpFin = c1 ? obtenerSaludActualCarta(c1) : salHpIni;
+        const escIni = Math.max(0, Number(c0.escudoActual || 0));
+        const escFin = Math.max(0, Number((c1 || c0).escudoActual || 0));
+
+        restaurarSaludEscudoVisual(live, salHpIni, escIni);
+        renderTodo();
+
+        if (clase === 'escudo') {
+            await animarBajadaSaludCartaCoop(zona, slot, salHpIni, salHpIni, {
+                escudoInicial: escIni,
+                escudoFinal: escFin,
+                esEscudo: true
+            });
+        } else {
+            await animarBajadaSaludCartaCoop(zona, slot, salHpIni, salHpFin, {
+                escudoInicial: escIni,
+                escudoFinal: escFin,
+                esCura: true
+            });
+        }
+
+        if (c1) {
+            restaurarSaludEscudoVisual(live, salHpFin, escFin);
+            renderTodo();
+        }
+    }
+
     async function ejecutarCoopReplayVisual(rep, opts = {}) {
         if (!rep || typeof rep !== 'object') return;
         const omitirAnuncio = Boolean(opts.omitirAnuncio);
         const soloAnuncio = Boolean(opts.soloAnuncio);
+        const snapAntes = opts.snapAntes;
+        const snapDespues = opts.snapDespues;
         const ms = Math.max(300, Number(rep.msAviso || PAUSA_AVISO_HABILIDAD_MS));
         const txt = String(rep.textoAnuncio || '').trim();
         if (!omitirAnuncio && txt) {
@@ -272,12 +325,13 @@
         }
         if (soloAnuncio) return;
         const floats = Array.isArray(rep.floats) ? rep.floats : [];
-        floats.forEach((f) => {
-            if (!f || typeof f !== 'object') return;
+        for (let fi = 0; fi < floats.length; fi += 1) {
+            const f = floats[fi];
+            if (!f || typeof f !== 'object') continue;
             const zona = f.zona;
             const slot = Number(f.slot);
-            if (zona !== 'A' && zona !== 'B' && zona !== 'bot') return;
-            if (!Number.isFinite(slot)) return;
+            if (zona !== 'A' && zona !== 'B' && zona !== 'bot') continue;
+            if (!Number.isFinite(slot)) continue;
             mostrarValorFlotanteCoop(
                 zona,
                 slot,
@@ -285,7 +339,10 @@
                 f.tipoImpacto === 'oponente' ? 'oponente' : 'jugador',
                 f.claseVisual || 'danio'
             );
-        });
+            if (snapAntes && snapDespues) {
+                await animarBarraImpactoCoopDesdeFloat(snapAntes, snapDespues, f);
+            }
+        }
     }
 
     function atacanteDesdeReplayCoop(replay) {
@@ -542,6 +599,19 @@
 
     function enemigosSaludParaZonaCoop(zonaCarta) {
         return enemigosSaludParaZonaDesdeSnapshot(zonaCarta, snapshot);
+    }
+
+    function sincronizarHealDebuffCoop() {
+        const H = window.DCHealDebuffCombat;
+        if (!H || !snapshot) return;
+        ['A', 'B', 'bot'].forEach((zona) => {
+            const enemigos = enemigosSaludParaZonaCoop(zona);
+            const mesa = obtenerMesaPorZona(zona);
+            const factorNuevo = H.obtenerFactorHealDebuff(enemigos);
+            const factorAnterior = coopHealDebuffFactors[zona] ?? 1;
+            H.sincronizarCartasConFactor(mesa, factorAnterior, factorNuevo);
+            coopHealDebuffFactors[zona] = factorNuevo;
+        });
     }
 
     function inferirAtacanteBotActivoDesdeProx(prox) {
@@ -821,9 +891,16 @@
             if (replay && !replaySeEncargaAnim && !replayExtraAttackConAnim && !partidaFinalizada) {
                 coopDebugEco(`replayVisual post-snapshot tipo=${replay.tipoAccion || '?'}`);
                 if (replayExtraAttack) {
-                    await ejecutarCoopReplayVisual(replay, { omitirAnuncio: true });
+                    await ejecutarCoopReplayVisual(replay, {
+                        omitirAnuncio: true,
+                        snapAntes: prev,
+                        snapDespues: prox
+                    });
                 } else {
-                    await ejecutarCoopReplayVisual(replay);
+                    await ejecutarCoopReplayVisual(replay, {
+                        snapAntes: prev,
+                        snapDespues: prox
+                    });
                 }
             }
         } catch (e) {
@@ -877,6 +954,9 @@
         if (claseVisual === 'cura') {
             danioDiv.classList.add('cura');
             danioDiv.textContent = `${Math.max(0, Math.floor(Number(valor) || 0))}`;
+        } else if (claseVisual === 'escudo') {
+            danioDiv.classList.add('escudo');
+            danioDiv.textContent = `${Math.max(0, Math.floor(Number(valor) || 0))}`;
         } else {
             danioDiv.textContent = `-${Math.max(0, Math.floor(Number(valor) || 0))}`;
         }
@@ -911,7 +991,10 @@
         const saludFinal = Math.max(0, Number(saludRawFinal || 0));
         const cartasEnemigasSalud = enemigosSaludParaZonaCoop(zonaObjetivo);
         const esCura = Boolean(opciones && opciones.esCura);
-        const claseImpactoBarra = esCura ? 'recibiendo-cura' : 'recibiendo-danio';
+        const esEscudo = Boolean(opciones && opciones.esEscudo);
+        const claseImpactoBarra = esCura
+            ? 'recibiendo-cura'
+            : (esEscudo ? 'recibiendo-escudo' : 'recibiendo-danio');
         const ritmoBot = Boolean(opciones && opciones.ritmoAtaqueBot);
         const msAntesBarra = ritmoBot ? 70 : 120;
         const msDespuesBarra = ritmoBot ? 260 : 420;
@@ -930,14 +1013,18 @@
         await esperar(msAntesBarra);
 
         const estadoIni = ui.obtenerSaludEfectiva(carta, cartasEnemigasSalud);
-        const pctIni = Math.max(0, Math.min((estadoIni.totalActual / Math.max(estadoIni.totalMax, 1)) * 100, 100));
+        const barraIni = typeof ui.obtenerPresentacionBarraSalud === 'function'
+            ? ui.obtenerPresentacionBarraSalud(estadoIni)
+            : window.DCHealDebuffCombat?.obtenerPresentacionBarraSalud?.(estadoIni);
 
         carta.Salud = saludFinal;
         if (opciones && Object.prototype.hasOwnProperty.call(opciones, 'escudoFinal')) {
             carta.escudoActual = Math.max(0, Number(opciones.escudoFinal || 0));
         }
         const estadoFin = ui.obtenerSaludEfectiva(carta, cartasEnemigasSalud);
-        const pctFin = Math.max(0, Math.min((estadoFin.totalActual / Math.max(estadoFin.totalMax, 1)) * 100, 100));
+        const barraFin = typeof ui.obtenerPresentacionBarraSalud === 'function'
+            ? ui.obtenerPresentacionBarraSalud(estadoFin)
+            : window.DCHealDebuffCombat?.obtenerPresentacionBarraSalud?.(estadoFin);
 
         const rellenoAnim = slotTrasRender?.querySelector('.barra-salud-relleno');
         if (!rellenoAnim) {
@@ -946,16 +1033,22 @@
             return;
         }
 
-        rellenoAnim.style.width = `${pctIni}%`;
-        rellenoAnim.style.setProperty('--health-ratio', String(pctIni / 100));
+        if (barraIni) {
+            rellenoAnim.style.width = `${barraIni.porcentaje}%`;
+            rellenoAnim.style.setProperty('--health-ratio', String(barraIni.ratio));
+            rellenoAnim.classList.toggle('con-escudo', Boolean(barraIni.barraAzul));
+        }
         void rellenoAnim.offsetWidth;
         rellenoAnim.style.transition = `width ${durTransBarra} cubic-bezier(0.22, 0.8, 0.2, 1), background-color 0.3s ease, filter 0.25s ease`;
-        rellenoAnim.style.width = `${pctFin}%`;
-        rellenoAnim.style.setProperty('--health-ratio', String(pctFin / 100));
+        if (barraFin) {
+            rellenoAnim.style.width = `${barraFin.porcentaje}%`;
+            rellenoAnim.style.setProperty('--health-ratio', String(barraFin.ratio));
+            rellenoAnim.classList.toggle('con-escudo', Boolean(barraFin.barraAzul));
+        }
 
         const saludTxt = slotTrasRender?.querySelector('.salud-carta');
-        if (saludTxt) {
-            saludTxt.textContent = `${Math.round(estadoFin.totalActual)}/${Math.round(estadoFin.totalMax)}`;
+        if (saludTxt && barraFin) {
+            saludTxt.textContent = `${Math.round(barraFin.textoNumerador)}/${Math.round(barraFin.textoDenominador)}`;
         }
 
         await esperar(msDespuesBarra);
@@ -1102,7 +1195,13 @@
         });
     }
 
-    function aplicarDanioCarta(carta, danioBruto) {
+    function aplicarDanioCarta(carta, danioBruto, zonaCarta) {
+        const H = window.DCHealDebuffCombat;
+        if (H && zonaCarta) {
+            const enemigos = enemigosSaludParaZonaCoop(zonaCarta);
+            const { murio } = H.aplicarDanio(carta, danioBruto, enemigos);
+            return !murio;
+        }
         let escudo = Math.max(0, Number(carta.escudoActual || 0));
         let salud = obtenerSaludActualCarta(carta);
         let restante = Math.max(0, Number(danioBruto) || 0);
@@ -1592,7 +1691,10 @@
             } else if (replay.tipoAccion === 'extra_attack') {
                 await animarTransicionCoopExtraAttackDesdeReplay(snapAntes, snapDespuesCanon, replay);
             } else {
-                await ejecutarCoopReplayVisual(replay);
+                await ejecutarCoopReplayVisual(replay, {
+                    snapAntes,
+                    snapDespues: snapDespuesCanon
+                });
             }
         } catch (e) {
             console.error('[coop] animar habilidad (emisor)', e);
@@ -1630,7 +1732,7 @@
 
     function aplicarDanioDirectoSinAnimCoop(cartaObjetivo, zonaObjetivo, slotObjetivo, danio, snapRef = snapshot) {
         if (!cartaObjetivo || danio <= 0) return false;
-        aplicarDanioCarta(cartaObjetivo, danio);
+        aplicarDanioCarta(cartaObjetivo, danio, zonaObjetivo);
         if (cartaViva(cartaObjetivo)) return true;
         const cement = obtenerCementerioPorZonaEnSnapshot(snapRef, zonaObjetivo);
         const mesa = obtenerMesaPorZonaEnSnapshot(snapRef, zonaObjetivo);
@@ -1728,7 +1830,11 @@
             const objetivo = mesaObj[selMesa.slot];
             if (!objetivo) return false;
             const saludAntes = obtenerSaludActualCarta(objetivo);
-            objetivo.Salud = Math.min(obtenerSaludMaxCarta(objetivo), saludAntes + Math.floor(valor));
+            const H = window.DCHealDebuffCombat;
+            const enObjHeal = enemigosSaludParaZonaCoop(selMesa.zona);
+            objetivo.Salud = H
+                ? H.capCuracion(objetivo, saludAntes + Math.floor(valor), enObjHeal)
+                : Math.min(obtenerSaludMaxCarta(objetivo), saludAntes + Math.floor(valor));
             const curado = Math.max(0, objetivo.Salud - saludAntes);
             if (curado <= 0) return false;
             coopReplayTexto = construirMensajeUsoHabilidadActiva(carta.Nombre, meta.nombre, objetivo.Nombre);
@@ -1768,9 +1874,17 @@
             const mesaObj = obtenerMesaPorZona(selMesa.zona);
             const objetivo = mesaObj[selMesa.slot];
             if (!objetivo) return false;
+            const escCantidad = Math.floor(valor);
             coopReplayTexto = construirMensajeUsoHabilidadActiva(carta.Nombre, meta.nombre, objetivo.Nombre);
-            objetivo.escudoActual = Math.max(0, Number(objetivo.escudoActual || 0)) + Math.floor(valor);
-            logCoop(`${carta.Nombre} usa ${meta.nombre}: escudo +${Math.floor(valor)} para ${objetivo.Nombre}.`);
+            objetivo.escudoActual = Math.max(0, Number(objetivo.escudoActual || 0)) + escCantidad;
+            coopReplayFloats.push({
+                zona: selMesa.zona,
+                slot: selMesa.slot,
+                valor: escCantidad,
+                tipoImpacto: tipoFloatImpactoParaZonaCarta(selMesa.zona),
+                claseVisual: 'escudo'
+            });
+            logCoop(`${carta.Nombre} usa ${meta.nombre}: escudo +${escCantidad} para ${objetivo.Nombre}.`);
         } else if (meta.clase === 'stun' || meta.clase === 'dot' || meta.clase === 'extra_attack') {
             const tank = obtenerIndiceTankActivoEnMesa(enemigos);
             const disp = tank !== null ? [tank] : obtenerIndicesDisponiblesCoop(enemigos);
@@ -1854,12 +1968,12 @@
                     const saludIniExtra = obtenerSaludActualCarta(objetivoReal);
                     const escIniExtra = Math.max(0, Number(objetivoReal.escudoActual || 0));
                     const tempExtra = JSON.parse(JSON.stringify(objetivoReal));
-                    aplicarDanioCarta(tempExtra, danioExtra);
+                    aplicarDanioCarta(tempExtra, danioExtra, zonaObjetivo);
                     const saludFinExtra = obtenerSaludActualCarta(tempExtra);
                     const escFinExtra = Math.max(0, Number(tempExtra.escudoActual || 0));
                     const esLetalExtra = !cartaViva(tempExtra);
 
-                    aplicarDanioCarta(objetivoReal, danioExtra);
+                    aplicarDanioCarta(objetivoReal, danioExtra, zonaObjetivo);
                     coopReplayFloats.push({
                         zona: zonaObjetivo,
                         slot: slotObjetivo,
@@ -1892,7 +2006,11 @@
                     mesa.forEach((objetivo, idx) => {
                         if (!objetivo) return;
                         const antes = obtenerSaludActualCarta(objetivo);
-                        objetivo.Salud = Math.min(obtenerSaludMaxCarta(objetivo), antes + Math.floor(valor));
+                        const H = window.DCHealDebuffCombat;
+                        const enObj = enemigosSaludParaZonaCoop(z);
+                        objetivo.Salud = H
+                            ? H.capCuracion(objetivo, antes + Math.floor(valor), enObj)
+                            : Math.min(obtenerSaludMaxCarta(objetivo), antes + Math.floor(valor));
                         const curado = Math.max(0, objetivo.Salud - antes);
                         if (curado > 0) {
                             hubo = true;
@@ -1910,7 +2028,11 @@
                 aliados.forEach((objetivo, idx) => {
                     if (!objetivo) return;
                     const antes = obtenerSaludActualCarta(objetivo);
-                    objetivo.Salud = Math.min(obtenerSaludMaxCarta(objetivo), antes + Math.floor(valor));
+                    const H = window.DCHealDebuffCombat;
+                    const enObj = enemigosSaludParaZonaCoop(ctx.zonaAliada);
+                    objetivo.Salud = H
+                        ? H.capCuracion(objetivo, antes + Math.floor(valor), enObj)
+                        : Math.min(obtenerSaludMaxCarta(objetivo), antes + Math.floor(valor));
                     const curado = Math.max(0, objetivo.Salud - antes);
                     if (curado > 0) {
                         hubo = true;
@@ -1927,7 +2049,17 @@
             if (!hubo) return false;
             logCoop(`${carta.Nombre} usa ${meta.nombre}: cura grupal +${Math.floor(valor)}.`);
         } else if (meta.clase === 'aoe') {
-            const danoAoe = Math.max(1, Math.floor(valor || (obtenerPoderAtaqueCoop(ctx.zonaAliada, slotCarta) / 2)));
+            const poderAoe = obtenerPoderAtaqueCoop(ctx.zonaAliada, slotCarta);
+            const cartaAoeCtx = ctx.zonaAliada === 'bot'
+                ? snapshot.cartasEnJuegoBot[slotCarta]
+                : ctx.zonaAliada === 'A'
+                    ? snapshot.cartasEnJuegoA[slotCarta]
+                    : snapshot.cartasEnJuegoB[slotCarta];
+            const danoAoe = typeof window.calcularDanioSkillDesdePoder === 'function'
+                ? window.calcularDanioSkillDesdePoder('aoe', poderAoe, cartaAoeCtx, {
+                    salud: cartaAoeCtx?.Salud ?? cartaAoeCtx?.SaludMax ?? poderAoe
+                })
+                : Math.max(1, Math.floor(poderAoe / 2));
             const disp = obtenerIndicesDisponiblesCoop(enemigos);
             if (!disp.length) return false;
             coopReplayTexto = construirMensajeUsoHabilidadActiva(carta.Nombre, meta.nombre, 'todo el equipo rival');
@@ -2037,7 +2169,11 @@
                     ? 'aoe'
                     : meta.clase === 'extra_attack'
                         ? 'extra_attack'
-                        : 'general',
+                        : meta.clase === 'shield'
+                            ? 'shield'
+                            : meta.clase === 'heal'
+                                ? 'heal'
+                                : 'general',
                 actorZona: zonaActor,
                 actorSlot: slotCarta,
                 extraAttack: coopReplayExtraAttack,
@@ -2435,6 +2571,7 @@
     }
 
     function renderTodo() {
+        sincronizarHealDebuffCoop();
         destacarTurnoUi();
         actualizarContadores();
         renderSlotsPlano();
@@ -3086,13 +3223,13 @@
         const escudoAntes = Math.max(0, Number(objetivoRef.escudoActual || 0));
 
         const temp = JSON.parse(JSON.stringify(objetivoRef));
-        aplicarDanioCarta(temp, danio);
+        aplicarDanioCarta(temp, danio, zonaObjetivo);
         const saludRawFinal = obtenerSaludActualCarta(temp);
         const escudoFinal = Math.max(0, Number(temp.escudoActual || 0));
 
         const impactoConEscudo = escudoAntes > 0 || escudoFinal > 0;
 
-        aplicarDanioCarta(objetivoRef, danio);
+        aplicarDanioCarta(objetivoRef, danio, zonaObjetivo);
         const murio = !cartaViva(objetivoRef);
 
         atacanteSel = null;
@@ -3378,13 +3515,13 @@
                     const saludAnt = obtenerSaludActualCarta(objetivo);
                     const escAnt = Math.max(0, Number(objetivo.escudoActual || 0));
                     const tempB = JSON.parse(JSON.stringify(objetivo));
-                    aplicarDanioCarta(tempB, danio);
+                    aplicarDanioCarta(tempB, danio, pick.zona);
                     const saludFin = obtenerSaludActualCarta(tempB);
                     const escFinB = Math.max(0, Number(tempB.escudoActual || 0));
 
                     const impactoEsc = escAnt > 0 || escFinB > 0;
 
-                    aplicarDanioCarta(objetivo, danio);
+                    aplicarDanioCarta(objetivo, danio, pick.zona);
                     const cement = obtenerCementerioPorZona(pick.zona);
                     const murioBot = !cartaViva(objetivo);
 
@@ -3535,6 +3672,12 @@
             delete snapshot.coopReplayVisual;
         }
         normalizarSnapshotCoop(snapshot);
+        const H = window.DCHealDebuffCombat;
+        if (H) {
+            ['A', 'B', 'bot'].forEach((zona) => {
+                coopHealDebuffFactors[zona] = H.obtenerFactorHealDebuff(enemigosSaludParaZonaCoop(zona));
+            });
+        }
         const r = Number(rev);
         revisionConfirmada = Number.isFinite(r) ? r : revisionConfirmada;
         atacanteSel = null;
@@ -3809,6 +3952,12 @@
         if (esAperturaPartida
             && (snapshot.faseCoop === 'P1' || snapshot.faseCoop === 'P2' || snapshot.faseCoop === 'BOT')) {
             ultimaFaseCoopParaAvisoTurno = snapshot.faseCoop;
+        }
+        const HInit = window.DCHealDebuffCombat;
+        if (HInit && snapshot) {
+            ['A', 'B', 'bot'].forEach((zona) => {
+                coopHealDebuffFactors[zona] = HInit.obtenerFactorHealDebuff(enemigosSaludParaZonaCoop(zona));
+            });
         }
         renderTodo();
         if (typeof window.emitMultiplayerCoopJoin === 'function') {

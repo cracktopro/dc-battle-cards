@@ -1810,6 +1810,16 @@ select:disabled,
     color: #ff8d8d;
 }
 
+.tooltip-skill-power--power-buff {
+    color: #ffe37d;
+    text-shadow: 0 0 10px rgba(255, 220, 100, 0.45);
+}
+
+.tooltip-skill-power--power-debuff {
+    color: #d7a8ff;
+    text-shadow: 0 0 10px rgba(190, 140, 255, 0.4);
+}
+
 .tooltip-skill-power--stun,
 .tooltip-skill-power--dot {
     color: #ffbe7a;
@@ -1888,13 +1898,35 @@ select:disabled,
 
 .modal-cambio-carta .lista-cartas-reemplazo {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(var(--dc-card-grid-min, clamp(150px, 12vw, 200px)), 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     justify-content: start;
-    gap: clamp(10px, 1.2vw, 14px);
+    gap: 8px;
     margin: 15px 0;
     max-height: 50vh;
     overflow-y: auto;
     padding-bottom: 14px;
+}
+
+.modal-cambio-carta .lista-cartas-reemplazo .item-carta-reemplazo .detalles-carta {
+    font-size: 0.68rem;
+    min-height: 26px;
+    padding: 4px 5px;
+}
+
+.modal-cambio-carta .lista-cartas-reemplazo .item-carta-reemplazo .estrellas-carta .estrella {
+    width: 9px;
+    height: 9px;
+}
+
+.modal-cambio-carta .lista-cartas-reemplazo .item-carta-reemplazo .estrella-icono-nivel {
+    width: 32px;
+    height: 32px;
+}
+
+@media (max-width: 520px) {
+    .modal-cambio-carta .lista-cartas-reemplazo {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
 }
 
 .modal-cambio-carta {
@@ -1934,16 +1966,16 @@ select:disabled,
         flex-wrap: wrap;
         justify-content: flex-start;
         align-content: flex-start;
-        gap: clamp(14px, 1.8vw, 20px);
+        gap: 8px;
         padding: 6px 4px 16px;
         align-items: flex-start;
     }
 
     .modal-cambio-carta .item-carta-reemplazo {
-        flex: 0 0 var(--dc-card-grid-min, clamp(150px, 12vw, 200px));
-        width: var(--dc-card-grid-min, clamp(150px, 12vw, 200px));
-        max-width: 100%;
-        min-height: clamp(170px, 28vh, 260px);
+        flex: 0 0 calc((100% - 32px) / 5);
+        width: calc((100% - 32px) / 5);
+        max-width: calc((100% - 32px) / 5);
+        min-height: clamp(120px, 22vh, 200px);
         margin: 0;
         contain: paint;
     }
@@ -2026,6 +2058,7 @@ select:disabled,
 
     .modal-cambio-carta .lista-cartas-reemplazo {
         max-height: min(52dvh, 340px);
+        grid-template-columns: repeat(5, minmax(0, 1fr));
     }
 
     .faccion-tab {

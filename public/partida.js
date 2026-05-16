@@ -15,6 +15,8 @@ const MENSAJE_SALIDA_PARTIDA = 'Hay una partida en curso. ¿Seguro que quieres a
 let proteccionSalidaActiva = true;
 
 let cartasJugadorEnJuego = [null, null, null];
+let _healDebuffFactorJugador = 1;
+let _healDebuffFactorOponente = 1;
 let cartasOponenteEnJuego = [null, null, null];
 let mapaDatosCartasCatalogo = null;
 let desafioActivo = null;
@@ -520,6 +522,63 @@ async function animarCambiosHabilidadPvp(prevJ, prevO, proxJ, proxO, accion = {}
         renderizarTablero();
         return;
     }
+    if (clase === 'heal' || clase === 'shield') {
+        const slotObjSkill = parseSlotIndicePvp(accion?.slotObjetivo);
+        if (slotObjSkill === null) {
+            return;
+        }
+        const tipoAliado = usaYo ? 'jugador' : 'oponente';
+        const arrAntes = usaYo ? prevJ : prevO;
+        const arrDespues = usaYo ? proxJ : proxO;
+        const arrLive = tipoAliado === 'jugador' ? cartasJugadorEnJuego : cartasOponenteEnJuego;
+        const cartasEnemigosParaEfectiva = tipoAliado === 'jugador' ? cartasOponenteEnJuego : cartasJugadorEnJuego;
+        const antes = arrAntes[slotObjSkill];
+        const despues = arrDespues[slotObjSkill];
+        if (!antes || !despues) {
+            return;
+        }
+        if (firmaCartaMesaPvp(antes) !== firmaCartaMesaPvp(despues)) {
+            return;
+        }
+
+        const salHp = obtenerSaludActualCarta(antes);
+        const salHpPost = obtenerSaludActualCarta(despues);
+        const escAnt = Math.max(0, Number(antes.escudoActual || 0));
+        const escPost = Math.max(0, Number(despues.escudoActual || 0));
+
+        if (!arrLive[slotObjSkill]) {
+            return;
+        }
+        Object.assign(arrLive[slotObjSkill], antes);
+        arrLive[slotObjSkill].Salud = salHp;
+        arrLive[slotObjSkill].escudoActual = escAnt;
+
+        if (clase === 'heal') {
+            const totAnt = obtenerSaludEfectiva(antes, cartasEnemigosParaEfectiva).totalActual;
+            const totDesp = obtenerSaludEfectiva(despues, cartasEnemigosParaEfectiva).totalActual;
+            if (totDesp > totAnt) {
+                const curaMostrar = Math.max(1, Math.floor(totDesp - totAnt));
+                mostrarValorFlotante(tipoAliado, slotObjSkill, curaMostrar, 'cura');
+                await animarBajadaSaludCarta(arrLive, slotObjSkill, salHp, salHpPost, tipoAliado, {
+                    escudoInicial: escAnt,
+                    escudoFinal: escPost,
+                    esCura: true
+                });
+            }
+        } else {
+            const escudoMostrar = Math.max(1, Math.floor(escPost - escAnt));
+            if (escPost > escAnt) {
+                mostrarValorFlotante(tipoAliado, slotObjSkill, escudoMostrar, 'escudo');
+                await animarBajadaSaludCarta(arrLive, slotObjSkill, salHp, salHp, tipoAliado, {
+                    escudoInicial: escAnt,
+                    escudoFinal: escPost,
+                    esEscudo: true
+                });
+            }
+        }
+        renderizarTablero();
+        return;
+    }
     if (clase === 'aoe') {
         const tipoObjetivo = usaYo ? 'oponente' : 'jugador';
         const arrAntes = usaYo ? prevO : prevJ;
@@ -734,6 +793,11 @@ function aplicarSnapshotCanonicoPvp(snapshot = {}) {
                 atacanteSeleccionadoOponentePvp = null;
             }
             turnoActual = snapshot?.turno === 'B' ? 'jugador' : 'oponente';
+        }
+        const H = obtenerHealDebuffApi();
+        if (H) {
+            _healDebuffFactorJugador = H.obtenerFactorHealDebuff(cartasOponenteEnJuego);
+            _healDebuffFactorOponente = H.obtenerFactorHealDebuff(cartasJugadorEnJuego);
         }
         renderizarTablero();
     } finally {
@@ -1636,6 +1700,8 @@ function aplicarBonusAfiliaciones(cartas, cartasEnemigas = []) {
                 bonusAfiliacionBase: 0,
                 bonusBuffAplicado: 0,
                 bonusBuffSoloUiAfiliacion: 0,
+                bonusTotalUi: 0,
+                debuffGlobalUi: debuffGlobal,
                 bonusEsperadoAfiliacion: 0,
                 bonusCanceladoAfiliacion: 0,
                 bonusAfiliacion: 0,
@@ -1647,23 +1713,23 @@ function aplicarBonusAfiliaciones(cartas, cartasEnemigas = []) {
             obtenerAfiliacionesCarta(carta).map(normalizarAfiliacion).filter(Boolean)
         );
         const recibeBonus = Boolean(afiliacionPrincipal?.afiliacion) && afiliacionesCarta.has(afiliacionPrincipal.afiliacion);
-        const bonusBuffAplicado = (recibeBonus && bonusMaximo > 0) ? bonusBuffExtra : 0;
-        const bonusBuffSoloUiAfiliacion = (recibeBonus && bonusMaximo > 0) ? pasivaBonusBuffExtra : 0;
-        const bonusEsperado = recibeBonus ? (bonusMaximo + bonusBuffAplicado) : 0;
-        const bonusAplicado = (recibeBonus && !anulaBonusAfiliacion) ? bonusEsperado : 0;
-        const bonusCancelado = recibeBonus && anulaBonusAfiliacion ? bonusEsperado : 0;
+        const bonusAfiliacionCarta = (recibeBonus && !anulaBonusAfiliacion) ? bonusMaximo : 0;
+        const bonusCancelado = recibeBonus && anulaBonusAfiliacion ? bonusMaximo : 0;
+        const bonusTotalUi = bonusAfiliacionCarta + bonusBuffExtra;
 
         return {
             ...carta,
             poderBaseAfiliacion: poderBaseConHabilidad,
             poderModHabilidadVisual: modHabilidad,
             bonusAfiliacionBase: recibeBonus ? bonusMaximo : 0,
-            bonusBuffAplicado,
-            bonusBuffSoloUiAfiliacion,
-            bonusEsperadoAfiliacion: bonusEsperado,
+            bonusBuffAplicado: bonusBuffExtra,
+            bonusBuffSoloUiAfiliacion: bonusBuffExtra,
+            bonusTotalUi,
+            debuffGlobalUi: debuffGlobal,
+            bonusEsperadoAfiliacion: recibeBonus ? bonusMaximo : 0,
             bonusCanceladoAfiliacion: bonusCancelado,
-            bonusAfiliacion: bonusAplicado,
-            poderFinalAfiliacion: poderBaseConHabilidad + bonusAplicado
+            bonusAfiliacion: bonusAfiliacionCarta,
+            poderFinalAfiliacion: poderBaseConHabilidad + bonusAfiliacionCarta
         };
     });
 
@@ -1751,40 +1817,64 @@ function cartaCuentaComoActivaEnMesa(carta) {
     return salud + escudo > 0;
 }
 
+function obtenerHealDebuffApi() {
+    return window.DCHealDebuffCombat || null;
+}
+
 function obtenerFactorDebuffSaludDesdeEnemigos(cartasEnemigas) {
-    if (!Array.isArray(cartasEnemigas)) {
-        return 1;
-    }
-    const cantidadDebuffs = cartasEnemigas.filter(carta => {
-        if (!carta || !cartaCuentaComoActivaEnMesa(carta)) {
-            return false;
-        }
-        const meta = obtenerMetaHabilidad(carta);
-        return meta.tieneHabilidad && meta.trigger === 'auto' && meta.clase === 'heal_debuff';
-    }).length;
-    if (cantidadDebuffs <= 0) {
-        return 1;
-    }
-    return Math.max(0.1, Math.pow(0.75, cantidadDebuffs));
+    const H = obtenerHealDebuffApi();
+    if (H) return H.obtenerFactorHealDebuff(cartasEnemigas);
+    return 1;
 }
 
 function obtenerSaludEfectiva(carta, cartasEnemigas) {
+    const H = obtenerHealDebuffApi();
+    if (H) return H.obtenerSaludEfectiva(carta, cartasEnemigas);
     if (!carta) {
         return { saludActual: 0, saludMax: 0, escudo: 0, totalActual: 0, totalMax: 0 };
     }
-    const factorDebuff = obtenerFactorDebuffSaludDesdeEnemigos(cartasEnemigas);
     const saludMaxBase = obtenerSaludMaxCarta(carta);
     const saludActualBase = obtenerSaludActualCarta(carta);
-    const saludMaxEfectiva = Math.max(1, Math.round(saludMaxBase * factorDebuff));
-    const saludActualEfectiva = Math.max(0, Math.min(saludActualBase, saludMaxEfectiva));
     const escudo = Math.max(0, Number(carta.escudoActual || 0));
     return {
-        saludActual: saludActualEfectiva,
-        saludMax: saludMaxEfectiva,
+        saludActual: saludActualBase,
+        saludMax: saludMaxBase,
         escudo,
-        totalActual: saludActualEfectiva + escudo,
-        totalMax: saludMaxEfectiva + escudo
+        totalActual: saludActualBase + escudo,
+        totalMax: saludMaxBase
     };
+}
+
+function obtenerPresentacionBarraSalud(estadoSalud) {
+    const H = obtenerHealDebuffApi();
+    if (H && typeof H.obtenerPresentacionBarraSalud === 'function') {
+        return H.obtenerPresentacionBarraSalud(estadoSalud);
+    }
+    const saludMaxBarra = Math.max(Number(estadoSalud?.saludMax) || 0, 1);
+    const totalActual = Math.max(0, Number(estadoSalud?.totalActual) || 0);
+    const escudo = Math.max(0, Number(estadoSalud?.escudo) || 0);
+    const excedeMax = totalActual > saludMaxBarra;
+    const porcentaje = excedeMax
+        ? 100
+        : Math.max(0, Math.min((totalActual / saludMaxBarra) * 100, 100));
+    return {
+        textoNumerador: totalActual,
+        textoDenominador: saludMaxBarra,
+        porcentaje,
+        ratio: porcentaje / 100,
+        barraAzul: escudo > 0 || excedeMax
+    };
+}
+
+function sincronizarHealDebuffEnPartida() {
+    const H = obtenerHealDebuffApi();
+    if (!H) return;
+    const factorJug = H.obtenerFactorHealDebuff(cartasOponenteEnJuego);
+    const factorOpo = H.obtenerFactorHealDebuff(cartasJugadorEnJuego);
+    H.sincronizarCartasConFactor(cartasJugadorEnJuego, _healDebuffFactorJugador, factorJug);
+    H.sincronizarCartasConFactor(cartasOponenteEnJuego, _healDebuffFactorOponente, factorOpo);
+    _healDebuffFactorJugador = factorJug;
+    _healDebuffFactorOponente = factorOpo;
 }
 
 function crearCartaCombateDesdeMazo(carta) {
@@ -1871,7 +1961,7 @@ function resumirCartaDebug(carta, cartasEnemigasParaSaludEfectiva = null) {
     if (Array.isArray(cartasEnemigasParaSaludEfectiva)) {
         const eff = obtenerSaludEfectiva(carta, cartasEnemigasParaSaludEfectiva);
         res.saludEfectiva = eff.totalActual;
-        res.saludMaxEfectiva = eff.totalMax;
+        res.saludMaxEfectiva = eff.saludMax;
     }
     return res;
 }
@@ -1944,6 +2034,9 @@ function mostrarValorFlotante(tipo, slotIndex, valor, claseVisual = 'danio') {
     if (claseVisual === 'cura') {
         danioDiv.classList.add('cura');
         danioDiv.textContent = `${Math.max(0, Math.floor(Number(valor) || 0))}`;
+    } else if (claseVisual === 'escudo') {
+        danioDiv.classList.add('escudo');
+        danioDiv.textContent = `${Math.max(0, Math.floor(Number(valor) || 0))}`;
     } else {
         danioDiv.textContent = `-${Math.max(0, Math.floor(Number(valor) || 0))}`;
     }
@@ -1968,7 +2061,10 @@ async function animarBajadaSaludCarta(cartasObjetivo, slotObjetivo, saludRawInic
     const idSlotObjetivo = obtenerIdSlot(tipoObjetivo, slotObjetivo);
     const cartasEnemigasSalud = tipoObjetivo === 'jugador' ? cartasOponenteEnJuego : cartasJugadorEnJuego;
     const esCura = Boolean(opciones && opciones.esCura);
-    const claseImpactoBarra = esCura ? 'recibiendo-cura' : 'recibiendo-danio';
+    const esEscudo = Boolean(opciones && opciones.esEscudo);
+    const claseImpactoBarra = esCura
+        ? 'recibiendo-cura'
+        : (esEscudo ? 'recibiendo-escudo' : 'recibiendo-danio');
 
     carta.SaludMax = obtenerSaludMaxCarta(carta);
     carta.Salud = saludInicial;
@@ -1982,14 +2078,14 @@ async function animarBajadaSaludCarta(cartasObjetivo, slotObjetivo, saludRawInic
     await esperar(120);
 
     const estadoIni = obtenerSaludEfectiva(carta, cartasEnemigasSalud);
-    const pctIni = Math.max(0, Math.min((estadoIni.totalActual / Math.max(estadoIni.totalMax, 1)) * 100, 100));
+    const barraIni = obtenerPresentacionBarraSalud(estadoIni);
 
     carta.Salud = saludFinal;
     if (opciones && Object.prototype.hasOwnProperty.call(opciones, 'escudoFinal')) {
         carta.escudoActual = Math.max(0, Number(opciones.escudoFinal || 0));
     }
     const estadoFin = obtenerSaludEfectiva(carta, cartasEnemigasSalud);
-    const pctFin = Math.max(0, Math.min((estadoFin.totalActual / Math.max(estadoFin.totalMax, 1)) * 100, 100));
+    const barraFin = obtenerPresentacionBarraSalud(estadoFin);
 
     const rellenoAnim = slotTrasRender?.querySelector('.barra-salud-relleno');
     if (!rellenoAnim) {
@@ -2000,16 +2096,26 @@ async function animarBajadaSaludCarta(cartasObjetivo, slotObjetivo, saludRawInic
 
     // Un segundo renderizarTablero() aquí recreaba el nodo .barra-salud-relleno y la transición CSS
     // de width no corría entre valores (sobre todo al pasar a 0%). Animamos el mismo elemento.
-    rellenoAnim.style.width = `${pctIni}%`;
-    rellenoAnim.style.setProperty('--health-ratio', String(pctIni / 100));
+    rellenoAnim.style.width = `${barraIni.porcentaje}%`;
+    rellenoAnim.style.setProperty('--health-ratio', String(barraIni.ratio));
+    if (barraIni.barraAzul) {
+        rellenoAnim.classList.add('con-escudo');
+    } else {
+        rellenoAnim.classList.remove('con-escudo');
+    }
     void rellenoAnim.offsetWidth;
     rellenoAnim.style.transition = 'width 0.38s cubic-bezier(0.22, 0.8, 0.2, 1), background-color 0.3s ease, filter 0.25s ease';
-    rellenoAnim.style.width = `${pctFin}%`;
-    rellenoAnim.style.setProperty('--health-ratio', String(pctFin / 100));
+    rellenoAnim.style.width = `${barraFin.porcentaje}%`;
+    rellenoAnim.style.setProperty('--health-ratio', String(barraFin.ratio));
+    if (barraFin.barraAzul) {
+        rellenoAnim.classList.add('con-escudo');
+    } else {
+        rellenoAnim.classList.remove('con-escudo');
+    }
 
     const saludTxt = slotTrasRender?.querySelector('.salud-carta');
     if (saludTxt) {
-        saludTxt.textContent = `${Math.round(estadoFin.totalActual)}/${Math.round(estadoFin.totalMax)}`;
+        saludTxt.textContent = `${Math.round(barraFin.textoNumerador)}/${Math.round(barraFin.textoDenominador)}`;
     }
 
     await esperar(420);
@@ -3075,8 +3181,8 @@ function aplicarEfectosInicioTurno(propietario) {
             return;
         }
 
-        let saludActual = obtenerSaludActualCarta(carta);
-        let escudoActual = Math.max(0, Number(carta.escudoActual || 0));
+        const enemigos = obtenerSlotsEnemigos(propietario);
+        const H = obtenerHealDebuffApi();
         let danoTotalTurno = 0;
 
         dots.forEach(dot => {
@@ -3084,14 +3190,22 @@ function aplicarEfectosInicioTurno(propietario) {
             if (danoTick <= 0) {
                 return;
             }
-            let danoRestante = danoTick;
-            if (escudoActual > 0) {
-                const absorbido = Math.min(escudoActual, danoRestante);
-                escudoActual -= absorbido;
-                danoRestante -= absorbido;
-            }
-            if (danoRestante > 0) {
-                saludActual = Math.max(0, saludActual - danoRestante);
+            if (H) {
+                H.aplicarDanio(carta, danoTick, enemigos);
+            } else {
+                let saludActual = obtenerSaludActualCarta(carta);
+                let escudoActual = Math.max(0, Number(carta.escudoActual || 0));
+                let danoRestante = danoTick;
+                if (escudoActual > 0) {
+                    const absorbido = Math.min(escudoActual, danoRestante);
+                    escudoActual -= absorbido;
+                    danoRestante -= absorbido;
+                }
+                if (danoRestante > 0) {
+                    saludActual = Math.max(0, saludActual - danoRestante);
+                }
+                carta.escudoActual = escudoActual;
+                carta.Salud = saludActual;
             }
             danoTotalTurno += danoTick;
         });
@@ -3104,8 +3218,6 @@ function aplicarEfectosInicioTurno(propietario) {
             }))
             .filter(dot => dot.turnosRestantes > 0 && dot.danoPorTurno > 0);
 
-        carta.escudoActual = escudoActual;
-        carta.Salud = saludActual;
         huboCambios = true;
 
         if (danoTotalTurno > 0) {
@@ -3113,6 +3225,8 @@ function aplicarEfectosInicioTurno(propietario) {
             escribirLog(`${carta.Nombre} sufre ${danoTotalTurno} de daño por sangrado.`);
         }
 
+        const escudoActual = Math.max(0, Number(carta.escudoActual || 0));
+        const saludActual = obtenerSaludActualCarta(carta);
         if ((saludActual + escudoActual) <= 0) {
             registrarCartaDerrotada(carta, propietario);
             aliados[index] = null;
@@ -3205,8 +3319,11 @@ async function usarHabilidadActiva(carta, propietario, slotCarta) {
         if (idx === null || idx === undefined || !aliados[idx]) return false;
         const objetivo = aliados[idx];
         const saludAntes = obtenerSaludActualCarta(objetivo);
-        const saludMax = obtenerSaludMaxCarta(objetivo);
-        objetivo.Salud = Math.min(saludMax, saludAntes + Math.floor(valor));
+        const H = obtenerHealDebuffApi();
+        const saludNueva = H
+            ? H.capCuracion(objetivo, saludAntes + Math.floor(valor), enemigos)
+            : Math.min(obtenerSaludMaxCarta(objetivo), saludAntes + Math.floor(valor));
+        objetivo.Salud = saludNueva;
         const curado = Math.max(0, objetivo.Salud - saludAntes);
         if (curado <= 0) return false;
         await anunciarUsoHabilidadActivaSiUI(carta, meta, objetivo.Nombre, propietario);
@@ -3266,14 +3383,29 @@ async function usarHabilidadActiva(carta, propietario, slotCarta) {
             : elegirAliadoMasHerido(propietario);
         if (idx === null || idx === undefined || !aliados[idx]) return false;
         const objetivo = aliados[idx];
+        const escAntes = Math.max(0, Number(objetivo.escudoActual || 0));
+        const escCantidad = Math.floor(valor);
+        const escNuevo = escAntes + escCantidad;
+        const saludHp = obtenerSaludActualCarta(objetivo);
+        const tipoCartaObjetivo = propietario === 'jugador' ? 'jugador' : 'oponente';
         await anunciarUsoHabilidadActivaSiUI(carta, meta, objetivo.Nombre, propietario);
-        objetivo.escudoActual = Math.max(0, Number(objetivo.escudoActual || 0)) + Math.floor(valor);
-        escribirLog(`${carta.Nombre} usa ${meta.nombre}: escudo +${Math.floor(valor)} para ${objetivo.Nombre}.`);
+        mostrarValorFlotante(propietario, idx, escCantidad, 'escudo');
+        await animarBajadaSaludCarta(aliados, idx, saludHp, saludHp, tipoCartaObjetivo, {
+            escudoInicial: escAntes,
+            escudoFinal: escNuevo,
+            esEscudo: true
+        });
+        objetivo.escudoActual = escNuevo;
+        escribirLog(`${carta.Nombre} usa ${meta.nombre}: escudo +${escCantidad} para ${objetivo.Nombre}.`);
     } else if (meta.clase === 'aoe') {
         const { cartasConBonus: aliadosConBonusAoe } = aplicarBonusAfiliaciones(aliados, enemigos);
         const cartaAoeConBonus = aliadosConBonusAoe[slotCarta] || carta;
         const poderFuenteAoe = obtenerPoderCartaFinal(cartaAoeConBonus);
-        const danioAoe = Math.max(1, Math.floor(valor || (poderFuenteAoe / 2)));
+        const danioAoe = typeof window.calcularDanioSkillDesdePoder === 'function'
+            ? window.calcularDanioSkillDesdePoder('aoe', poderFuenteAoe, cartaAoeConBonus, {
+                salud: obtenerSaludActualCarta(cartaAoeConBonus)
+            })
+            : Math.max(1, Math.floor(poderFuenteAoe / 2));
         const objetivos = obtenerIndicesCartasDisponibles(enemigos);
         if (objetivos.length === 0) return false;
         await anunciarUsoHabilidadActivaSiUI(carta, meta, 'todo el equipo rival', propietario);
@@ -3298,8 +3430,11 @@ async function usarHabilidadActiva(carta, propietario, slotCarta) {
             if (!objetivo) return;
             const idxObjetivo = aliados.indexOf(objetivo);
             const saludAntes = obtenerSaludActualCarta(objetivo);
-            const saludMax = obtenerSaludMaxCarta(objetivo);
-            objetivo.Salud = Math.min(saludMax, saludAntes + Math.floor(valor));
+            const H = obtenerHealDebuffApi();
+            const saludNueva = H
+                ? H.capCuracion(objetivo, saludAntes + Math.floor(valor), enemigos)
+                : Math.min(obtenerSaludMaxCarta(objetivo), saludAntes + Math.floor(valor));
+            objetivo.Salud = saludNueva;
             const curado = Math.max(0, objetivo.Salud - saludAntes);
             if (curado > 0 && idxObjetivo >= 0) {
                 huboCuracion = true;
@@ -3809,9 +3944,10 @@ function crearCartaElemento(carta, tipo, slotIndex, opciones = {}) {
     const penalizacionTankVisual = carta?.tankActiva
         ? Math.floor(Number(carta.Poder || 0) * 0.5)
         : 0;
-    const modHabilidad = Number((carta?.poderModHabilidadVisual ?? carta?.poderModHabilidad) || 0) + penalizacionTankVisual;
+    const modPersonal = Number(carta?.poderModHabilidad || 0) + penalizacionTankVisual;
+    const bonusTotalUi = Number(carta?.bonusTotalUi ?? 0);
+    const debuffGlobalUi = Number(carta?.debuffGlobalUi ?? 0);
     const bonusAfiliacionBase = Number(carta?.bonusAfiliacionBase || 0);
-    const bonusBuffSoloUiAfiliacion = Number(carta?.bonusBuffSoloUiAfiliacion || 0);
     const bonusCancelado = Number(carta?.bonusCanceladoAfiliacion || 0);
     if (bonusAfiliacionBase > 0 && bonusCancelado <= 0) {
         poderSpan.style.color = '#FFD700';
@@ -3819,16 +3955,16 @@ function crearCartaElemento(carta, tipo, slotIndex, opciones = {}) {
 
     detallesDiv.appendChild(nombreSpan);
     detallesDiv.appendChild(poderSpan);
-    if (modHabilidad !== 0) {
+    if (modPersonal !== 0) {
         const modSpan = document.createElement('span');
-        modSpan.className = `modificador-poder ${modHabilidad > 0 ? 'mod-buff' : 'mod-debuff'}`;
-        modSpan.textContent = `(${modHabilidad > 0 ? '+' : ''}${modHabilidad})`;
+        modSpan.className = `modificador-poder ${modPersonal > 0 ? 'mod-buff' : 'mod-debuff'}`;
+        modSpan.textContent = `(${modPersonal > 0 ? '+' : ''}${modPersonal})`;
         detallesDiv.appendChild(modSpan);
     }
-    if (bonusBuffSoloUiAfiliacion > 0 && bonusCancelado <= 0) {
+    if (bonusTotalUi > 0 && bonusCancelado <= 0) {
         const bonusSpan = document.createElement('span');
         bonusSpan.className = 'modificador-poder mod-bonus-buff';
-        bonusSpan.textContent = `(+${bonusBuffSoloUiAfiliacion})`;
+        bonusSpan.textContent = `(+${bonusTotalUi})`;
         detallesDiv.appendChild(bonusSpan);
     } else if (bonusCancelado > 0) {
         const cancelSpan = document.createElement('span');
@@ -3836,13 +3972,20 @@ function crearCartaElemento(carta, tipo, slotIndex, opciones = {}) {
         cancelSpan.textContent = `(-${bonusCancelado})`;
         detallesDiv.appendChild(cancelSpan);
     }
+    if (debuffGlobalUi > 0) {
+        const debuffSpan = document.createElement('span');
+        debuffSpan.className = 'modificador-poder mod-debuff';
+        debuffSpan.textContent = `(-${debuffGlobalUi})`;
+        detallesDiv.appendChild(debuffSpan);
+    }
 
     const factorDebuffHeal = obtenerFactorDebuffSaludDesdeEnemigos(cartasEnemigas);
     const estadoSalud = obtenerSaludEfectiva(carta, cartasEnemigas);
-    const saludActual = estadoSalud.totalActual;
-    const saludMax = Math.max(estadoSalud.totalMax, 1);
-    const porcentajeSalud = Math.max(0, Math.min((saludActual / saludMax) * 100, 100));
-    const ratioSalud = porcentajeSalud / 100;
+    const barraSalud = obtenerPresentacionBarraSalud(estadoSalud);
+    const saludActual = barraSalud.textoNumerador;
+    const saludMax = barraSalud.textoDenominador;
+    const porcentajeSalud = barraSalud.porcentaje;
+    const ratioSalud = barraSalud.ratio;
 
     const barraSaludContenedor = document.createElement('div');
     barraSaludContenedor.classList.add('barra-salud-contenedor');
@@ -3852,7 +3995,7 @@ function crearCartaElemento(carta, tipo, slotIndex, opciones = {}) {
 
     const barraSaludRelleno = document.createElement('div');
     barraSaludRelleno.classList.add('barra-salud-relleno');
-    if (estadoSalud.escudo > 0) {
+    if (barraSalud.barraAzul) {
         barraSaludRelleno.classList.add('con-escudo');
     }
     barraSaludRelleno.style.width = `${porcentajeSalud}%`;
@@ -4077,6 +4220,7 @@ function renderizarTablero() {
     // Garantiza que cualquier carta recién entrada en mesa active su pasiva AUTO
     // antes de recalcular poder/vida efectiva y pintar el tablero.
     sincronizarPasivasAutoEnMesa();
+    sincronizarHealDebuffEnPartida();
 
     const { cartasConBonus: cartasJugadorConBonus } = aplicarBonusAfiliaciones(cartasJugadorEnJuego, cartasOponenteEnJuego);
     const { cartasConBonus: cartasOponenteConBonus } = aplicarBonusAfiliaciones(cartasOponenteEnJuego, cartasJugadorEnJuego);
@@ -4250,6 +4394,8 @@ async function cargarCartasIniciales() {
     // 1. Empezar con tablero vacío
     cartasJugadorEnJuego = [null, null, null];
     cartasOponenteEnJuego = [null, null, null];
+    _healDebuffFactorJugador = 1;
+    _healDebuffFactorOponente = 1;
     
     // Preparar cartas del mazo (sin ponerlas aún)
     const indicesInicialesJugadorPvp = leerIndicesInicialesPvp('partidaPvpInicialesJugadorIdx');
@@ -4689,18 +4835,27 @@ async function resolverAtaque(cartasAtacante, slotAtacante, cartasObjetivo, slot
     const estadoAntes = obtenerSaludEfectiva(objetivoConBonus[slotObjetivo], cartasEnemigasObjetivo);
     const saludObjetivo = estadoAntes.totalActual;
     const saludRawAntes = obtenerSaludActualCarta(objetivoBase);
-    let escudoRestante = Math.max(0, Number(objetivoBase?.escudoActual || 0));
-    let saludRestanteBase = saludRawAntes;
-    let danioRestante = poderDanioAtacante;
-
-    if (escudoRestante > 0) {
-        const absorbidoEscudo = Math.min(escudoRestante, danioRestante);
-        escudoRestante -= absorbidoEscudo;
-        danioRestante -= absorbidoEscudo;
-    }
-
-    if (danioRestante > 0) {
-        saludRestanteBase = Math.max(0, saludRestanteBase - danioRestante);
+    const escudoAntes = Math.max(0, Number(objetivoBase?.escudoActual || 0));
+    const H = obtenerHealDebuffApi();
+    let saludRestanteBase;
+    let escudoRestante;
+    if (H) {
+        const temp = JSON.parse(JSON.stringify(objetivoBase));
+        H.aplicarDanio(temp, poderDanioAtacante, cartasEnemigasObjetivo);
+        saludRestanteBase = obtenerSaludActualCarta(temp);
+        escudoRestante = Math.max(0, Number(temp.escudoActual || 0));
+    } else {
+        saludRestanteBase = saludRawAntes;
+        escudoRestante = escudoAntes;
+        let danioRestante = poderDanioAtacante;
+        if (escudoRestante > 0) {
+            const absorbidoEscudo = Math.min(escudoRestante, danioRestante);
+            escudoRestante -= absorbidoEscudo;
+            danioRestante -= absorbidoEscudo;
+        }
+        if (danioRestante > 0) {
+            saludRestanteBase = Math.max(0, saludRestanteBase - danioRestante);
+        }
     }
 
     const cartaEstadoFin = { ...objetivoConBonus[slotObjetivo], Salud: saludRestanteBase, escudoActual: escudoRestante };
@@ -4721,12 +4876,22 @@ async function resolverAtaque(cartasAtacante, slotAtacante, cartasObjetivo, slot
     mostrarValorFlotante(tipoObjetivo, slotObjetivo, danioInfligido, 'danio');
 
     escribirLog(`${nombreAtacante} golpea a ${nombreObjetivo} con ${poderDanioAtacante} de daño.`);
-    if (Number(objetivoBase?.escudoActual || 0) > 0 || escudoRestante > 0) {
-        cartasObjetivo[slotObjetivo].escudoActual = escudoRestante;
-        cartasObjetivo[slotObjetivo].Salud = saludRestanteBase;
+    if (escudoAntes > 0 || escudoRestante > 0) {
+        if (H) {
+            H.aplicarDanio(cartasObjetivo[slotObjetivo], poderDanioAtacante, cartasEnemigasObjetivo);
+        } else {
+            cartasObjetivo[slotObjetivo].escudoActual = escudoRestante;
+            cartasObjetivo[slotObjetivo].Salud = saludRestanteBase;
+        }
         renderizarTablero();
     } else {
-        await animarBajadaSaludCarta(cartasObjetivo, slotObjetivo, saludRawAntes, saludRestanteBase, tipoObjetivo);
+        if (H) {
+            H.aplicarDanio(cartasObjetivo[slotObjetivo], poderDanioAtacante, cartasEnemigasObjetivo);
+        } else {
+            cartasObjetivo[slotObjetivo].escudoActual = escudoRestante;
+            cartasObjetivo[slotObjetivo].Salud = saludRestanteBase;
+        }
+        await animarBajadaSaludCarta(cartasObjetivo, slotObjetivo, saludRawAntes, obtenerSaludActualCarta(cartasObjetivo[slotObjetivo]), tipoObjetivo);
     }
 
     if (estadoFin.totalActual <= 0) {
@@ -4735,8 +4900,10 @@ async function resolverAtaque(cartasAtacante, slotAtacante, cartasObjetivo, slot
         escribirLog(`${nombreObjetivo} es derrotada y sale del tablero.`);
     } else {
         cartasObjetivo[slotObjetivo].SaludMax = obtenerSaludMaxCarta(cartasObjetivo[slotObjetivo]);
-        cartasObjetivo[slotObjetivo].Salud = saludRestanteBase;
-        cartasObjetivo[slotObjetivo].escudoActual = escudoRestante;
+        if (!H) {
+            cartasObjetivo[slotObjetivo].Salud = saludRestanteBase;
+            cartasObjetivo[slotObjetivo].escudoActual = escudoRestante;
+        }
         escribirLog(`${nombreObjetivo} sobrevive con ${estadoDespuesTotal} de vida total.`);
 
         if (metaAtacante.tieneHabilidad && metaAtacante.trigger === 'auto' && metaAtacante.clase === 'dot' && danioInfligido > 0) {
@@ -4758,8 +4925,10 @@ async function resolverAtaque(cartasAtacante, slotAtacante, cartasObjetivo, slot
         const atacanteReal = cartasAtacante[slotAtacante];
         if (atacanteReal) {
             const saludAntes = obtenerSaludActualCarta(atacanteReal);
-            const saludMax = obtenerSaludMaxCarta(atacanteReal);
-            atacanteReal.Salud = Math.min(saludMax, saludAntes + valorRobo);
+            const enemigosAtacante = propietarioAtacante === 'jugador' ? cartasOponenteEnJuego : cartasJugadorEnJuego;
+            atacanteReal.Salud = H
+                ? H.capCuracion(atacanteReal, saludAntes + valorRobo, enemigosAtacante)
+                : Math.min(obtenerSaludMaxCarta(atacanteReal), saludAntes + valorRobo);
             const curado = Math.max(0, atacanteReal.Salud - saludAntes);
             if (curado > 0) {
                 mostrarValorFlotante(propietarioAtacante, slotAtacante, curado, 'cura');

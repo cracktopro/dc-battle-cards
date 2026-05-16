@@ -465,6 +465,68 @@ function tiendaTieneEstructuraActual(tiendaUsuario) {
         && Array.isArray(tiendaUsuario.ofertasDia));
 }
 
+function construirMapaCatalogoPorNombre(catalogo) {
+    const mapa = new Map();
+    (Array.isArray(catalogo) ? catalogo : []).forEach((carta) => {
+        const clave = normalizarNombreCarta(carta?.Nombre);
+        if (clave && !mapa.has(clave)) {
+            mapa.set(clave, carta);
+        }
+    });
+    return mapa;
+}
+
+function extraerSufijoIdOfertaTienda(idOferta) {
+    const m = String(idOferta || '').match(/-(\d+)-([^-]+)$/);
+    return m ? m[2] : 'std';
+}
+
+/** Actualiza stats/skills de ofertas guardadas sin cambiar selección, precios ni estado agotada. */
+function refrescarOfertaTiendaConCatalogo(oferta, mapaCatalogo) {
+    if (!oferta?.carta?.Nombre || !mapaCatalogo) {
+        return oferta;
+    }
+    const clave = normalizarNombreCarta(oferta.carta.Nombre);
+    const fila = mapaCatalogo.get(clave);
+    if (!fila) {
+        return oferta;
+    }
+    const nivel = Math.max(1, Number(oferta.nivel || oferta.carta.Nivel || 1));
+    const refreshed = crearOfertaCarta(fila, nivel, {
+        precio: oferta.precio,
+        precioOriginal: oferta.precioOriginal,
+        descuentoPct: oferta.descuentoPct,
+        esOfertaDia: oferta.esOfertaDia,
+        sufijoId: extraerSufijoIdOfertaTienda(oferta.id)
+    });
+    refreshed.id = oferta.id;
+    refreshed.agotada = Boolean(oferta.agotada);
+    return refreshed;
+}
+
+function sincronizarTiendaConCatalogo(tienda, mapaCatalogo) {
+    if (!tienda || !mapaCatalogo) {
+        return { huboCambios: false };
+    }
+    let huboCambios = false;
+    const syncLista = (lista) => {
+        if (!Array.isArray(lista)) {
+            return;
+        }
+        for (let i = 0; i < lista.length; i += 1) {
+            const actualizada = refrescarOfertaTiendaConCatalogo(lista[i], mapaCatalogo);
+            if (JSON.stringify(actualizada) !== JSON.stringify(lista[i])) {
+                lista[i] = actualizada;
+                huboCambios = true;
+            }
+        }
+    };
+    syncLista(tienda.cartasHeroes);
+    syncLista(tienda.cartasVillanos);
+    syncLista(tienda.ofertasDia);
+    return { huboCambios };
+}
+
 function fechaOfertasDiaEfectiva(tienda) {
     const hoy = obtenerFechaHoy();
     const expl = String(tienda?.ofertasDiaFecha || '').trim();
@@ -481,6 +543,8 @@ async function prepararTiendaDiaria() {
     const hoy = obtenerFechaHoy();
     const { idVentana } = obtenerVentanaRotacion();
     const t = usuarioActual.tienda;
+    const catalogo = await cargarCatalogoCartas();
+    const mapaCatalogo = construirMapaCatalogoPorNombre(catalogo);
 
     const hvOk = Boolean(
         t
@@ -492,14 +556,17 @@ async function prepararTiendaDiaria() {
     const ofertasFechaOk = fechaOfertasDiaEfectiva(t) === hoy;
 
     if (hvOk && ofertasFechaOk) {
+        const { huboCambios } = sincronizarTiendaConCatalogo(t, mapaCatalogo);
+        let persistir = huboCambios;
         if (t && !t.ofertasDiaFecha) {
             t.ofertasDiaFecha = hoy;
+            persistir = true;
+        }
+        if (persistir) {
             await persistirUsuario();
         }
         return;
     }
-
-    const catalogo = await cargarCatalogoCartas();
 
     if (!hvOk) {
         const panels = construirPanelesHVDesdeCatalogo(catalogo, String(idVentana));
@@ -521,6 +588,7 @@ async function prepararTiendaDiaria() {
         return;
     }
 
+    sincronizarTiendaConCatalogo(t, mapaCatalogo);
     const ofertasDia = construirOfertasDiaDesdeCatalogo(catalogo, hoy, t.cartasHeroes, t.cartasVillanos);
     usuarioActual.tienda.ofertasDia = ofertasDia;
     usuarioActual.tienda.ofertasDiaFecha = hoy;

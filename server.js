@@ -9,6 +9,7 @@ const { Server } = require('socket.io');
 const path = require('path');
 const fs = require('fs');
 const cors = require('cors');
+const DCHealDebuff = require(path.join(__dirname, 'public', 'js', 'healDebuffCombat.js'));
 
 // Configuración de Firebase
 const firebaseConfig = {
@@ -600,7 +601,7 @@ function parsearNumeroSeguroServidor(valor) {
     return Number.isFinite(num) ? num : null;
 }
 
-function evaluarFormulaSkillPowerServidor(formulaRaw, contexto = {}) {
+function prepararFormulaSkillPowerParaEvaluacionServidor(formulaRaw, contexto = {}) {
     const formula = String(formulaRaw || '').trim().toLowerCase();
     if (!formula) return null;
     const formulaSegura = formula
@@ -609,9 +610,25 @@ function evaluarFormulaSkillPowerServidor(formulaRaw, contexto = {}) {
         .replace(/\bpoder\b/g, String(Number(contexto.poder || 0)))
         .replace(/,/g, '.')
         .replace(/\s+/g, '');
-    if (!/^[0-9+\-*/().]+$/.test(formulaSegura)) {
+    if (!formulaSegura || !/^[0-9+\-*/().]+$/.test(formulaSegura)) {
         return null;
     }
+    let profundidad = 0;
+    for (let i = 0; i < formulaSegura.length; i += 1) {
+        const ch = formulaSegura[i];
+        if (ch === '(') profundidad += 1;
+        else if (ch === ')') {
+            profundidad -= 1;
+            if (profundidad < 0) return null;
+        }
+    }
+    if (profundidad !== 0) return null;
+    return formulaSegura;
+}
+
+function evaluarFormulaSkillPowerServidor(formulaRaw, contexto = {}) {
+    const formulaSegura = prepararFormulaSkillPowerParaEvaluacionServidor(formulaRaw, contexto);
+    if (!formulaSegura) return null;
     try {
         // eslint-disable-next-line no-new-func
         const resultado = Function(`"use strict"; return (${formulaSegura});`)();
@@ -647,27 +664,137 @@ function calcularBonusAfiliacionesServidor(cartas = []) {
     return principal;
 }
 
-function obtenerValorSkillServidor(carta, fallback = 0, contexto = {}) {
+const SKILL_CLASSES_ESCALABLES_SERVIDOR = new Set(['buff', 'debuff', 'heal', 'shield', 'heal_all', 'bonus_buff']);
+
+const SKILL_CLASSES_CONTEXTO_BASE_SERVIDOR = new Set(['buff', 'debuff', 'bonus_buff']);
+
+const SKILL_CLASSES_CON_FORMULA_SERVIDOR = new Set([
+    'buff', 'debuff', 'heal', 'shield', 'aoe', 'heal_all', 'bonus_buff',
+    'tank', 'extra_attack', 'dot', 'life_steal'
+]);
+
+function esSkillPowerFormulaServidor(raw) {
+    const texto = String(raw ?? '').trim();
+    if (!texto) return false;
+    if (parsearNumeroSeguroServidor(texto) !== null) return false;
+    return prepararFormulaSkillPowerParaEvaluacionServidor(texto, { poder: 100, salud: 100, saludEnemigo: 100 }) !== null;
+}
+
+function normalizarValorSkillPowerPorClaseServidor(clase, valor) {
+    const n = Number(valor);
+    if (!Number.isFinite(n)) return 0;
+    const claseNorm = normalizarClaseSkillServidor({ skill_class: clase });
+    switch (claseNorm) {
+        case 'aoe':
+        case 'extra_attack':
+        case 'dot':
+            return Math.max(1, Math.floor(n));
+        case 'tank':
+            return Math.max(0, Math.round(n));
+        default:
+            return Math.max(0, Math.floor(n));
+    }
+}
+
+function obtenerSkillPowerFallbackPorClaseServidor(clase, contexto = {}, fallback = 0) {
+    const claseNorm = normalizarClaseSkillServidor({ skill_class: clase });
+    const poder = Math.max(0, Number(contexto.poder || 0));
+    const salud = Math.max(0, Number(contexto.salud || 0));
+    const saludEnemigo = Math.max(0, Number(contexto.saludEnemigo || 0));
+    switch (claseNorm) {
+        case 'aoe':
+            return Math.max(1, Math.floor(poder / 2));
+        case 'extra_attack':
+            return Math.max(1, Math.floor(poder));
+        case 'tank':
+            return Math.max(0, Math.round(salud * 2));
+        case 'heal_debuff':
+            if (saludEnemigo > 0) return Math.max(1, Math.floor(saludEnemigo * 0.75));
+            return Number(fallback || 0);
+        default:
+            return Number(fallback || 0);
+    }
+}
+
+function obtenerSkillPowerEscaladoPorNivelServidor(carta) {
+    if (!carta || typeof carta !== 'object') return null;
     const clase = normalizarClaseSkillServidor(carta);
+    if (!SKILL_CLASSES_ESCALABLES_SERVIDOR.has(clase)) return null;
+    const nivel = Math.max(1, Number(carta?.Nivel || 1));
+    const basePersistida = parsearNumeroSeguroServidor(carta?.skill_power_base);
+    const valorActual = parsearNumeroSeguroServidor(carta?.skill_power);
+    let baseNivel1;
+    if (basePersistida !== null) {
+        baseNivel1 = Math.max(0, basePersistida);
+    } else if (valorActual !== null) {
+        baseNivel1 = Math.max(0, valorActual);
+    } else {
+        return null;
+    }
+    return Math.max(0, Math.round(baseNivel1 * nivel));
+}
+
+function obtenerContextoSkillPowerServidor(carta, contexto = {}) {
+    const clase = normalizarClaseSkillServidor(carta);
+    if (SKILL_CLASSES_CONTEXTO_BASE_SERVIDOR.has(clase)) {
+        return {
+            poder: Math.max(0, Number(obtenerPoderCartaServidor(carta))),
+            salud: Math.max(0, Number(obtenerSaludMaxCarta(carta))),
+            saludEnemigo: Math.max(0, Number(contexto?.saludEnemigo ?? 0))
+        };
+    }
     const poder = Math.max(0, Number(contexto?.poder ?? carta?.Poder ?? 0));
     const salud = Math.max(0, Number(contexto?.salud ?? carta?.Salud ?? carta?.SaludMax ?? poder));
-    const saludEnemigo = Math.max(0, Number(contexto?.saludEnemigo ?? 0));
-    if (clase === 'revive') return 1;
-    if (clase === 'aoe') return Math.max(1, Math.floor(poder / 2));
-    if (clase === 'tank') return Math.max(0, Math.round(salud * 2));
-    if (clase === 'heal_debuff') {
-        if (saludEnemigo > 0) return Math.max(1, Math.floor(saludEnemigo * 0.75));
-        return fallback;
-    }
-    if (clase === 'extra_attack') return Math.max(1, Math.floor(poder));
-    if (clase === 'bonus_debuff') return fallback;
+    return {
+        poder,
+        salud,
+        saludEnemigo: Math.max(0, Number(contexto?.saludEnemigo ?? 0))
+    };
+}
 
-    const raw = carta?.skill_power;
-    const numeroDirecto = parsearNumeroSeguroServidor(raw);
-    if (numeroDirecto !== null) return numeroDirecto;
-    const formula = evaluarFormulaSkillPowerServidor(raw, { poder, salud, saludEnemigo });
-    if (formula !== null) return formula;
-    return Number(fallback || 0);
+function obtenerValorSkillServidor(carta, fallback = 0, contexto = {}) {
+    const clase = normalizarClaseSkillServidor(carta);
+    const ctx = obtenerContextoSkillPowerServidor(carta, contexto);
+    const bruto = carta?.skill_power;
+
+    if (clase === 'revive') return 1;
+    if (clase === 'bonus_debuff') return Number(fallback || 0);
+    if (clase === 'heal_debuff') {
+        if (esSkillPowerFormulaServidor(bruto)) {
+            const v = evaluarFormulaSkillPowerServidor(bruto, ctx);
+            if (v !== null) return normalizarValorSkillPowerPorClaseServidor(clase, v);
+        }
+        return normalizarValorSkillPowerPorClaseServidor(
+            clase,
+            obtenerSkillPowerFallbackPorClaseServidor(clase, ctx, fallback)
+        );
+    }
+
+    if (SKILL_CLASSES_CON_FORMULA_SERVIDOR.has(clase) && esSkillPowerFormulaServidor(bruto)) {
+        const formulaEvaluada = evaluarFormulaSkillPowerServidor(bruto, ctx);
+        if (formulaEvaluada !== null) {
+            return normalizarValorSkillPowerPorClaseServidor(clase, formulaEvaluada);
+        }
+    }
+
+    const escaladoPorNivel = obtenerSkillPowerEscaladoPorNivelServidor(carta);
+    if (escaladoPorNivel !== null) {
+        return normalizarValorSkillPowerPorClaseServidor(clase, escaladoPorNivel);
+    }
+
+    const numeroDirecto = parsearNumeroSeguroServidor(bruto);
+    if (numeroDirecto !== null) {
+        return normalizarValorSkillPowerPorClaseServidor(clase, numeroDirecto);
+    }
+
+    if (SKILL_CLASSES_CON_FORMULA_SERVIDOR.has(clase) || clase === 'aoe' || clase === 'tank' || clase === 'extra_attack') {
+        return normalizarValorSkillPowerPorClaseServidor(
+            clase,
+            obtenerSkillPowerFallbackPorClaseServidor(clase, ctx, fallback)
+        );
+    }
+
+    return normalizarValorSkillPowerPorClaseServidor(clase, fallback);
 }
 
 function obtenerPoderCartaConBonosServidor(carta, mesaAliada = [], mesaEnemiga = []) {
@@ -723,6 +850,24 @@ function obtenerSaludCartaServidor(carta) {
     return saludMax;
 }
 
+function sincronizarHealDebuffPvpSesion(sesion) {
+    if (!sesion?.snapshotEstado) return;
+    if (!sesion.healDebuffFactor) {
+        sesion.healDebuffFactor = { A: 1, B: 1 };
+    }
+    const snap = sesion.snapshotEstado;
+    ['A', 'B'].forEach((lado) => {
+        const mesaAliada = lado === 'A' ? snap.cartasEnJuegoA : snap.cartasEnJuegoB;
+        const mesaEnemiga = lado === 'A' ? snap.cartasEnJuegoB : snap.cartasEnJuegoA;
+        const factorNuevo = DCHealDebuff.obtenerFactorHealDebuff(mesaEnemiga);
+        const factorAnterior = sesion.healDebuffFactor[lado] ?? 1;
+        if (factorAnterior !== factorNuevo) {
+            DCHealDebuff.sincronizarCartasConFactor(mesaAliada, factorAnterior, factorNuevo);
+            sesion.healDebuffFactor[lado] = factorNuevo;
+        }
+    });
+}
+
 function aplicarAtaqueCanonicoSnapshot(snapshot, ladoActor, slotAtacante, slotObjetivo) {
     const mesaActor = ladoActor === 'A' ? snapshot.cartasEnJuegoA : snapshot.cartasEnJuegoB;
     const mesaObjetivo = ladoActor === 'A' ? snapshot.cartasEnJuegoB : snapshot.cartasEnJuegoA;
@@ -737,18 +882,9 @@ function aplicarAtaqueCanonicoSnapshot(snapshot, ladoActor, slotAtacante, slotOb
     const triggerSkill = String(atacante?.skill_trigger || '').trim().toLowerCase();
     const usaDotAuto = triggerSkill === 'auto' && claseSkill === 'dot';
     const usaLifeSteal = claseSkill === 'life_steal' && (triggerSkill === 'auto' || Boolean(atacante?.lifeStealActiva));
-    let danio = poderDanioAtacante;
-    let escudo = Math.max(0, Number(objetivo.escudoActual || 0));
-    if (escudo > 0 && danio > 0) {
-        const absorbido = Math.min(escudo, danio);
-        escudo -= absorbido;
-        danio -= absorbido;
-    }
-    const saludActual = obtenerSaludCartaServidor(objetivo);
-    const saludAntesObjetivo = saludActual + escudo;
-    const nuevaSalud = Math.max(0, saludActual - danio);
-    objetivo.escudoActual = escudo;
-    objetivo.Salud = nuevaSalud;
+    const estadoAntes = DCHealDebuff.obtenerSaludEfectiva(objetivo, mesaActor);
+    const saludAntesObjetivo = estadoAntes.totalActual;
+    const { murio } = DCHealDebuff.aplicarDanio(objetivo, poderDanioAtacante, mesaActor);
     const danioInfligido = Math.max(0, Math.min(poderDanioAtacante, saludAntesObjetivo));
     if (usaDotAuto && danioInfligido > 0) {
         const danoDot = Math.max(1, Math.floor(obtenerValorSkillServidor(atacante, 1)));
@@ -759,7 +895,7 @@ function aplicarAtaqueCanonicoSnapshot(snapshot, ladoActor, slotAtacante, slotOb
             skillName: String(atacante?.skill_name || '').trim()
         });
     }
-    if (nuevaSalud <= 0 && escudo <= 0) {
+    if (murio) {
         if (Array.isArray(cementerioObjetivo)) {
             cementerioObjetivo.push({
                 ...objetivo,
@@ -778,8 +914,7 @@ function aplicarAtaqueCanonicoSnapshot(snapshot, ladoActor, slotAtacante, slotOb
     if (usaLifeSteal && danioInfligido > 0) {
         const robo = Math.max(1, Math.floor(obtenerValorSkillServidor(atacante, 1)));
         const saludAtacante = obtenerSaludCartaServidor(atacante);
-        const saludMaxAtacante = obtenerSaludMaxCarta(atacante);
-        atacante.Salud = Math.min(saludMaxAtacante, saludAtacante + robo);
+        atacante.Salud = DCHealDebuff.capCuracion(atacante, saludAtacante + robo, mesaObjetivo);
     }
     return { ok: true };
 }
@@ -802,11 +937,10 @@ function aplicarHabilidadCanonicaSnapshot(snapshot, ladoActor, slotAtacante, slo
         return { ok: false, reason: 'aturdida' };
     }
     const clase = String(atacante?.skill_class || '').trim().toLowerCase();
-    // Las habilidades usan siempre su escala propia (skill_power por nivel),
-    // sin mezclar buffs/debuffs de daño de combate.
     const poderBaseAtacante = Math.max(0, Number(obtenerPoderCartaServidor(atacante)));
+    const poderConBonosAtacante = Math.max(0, Math.round(obtenerPoderCartaConBonosServidor(atacante, mesaActor, mesaObjetivo)));
     const valorSkill = Math.max(0, Number(obtenerValorSkillServidor(atacante, 0, {
-        poder: poderBaseAtacante,
+        poder: (clase === 'aoe' || clase === 'extra_attack') ? poderConBonosAtacante : poderBaseAtacante,
         salud: obtenerSaludCartaServidor(atacante)
     })));
     if (clase === 'tank') {
@@ -823,8 +957,7 @@ function aplicarHabilidadCanonicaSnapshot(snapshot, ladoActor, slotAtacante, slo
         (Array.isArray(mesaActor) ? mesaActor : []).forEach(carta => {
             if (!carta) return;
             const saludAntes = obtenerSaludCartaServidor(carta);
-            const saludMax = obtenerSaludMaxCarta(carta);
-            carta.Salud = Math.min(saludMax, saludAntes + Math.floor(valorSkill));
+            carta.Salud = DCHealDebuff.capCuracion(carta, saludAntes + Math.floor(valorSkill), mesaObjetivo);
             if (carta.Salud > saludAntes) {
                 huboCuracion = true;
             }
@@ -843,8 +976,7 @@ function aplicarHabilidadCanonicaSnapshot(snapshot, ladoActor, slotAtacante, slo
         if (!mesaActor[idxObjetivo]) return { ok: false, reason: 'objetivo_invalido' };
         const objetivoHeal = mesaActor[idxObjetivo];
         const saludAntes = obtenerSaludCartaServidor(objetivoHeal);
-        const saludMax = obtenerSaludMaxCarta(objetivoHeal);
-        objetivoHeal.Salud = Math.min(saludMax, saludAntes + Math.floor(valorSkill));
+        objetivoHeal.Salud = DCHealDebuff.capCuracion(objetivoHeal, saludAntes + Math.floor(valorSkill), mesaObjetivo);
     } else if (clase === 'shield') {
         if (valorSkill <= 0) return { ok: false, reason: 'valor_invalido' };
         const idxObjetivoSeleccionado = Number.isInteger(slotObjetivo) ? slotObjetivo : null;
@@ -864,24 +996,14 @@ function aplicarHabilidadCanonicaSnapshot(snapshot, ladoActor, slotAtacante, slo
             ? [tankIdx]
             : objetivosVivos;
         if (objetivos.length === 0) return { ok: false, reason: 'objetivo_invalido' };
-        const poderFuente = Math.max(1, poderBaseAtacante);
-        const danioAoe = Math.max(1, Math.floor(valorSkill || (poderFuente / 2)));
+        const poderFuente = Math.max(1, poderConBonosAtacante);
+        const danioAoe = Math.max(1, Math.floor(valorSkill > 0 ? valorSkill : poderFuente / 2));
         for (let i = 0; i < objetivos.length; i++) {
             const idx = objetivos[i];
             const objetivoAoe = mesaObjetivo[idx];
             if (!objetivoAoe) continue;
-            let dano = danioAoe;
-            let escudo = Math.max(0, Number(objetivoAoe.escudoActual || 0));
-            if (escudo > 0) {
-                const absorbido = Math.min(escudo, dano);
-                escudo -= absorbido;
-                dano -= absorbido;
-            }
-            const saludAntes = obtenerSaludCartaServidor(objetivoAoe);
-            const saludDespues = Math.max(0, saludAntes - dano);
-            objetivoAoe.escudoActual = escudo;
-            objetivoAoe.Salud = saludDespues;
-            if (saludDespues <= 0 && escudo <= 0) {
+            const { murio: murioAoe } = DCHealDebuff.aplicarDanio(objetivoAoe, danioAoe, mesaActor);
+            if (murioAoe) {
                 if (Array.isArray(cementerioObjetivo)) {
                     cementerioObjetivo.push({
                         ...objetivoAoe,
@@ -1031,7 +1153,7 @@ function consumirStunFinTurnoServidor(cartas = []) {
     });
 }
 
-function aplicarDotInicioTurnoServidor(cartas = []) {
+function aplicarDotInicioTurnoServidor(cartas = [], cartasEnemigas = []) {
     (Array.isArray(cartas) ? cartas : []).forEach((carta, index, arr) => {
         if (!carta) return;
         const dots = Array.isArray(carta.efectosDot) ? carta.efectosDot : [];
@@ -1039,22 +1161,12 @@ function aplicarDotInicioTurnoServidor(cartas = []) {
             carta.efectosDot = [];
             return;
         }
-        let salud = obtenerSaludCartaServidor(carta);
-        let escudo = Math.max(0, Number(carta.escudoActual || 0));
         dots.forEach(dot => {
-            let dano = Math.max(0, Math.floor(Number(dot?.danoPorTurno || 0)));
-            if (dano <= 0) return;
-            if (escudo > 0) {
-                const absorbido = Math.min(escudo, dano);
-                escudo -= absorbido;
-                dano -= absorbido;
-            }
+            const dano = Math.max(0, Math.floor(Number(dot?.danoPorTurno || 0)));
             if (dano > 0) {
-                salud = Math.max(0, salud - dano);
+                DCHealDebuff.aplicarDanio(carta, dano, cartasEnemigas);
             }
         });
-        carta.escudoActual = escudo;
-        carta.Salud = salud;
         carta.efectosDot = dots
             .map(dot => ({
                 danoPorTurno: Math.max(0, Math.floor(Number(dot?.danoPorTurno || 0))),
@@ -1062,13 +1174,15 @@ function aplicarDotInicioTurnoServidor(cartas = []) {
                 skillName: String(dot?.skillName || '').trim()
             }))
             .filter(dot => dot.turnosRestantes > 0 && dot.danoPorTurno > 0);
+        const escudo = Math.max(0, Number(carta.escudoActual || 0));
+        const salud = obtenerSaludCartaServidor(carta);
         if ((salud + escudo) <= 0) {
             arr[index] = null;
         }
     });
 }
 
-function aplicarDotInicioTurnoServidorConCementerio(cartas = [], cementerio = []) {
+function aplicarDotInicioTurnoServidorConCementerio(cartas = [], cementerio = [], cartasEnemigas = []) {
     (Array.isArray(cartas) ? cartas : []).forEach((carta, index, arr) => {
         if (!carta) return;
         const dots = Array.isArray(carta.efectosDot) ? carta.efectosDot : [];
@@ -1076,22 +1190,12 @@ function aplicarDotInicioTurnoServidorConCementerio(cartas = [], cementerio = []
             carta.efectosDot = [];
             return;
         }
-        let salud = obtenerSaludCartaServidor(carta);
-        let escudo = Math.max(0, Number(carta.escudoActual || 0));
         dots.forEach(dot => {
-            let dano = Math.max(0, Math.floor(Number(dot?.danoPorTurno || 0)));
-            if (dano <= 0) return;
-            if (escudo > 0) {
-                const absorbido = Math.min(escudo, dano);
-                escudo -= absorbido;
-                dano -= absorbido;
-            }
+            const dano = Math.max(0, Math.floor(Number(dot?.danoPorTurno || 0)));
             if (dano > 0) {
-                salud = Math.max(0, salud - dano);
+                DCHealDebuff.aplicarDanio(carta, dano, cartasEnemigas);
             }
         });
-        carta.escudoActual = escudo;
-        carta.Salud = salud;
         carta.efectosDot = dots
             .map(dot => ({
                 danoPorTurno: Math.max(0, Math.floor(Number(dot?.danoPorTurno || 0))),
@@ -1099,6 +1203,8 @@ function aplicarDotInicioTurnoServidorConCementerio(cartas = [], cementerio = []
                 skillName: String(dot?.skillName || '').trim()
             }))
             .filter(dot => dot.turnosRestantes > 0 && dot.danoPorTurno > 0);
+        const escudo = Math.max(0, Number(carta.escudoActual || 0));
+        const salud = obtenerSaludCartaServidor(carta);
         if ((salud + escudo) <= 0) {
             if (Array.isArray(cementerio)) {
                 cementerio.push({
@@ -1335,6 +1441,7 @@ function enriquecerCartasConCatalogoCoop(cartas, mapaCatalogo) {
             skill_info: String(carta.skill_info || '').trim() || String(datos.skill_info || '').trim(),
             skill_class: String(carta.skill_class || '').trim().toLowerCase() || String(datos.skill_class || '').trim().toLowerCase(),
             skill_power: carta.skill_power ?? datos.skill_power ?? '',
+            skill_power_base: carta.skill_power_base ?? datos.skill_power ?? '',
             skill_trigger: String(carta.skill_trigger || '').trim().toLowerCase() || String(datos.skill_trigger || '').trim().toLowerCase()
         };
     });
@@ -1916,7 +2023,8 @@ io.on('connection', (socket) => {
                     finalizada: false,
                     resultado: null,
                     revisionEstado: 0,
-                    snapshotEstado: null
+                    snapshotEstado: null,
+                    healDebuffFactor: { A: 1, B: 1 }
                 });
                 const payloadA = {
                     sessionId,
@@ -2186,6 +2294,7 @@ io.on('connection', (socket) => {
             sesion.snapshotEstado[keyAccionesExtra] = Math.max(0, Number(sesion.snapshotEstado[keyAccionesExtra] || 0) - 1);
         }
         if (tipo === 'ataque') {
+            sincronizarHealDebuffPvpSesion(sesion);
             const slotObjetivo = Number(payloadAccion?.slotObjetivo);
             const resultado = aplicarAtaqueCanonicoSnapshot(sesion.snapshotEstado, ladoActor, slotAtacante, slotObjetivo);
             if (!resultado.ok) {
@@ -2202,6 +2311,7 @@ io.on('connection', (socket) => {
                 sesion.snapshotEstado[keyActuaron].push(slotAtacante);
             }
         } else {
+            sincronizarHealDebuffPvpSesion(sesion);
             const resultado = aplicarHabilidadCanonicaSnapshot(
                 sesion.snapshotEstado,
                 ladoActor,
@@ -2295,9 +2405,11 @@ io.on('connection', (socket) => {
             const mesaActual = ladoActual === 'A' ? sesion.snapshotEstado.cartasEnJuegoA : sesion.snapshotEstado.cartasEnJuegoB;
             const mesaSiguiente = ladoSiguiente === 'A' ? sesion.snapshotEstado.cartasEnJuegoA : sesion.snapshotEstado.cartasEnJuegoB;
             const cementerioSiguiente = ladoSiguiente === 'A' ? sesion.snapshotEstado.cementerioA : sesion.snapshotEstado.cementerioB;
+            sincronizarHealDebuffPvpSesion(sesion);
             consumirStunFinTurnoServidor(mesaActual);
             reducirCooldownHabilidadesServidor(mesaSiguiente);
-            aplicarDotInicioTurnoServidorConCementerio(mesaSiguiente, cementerioSiguiente);
+            const mesaEnemigaDot = ladoSiguiente === 'A' ? sesion.snapshotEstado.cartasEnJuegoB : sesion.snapshotEstado.cartasEnJuegoA;
+            aplicarDotInicioTurnoServidorConCementerio(mesaSiguiente, cementerioSiguiente, mesaEnemigaDot);
             rellenarSlotsDesdeMazoServidor(sesion.snapshotEstado, ladoSiguiente);
             const keyActuaronSiguiente = ladoSiguiente === 'A' ? 'cartasYaActuaronA' : 'cartasYaActuaronB';
             sesion.snapshotEstado[keyActuaronSiguiente] = [];

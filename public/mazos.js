@@ -22,6 +22,14 @@ function calcularPoderMazo(cartas) {
     return (cartas || []).reduce((total, carta) => total + Number(carta?.Poder || 0), 0);
 }
 
+function compararCartasPorPoderDesc(a, b) {
+    const diff = Number(b?.Poder || 0) - Number(a?.Poder || 0);
+    if (diff !== 0) {
+        return diff;
+    }
+    return String(a?.Nombre || '').localeCompare(String(b?.Nombre || ''), undefined, { sensitivity: 'base' });
+}
+
 function obtenerSaludMaxCarta(carta) {
     if (!carta) {
         return 0;
@@ -411,6 +419,7 @@ function crearCartaMazoElemento(carta, indiceCarta) {
         cartaDiv.appendChild(badgeAfiliacion);
     }
     cartaDiv.appendChild(crearBarraSaludElemento(carta));
+    cartaDiv.appendChild(detallesDiv);
     cartaDiv.appendChild(estrellasDiv);
     cartaDiv.addEventListener('click', function () {
         abrirModalCambioCarta(indiceCarta);
@@ -432,7 +441,7 @@ function cargarCartasDelMazo() {
     const cartasMazoOriginal = [...(usuario.mazos[mazoIndexSeleccionado].Cartas || [])];
     const cartasOrdenadasConIndiceReal = cartasMazoOriginal
         .map((carta, originalIndex) => ({ carta, originalIndex }))
-        .sort((a, b) => String(a.carta?.Nombre || '').localeCompare(String(b.carta?.Nombre || '')));
+        .sort((a, b) => compararCartasPorPoderDesc(a.carta, b.carta));
 
     cartasOrdenadasConIndiceReal.forEach(({ carta, originalIndex }) => {
         // Usar el índice real del mazo evita reemplazar la carta equivocada.
@@ -540,7 +549,9 @@ function abrirModalCambioCarta(indiceCarta) {
     const lista = document.getElementById('lista-cartas-reemplazo');
     lista.innerHTML = '';
 
-    const candidatas = obtenerCartasCandidatasReemplazo();
+    const candidatas = obtenerCartasCandidatasReemplazo()
+        .slice()
+        .sort(compararCartasPorPoderDesc);
     if (candidatas.length === 0) {
         lista.innerHTML = '<p>No hay cartas disponibles para reemplazar en este mazo.</p>';
     }

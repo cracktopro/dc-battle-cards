@@ -82,6 +82,26 @@
     filter: brightness(1.12) saturate(1.1);
 }
 
+.barra-salud-contenedor.recibiendo-escudo {
+    animation: escudoBarraSalud 0.38s ease-out;
+}
+
+.barra-salud-contenedor.recibiendo-escudo .barra-salud-relleno {
+    filter: brightness(1.14) saturate(1.2);
+}
+
+@keyframes escudoBarraSalud {
+    0% {
+        box-shadow: 0 0 0 rgba(66, 176, 255, 0);
+    }
+    40% {
+        box-shadow: 0 0 12px rgba(66, 176, 255, 0.65);
+    }
+    100% {
+        box-shadow: 0 0 0 rgba(66, 176, 255, 0);
+    }
+}
+
 @keyframes curaBarraSalud {
     0% {
         box-shadow: 0 0 0 rgba(80, 220, 140, 0);

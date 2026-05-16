@@ -484,6 +484,18 @@ body {
     content: "+";
 }
 
+.danio-flotante.escudo {
+    color: #6ec8ff;
+    text-shadow:
+        0 0 8px rgba(66, 176, 255, 0.9),
+        0 0 18px rgba(107, 214, 255, 0.65),
+        1px 1px 0 rgba(0, 0, 0, 0.75);
+}
+
+.danio-flotante.escudo::before {
+    content: "+";
+}
+
 @keyframes cartaRobada {
     0% {
         opacity: 0;

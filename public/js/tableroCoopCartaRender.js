@@ -176,6 +176,8 @@
                     bonusAfiliacionBase: 0,
                     bonusBuffAplicado: 0,
                     bonusBuffSoloUiAfiliacion: 0,
+                    bonusTotalUi: 0,
+                    debuffGlobalUi: debuffGlobal,
                     bonusEsperadoAfiliacion: 0,
                     bonusCanceladoAfiliacion: 0,
                     bonusAfiliacion: 0,
@@ -188,23 +190,23 @@
             );
             const recibeBonus = Boolean(afiliacionPrincipal?.afiliacion)
                 && afiliacionesCarta.has(afiliacionPrincipal.afiliacion);
-            const bonusBuffAplicado = (recibeBonus && bonusMaximo > 0) ? bonusBuffExtra : 0;
-            const bonusBuffSoloUiAfiliacion = (recibeBonus && bonusMaximo > 0) ? pasivaBonusBuffExtra : 0;
-            const bonusEsperado = recibeBonus ? (bonusMaximo + bonusBuffAplicado) : 0;
-            const bonusAplicado = (recibeBonus && !anulaBonusAfiliacion) ? bonusEsperado : 0;
-            const bonusCancelado = recibeBonus && anulaBonusAfiliacion ? bonusEsperado : 0;
+            const bonusAfiliacionCarta = (recibeBonus && !anulaBonusAfiliacion) ? bonusMaximo : 0;
+            const bonusCancelado = recibeBonus && anulaBonusAfiliacion ? bonusMaximo : 0;
+            const bonusTotalUi = bonusAfiliacionCarta + bonusBuffExtra;
 
             return {
                 ...carta,
                 poderBaseAfiliacion: poderBaseConHabilidad,
                 poderModHabilidadVisual: modHabilidad,
                 bonusAfiliacionBase: recibeBonus ? bonusMaximo : 0,
-                bonusBuffAplicado,
-                bonusBuffSoloUiAfiliacion,
-                bonusEsperadoAfiliacion: bonusEsperado,
+                bonusBuffAplicado: bonusBuffExtra,
+                bonusBuffSoloUiAfiliacion: bonusBuffExtra,
+                bonusTotalUi,
+                debuffGlobalUi: debuffGlobal,
+                bonusEsperadoAfiliacion: recibeBonus ? bonusMaximo : 0,
                 bonusCanceladoAfiliacion: bonusCancelado,
-                bonusAfiliacion: bonusAplicado,
-                poderFinalAfiliacion: poderBaseConHabilidad + bonusAplicado
+                bonusAfiliacion: bonusAfiliacionCarta,
+                poderFinalAfiliacion: poderBaseConHabilidad + bonusAfiliacionCarta
             };
         });
 
@@ -216,32 +218,47 @@
     }
 
     function obtenerFactorDebuffSaludDesdeEnemigos(cartasEnemigas) {
-        if (!Array.isArray(cartasEnemigas)) return 1;
-        const cantidadDebuffs = cartasEnemigas.filter(carta => {
-            if (!carta || !cartaCuentaComoActivaEnMesa(carta)) return false;
-            const meta = obtenerMetaHabilidad(carta);
-            return meta.tieneHabilidad && meta.trigger === 'auto' && meta.clase === 'heal_debuff';
-        }).length;
-        if (cantidadDebuffs <= 0) return 1;
-        return Math.max(0.1, Math.pow(0.75, cantidadDebuffs));
+        const H = window.DCHealDebuffCombat;
+        if (H) return H.obtenerFactorHealDebuff(cartasEnemigas);
+        return 1;
     }
 
     function obtenerSaludEfectiva(carta, cartasEnemigas) {
+        const H = window.DCHealDebuffCombat;
+        if (H) return H.obtenerSaludEfectiva(carta, cartasEnemigas);
         if (!carta) {
             return { saludActual: 0, saludMax: 0, escudo: 0, totalActual: 0, totalMax: 0 };
         }
-        const factorDebuff = obtenerFactorDebuffSaludDesdeEnemigos(cartasEnemigas);
         const saludMaxBase = obtenerSaludMaxCarta(carta);
         const saludActualBase = obtenerSaludActualCarta(carta);
-        const saludMaxEfectiva = Math.max(1, Math.round(saludMaxBase * factorDebuff));
-        const saludActualEfectiva = Math.max(0, Math.min(saludActualBase, saludMaxEfectiva));
         const escudo = Math.max(0, Number(carta.escudoActual || 0));
         return {
-            saludActual: saludActualEfectiva,
-            saludMax: saludMaxEfectiva,
+            saludActual: saludActualBase,
+            saludMax: saludMaxBase,
             escudo,
-            totalActual: saludActualEfectiva + escudo,
-            totalMax: saludMaxEfectiva + escudo
+            totalActual: saludActualBase + escudo,
+            totalMax: saludMaxBase
+        };
+    }
+
+    function obtenerPresentacionBarraSalud(estadoSalud) {
+        const H = window.DCHealDebuffCombat;
+        if (H && typeof H.obtenerPresentacionBarraSalud === 'function') {
+            return H.obtenerPresentacionBarraSalud(estadoSalud);
+        }
+        const saludMaxBarra = Math.max(Number(estadoSalud?.saludMax) || 0, 1);
+        const totalActual = Math.max(0, Number(estadoSalud?.totalActual) || 0);
+        const escudo = Math.max(0, Number(estadoSalud?.escudo) || 0);
+        const excedeMax = totalActual > saludMaxBarra;
+        const porcentaje = excedeMax
+            ? 100
+            : Math.max(0, Math.min((totalActual / saludMaxBarra) * 100, 100));
+        return {
+            textoNumerador: totalActual,
+            textoDenominador: saludMaxBarra,
+            porcentaje,
+            ratio: porcentaje / 100,
+            barraAzul: escudo > 0 || excedeMax
         };
     }
 
@@ -357,9 +374,10 @@
         const penalizacionTankVisual = carta?.tankActiva
             ? Math.floor(Number(carta.Poder || 0) * 0.5)
             : 0;
-        const modHabilidad = Number((carta?.poderModHabilidadVisual ?? carta?.poderModHabilidad) || 0) + penalizacionTankVisual;
+        const modPersonal = Number(carta?.poderModHabilidad || 0) + penalizacionTankVisual;
+        const bonusTotalUi = Number(carta?.bonusTotalUi ?? 0);
+        const debuffGlobalUi = Number(carta?.debuffGlobalUi ?? 0);
         const bonusAfiliacionBase = Number(carta?.bonusAfiliacionBase || 0);
-        const bonusBuffSoloUiAfiliacion = Number(carta?.bonusBuffSoloUiAfiliacion || 0);
         const bonusCancelado = Number(carta?.bonusCanceladoAfiliacion || 0);
         if (bonusAfiliacionBase > 0 && bonusCancelado <= 0) {
             poderSpan.style.color = '#FFD700';
@@ -367,16 +385,16 @@
 
         detallesDiv.appendChild(nombreSpan);
         detallesDiv.appendChild(poderSpan);
-        if (modHabilidad !== 0) {
+        if (modPersonal !== 0) {
             const modSpan = document.createElement('span');
-            modSpan.className = `modificador-poder ${modHabilidad > 0 ? 'mod-buff' : 'mod-debuff'}`;
-            modSpan.textContent = `(${modHabilidad > 0 ? '+' : ''}${modHabilidad})`;
+            modSpan.className = `modificador-poder ${modPersonal > 0 ? 'mod-buff' : 'mod-debuff'}`;
+            modSpan.textContent = `(${modPersonal > 0 ? '+' : ''}${modPersonal})`;
             detallesDiv.appendChild(modSpan);
         }
-        if (bonusBuffSoloUiAfiliacion > 0 && bonusCancelado <= 0) {
+        if (bonusTotalUi > 0 && bonusCancelado <= 0) {
             const bonusSpan = document.createElement('span');
             bonusSpan.className = 'modificador-poder mod-bonus-buff';
-            bonusSpan.textContent = `(+${bonusBuffSoloUiAfiliacion})`;
+            bonusSpan.textContent = `(+${bonusTotalUi})`;
             detallesDiv.appendChild(bonusSpan);
         } else if (bonusCancelado > 0) {
             const cancelSpan = document.createElement('span');
@@ -384,13 +402,20 @@
             cancelSpan.textContent = `(-${bonusCancelado})`;
             detallesDiv.appendChild(cancelSpan);
         }
+        if (debuffGlobalUi > 0) {
+            const debuffSpan = document.createElement('span');
+            debuffSpan.className = 'modificador-poder mod-debuff';
+            debuffSpan.textContent = `(-${debuffGlobalUi})`;
+            detallesDiv.appendChild(debuffSpan);
+        }
 
         const factorDebuffHeal = obtenerFactorDebuffSaludDesdeEnemigos(cartasEnemigas);
         const estadoSalud = obtenerSaludEfectiva(carta, cartasEnemigas);
-        const saludActual = estadoSalud.totalActual;
-        const saludMax = Math.max(estadoSalud.totalMax, 1);
-        const porcentajeSalud = Math.max(0, Math.min((saludActual / saludMax) * 100, 100));
-        const ratioSalud = porcentajeSalud / 100;
+        const barraSalud = obtenerPresentacionBarraSalud(estadoSalud);
+        const saludActual = barraSalud.textoNumerador;
+        const saludMax = barraSalud.textoDenominador;
+        const porcentajeSalud = barraSalud.porcentaje;
+        const ratioSalud = barraSalud.ratio;
 
         const barraSaludContenedor = document.createElement('div');
         barraSaludContenedor.classList.add('barra-salud-contenedor');
@@ -400,7 +425,7 @@
 
         const barraSaludRelleno = document.createElement('div');
         barraSaludRelleno.classList.add('barra-salud-relleno');
-        if (estadoSalud.escudo > 0) {
+        if (barraSalud.barraAzul) {
             barraSaludRelleno.classList.add('con-escudo');
         }
         barraSaludRelleno.style.width = `${porcentajeSalud}%`;
@@ -537,6 +562,7 @@
         aplicarBonusAfiliaciones,
         obtenerIndiceTankActivo,
         obtenerSaludEfectiva,
+        obtenerPresentacionBarraSalud,
         obtenerSaludMaxCarta
     };
 })();
