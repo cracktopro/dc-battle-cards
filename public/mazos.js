@@ -189,6 +189,13 @@ function calcularSaludEscalada(carta, datosCatalogo) {
 
     const nivelCarta = Math.max(1, Number(carta?.Nivel || 1));
     const nivelBase = Math.max(1, Number(datosCatalogo.nivelBase || 1));
+    if (window.DCEscaladoStatsCarta?.calcularSaludEscaladaDesdeBase) {
+        return window.DCEscaladoStatsCarta.calcularSaludEscaladaDesdeBase(
+            Number(datosCatalogo.saludBase || 0),
+            nivelCarta,
+            nivelBase
+        );
+    }
     const incrementoNiveles = Math.max(nivelCarta - nivelBase, 0);
     return Math.max(0, Number(datosCatalogo.saludBase || 0)) + (incrementoNiveles * 500);
 }

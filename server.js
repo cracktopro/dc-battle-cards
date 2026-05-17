@@ -11,6 +11,7 @@ const fs = require('fs');
 const cors = require('cors');
 const DCHealDebuff = require(path.join(__dirname, 'public', 'js', 'healDebuffCombat.js'));
 const DCSkinsCartas = require(path.join(__dirname, 'public', 'js', 'skinsCartas.js'));
+const DCEscaladoStatsCarta = require(path.join(__dirname, 'public', 'js', 'escaladoStatsCarta.js'));
 
 // Configuración de Firebase
 const firebaseConfig = {
@@ -1563,16 +1564,17 @@ function mezclarArrayServidor(arr) {
 }
 
 function escalarCartaEnemigoCoopServidor(cartaBase, dificultad) {
-    const d = Math.min(6, Math.max(1, Number(dificultad) || 1));
+    const maxNivel = DCEscaladoStatsCarta.DC_NIVEL_STATS_CARTA_MAX;
+    const d = Math.min(maxNivel, Math.max(1, Number(dificultad) || 1));
     const nivelBase = Number(cartaBase?.Nivel || 1);
-    const incrementoNiveles = Math.max(d - nivelBase, 0);
+    const inc = DCEscaladoStatsCarta.calcularIncrementoStatsAcumulado(d, nivelBase);
     const saludBase = obtenerSaludMaxCarta(cartaBase);
-    const saludEscalada = saludBase + (incrementoNiveles * 500);
+    const saludEscalada = saludBase + inc.salud;
     const poderNum = Number(cartaBase?.Poder || 0);
     return inicializarSaludCarta({
         ...cartaBase,
         Nivel: d,
-        Poder: poderNum + (incrementoNiveles * 500),
+        Poder: poderNum + inc.poder,
         SaludMax: saludEscalada,
         Salud: saludEscalada
     });
@@ -1580,20 +1582,11 @@ function escalarCartaEnemigoCoopServidor(cartaBase, dificultad) {
 
 /** Misma fórmula que `escalarBossSegunDificultad` en partida.js (desafíos / eventos). */
 function escalarBossSegunDificultadServidor(carta, dificultad) {
-    const cartaBoss = { ...carta };
-    const nivelBase = Number(cartaBoss.Nivel || 1);
-    const dificultadObjetivo = Math.min(Math.max(Number(dificultad) || 1, 1), 6);
-    const incrementoNiveles = Math.max(dificultadObjetivo - nivelBase, 0);
-    const incrementoPorNivel = incrementoNiveles * 500;
-    const saludBase = obtenerSaludMaxCarta(cartaBoss);
-    const poderBase = Number(cartaBoss.Poder || 0);
-
-    cartaBoss.Nivel = dificultadObjetivo;
-    cartaBoss.Poder = Math.round(poderBase + incrementoPorNivel);
-    const saludBossActual = Math.round((saludBase * 8) + incrementoPorNivel);
-    cartaBoss.SaludMax = Math.round(saludBossActual * 1.75);
-    cartaBoss.Salud = cartaBoss.SaludMax;
-    cartaBoss.esBoss = true;
+    const maxNivel = DCEscaladoStatsCarta.DC_NIVEL_STATS_CARTA_MAX;
+    const cartaBoss = DCEscaladoStatsCarta.escalarBossSegunDificultad(carta, dificultad, {
+        maxNivel,
+        obtenerSaludMaxCarta
+    });
     return inicializarSaludCarta(cartaBoss);
 }
 

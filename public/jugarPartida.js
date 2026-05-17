@@ -262,6 +262,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
                 // Ajustar siempre nivel/poder al nivel de dificultad seleccionado
                 mazoOponente = mazoOponente.map(carta => {
+                    if (window.DCEscaladoStatsCarta?.escalarCartaDeltaDificultad) {
+                        return window.DCEscaladoStatsCarta.escalarCartaDeltaDificultad(carta, dificultadSeleccionada, {
+                            obtenerSaludMaxCarta: (c) => Number((c.SaludMax ?? c.saludMax ?? c.Salud ?? c.salud ?? c.Poder) || 0)
+                        });
+                    }
                     const nivelBase = Number(carta.Nivel || 1);
                     const incrementoNiveles = Math.max(dificultadSeleccionada - nivelBase, 0);
                     const saludBase = Number((carta.SaludMax ?? carta.saludMax ?? carta.Salud ?? carta.salud ?? carta.Poder) || 0);
@@ -1302,6 +1307,11 @@ function construirPoolUnicoPorNombre(cartas) {
 }
 
 function escalarCartaANivel(carta, nivelObjetivo) {
+    if (window.DCEscaladoStatsCarta?.escalarCartaANivel) {
+        return window.DCEscaladoStatsCarta.escalarCartaANivel(carta, nivelObjetivo, {
+            recalcularSkillOpciones: { rawEsBase: true }
+        });
+    }
     const nivelActual = Number(carta.Nivel || 1);
     const poderActual = Number(carta.Poder || 0);
     const poderBaseNivel1 = Math.max(0, poderActual - ((nivelActual - 1) * 500));

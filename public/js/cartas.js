@@ -31,6 +31,10 @@ function resolverImagenesCartaDesdeCatalogo(carta) {
     return _mapaImagenesCatalogoPorNombre.get(clave) || null;
 }
 
+function cartaMuestraImagenFinal(nivel) {
+    return Number(nivel || 1) >= 6;
+}
+
 function obtenerImagenCarta(carta) {
     if (!carta) return 'img/default-image.jpg';
 
@@ -38,7 +42,7 @@ function obtenerImagenCarta(carta) {
     const tieneSkinActivo = carta.skinActivoId !== null && carta.skinActivoId !== undefined;
     if (tieneSkinActivo) {
         const imagenFinalSkin = String(carta.imagen_final || carta.Imagen_final || carta.imagenFinal || '').trim();
-        if (nivel === 6 && imagenFinalSkin) {
+        if (cartaMuestraImagenFinal(nivel) && imagenFinalSkin) {
             return imagenFinalSkin;
         }
         const imagenSkin = String(carta.Imagen || carta.imagen || '').trim();
@@ -51,7 +55,7 @@ function obtenerImagenCarta(carta) {
     const imagenBase = (imagenesCatalogo?.Imagen || String(carta.Imagen || carta.imagen || '').trim());
     const imagenFinal = (imagenesCatalogo?.imagen_final || String(carta.imagen_final || carta.Imagen_final || carta.imagenFinal || '').trim());
 
-    if (nivel === 6 && imagenFinal && String(imagenFinal).trim() !== '') {
+    if (cartaMuestraImagenFinal(nivel) && imagenFinal && String(imagenFinal).trim() !== '') {
         return imagenFinal;
     }
 
@@ -60,6 +64,7 @@ function obtenerImagenCarta(carta) {
 
 // opcional: exponer global (por seguridad)
 window.obtenerImagenCarta = obtenerImagenCarta;
+window.cartaMuestraImagenFinal = cartaMuestraImagenFinal;
 
 function normalizarTextoHabilidad(valor) {
     return String(valor || '').trim();
@@ -857,8 +862,17 @@ window.extraerSkillRowDeCartaExcel = extraerSkillRowDeCartaExcel;
 
 let _migracionSkillsUsuarioEnCurso = false;
 const VERSION_MIGRACION_SKILLS_USUARIO = 6;
-/** Incremento de Poder/SaludMax por cada nivel por encima de 1★ (coherente con `escalarCartaANivel` / tienda). */
-const DC_INCREMENTO_STATS_POR_NIVEL_CARTA = 500;
+/** @deprecated Usar `DCEscaladoStatsCarta` — reexportado para compatibilidad. */
+const DC_INCREMENTO_STATS_POR_NIVEL_CARTA = (typeof window !== 'undefined' && window.DCEscaladoStatsCarta)
+    ? window.DCEscaladoStatsCarta.DC_INCREMENTO_STATS_POR_NIVEL_CARTA
+    : 500;
+
+function _escaladoStatsApi() {
+    if (typeof window !== 'undefined' && window.DCEscaladoStatsCarta) {
+        return window.DCEscaladoStatsCarta;
+    }
+    return null;
+}
 
 function hashTextoSimple(texto) {
     let hash = 5381;
@@ -940,7 +954,7 @@ function serializarCartaParaSyncMigracion(carta) {
     const skill = JSON.parse(skillFilaSerializada(carta));
     return JSON.stringify({
         Nombre: String(carta.Nombre || '').trim(),
-        Nivel: Math.min(6, Math.max(1, Number(carta.Nivel || 1))),
+        Nivel: Math.min(8, Math.max(1, Number(carta.Nivel || 1))),
         Poder: Number(carta.Poder || 0),
         Salud: Number(carta.Salud ?? ''),
         SaludMax: Number(carta.SaludMax ?? ''),
@@ -958,7 +972,7 @@ function fusionarCartaCompletaDesdeCatalogo(cartaUsuario, filaCatalogo) {
     if (!cartaUsuario || !filaCatalogo) {
         return cartaUsuario;
     }
-    const nivel = Math.min(6, Math.max(1, Number(cartaUsuario.Nivel || 1)));
+    const nivel = Math.min(8, Math.max(1, Number(cartaUsuario.Nivel || 1)));
     let carta = { ...cartaUsuario };
 
     const nombreCat = String(filaCatalogo.Nombre || carta.Nombre || '').trim();
@@ -979,8 +993,13 @@ function fusionarCartaCompletaDesdeCatalogo(cartaUsuario, filaCatalogo) {
     carta = forzarSkillDesdeFilaCatalogo(carta, filaCatalogo);
 
     let poderBase = Math.max(0, Number(filaCatalogo.Poder ?? filaCatalogo.poder ?? 0));
+    const escaladoApi = _escaladoStatsApi();
     if (poderBase <= 0 && Number(cartaUsuario.Poder) > 0) {
-        poderBase = Math.max(0, Number(cartaUsuario.Poder) - ((nivel - 1) * DC_INCREMENTO_STATS_POR_NIVEL_CARTA));
+        if (escaladoApi) {
+            poderBase = escaladoApi.inferirStatsBaseDesdeCartaNivel(cartaUsuario, nivel).poderBase;
+        } else {
+            poderBase = Math.max(0, Number(cartaUsuario.Poder) - ((nivel - 1) * DC_INCREMENTO_STATS_POR_NIVEL_CARTA));
+        }
     }
     const saludBaseRaw = filaCatalogo.SaludMax ?? filaCatalogo.Salud ?? filaCatalogo.salud ?? filaCatalogo.Poder ?? filaCatalogo.poder;
     let saludBase = Number(saludBaseRaw);
@@ -992,12 +1011,22 @@ function fusionarCartaCompletaDesdeCatalogo(cartaUsuario, filaCatalogo) {
     if (saludBase <= 1 && Number(cartaUsuario.SaludMax ?? cartaUsuario.Salud ?? 0) > 0) {
         const sm = Number(cartaUsuario.SaludMax ?? cartaUsuario.Salud ?? cartaUsuario.Poder);
         if (Number.isFinite(sm) && sm > 0) {
-            saludBase = Math.max(1, sm - ((nivel - 1) * DC_INCREMENTO_STATS_POR_NIVEL_CARTA));
+            if (escaladoApi) {
+                saludBase = escaladoApi.inferirStatsBaseDesdeCartaNivel(
+                    { SaludMax: sm, Poder: cartaUsuario.Poder },
+                    nivel
+                ).saludBase;
+            } else {
+                saludBase = Math.max(1, sm - ((nivel - 1) * DC_INCREMENTO_STATS_POR_NIVEL_CARTA));
+            }
         }
     }
-    const inc = (nivel - 1) * DC_INCREMENTO_STATS_POR_NIVEL_CARTA;
-    const poderNuevo = Math.max(0, poderBase + inc);
-    const saludMaxNuevo = Math.max(1, saludBase + inc);
+    const poderNuevo = escaladoApi
+        ? escaladoApi.calcularPoderEscaladoDesdeBase(poderBase, nivel)
+        : Math.max(0, poderBase + ((nivel - 1) * DC_INCREMENTO_STATS_POR_NIVEL_CARTA));
+    const saludMaxNuevo = escaladoApi
+        ? escaladoApi.calcularSaludEscaladaDesdeBase(saludBase, nivel)
+        : Math.max(1, saludBase + ((nivel - 1) * DC_INCREMENTO_STATS_POR_NIVEL_CARTA));
 
     const oldMax = Math.max(
         1,

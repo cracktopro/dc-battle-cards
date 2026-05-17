@@ -202,13 +202,34 @@
         return resultado;
     }
 
-    const INCREMENTO_STATS_POR_NIVEL = 500;
+    function obtenerEscaladoStatsApi() {
+        const g = typeof globalThis !== 'undefined' ? globalThis : null;
+        if (g?.DCEscaladoStatsCarta) {
+            return g.DCEscaladoStatsCarta;
+        }
+        if (typeof window !== 'undefined' && window.DCEscaladoStatsCarta) {
+            return window.DCEscaladoStatsCarta;
+        }
+        try {
+            return require('./escaladoStatsCarta');
+        } catch (_) {
+            return null;
+        }
+    }
 
-    function escalarStatJugadorDesdeBase(valorBase, nivelCarta, nivelBaseCatalogo) {
+    function escalarStatJugadorDesdeBase(valorBase, nivelCarta, nivelBaseCatalogo, tipoStat) {
         const nivel = Math.max(1, Number(nivelCarta || 1));
         const nivelBase = Math.max(1, Number(nivelBaseCatalogo || 1));
-        const incremento = Math.max(nivel - nivelBase, 0) * INCREMENTO_STATS_POR_NIVEL;
-        return Math.max(0, Number(valorBase || 0)) + incremento;
+        const base = Math.max(0, Number(valorBase || 0));
+        const E = obtenerEscaladoStatsApi();
+        if (E) {
+            if (tipoStat === 'salud') {
+                return E.calcularSaludEscaladaDesdeBase(Math.max(1, base), nivel, nivelBase);
+            }
+            return E.calcularPoderEscaladoDesdeBase(base, nivel, nivelBase);
+        }
+        const incremento = Math.max(nivel - nivelBase, 0) * 500;
+        return base + incremento;
     }
 
     function restaurarStatsJugadorDesdeCatalogo(cartaJugador, filaCatalogoParent) {
@@ -221,8 +242,8 @@
             filaCatalogoParent.Salud ?? filaCatalogoParent.salud ?? filaCatalogoParent.Poder ?? filaCatalogoParent.poder ?? 0
         );
         const poderBase = Number(filaCatalogoParent.Poder ?? filaCatalogoParent.poder ?? 0);
-        const saludEscalada = escalarStatJugadorDesdeBase(saludBase, resultado.Nivel, nivelBase);
-        const poderEscalado = escalarStatJugadorDesdeBase(poderBase, resultado.Nivel, nivelBase);
+        const saludEscalada = escalarStatJugadorDesdeBase(saludBase, resultado.Nivel, nivelBase, 'salud');
+        const poderEscalado = escalarStatJugadorDesdeBase(poderBase, resultado.Nivel, nivelBase, 'poder');
         resultado.SaludMax = Math.max(1, saludEscalada);
         resultado.Salud = resultado.SaludMax;
         resultado.Poder = Math.max(0, poderEscalado);
@@ -276,14 +297,14 @@
 
         const saludSkin = parsearNumeroSeguro(skin.Salud);
         if (saludSkin !== null && saludSkin > 0) {
-            const saludEscalada = escalarStatJugadorDesdeBase(saludSkin, resultado.Nivel, nivelBase);
+            const saludEscalada = escalarStatJugadorDesdeBase(saludSkin, resultado.Nivel, nivelBase, 'salud');
             resultado.SaludMax = Math.max(1, saludEscalada);
             resultado.Salud = resultado.SaludMax;
         }
 
         const poderSkin = parsearNumeroSeguro(skin.Poder);
         if (poderSkin !== null && poderSkin >= 0) {
-            resultado.Poder = escalarStatJugadorDesdeBase(poderSkin, resultado.Nivel, nivelBase);
+            resultado.Poder = escalarStatJugadorDesdeBase(poderSkin, resultado.Nivel, nivelBase, 'poder');
         }
 
         if (typeof window !== 'undefined' && typeof window.recalcularSkillPowerPorNivel === 'function') {

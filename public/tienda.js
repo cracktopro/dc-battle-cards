@@ -240,6 +240,18 @@ function crearBadgeYaObtenidaTienda(nivelColeccion) {
 function escalarPoderPorNivel(poderBase, nivel) {
     const base = Number(poderBase || 0);
     const objetivo = Math.max(1, Number(nivel || 1));
+    if (window.DCEscaladoStatsCarta?.calcularPoderEscaladoDesdeBase) {
+        return window.DCEscaladoStatsCarta.calcularPoderEscaladoDesdeBase(base, objetivo);
+    }
+    return base + ((objetivo - 1) * 500);
+}
+
+function escalarSaludPorNivel(saludBase, nivel) {
+    const base = Number(saludBase || 0);
+    const objetivo = Math.max(1, Number(nivel || 1));
+    if (window.DCEscaladoStatsCarta?.calcularSaludEscaladaDesdeBase) {
+        return window.DCEscaladoStatsCarta.calcularSaludEscaladaDesdeBase(Math.max(1, base), objetivo);
+    }
     return base + ((objetivo - 1) * 500);
 }
 
@@ -264,7 +276,7 @@ function crearOfertaCarta(cartaBase, nivel, opciones = {}) {
         ? window.fusionarSkillDesdeFilaCatalogo({ ...cartaBase }, cartaBase)
         : { ...cartaBase };
     const saludBase = Number((srcCarta.SaludMax ?? srcCarta.Salud ?? srcCarta.Poder) || 0);
-    const saludEscalada = escalarPoderPorNivel(saludBase, nivel);
+    const saludEscalada = escalarSaludPorNivel(saludBase, nivel);
     const precioCatalogo = PRECIOS_CARTAS[nivel];
     const precio = opciones.precio != null ? opciones.precio : precioCatalogo;
     const sufijoId = opciones.sufijoId || 'std';

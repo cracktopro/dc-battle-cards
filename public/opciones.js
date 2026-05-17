@@ -534,6 +534,12 @@ async function adminObtenerTodasCartas() {
 
 function escalarCartaANivel(carta, nivelObjetivo) {
     const nivelNormalizado = Math.min(Math.max(Number(nivelObjetivo || 1), 1), ADMIN_NIVEL_CARTA_MAX);
+    if (window.DCEscaladoStatsCarta?.escalarCartaANivel) {
+        return window.DCEscaladoStatsCarta.escalarCartaANivel(carta, nivelNormalizado, {
+            maxNivel: ADMIN_NIVEL_CARTA_MAX,
+            recalcularSkillOpciones: { rawEsBase: true }
+        });
+    }
     const nivelActual = Math.max(1, Number(carta.Nivel || 1));
     const poderActual = Number(carta.Poder || 0);
     const saludActualBase = Number(carta.SaludMax ?? carta.Salud ?? carta.Poder ?? 0);

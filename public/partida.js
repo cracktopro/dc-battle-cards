@@ -1432,6 +1432,13 @@ function calcularSaludEscaladaDesdeCatalogo(carta, datosCatalogo) {
 
     const nivelCarta = Math.max(1, Number(carta.Nivel || 1));
     const nivelBaseCatalogo = Math.max(1, Number(datosCatalogo.nivelBase || 1));
+    if (window.DCEscaladoStatsCarta?.calcularSaludEscaladaDesdeBase) {
+        return window.DCEscaladoStatsCarta.calcularSaludEscaladaDesdeBase(
+            Math.max(0, Number(datosCatalogo.saludBase || 0)),
+            nivelCarta,
+            nivelBaseCatalogo
+        );
+    }
     const incrementoNiveles = Math.max(nivelCarta - nivelBaseCatalogo, 0);
     const saludBase = Math.max(0, Number(datosCatalogo.saludBase || 0));
     return saludBase + (incrementoNiveles * 500);
@@ -2282,6 +2289,12 @@ function calcularPuntosVictoria(dificultad) {
 }
 
 function escalarCartaSegunDificultad(carta, dificultad) {
+    if (window.DCEscaladoStatsCarta?.escalarCartaDeltaDificultad) {
+        return window.DCEscaladoStatsCarta.escalarCartaDeltaDificultad(carta, dificultad, {
+            maxNivel: DC_NIVEL_COMBATE_MAX,
+            obtenerSaludMaxCarta
+        });
+    }
     const cartaEscalada = { ...carta };
     const nivelBase = Number(cartaEscalada.Nivel || 1);
     const dificultadObjetivo = Math.min(Math.max(dificultad, 1), DC_NIVEL_COMBATE_MAX);
@@ -2300,6 +2313,12 @@ function escalarCartaSegunDificultad(carta, dificultad) {
 }
 
 function escalarBossSegunDificultad(carta, dificultad) {
+    if (window.DCEscaladoStatsCarta?.escalarBossSegunDificultad) {
+        return window.DCEscaladoStatsCarta.escalarBossSegunDificultad(carta, dificultad, {
+            maxNivel: DC_NIVEL_COMBATE_MAX,
+            obtenerSaludMaxCarta
+        });
+    }
     const cartaBoss = { ...carta };
     const nivelBase = Number(cartaBoss.Nivel || 1);
     const dificultadObjetivo = Math.min(Math.max(dificultad, 1), DC_NIVEL_COMBATE_MAX);

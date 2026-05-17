@@ -2857,9 +2857,18 @@
      */
     function coopEscalarCartaSegunDificultad(carta, dificultad) {
         const obtenerSaludMaxCartaCoop = window.tableroCoopCartaUi?.obtenerSaludMaxCarta;
+        const maxNivel = window.DCEscaladoStatsCarta?.DC_NIVEL_STATS_CARTA_MAX || 8;
+        if (window.DCEscaladoStatsCarta?.escalarCartaDeltaDificultad) {
+            return window.DCEscaladoStatsCarta.escalarCartaDeltaDificultad(carta, dificultad, {
+                maxNivel,
+                obtenerSaludMaxCarta: typeof obtenerSaludMaxCartaCoop === 'function'
+                    ? obtenerSaludMaxCartaCoop
+                    : (c) => Number(c?.SaludMax || c?.Salud || 0)
+            });
+        }
         const cartaEscalada = { ...carta };
         const nivelBase = Number(cartaEscalada.Nivel || 1);
-        const dificultadObjetivo = Math.min(Math.max(Number(dificultad || 1), 1), 6);
+        const dificultadObjetivo = Math.min(Math.max(Number(dificultad || 1), 1), maxNivel);
         const incrementoNiveles = Math.max(dificultadObjetivo - nivelBase, 0);
         const saludBase = typeof obtenerSaludMaxCartaCoop === 'function'
             ? Number(obtenerSaludMaxCartaCoop(cartaEscalada) || 0)

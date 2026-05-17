@@ -124,6 +124,18 @@
     function escalarPoderPorNivel(poderBase, nivel) {
         const base = Number(poderBase || 0);
         const objetivo = Math.max(1, Number(nivel || 1));
+        if (window.DCEscaladoStatsCarta?.calcularPoderEscaladoDesdeBase) {
+            return window.DCEscaladoStatsCarta.calcularPoderEscaladoDesdeBase(base, objetivo);
+        }
+        return base + ((objetivo - 1) * 500);
+    }
+
+    function escalarSaludPorNivel(saludBase, nivel) {
+        const base = Number(saludBase || 0);
+        const objetivo = Math.max(1, Number(nivel || 1));
+        if (window.DCEscaladoStatsCarta?.calcularSaludEscaladaDesdeBase) {
+            return window.DCEscaladoStatsCarta.calcularSaludEscaladaDesdeBase(Math.max(1, base), objetivo);
+        }
         return base + ((objetivo - 1) * 500);
     }
 
@@ -132,7 +144,7 @@
             ? window.fusionarSkillDesdeFilaCatalogo({ ...cartaBase }, cartaBase)
             : { ...cartaBase };
         const saludBase = Number((fuente.SaludMax ?? fuente.Salud ?? fuente.Poder) || 0);
-        const saludEscalada = escalarPoderPorNivel(saludBase, nivel);
+        const saludEscalada = escalarSaludPorNivel(saludBase, nivel);
         return {
             ...fuente,
             Nivel: nivel,

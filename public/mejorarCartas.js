@@ -110,6 +110,21 @@ function refrescarPanelPerfilLateral() {
     window.dispatchEvent(new Event('dc:usuario-actualizado'));
 }
 
+function aplicarMejoraStatsEntreNiveles(carta, nivelInicial, nivelFinal) {
+    if (window.DCEscaladoStatsCarta?.aplicarIncrementoStatsEntreNiveles) {
+        return window.DCEscaladoStatsCarta.aplicarIncrementoStatsEntreNiveles(carta, nivelInicial, nivelFinal);
+    }
+    const incN = Math.max(Number(nivelFinal) - Number(nivelInicial), 0);
+    const saludBase = Number((carta.SaludMax ?? carta.Salud ?? carta.Poder) || 0);
+    return {
+        ...carta,
+        Nivel: nivelFinal,
+        Poder: Number(carta.Poder || 0) + (incN * 500),
+        SaludMax: saludBase + (incN * 500),
+        Salud: saludBase + (incN * 500)
+    };
+}
+
 function esCartaLegendaria(carta) {
     return Number(carta?.Nivel || 1) >= 6;
 }
@@ -288,9 +303,11 @@ function calcularFusionDesdeSeleccion(usuario, keeperIndex, seleccionIndices) {
     }
     const consumir = ordenados.slice(0, n);
     const cartaAntes = { ...usuario.cartas[keeperIndex] };
-    const cartaMejorada = { ...usuario.cartas[keeperIndex] };
-    cartaMejorada.Nivel = nivelIni + n;
-    cartaMejorada.Poder = Number(cartaMejorada.Poder || 0) + (500 * n);
+    const cartaMejorada = aplicarMejoraStatsEntreNiveles(
+        { ...usuario.cartas[keeperIndex] },
+        nivelIni,
+        nivelIni + n
+    );
     if (typeof window.recalcularSkillPowerPorNivel === 'function') {
         window.recalcularSkillPowerPorNivel(cartaMejorada, cartaMejorada.Nivel);
     }
@@ -1102,7 +1119,6 @@ function renderizarSeccionFragmentos(usuario) {
 function crearCartaMejoradaPorFragmento(cartaOriginal, tipoFragmento) {
     const original = { ...cartaOriginal };
     const mejorada = { ...cartaOriginal };
-    const saludBase = Number((mejorada.SaludMax ?? mejorada.Salud ?? mejorada.Poder) || 0);
     const nivelInicial = Number(mejorada.Nivel || 1);
     let nivelFinal = nivelInicial;
     if (tipoFragmento === 'elite') {
@@ -1110,17 +1126,13 @@ function crearCartaMejoradaPorFragmento(cartaOriginal, tipoFragmento) {
     } else if (tipoFragmento === 'legendario') {
         nivelFinal = 8;
     }
-    const incrementoNiveles = Math.max(nivelFinal - nivelInicial, 0);
-    mejorada.Nivel = nivelFinal;
-    mejorada.Poder = Number(mejorada.Poder || 0) + (incrementoNiveles * 500);
-    mejorada.SaludMax = saludBase + (incrementoNiveles * 500);
-    mejorada.Salud = mejorada.SaludMax;
+    const mejoradaFinal = aplicarMejoraStatsEntreNiveles(mejorada, nivelInicial, nivelFinal);
 
     if (typeof window.recalcularSkillPowerPorNivel === 'function') {
-        window.recalcularSkillPowerPorNivel(mejorada, Number(mejorada.Nivel || 1));
+        window.recalcularSkillPowerPorNivel(mejoradaFinal, Number(mejoradaFinal.Nivel || 1));
     }
 
-    return { original, mejorada };
+    return { original, mejorada: mejoradaFinal };
 }
 
 function cerrarModalAnimacionFragmento() {
@@ -1333,8 +1345,10 @@ function analizarMejoraAutomatica(cartas) {
             const mejorasPosibles = Math.min(5 - nivelInicial, duplicados.length);
 
             if (mejorasPosibles > 0) {
-                cartaBase.Nivel = nivelInicial + mejorasPosibles;
-                cartaBase.Poder = (cartaBase.Poder || 0) + (500 * mejorasPosibles);
+                Object.assign(
+                    cartaBase,
+                    aplicarMejoraStatsEntreNiveles(cartaBase, nivelInicial, nivelInicial + mejorasPosibles)
+                );
                 if (typeof window.recalcularSkillPowerPorNivel === 'function') {
                     window.recalcularSkillPowerPorNivel(cartaBase, cartaBase.Nivel);
                 }
@@ -1746,7 +1760,6 @@ function cerrarModalResultadoObjeto() {
 function crearCartaMejoradaPorObjeto(cartaOriginal, tipo) {
     const original = { ...cartaOriginal };
     const mejorada = { ...cartaOriginal };
-    const saludBase = Number((mejorada.SaludMax ?? mejorada.Salud ?? mejorada.Poder) || 0);
     const nivelInicial = Number(mejorada.Nivel || 1);
     let nivelFinal = nivelInicial;
 
@@ -1760,17 +1773,13 @@ function crearCartaMejoradaPorObjeto(cartaOriginal, tipo) {
         nivelFinal = 6;
     }
 
-    const incrementoNiveles = Math.max(nivelFinal - nivelInicial, 0);
-    mejorada.Nivel = nivelFinal;
-    mejorada.Poder = Number(mejorada.Poder || 0) + (incrementoNiveles * 500);
-    mejorada.SaludMax = saludBase + (incrementoNiveles * 500);
-    mejorada.Salud = mejorada.SaludMax;
+    const mejoradaFinal = aplicarMejoraStatsEntreNiveles(mejorada, nivelInicial, nivelFinal);
 
     if (typeof window.recalcularSkillPowerPorNivel === 'function') {
-        window.recalcularSkillPowerPorNivel(mejorada, Number(mejorada.Nivel || 1));
+        window.recalcularSkillPowerPorNivel(mejoradaFinal, Number(mejoradaFinal.Nivel || 1));
     }
 
-    return { original, mejorada };
+    return { original, mejorada: mejoradaFinal };
 }
 
 function mostrarResultadoMejoraObjeto(cartaOriginal, cartaMejorada) {
