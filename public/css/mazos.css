@@ -355,6 +355,30 @@ select:disabled,
     background: rgba(10, 22, 44, 0.62);
 }
 
+.menu-group-companion-btn {
+    cursor: pointer;
+    text-align: left;
+    font: inherit;
+    color: inherit;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.12s ease;
+}
+
+.menu-group-companion-btn:hover {
+    border-color: rgba(0, 197, 255, 0.75);
+    box-shadow: 0 0 12px rgba(0, 123, 255, 0.35);
+    transform: translateY(-1px);
+}
+
+.menu-group-trade-label {
+    display: block;
+    font-size: 0.62rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #7ee8ff;
+    margin-top: 2px;
+}
+
 .menu-group-avatar {
     width: 32px;
     height: 32px;
@@ -1119,6 +1143,16 @@ a.faccion-tab.active {
 .modal-destruir-duplicados .modal-combinar-duplicados-item.seleccionada {
     border-color: rgba(255, 100, 90, 0.92);
     box-shadow: 0 0 14px rgba(255, 80, 70, 0.45);
+}
+
+#contenedor-cartas-destruccion .carta-grupo-duplicados-wrap--clicable {
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+#contenedor-cartas-destruccion .carta-grupo-duplicados-wrap--clicable:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0 14px rgba(255, 100, 80, 0.45);
 }
 
 #contenedor-cartas-destruccion .carta-grupo-duplicados-wrap .carta {
@@ -2526,4 +2560,238 @@ a.faccion-tab.active {
             0 0 29px rgba(255, 190, 40, 0.65),
             inset 0 0 15px rgba(255, 250, 200, 0.18);
     }
+}
+
+/* Intercambio entre jugadores del grupo */
+.trade-overlay {
+    z-index: 3200;
+}
+
+.trade-modal-solicitud {
+    width: min(380px, 92vw);
+    text-align: center;
+}
+
+.trade-modal-titulo {
+    margin: 0 0 10px;
+    color: #dff8ff;
+    font-family: 'Orbitron', sans-serif;
+}
+
+.trade-modal-mensaje {
+    margin: 0 0 16px;
+    color: #cfefff;
+}
+
+.trade-modal-acciones {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.trade-modal-intercambio {
+    width: min(1180px, 98vw);
+    max-height: 92vh;
+    overflow: auto;
+    background: rgba(10, 20, 38, 0.98);
+    border: 1px solid rgba(0, 197, 255, 0.45);
+    border-radius: 14px;
+    padding: 14px;
+    box-shadow: 0 0 28px rgba(0, 123, 255, 0.25);
+}
+
+.trade-modal-intercambio-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+    color: #dff8ff;
+}
+
+.trade-intercambio-layout {
+    display: grid;
+    grid-template-columns: minmax(200px, 1fr) minmax(280px, 1.4fr);
+    gap: 14px;
+}
+
+@media (max-width: 900px) {
+    .trade-intercambio-layout {
+        grid-template-columns: 1fr;
+    }
+}
+
+.trade-panel {
+    border: 1px solid rgba(0, 123, 255, 0.35);
+    border-radius: 12px;
+    padding: 10px;
+    background: rgba(8, 18, 36, 0.72);
+}
+
+.trade-panel-titulo {
+    margin: 0 0 8px;
+    font-size: 0.82rem;
+    color: #9edcff;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.trade-panel-inventario {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.trade-inventario-filtros {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.trade-inventario-tabs {
+    margin-bottom: 0;
+}
+
+.trade-inventario-tabs .faccion-tab {
+    flex: 1;
+    font-size: 0.72rem;
+    padding: 6px 8px;
+}
+
+.trade-filtro-nombre,
+.trade-filtro-select {
+    width: 100%;
+    background: rgba(6, 14, 28, 0.9);
+    border: 1px solid rgba(0, 123, 255, 0.4);
+    color: #dff8ff;
+    font-size: 0.78rem;
+}
+
+.trade-inventario-filtros-fila {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+}
+
+.trade-inventario-contador {
+    margin: 0;
+    font-size: 0.72rem;
+    color: #7eb8dc;
+}
+
+.trade-panel-inventario .trade-cartas-grid {
+    max-height: min(52vh, 420px);
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+.trade-panel-ofertas {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.trade-cartas-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: 8px;
+    min-height: 80px;
+}
+
+.trade-oferta-bloque {
+    border: 2px solid rgba(0, 123, 255, 0.35);
+    border-radius: 10px;
+    padding: 8px;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.trade-oferta-bloque--aceptado {
+    border-color: rgba(72, 220, 120, 0.95);
+    box-shadow:
+        0 0 14px rgba(72, 220, 120, 0.55),
+        inset 0 0 10px rgba(72, 220, 120, 0.12);
+}
+
+.trade-btn-aceptar {
+    width: 100%;
+    margin-top: 8px;
+}
+
+.trade-companero-estado {
+    margin-top: 6px;
+    font-size: 0.75rem;
+    color: #9edcff;
+    text-align: center;
+}
+
+.trade-carta-mini {
+    position: relative;
+    min-height: 130px;
+    border-radius: 10px;
+    background-size: cover;
+    background-position: center top;
+    border: 2px solid rgba(0, 123, 255, 0.4);
+    overflow: hidden;
+}
+
+.trade-carta-mini--clicable {
+    cursor: pointer;
+}
+
+.trade-carta-mini--clicable:hover {
+    border-color: rgba(0, 197, 255, 0.85);
+    box-shadow: 0 0 10px rgba(0, 123, 255, 0.4);
+}
+
+.trade-carta-mini--seleccionada,
+.trade-carta-mini--en-oferta {
+    border-color: rgba(255, 180, 60, 0.9);
+    box-shadow: 0 0 10px rgba(255, 160, 40, 0.45);
+}
+
+.trade-carta-mini--solo-vista {
+    opacity: 0.72;
+    border-color: rgba(120, 140, 160, 0.45);
+    cursor: default;
+    filter: grayscale(0.15);
+}
+
+.trade-carta-mini-detalles {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 22px;
+    padding: 4px 6px;
+    background: linear-gradient(transparent, rgba(0, 0, 0, 0.82));
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.trade-carta-mini-nombre {
+    font-size: 0.62rem;
+    font-weight: 700;
+    color: #fff;
+    line-height: 1.1;
+}
+
+.trade-carta-mini-poder {
+    font-size: 0.68rem;
+    color: #ffd86f;
+    font-weight: 800;
+}
+
+.trade-carta-mini-estrellas {
+    position: absolute;
+    left: 4px;
+    bottom: 4px;
+}
+
+.trade-vacio {
+    grid-column: 1 / -1;
+    margin: 0;
+    font-size: 0.8rem;
+    color: #9edcff;
+    text-align: center;
 }

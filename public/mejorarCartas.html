@@ -144,7 +144,7 @@
 
         <div id="seccion-destruir-repetidas" class="mt-2" style="display:none;">
             <div class="panel-info-destruccion-duplicados" style="margin-bottom: 10px;">
-                Aquí se muestran cartas repetidas de personajes que ya tienes al máximo nivel (6★). Se conservará una copia y el resto se destruirán por puntos.
+                Aquí se muestran las copias que se destruirán: repetidas de personajes con una carta a 5★ o 6★. Se conserva siempre la de mayor nivel.
             </div>
             <button id="destruir-duplicados-todo" class="btn btn-danger mb-3">Destruir Todas las cartas</button>
             <div id="contenedor-cartas-destruccion" class="contenedor-cartas"></div>
@@ -200,6 +200,16 @@
                 </div>
             </div>
             <div id="contenedor-fragmentos-todas" class="contenedor-cartas"></div>
+        </div>
+    </div>
+    <div id="modal-destruir-duplicado" class="modal-combinar-duplicados modal-destruir-duplicados" style="display:none;">
+        <div class="modal-combinar-duplicados-inner">
+            <p id="destruir-duplicado-texto" class="modal-combinar-duplicados-titulo" style="margin-bottom: 14px;"></p>
+            <div id="destruir-duplicado-preview" class="modal-combinar-duplicados-keeper"></div>
+            <div class="modal-combinar-duplicados-acciones">
+                <button id="btn-destruir-duplicado-aceptar" type="button" class="btn btn-danger">Aceptar</button>
+                <button id="btn-destruir-duplicado-cancelar" type="button" class="btn btn-secondary">Cancelar</button>
+            </div>
         </div>
     </div>
 
@@ -318,7 +328,11 @@
 
     <!-- Scripts -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.0/xlsx.full.min.js"></script>
-    <script src="js/cartas.js"></script>
+    
+<script src="/socket.io/socket.io.js"></script>
+<script src="cliente.js"></script>
+<script src="js/tradeGrupo.js"></script>
+<script src="js/cartas.js"></script>
     <script src="js/sobresCartas.js"></script>
     <script src="js/misionesDiarias.js"></script>
     <script src="mejorarCartas.js"></script>

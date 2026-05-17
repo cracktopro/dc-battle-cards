@@ -1891,10 +1891,11 @@ function normalizarMenuLateral() {
         perfil.innerHTML = `
             <img id="menu-user-avatar" class="menu-user-avatar" alt="Avatar">
             <div id="menu-user-name" class="menu-user-name"></div>
-            <div id="menu-group-companion" class="menu-group-companion" style="display:none;">
+            <button type="button" id="menu-group-companion" class="menu-group-companion menu-group-companion-btn" style="display:none;" title="Intercambiar cartas con tu compañero">
                 <img id="menu-group-avatar" class="menu-group-avatar" alt="Compañero">
-                <div id="menu-group-name" class="menu-group-name"></div>
-            </div>
+                <span id="menu-group-name" class="menu-group-name"></span>
+                <span class="menu-group-trade-label">Intercambiar</span>
+            </button>
             <button id="menu-group-leave-btn" class="btn btn-menu menu-group-leave-btn" type="button" style="display:none;">
                 <svg class="menu-group-leave-icon" viewBox="0 0 600 600" aria-hidden="true" focusable="false">
                     <path d="M130 0C58.672245 0 0 58.672245 0 130V470C0 541.32776 58.672245 600 130 600H301.57812C367.83331 600 423.13643 549.36696 430.67188 485H349.43555C343.32179 505.66026 324.7036 520 301.57812 520H130C101.60826 520 80 498.39174 80 470V130C80 101.60826 101.60826 80 130 80H301.57812C324.7036 80 343.32179 94.339739 349.43555 115H430.67188C423.13642 50.633038 367.83331 0 301.57812 0H130Z"></path>
@@ -1961,6 +1962,13 @@ function normalizarMenuLateral() {
         if (mostrarCompanion) {
             grupoAvatar.src = String(companion?.avatar || '').trim() || 'https://i.ibb.co/QJvLStm/zzz-Carta-Back.png';
             grupoName.textContent = companion?.nombre || companion?.email || 'Compañero';
+            grupoCompanion.onclick = () => {
+                if (typeof window.DCTradeGrupo?.solicitarIntercambio === 'function') {
+                    window.DCTradeGrupo.solicitarIntercambio();
+                }
+            };
+        } else {
+            grupoCompanion.onclick = null;
         }
     }
     if (grupoLeaveBtn) {

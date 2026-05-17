@@ -107,6 +107,7 @@ const disolucionesPendientesGrupo = new Map(); // partyId -> timeoutId
 const sesionesPvpActivas = new Map(); // sessionId -> metadata
 const preparacionesCoopEvento = new Map(); // prepId -> estado invitación / selección 6 cartas
 const sesionesCoopEventoActivas = new Map(); // sessionId -> metadata coop vs BOT
+const intercambiosActivos = new Map(); // partyId -> estado intercambio
 let catalogoCartasServidorCache = null;
 let filasEventosOnlineCache = null;
 const LEGACY_SOCKET_COMBATE_ACTIVO = false;
@@ -335,11 +336,228 @@ function limpiarInvitacionPendienteTarget(targetEmail, motivo = null, emitirCanc
     return invitacion;
 }
 
+function crearEstadoOfertaIntercambio(email) {
+    return {
+        email: String(email || '').trim(),
+        indices: [],
+        cartas: [],
+        aceptado: false
+    };
+}
+
+function obtenerIntercambioPorParty(partyId) {
+    return partyId ? intercambiosActivos.get(partyId) || null : null;
+}
+
+function cancelarIntercambioPorParty(partyId, motivo = 'Intercambio cancelado.') {
+    const trade = intercambiosActivos.get(partyId);
+    if (!trade) {
+        return;
+    }
+    intercambiosActivos.delete(partyId);
+    emitirAGrupo(partyId, 'trade:cancelado', { motivo: String(motivo || 'Intercambio cancelado.') });
+}
+
+function agruparCartasPorNombreServidor(cartas) {
+    const mapa = new Map();
+    (Array.isArray(cartas) ? cartas : []).forEach((carta, index) => {
+        const nombre = String(carta?.Nombre || '').trim().toLowerCase();
+        if (!nombre) {
+            return;
+        }
+        if (!mapa.has(nombre)) {
+            mapa.set(nombre, []);
+        }
+        mapa.get(nombre).push({ index, carta });
+    });
+    return mapa;
+}
+
+function indicesIntercambiablesValidos(cartas, indicesOfrecidos) {
+    const arr = Array.isArray(cartas) ? cartas : [];
+    const indices = [...new Set((indicesOfrecidos || [])
+        .map((i) => Number(i))
+        .filter((i) => Number.isInteger(i) && i >= 0 && i < arr.length))];
+    if (!indices.length) {
+        return true;
+    }
+    const mapa = agruparCartasPorNombreServidor(arr);
+    const conteoOferta = new Map();
+    indices.forEach((idx) => {
+        const nombre = String(arr[idx]?.Nombre || '').trim().toLowerCase();
+        conteoOferta.set(nombre, (conteoOferta.get(nombre) || 0) + 1);
+    });
+    for (const [nombre, cantOfertada] of conteoOferta.entries()) {
+        const grupo = mapa.get(nombre) || [];
+        if (grupo.length < 2) {
+            return false;
+        }
+        if (grupo.length - cantOfertada < 1) {
+            return false;
+        }
+    }
+    return true;
+}
+
+function sincronizarMazosConColeccionServidor(usuario) {
+    if (!usuario || typeof usuario !== 'object') {
+        return;
+    }
+    if (!Array.isArray(usuario.mazos)) {
+        usuario.mazos = [];
+        return;
+    }
+    const pool = new Map();
+    (usuario.cartas || []).forEach((carta) => {
+        const clave = String(carta?.Nombre || '').trim().toLowerCase();
+        if (!clave) {
+            return;
+        }
+        if (!pool.has(clave)) {
+            pool.set(clave, []);
+        }
+        pool.get(clave).push(carta);
+    });
+    pool.forEach((lista) => {
+        lista.sort((a, b) => Number(b?.Nivel || 1) - Number(a?.Nivel || 1));
+    });
+    usuario.mazos = usuario.mazos.map((mazo) => {
+        const cartasSincronizadas = (mazo?.Cartas || []).map((cartaMazo) => {
+            const clave = String(cartaMazo?.Nombre || '').trim().toLowerCase();
+            const disponibles = pool.get(clave) || [];
+            if (disponibles.length > 0) {
+                return { ...disponibles[0] };
+            }
+            return { ...cartaMazo };
+        });
+        return { ...mazo, Cartas: cartasSincronizadas };
+    });
+}
+
+function quitarCartasPorIndices(cartas, indices) {
+    const arr = [...(Array.isArray(cartas) ? cartas : [])];
+    const ordenados = [...indices].map(Number).filter(Number.isInteger).sort((a, b) => b - a);
+    const extraidas = [];
+    ordenados.forEach((idx) => {
+        if (idx >= 0 && idx < arr.length) {
+            extraidas.unshift(arr.splice(idx, 1)[0]);
+        }
+    });
+    return { cartas: arr, extraidas };
+}
+
+function serializarCartaIntercambio(carta) {
+    if (!carta || typeof carta !== 'object') {
+        return null;
+    }
+    return {
+        Nombre: carta.Nombre,
+        Nivel: carta.Nivel,
+        Poder: carta.Poder,
+        Salud: carta.Salud,
+        SaludMax: carta.SaludMax ?? carta.saludMax,
+        faccion: carta.faccion,
+        skill_name: carta.skill_name,
+        skill_power: carta.skill_power,
+        skill_trigger: carta.skill_trigger,
+        imagen: carta.imagen,
+        skin_id: carta.skin_id
+    };
+}
+
+function construirPayloadEstadoIntercambio(partyId, trade) {
+    const party = gruposActivos.get(partyId);
+    if (!party || !trade) {
+        return { activo: false };
+    }
+    const emails = [party.leaderEmail, party.memberEmail];
+    const jugadores = {};
+    emails.forEach((email) => {
+        const conectado = obtenerUsuarioConectadoPorEmail(email);
+        const oferta = trade.ofertas[email] || crearEstadoOfertaIntercambio(email);
+        jugadores[email] = {
+            email,
+            nombre: conectado?.nombre || email.split('@')[0],
+            avatar: conectado?.avatar || '',
+            indices: [...(oferta.indices || [])],
+            cartas: Array.isArray(oferta.cartas) ? oferta.cartas.map((c) => ({ ...c })) : [],
+            aceptado: Boolean(oferta.aceptado)
+        };
+    });
+    return {
+        activo: trade.fase === 'activo',
+        fase: trade.fase,
+        solicitanteEmail: trade.solicitanteEmail || null,
+        partyId,
+        jugadores
+    };
+}
+
+function emitirEstadoIntercambio(partyId) {
+    const trade = intercambiosActivos.get(partyId);
+    if (!trade) {
+        emitirAGrupo(partyId, 'trade:estado', { activo: false });
+        return;
+    }
+    emitirAGrupo(partyId, 'trade:estado', construirPayloadEstadoIntercambio(partyId, trade));
+}
+
+async function ejecutarIntercambioGrupo(partyId) {
+    const trade = intercambiosActivos.get(partyId);
+    const party = gruposActivos.get(partyId);
+    if (!trade || !party || trade.fase !== 'activo') {
+        return { ok: false, mensaje: 'No hay un intercambio activo.' };
+    }
+    const emailA = party.leaderEmail;
+    const emailB = party.memberEmail;
+    const ofertaA = trade.ofertas[emailA];
+    const ofertaB = trade.ofertas[emailB];
+    if (!ofertaA?.aceptado || !ofertaB?.aceptado) {
+        return { ok: false, mensaje: 'Ambos jugadores deben aceptar.' };
+    }
+    const [userA, userB] = await Promise.all([
+        obtenerUsuarioPersistidoPorEmail(emailA),
+        obtenerUsuarioPersistidoPorEmail(emailB)
+    ]);
+    if (!userA || !userB) {
+        return { ok: false, mensaje: 'No se pudo cargar el progreso de los jugadores.' };
+    }
+    const cartasA = [...(userA.cartas || [])];
+    const cartasB = [...(userB.cartas || [])];
+    if (!indicesIntercambiablesValidos(cartasA, ofertaA.indices) || !indicesIntercambiablesValidos(cartasB, ofertaB.indices)) {
+        return { ok: false, mensaje: 'Oferta inválida: solo puedes intercambiar duplicados sobrantes.' };
+    }
+    const remA = quitarCartasPorIndices(cartasA, ofertaA.indices);
+    const remB = quitarCartasPorIndices(cartasB, ofertaB.indices);
+    remA.cartas.push(...remB.extraidas);
+    remB.cartas.push(...remA.extraidas);
+    const usuarioA = { ...userA, cartas: remA.cartas };
+    const usuarioB = { ...userB, cartas: remB.cartas };
+    sincronizarMazosConColeccionServidor(usuarioA);
+    sincronizarMazosConColeccionServidor(usuarioB);
+    const [saveA, saveB] = await Promise.all([
+        guardarUsuarioConControlConcurrencia(emailA, usuarioA),
+        guardarUsuarioConControlConcurrencia(emailB, usuarioB)
+    ]);
+    if (!saveA.ok || !saveB.ok) {
+        return { ok: false, mensaje: 'Conflicto al guardar. Vuelve a intentar el intercambio.' };
+    }
+    intercambiosActivos.delete(partyId);
+    emitirAGrupo(partyId, 'trade:completado', {
+        usuarios: {
+            [emailA]: saveA.usuario,
+            [emailB]: saveB.usuario
+        }
+    });
+    return { ok: true };
+}
+
 function disolverGrupoPorId(partyId, motivo = 'Grupo disuelto.') {
     const party = gruposActivos.get(partyId);
     if (!party) {
         return;
     }
+    cancelarIntercambioPorParty(partyId, 'Intercambio cancelado: el grupo se disolvió.');
     if (disolucionesPendientesGrupo.has(partyId)) {
         clearTimeout(disolucionesPendientesGrupo.get(partyId));
         disolucionesPendientesGrupo.delete(partyId);
@@ -1882,6 +2100,170 @@ io.on('connection', (socket) => {
         const historial = [...(chatGrupoPorParty.get(partyId) || []), payloadMensaje].slice(-CHAT_GRUPO_MAX_MENSAJES);
         chatGrupoPorParty.set(partyId, historial);
         emitirAGrupo(partyId, 'grupo:chat:mensaje', payloadMensaje);
+    });
+
+    // --------- Intercambio de cartas entre miembros del grupo ---------
+    socket.on('trade:solicitar', () => {
+        const usuario = obtenerUsuarioConectadoPorSocketId(socket.id);
+        if (!usuario) {
+            return;
+        }
+        const partyId = indiceGrupoPorEmail.get(usuario.email);
+        if (!partyId) {
+            io.to(socket.id).emit('grupo:notificacion', { tipo: 'error', mensaje: 'Debes estar en un grupo para intercambiar.' });
+            return;
+        }
+        const trade = intercambiosActivos.get(partyId);
+        if (trade?.fase === 'activo') {
+            io.to(socket.id).emit('grupo:notificacion', { tipo: 'warning', mensaje: 'Ya hay un intercambio en curso.' });
+            return;
+        }
+        if (trade?.fase === 'pendiente') {
+            io.to(socket.id).emit('grupo:notificacion', { tipo: 'warning', mensaje: 'Ya hay una solicitud de intercambio pendiente.' });
+            return;
+        }
+        const party = gruposActivos.get(partyId);
+        const companeroEmail = normalizarTexto(party.leaderEmail) === normalizarTexto(usuario.email)
+            ? party.memberEmail
+            : party.leaderEmail;
+        const companero = obtenerUsuarioConectadoPorEmail(companeroEmail);
+        if (!companero?.id) {
+            io.to(socket.id).emit('grupo:notificacion', { tipo: 'error', mensaje: 'Tu compañero no está conectado.' });
+            return;
+        }
+        intercambiosActivos.set(partyId, {
+            fase: 'pendiente',
+            solicitanteEmail: usuario.email,
+            ofertas: {
+                [party.leaderEmail]: crearEstadoOfertaIntercambio(party.leaderEmail),
+                [party.memberEmail]: crearEstadoOfertaIntercambio(party.memberEmail)
+            }
+        });
+        io.to(companero.id).emit('trade:solicitud', {
+            fromEmail: usuario.email,
+            fromNombre: usuario.nombre,
+            fromAvatar: usuario.avatar || ''
+        });
+        io.to(socket.id).emit('trade:solicitudEnviada', {
+            targetEmail: companeroEmail,
+            targetNombre: companero.nombre
+        });
+    });
+
+    socket.on('trade:respuestaSolicitud', ({ aceptada }) => {
+        const usuario = obtenerUsuarioConectadoPorSocketId(socket.id);
+        if (!usuario) {
+            return;
+        }
+        const partyId = indiceGrupoPorEmail.get(usuario.email);
+        const trade = partyId ? intercambiosActivos.get(partyId) : null;
+        if (!trade || trade.fase !== 'pendiente') {
+            io.to(socket.id).emit('grupo:notificacion', { tipo: 'error', mensaje: 'No hay solicitud de intercambio pendiente.' });
+            return;
+        }
+        if (normalizarTexto(trade.solicitanteEmail) === normalizarTexto(usuario.email)) {
+            return;
+        }
+        const solicitante = obtenerUsuarioConectadoPorEmail(trade.solicitanteEmail);
+        if (!aceptada) {
+            intercambiosActivos.delete(partyId);
+            if (solicitante?.id) {
+                io.to(solicitante.id).emit('trade:rechazado', { porEmail: usuario.email, porNombre: usuario.nombre });
+            }
+            io.to(socket.id).emit('grupo:notificacion', { tipo: 'info', mensaje: 'Has rechazado el intercambio.' });
+            return;
+        }
+        trade.fase = 'activo';
+        trade.ofertas[trade.solicitanteEmail].aceptado = false;
+        trade.ofertas[trade.solicitanteEmail].indices = [];
+        trade.ofertas[usuario.email].aceptado = false;
+        trade.ofertas[usuario.email].indices = [];
+        emitirEstadoIntercambio(partyId);
+    });
+
+    socket.on('trade:actualizarOferta', ({ indices }) => {
+        const usuario = obtenerUsuarioConectadoPorSocketId(socket.id);
+        if (!usuario) {
+            return;
+        }
+        const partyId = indiceGrupoPorEmail.get(usuario.email);
+        const trade = partyId ? intercambiosActivos.get(partyId) : null;
+        if (!trade || trade.fase !== 'activo') {
+            return;
+        }
+        const oferta = trade.ofertas[usuario.email];
+        if (!oferta) {
+            return;
+        }
+        obtenerUsuarioPersistidoPorEmail(usuario.email).then((persistido) => {
+            const cartas = persistido?.cartas || [];
+            const indicesLimpios = [...new Set((indices || [])
+                .map((i) => Number(i))
+                .filter((i) => Number.isInteger(i) && i >= 0 && i < cartas.length))];
+            if (!indicesIntercambiablesValidos(cartas, indicesLimpios)) {
+                io.to(socket.id).emit('grupo:notificacion', {
+                    tipo: 'error',
+                    mensaje: 'Solo puedes ofrecer cartas duplicadas (debes conservar al menos una copia).'
+                });
+                return;
+            }
+            oferta.indices = indicesLimpios;
+            oferta.cartas = indicesLimpios
+                .map((idx) => serializarCartaIntercambio(cartas[idx]))
+                .filter(Boolean);
+            oferta.aceptado = false;
+            emitirEstadoIntercambio(partyId);
+        });
+    });
+
+    socket.on('trade:toggleAceptar', ({ aceptado }) => {
+        const usuario = obtenerUsuarioConectadoPorSocketId(socket.id);
+        if (!usuario) {
+            return;
+        }
+        const partyId = indiceGrupoPorEmail.get(usuario.email);
+        const trade = partyId ? intercambiosActivos.get(partyId) : null;
+        if (!trade || trade.fase !== 'activo') {
+            return;
+        }
+        const oferta = trade.ofertas[usuario.email];
+        if (!oferta) {
+            return;
+        }
+        oferta.aceptado = Boolean(aceptado);
+        emitirEstadoIntercambio(partyId);
+        const party = gruposActivos.get(partyId);
+        if (!party) {
+            return;
+        }
+        const otraOferta = trade.ofertas[
+            normalizarTexto(usuario.email) === normalizarTexto(party.leaderEmail)
+                ? party.memberEmail
+                : party.leaderEmail
+        ];
+        if (oferta.aceptado && otraOferta?.aceptado) {
+            void ejecutarIntercambioGrupo(partyId).then((resultado) => {
+                if (!resultado.ok) {
+                    emitirAGrupo(partyId, 'grupo:notificacion', { tipo: 'error', mensaje: resultado.mensaje });
+                    if (trade && intercambiosActivos.has(partyId)) {
+                        Object.values(trade.ofertas).forEach((o) => { o.aceptado = false; });
+                        emitirEstadoIntercambio(partyId);
+                    }
+                }
+            });
+        }
+    });
+
+    socket.on('trade:cancelar', () => {
+        const usuario = obtenerUsuarioConectadoPorSocketId(socket.id);
+        if (!usuario) {
+            return;
+        }
+        const partyId = indiceGrupoPorEmail.get(usuario.email);
+        if (!partyId || !intercambiosActivos.has(partyId)) {
+            return;
+        }
+        cancelarIntercambioPorParty(partyId, `${usuario.nombre} canceló el intercambio.`);
     });
 
     socket.on('multiplayer:lobby:abrir', () => {

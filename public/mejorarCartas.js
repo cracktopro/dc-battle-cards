@@ -67,6 +67,8 @@ let faccionMejorasObjetosActiva = 'H';
 let ordenarPoderMejorasObjetos = false;
 let filtrosMejorasObjetosRegistrados = false;
 let combinacionDuplicadosGrupo = null;
+/** { index, carta, puntos, nombre } — destrucción individual en pestaña repetidas. */
+let destruccionDuplicadoPendiente = null;
 const seleccionIndicesCombinacion = new Set();
 const ICONO_MEJORA = '/resources/icons/mejora.png';
 const ICONO_MEJORA_ESPECIAL = '/resources/icons/mejora_especial.png';
@@ -218,6 +220,9 @@ function grupoVisibleEnVistaClasica(grupo) {
     if (n >= 6) {
         return false;
     }
+    if (grupo.total > 1 && n >= 5) {
+        return false;
+    }
     if (grupo.total === 1 && n === 5) {
         return false;
     }
@@ -226,7 +231,7 @@ function grupoVisibleEnVistaClasica(grupo) {
 
 function construirGruposDestruccion(usuario) {
     return construirGruposMejoraClasica(usuario)
-        .filter((grupo) => Number(grupo?.keeperCarta?.Nivel || 1) >= 6 && Number(grupo?.total || 0) > 1)
+        .filter((grupo) => Number(grupo?.keeperCarta?.Nivel || 1) >= 5 && Number(grupo?.total || 0) > 1)
         .map((grupo) => {
             const copiasDestruibles = grupo.sacrificables.map((item) => ({
                 index: item.index,
@@ -1547,6 +1552,23 @@ function configurarEventos() {
         });
     }
 
+    const btnDestruirDupAceptar = document.getElementById('btn-destruir-duplicado-aceptar');
+    const btnDestruirDupCancelar = document.getElementById('btn-destruir-duplicado-cancelar');
+    const modalDestruirDup = document.getElementById('modal-destruir-duplicado');
+    if (btnDestruirDupAceptar) {
+        btnDestruirDupAceptar.onclick = () => void confirmarDestruirDuplicadoIndividual();
+    }
+    if (btnDestruirDupCancelar) {
+        btnDestruirDupCancelar.onclick = cerrarModalDestruirDuplicado;
+    }
+    if (modalDestruirDup) {
+        modalDestruirDup.addEventListener('click', (event) => {
+            if (event.target === modalDestruirDup) {
+                cerrarModalDestruirDuplicado();
+            }
+        });
+    }
+
     const tabClasica = document.getElementById('tab-mejora-clasica');
     const tabDestruir = document.getElementById('tab-destruir-repetidas');
     const tabObjetos = document.getElementById('tab-mejoras-objetos');
@@ -1881,6 +1903,96 @@ async function mejorarDuplicadosAutomaticamente() {
     }
 }
 
+function esCopiaDestruibleEnColeccion(usuario, indexCarta) {
+    const grupos = construirGruposDestruccion(usuario);
+    return grupos.some((grupo) =>
+        grupo.copiasDestruibles.some((item) => item.index === indexCarta)
+    );
+}
+
+function cerrarModalDestruirDuplicado() {
+    const modal = document.getElementById('modal-destruir-duplicado');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+    destruccionDuplicadoPendiente = null;
+}
+
+function abrirModalDestruirDuplicado(item, grupo) {
+    if (!item || !grupo) {
+        return;
+    }
+    const puntos = Number(item.puntos || obtenerValorDestruccion(item?.carta?.Nivel || 1));
+    destruccionDuplicadoPendiente = {
+        index: item.index,
+        carta: item.carta,
+        puntos,
+        nombre: String(grupo.nombre || item?.carta?.Nombre || '').trim()
+    };
+
+    const modal = document.getElementById('modal-destruir-duplicado');
+    const texto = document.getElementById('destruir-duplicado-texto');
+    const preview = document.getElementById('destruir-duplicado-preview');
+    if (!modal || !texto || !preview) {
+        return;
+    }
+
+    texto.innerHTML = `¿Quieres destruir esta carta duplicada a cambio de <strong>${puntos}</strong> <img src="/resources/icons/moneda.png" alt="Moneda" style="width:20px;height:20px;vertical-align:middle;object-fit:contain;">?`;
+    preview.innerHTML = '';
+    preview.appendChild(crearElementoCartaSoloVisual(item.carta, false, 200));
+    modal.style.display = 'flex';
+}
+
+async function confirmarDestruirDuplicadoIndividual() {
+    if (!destruccionDuplicadoPendiente) {
+        return;
+    }
+    const pendiente = { ...destruccionDuplicadoPendiente };
+    const usuario = JSON.parse(localStorage.getItem('usuario'));
+    const email = localStorage.getItem('email');
+    if (!usuario || !Array.isArray(usuario.cartas) || !email) {
+        mostrarMensaje('No se pudo validar la sesión para destruir cartas.', 'danger');
+        cerrarModalDestruirDuplicado();
+        return;
+    }
+    normalizarObjetosUsuario(usuario);
+
+    if (!esCopiaDestruibleEnColeccion(usuario, pendiente.index)) {
+        mostrarMensaje('Esta copia ya no está disponible para destruir.', 'warning');
+        cerrarModalDestruirDuplicado();
+        cargarCartas();
+        return;
+    }
+
+    const carta = usuario.cartas[pendiente.index];
+    if (!carta) {
+        mostrarMensaje('No se encontró la carta seleccionada.', 'warning');
+        cerrarModalDestruirDuplicado();
+        cargarCartas();
+        return;
+    }
+
+    const nivel = Number(carta.Nivel || 1);
+    const puntos = obtenerValorDestruccion(nivel);
+    const nombre = String(carta.Nombre || pendiente.nombre || '').trim();
+
+    usuario.cartas = usuario.cartas.filter((_, idx) => idx !== pendiente.index);
+    usuario.puntos = Number(usuario.puntos || 0) + puntos;
+    sincronizarMazosConColeccion(usuario);
+
+    try {
+        await actualizarUsuarioFirebase(usuario, email);
+        localStorage.setItem('usuario', JSON.stringify(usuario));
+        refrescarPanelPerfilLateral();
+        cerrarModalDestruirDuplicado();
+        cargarCartas();
+        mostrarMensaje(`Se destruyó ${nombre} (Nivel ${nivel}) y ganaste ${puntos} puntos.`, 'success');
+    } catch (error) {
+        console.error('Error al destruir carta duplicada:', error);
+        mostrarMensaje('Error al destruir la carta en Firebase.', 'danger');
+    }
+}
+
 function renderizarSeccionDestruccion(usuario) {
     const contenedor = document.getElementById('contenedor-cartas-destruccion');
     const boton = document.getElementById('destruir-duplicados-todo');
@@ -1889,39 +2001,41 @@ function renderizarSeccionDestruccion(usuario) {
     const grupos = construirGruposDestruccion(usuario);
     contenedor.innerHTML = '';
     let puntosTotales = 0;
+    let totalCartasDestruibles = 0;
     grupos.forEach((grupo) => {
-        puntosTotales += Number(grupo.puntosTotalesGrupo || 0);
-        const wrap = document.createElement('div');
-        wrap.className = 'carta-grupo-duplicados-wrap';
+        grupo.copiasDestruibles.forEach((item) => {
+            const puntos = Number(item.puntos || 0);
+            puntosTotales += puntos;
+            totalCartasDestruibles += 1;
+            const wrap = document.createElement('div');
+            wrap.className = 'carta-grupo-duplicados-wrap carta-grupo-duplicados-wrap--clicable';
+            wrap.title = 'Clic para destruir esta copia';
+            wrap.addEventListener('click', () => abrirModalDestruirDuplicado(item, grupo));
 
-        const cartaDiv = crearElementoCartaSoloVisual(grupo.keeperCarta);
-        wrap.appendChild(cartaDiv);
+            const cartaDiv = crearElementoCartaSoloVisual(item.carta);
+            wrap.appendChild(cartaDiv);
 
-        const badgeDup = document.createElement('div');
-        badgeDup.className = 'carta-duplicados-badge';
-        badgeDup.textContent = String(grupo.total);
-        badgeDup.title = `${grupo.total} copias · ${grupo.puntosTotalesGrupo} puntos potenciales`;
-        wrap.appendChild(badgeDup);
+            const puntosTag = document.createElement('div');
+            puntosTag.className = 'carta-destruccion-puntos';
+            puntosTag.innerHTML = `+${puntos} <img src="/resources/icons/moneda.png" alt="Moneda">`;
+            puntosTag.title = `${grupo.nombre}: copia a destruir (se conserva la de mayor nivel)`;
+            wrap.appendChild(puntosTag);
 
-        const puntosTag = document.createElement('div');
-        puntosTag.className = 'carta-destruccion-puntos';
-        puntosTag.innerHTML = `+${grupo.puntosTotalesGrupo} <img src="/resources/icons/moneda.png" alt="Moneda">`;
-        wrap.appendChild(puntosTag);
-
-        contenedor.appendChild(wrap);
+            contenedor.appendChild(wrap);
+        });
     });
 
     if (boton) {
-        boton.disabled = grupos.length === 0;
-        boton.textContent = grupos.length === 0
+        boton.disabled = totalCartasDestruibles === 0;
+        boton.textContent = totalCartasDestruibles === 0
             ? 'No hay cartas para destruir'
             : `Destruir Todas las cartas (+${puntosTotales})`;
     }
 
-    if (grupos.length === 0) {
+    if (totalCartasDestruibles === 0) {
         const vacio = document.createElement('div');
         vacio.className = 'alert alert-info';
-        vacio.textContent = 'No hay cartas repetidas para destruir en personajes con nivel 6.';
+        vacio.textContent = 'No hay cartas repetidas para destruir en personajes con copia a 5★ o 6★.';
         contenedor.appendChild(vacio);
     }
 }

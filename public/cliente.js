@@ -406,6 +406,45 @@ window.enviarMensajeChatGrupo = function enviarMensajeChatGrupo(mensaje) {
     socket.emit('grupo:chat:enviar', { mensaje: texto });
 };
 
+window.emitTradeGrupo = function emitTradeGrupo(evento, payload) {
+    const mapa = {
+        solicitar: 'trade:solicitar',
+        respuestaSolicitud: 'trade:respuestaSolicitud',
+        actualizarOferta: 'trade:actualizarOferta',
+        toggleAceptar: 'trade:toggleAceptar',
+        cancelar: 'trade:cancelar'
+    };
+    const nombre = mapa[evento];
+    if (!nombre) {
+        return;
+    }
+    socket.emit(nombre, payload || {});
+};
+
+socket.on('trade:solicitud', (payload = {}) => {
+    window.dispatchEvent(new CustomEvent('dc:trade-solicitud', { detail: payload }));
+});
+
+socket.on('trade:solicitudEnviada', (payload = {}) => {
+    window.dispatchEvent(new CustomEvent('dc:trade-solicitud-enviada', { detail: payload }));
+});
+
+socket.on('trade:rechazado', (payload = {}) => {
+    window.dispatchEvent(new CustomEvent('dc:trade-rechazado', { detail: payload }));
+});
+
+socket.on('trade:estado', (estado = {}) => {
+    window.dispatchEvent(new CustomEvent('dc:trade-estado', { detail: { estado } }));
+});
+
+socket.on('trade:cancelado', (payload = {}) => {
+    window.dispatchEvent(new CustomEvent('dc:trade-cancelado', { detail: payload }));
+});
+
+socket.on('trade:completado', (payload = {}) => {
+    window.dispatchEvent(new CustomEvent('dc:trade-completado', { detail: payload }));
+});
+
 window.abrirLobbyMultijugador = function abrirLobbyMultijugador() {
     socket.emit('multiplayer:lobby:abrir');
 };
