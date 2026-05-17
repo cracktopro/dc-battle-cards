@@ -2699,9 +2699,10 @@ a.faccion-tab.active {
 }
 
 .trade-cartas-grid {
+    --dc-trade-card-col: clamp(65px, 7vw, 100px);
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(clamp(130px, 14vw, 200px), 1fr));
-    gap: clamp(10px, 1.2vw, 14px);
+    grid-template-columns: repeat(auto-fill, minmax(var(--dc-trade-card-col), 1fr));
+    gap: clamp(5px, 0.6vw, 8px);
     min-height: 80px;
     align-items: start;
 }
@@ -2740,6 +2741,62 @@ a.faccion-tab.active {
 
 .trade-carta-wrap .carta {
     width: 100%;
+    border-width: 2px;
+    border-radius: 9px;
+    box-shadow: 0 0 6px rgba(0, 123, 255, 0.22);
+}
+
+.trade-cartas-grid .detalles-carta {
+    font-size: 0.58rem;
+    min-height: 16px;
+    padding: 2px 4px;
+    gap: 3px;
+}
+
+.trade-cartas-grid .estrellas-carta {
+    top: 3px;
+    left: 3px;
+    padding: 2px;
+    gap: 1px;
+}
+
+.trade-cartas-grid .estrella {
+    width: 7px;
+    height: 7px;
+}
+
+.trade-cartas-grid .estrella-icono-nivel {
+    width: 22px;
+    height: auto;
+}
+
+.trade-cartas-grid .badge-habilidad-carta {
+    left: 3px;
+    right: 3px;
+    bottom: 26px;
+    padding: 1px 4px;
+    font-size: 0.4rem;
+    line-height: 1.1;
+}
+
+.trade-cartas-grid .barra-salud-contenedor {
+    left: 3px;
+    right: 3px;
+    bottom: 17px;
+    height: 7px;
+}
+
+.trade-cartas-grid .salud-carta {
+    font-size: 0.42rem;
+}
+
+.trade-cartas-grid .badge-afiliacion-carta {
+    top: 3px;
+    right: 3px;
+    min-width: 14px;
+    height: 14px;
+    padding: 0 3px;
+    font-size: 0.48rem;
 }
 
 .trade-carta-wrap--clicable {
@@ -2747,7 +2804,8 @@ a.faccion-tab.active {
 }
 
 .trade-carta-wrap--clicable:hover .carta {
-    transform: scale(1.03);
+    transform: scale(1.04);
+    box-shadow: 0 0 10px rgba(0, 123, 255, 0.4);
 }
 
 .trade-carta-wrap--seleccionada .carta,
