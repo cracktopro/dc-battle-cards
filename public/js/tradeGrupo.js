@@ -154,29 +154,126 @@
         });
     }
 
+    function obtenerSaludMaxCartaTrade(carta) {
+        if (!carta) {
+            return 0;
+        }
+        const saludMax = Number(carta.SaludMax ?? carta.saludMax);
+        if (Number.isFinite(saludMax) && saludMax > 0) {
+            return saludMax;
+        }
+        const salud = Number(carta.Salud ?? carta.salud);
+        if (Number.isFinite(salud) && salud > 0) {
+            return salud;
+        }
+        return Math.max(Number(carta.Poder || 0), 0);
+    }
+
+    function obtenerSaludActualCartaTrade(carta) {
+        const saludMax = Math.max(obtenerSaludMaxCartaTrade(carta), 0);
+        const salud = Number(carta?.Salud ?? carta?.salud);
+        const saludValida = Number.isFinite(salud) ? salud : saludMax;
+        return Math.max(0, Math.min(saludValida, saludMax));
+    }
+
+    function crearBarraSaludElementoTrade(carta) {
+        const saludActual = obtenerSaludActualCartaTrade(carta);
+        const saludMax = Math.max(obtenerSaludMaxCartaTrade(carta), 1);
+        const porcentajeSalud = Math.max(0, Math.min((saludActual / saludMax) * 100, 100));
+        const ratioSalud = porcentajeSalud / 100;
+
+        const barraSaludContenedor = document.createElement('div');
+        barraSaludContenedor.classList.add('barra-salud-contenedor');
+
+        const barraSaludRelleno = document.createElement('div');
+        barraSaludRelleno.classList.add('barra-salud-relleno');
+        barraSaludRelleno.style.width = `${porcentajeSalud}%`;
+        barraSaludRelleno.style.setProperty('--health-ratio', String(ratioSalud));
+
+        const saludSpan = document.createElement('span');
+        saludSpan.classList.add('salud-carta');
+        saludSpan.textContent = `${saludActual}/${saludMax}`;
+
+        barraSaludContenedor.appendChild(barraSaludRelleno);
+        barraSaludContenedor.appendChild(saludSpan);
+        return barraSaludContenedor;
+    }
+
     function crearMiniCarta(carta, opciones = {}) {
         const wrap = document.createElement('div');
-        wrap.className = `trade-carta-mini${opciones.seleccionada ? ' trade-carta-mini--seleccionada' : ''}${opciones.enOferta ? ' trade-carta-mini--en-oferta' : ''}${opciones.soloVista ? ' trade-carta-mini--solo-vista' : ''}`;
-        if (opciones.onClick) {
-            wrap.classList.add('trade-carta-mini--clicable');
-            wrap.addEventListener('click', opciones.onClick);
-        } else if (opciones.soloVista) {
+        wrap.className = 'trade-carta-wrap';
+        if (opciones.seleccionada) {
+            wrap.classList.add('trade-carta-wrap--seleccionada');
+        }
+        if (opciones.enOferta) {
+            wrap.classList.add('trade-carta-wrap--en-oferta');
+        }
+        if (opciones.soloVista) {
+            wrap.classList.add('trade-carta-wrap--solo-vista');
             wrap.title = opciones.titleSoloVista || 'Solo las copias duplicadas sobrantes se pueden intercambiar.';
         }
-        const img = typeof window.obtenerImagenCarta === 'function'
+        if (opciones.onClick) {
+            wrap.classList.add('trade-carta-wrap--clicable');
+            wrap.addEventListener('click', opciones.onClick);
+        }
+
+        const cartaDiv = document.createElement('div');
+        cartaDiv.classList.add('carta');
+        if (typeof window.dcAplicarClasesNivelCartaCompleta === 'function') {
+            window.dcAplicarClasesNivelCartaCompleta(cartaDiv, carta);
+        } else if (Number(carta?.Nivel || 1) >= 6) {
+            cartaDiv.classList.add('nivel-legendaria');
+        }
+
+        const imagenUrl = typeof window.obtenerImagenCarta === 'function'
             ? window.obtenerImagenCarta(carta)
             : (carta?.imagen || AVATAR_FALLBACK);
-        wrap.style.backgroundImage = `url(${img})`;
-        const det = document.createElement('div');
-        det.className = 'trade-carta-mini-detalles';
-        det.innerHTML = `<span class="trade-carta-mini-nombre">${carta?.Nombre || ''}</span><span class="trade-carta-mini-poder">${carta?.Poder || 0}</span>`;
-        wrap.appendChild(det);
-        const est = document.createElement('div');
-        est.className = 'trade-carta-mini-estrellas';
+        cartaDiv.style.backgroundImage = `url(${imagenUrl})`;
+        cartaDiv.style.backgroundSize = 'cover';
+        cartaDiv.style.backgroundPosition = 'center top';
+
+        const detallesDiv = document.createElement('div');
+        detallesDiv.classList.add('detalles-carta');
+
+        const nombreSpan = document.createElement('span');
+        nombreSpan.classList.add('nombre-carta');
+        nombreSpan.textContent = carta?.Nombre || 'Carta sin nombre';
+
+        const poderSpan = document.createElement('span');
+        poderSpan.classList.add('poder-carta');
+        poderSpan.textContent = carta?.Poder ?? 0;
+
+        detallesDiv.appendChild(nombreSpan);
+        detallesDiv.appendChild(poderSpan);
+
+        const estrellasDiv = document.createElement('div');
+        estrellasDiv.classList.add('estrellas-carta');
         if (typeof window.dcRellenarEstrellasCartaCompleta === 'function') {
-            window.dcRellenarEstrellasCartaCompleta(est, carta, {});
+            window.dcRellenarEstrellasCartaCompleta(estrellasDiv, carta, {});
+        } else {
+            const nivel = Number(carta?.Nivel || 1);
+            for (let i = 0; i < nivel; i++) {
+                const estrella = document.createElement('img');
+                estrella.classList.add('estrella');
+                estrella.src = 'https://i.ibb.co/zZt4R3x/star-level.png';
+                estrella.alt = 'star';
+                estrellasDiv.appendChild(estrella);
+            }
         }
-        wrap.appendChild(est);
+
+        const badgeHabilidad = window.crearBadgeHabilidadCarta ? window.crearBadgeHabilidadCarta(carta) : null;
+        if (badgeHabilidad) {
+            cartaDiv.appendChild(badgeHabilidad);
+        }
+        const badgeAfiliacion = window.crearBadgeAfiliacionCarta ? window.crearBadgeAfiliacionCarta(carta) : null;
+        if (badgeAfiliacion) {
+            cartaDiv.appendChild(badgeAfiliacion);
+        }
+        cartaDiv.appendChild(crearBarraSaludElementoTrade(carta));
+        cartaDiv.appendChild(detallesDiv);
+        cartaDiv.appendChild(estrellasDiv);
+
+        wrap.appendChild(cartaDiv);
         return wrap;
     }
 

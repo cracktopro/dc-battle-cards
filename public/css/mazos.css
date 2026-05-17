@@ -355,28 +355,19 @@ select:disabled,
     background: rgba(10, 22, 44, 0.62);
 }
 
-.menu-group-companion-btn {
-    cursor: pointer;
-    text-align: left;
-    font: inherit;
-    color: inherit;
-    transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.12s ease;
-}
-
-.menu-group-companion-btn:hover {
-    border-color: rgba(0, 197, 255, 0.75);
-    box-shadow: 0 0 12px rgba(0, 123, 255, 0.35);
-    transform: translateY(-1px);
-}
-
-.menu-group-trade-label {
-    display: block;
-    font-size: 0.62rem;
-    font-weight: 800;
-    letter-spacing: 0.06em;
+.menu-group-trade-btn {
+    width: 100%;
+    margin: 6px 0 2px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
     text-transform: uppercase;
-    color: #7ee8ff;
-    margin-top: 2px;
+    padding: 8px 12px;
 }
 
 .menu-group-avatar {
@@ -1986,7 +1977,8 @@ a.faccion-tab.active {
 #contenedor-mejora-carta-objeto .carta .barra-salud-contenedor,
 #contenedor-mejora-especial-objeto .carta .barra-salud-contenedor,
 .modal-cambio-carta .carta .barra-salud-contenedor,
-.modal-cambio-carta .item-carta-reemplazo .barra-salud-contenedor {
+.modal-cambio-carta .item-carta-reemplazo .barra-salud-contenedor,
+.trade-cartas-grid .carta .barra-salud-contenedor {
     left: 3px;
     right: 3px;
 }
@@ -1995,7 +1987,8 @@ a.faccion-tab.active {
 #contenedor-mejora-carta-objeto .carta .badge-habilidad-carta,
 #contenedor-mejora-especial-objeto .carta .badge-habilidad-carta,
 .modal-cambio-carta .carta .badge-habilidad-carta,
-.modal-cambio-carta .item-carta-reemplazo .badge-habilidad-carta {
+.modal-cambio-carta .item-carta-reemplazo .badge-habilidad-carta,
+.trade-cartas-grid .carta .badge-habilidad-carta {
     left: 3px;
     right: 3px;
 }
@@ -2662,16 +2655,29 @@ a.faccion-tab.active {
 .trade-filtro-nombre,
 .trade-filtro-select {
     width: 100%;
+    min-height: 42px;
+    padding: 10px 12px;
     background: rgba(6, 14, 28, 0.9);
     border: 1px solid rgba(0, 123, 255, 0.4);
     color: #dff8ff;
-    font-size: 0.78rem;
+    font-size: 0.88rem;
+    line-height: 1.25;
+}
+
+.trade-filtro-select {
+    min-width: 0;
 }
 
 .trade-inventario-filtros-fila {
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 6px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+    gap: 10px;
+}
+
+@media (max-width: 520px) {
+    .trade-inventario-filtros-fila {
+        grid-template-columns: 1fr;
+    }
 }
 
 .trade-inventario-contador {
@@ -2694,9 +2700,10 @@ a.faccion-tab.active {
 
 .trade-cartas-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-    gap: 8px;
+    grid-template-columns: repeat(auto-fill, minmax(clamp(130px, 14vw, 200px), 1fr));
+    gap: clamp(10px, 1.2vw, 14px);
     min-height: 80px;
+    align-items: start;
 }
 
 .trade-oferta-bloque {
@@ -2725,67 +2732,38 @@ a.faccion-tab.active {
     text-align: center;
 }
 
-.trade-carta-mini {
+.trade-carta-wrap {
     position: relative;
-    min-height: 130px;
-    border-radius: 10px;
-    background-size: cover;
-    background-position: center top;
-    border: 2px solid rgba(0, 123, 255, 0.4);
-    overflow: hidden;
+    width: 100%;
+    min-width: 0;
 }
 
-.trade-carta-mini--clicable {
+.trade-carta-wrap .carta {
+    width: 100%;
+}
+
+.trade-carta-wrap--clicable {
     cursor: pointer;
 }
 
-.trade-carta-mini--clicable:hover {
-    border-color: rgba(0, 197, 255, 0.85);
-    box-shadow: 0 0 10px rgba(0, 123, 255, 0.4);
+.trade-carta-wrap--clicable:hover .carta {
+    transform: scale(1.03);
 }
 
-.trade-carta-mini--seleccionada,
-.trade-carta-mini--en-oferta {
-    border-color: rgba(255, 180, 60, 0.9);
-    box-shadow: 0 0 10px rgba(255, 160, 40, 0.45);
+.trade-carta-wrap--seleccionada .carta,
+.trade-carta-wrap--en-oferta .carta {
+    border-color: rgba(255, 180, 60, 0.95);
+    box-shadow: 0 0 12px rgba(255, 160, 40, 0.5);
 }
 
-.trade-carta-mini--solo-vista {
-    opacity: 0.72;
-    border-color: rgba(120, 140, 160, 0.45);
+.trade-carta-wrap--solo-vista {
+    opacity: 0.78;
     cursor: default;
-    filter: grayscale(0.15);
+    filter: grayscale(0.12);
 }
 
-.trade-carta-mini-detalles {
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 22px;
-    padding: 4px 6px;
-    background: linear-gradient(transparent, rgba(0, 0, 0, 0.82));
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.trade-carta-mini-nombre {
-    font-size: 0.62rem;
-    font-weight: 700;
-    color: #fff;
-    line-height: 1.1;
-}
-
-.trade-carta-mini-poder {
-    font-size: 0.68rem;
-    color: #ffd86f;
-    font-weight: 800;
-}
-
-.trade-carta-mini-estrellas {
-    position: absolute;
-    left: 4px;
-    bottom: 4px;
+.trade-carta-wrap--solo-vista .carta:hover {
+    transform: none;
 }
 
 .trade-vacio {

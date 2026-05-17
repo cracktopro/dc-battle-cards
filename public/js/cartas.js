@@ -1855,6 +1855,50 @@ function iniciarChequeoRecompensaDiariaGlobal() {
     }, RECOMPENSA_DIARIA_CHECK_INTERVAL_MS);
 }
 
+function asegurarEstructuraGrupoMenu(perfil) {
+    if (!perfil) {
+        return;
+    }
+    let companion = perfil.querySelector('#menu-group-companion');
+    let tradeBtn = perfil.querySelector('#menu-group-trade-btn');
+    const leaveBtn = perfil.querySelector('#menu-group-leave-btn');
+
+    if (companion && companion.tagName === 'BUTTON') {
+        const div = document.createElement('div');
+        div.id = 'menu-group-companion';
+        div.className = 'menu-group-companion';
+        div.style.display = companion.style.display;
+        div.setAttribute('aria-label', 'Compañero de grupo');
+        Array.from(companion.childNodes).forEach((nodo) => {
+            if (nodo.nodeType === Node.ELEMENT_NODE && nodo.classList?.contains('menu-group-trade-label')) {
+                return;
+            }
+            div.appendChild(nodo);
+        });
+        companion.replaceWith(div);
+        companion = div;
+    }
+
+    if (!tradeBtn) {
+        tradeBtn = document.createElement('button');
+        tradeBtn.type = 'button';
+        tradeBtn.id = 'menu-group-trade-btn';
+        tradeBtn.className = 'btn btn-menu menu-group-trade-btn';
+        tradeBtn.style.display = 'none';
+        tradeBtn.title = 'Intercambiar cartas con tu compañero';
+        tradeBtn.textContent = 'Intercambiar';
+        if (companion && companion.parentNode === perfil) {
+            if (leaveBtn && leaveBtn.parentNode === perfil) {
+                perfil.insertBefore(tradeBtn, leaveBtn);
+            } else {
+                companion.insertAdjacentElement('afterend', tradeBtn);
+            }
+        } else {
+            perfil.appendChild(tradeBtn);
+        }
+    }
+}
+
 function normalizarMenuLateral() {
     const menu = document.querySelector('.menu-container');
     if (!menu) {
@@ -1891,11 +1935,11 @@ function normalizarMenuLateral() {
         perfil.innerHTML = `
             <img id="menu-user-avatar" class="menu-user-avatar" alt="Avatar">
             <div id="menu-user-name" class="menu-user-name"></div>
-            <button type="button" id="menu-group-companion" class="menu-group-companion menu-group-companion-btn" style="display:none;" title="Intercambiar cartas con tu compañero">
+            <div id="menu-group-companion" class="menu-group-companion" style="display:none;" aria-label="Compañero de grupo">
                 <img id="menu-group-avatar" class="menu-group-avatar" alt="Compañero">
                 <span id="menu-group-name" class="menu-group-name"></span>
-                <span class="menu-group-trade-label">Intercambiar</span>
-            </button>
+            </div>
+            <button type="button" id="menu-group-trade-btn" class="btn btn-menu menu-group-trade-btn" style="display:none;" title="Intercambiar cartas con tu compañero">Intercambiar</button>
             <button id="menu-group-leave-btn" class="btn btn-menu menu-group-leave-btn" type="button" style="display:none;">
                 <svg class="menu-group-leave-icon" viewBox="0 0 600 600" aria-hidden="true" focusable="false">
                     <path d="M130 0C58.672245 0 0 58.672245 0 130V470C0 541.32776 58.672245 600 130 600H301.57812C367.83331 600 423.13643 549.36696 430.67188 485H349.43555C343.32179 505.66026 324.7036 520 301.57812 520H130C101.60826 520 80 498.39174 80 470V130C80 101.60826 101.60826 80 130 80H301.57812C324.7036 80 343.32179 94.339739 349.43555 115H430.67188C423.13642 50.633038 367.83331 0 301.57812 0H130Z"></path>
@@ -1929,9 +1973,11 @@ function normalizarMenuLateral() {
     const nombre = menu.querySelector('#menu-user-name');
     const puntosEl = menu.querySelector('#menu-user-puntos');
     const objetosMejoraLineEl = menu.querySelector('#menu-user-objetos-mejora-line');
+    asegurarEstructuraGrupoMenu(perfil);
     const grupoCompanion = menu.querySelector('#menu-group-companion');
     const grupoAvatar = menu.querySelector('#menu-group-avatar');
     const grupoName = menu.querySelector('#menu-group-name');
+    const grupoTradeBtn = menu.querySelector('#menu-group-trade-btn');
     const grupoLeaveBtn = menu.querySelector('#menu-group-leave-btn');
     const resumen = obtenerResumenInventarioSesion();
     const grupoEstado = obtenerEstadoGrupoSesion();
@@ -1959,16 +2005,19 @@ function normalizarMenuLateral() {
         const companion = grupoEstado?.companero;
         const mostrarCompanion = Boolean(grupoEstado?.enGrupo && companion?.email);
         grupoCompanion.style.display = mostrarCompanion ? 'flex' : 'none';
+        if (grupoTradeBtn) {
+            grupoTradeBtn.style.display = mostrarCompanion ? 'inline-flex' : 'none';
+            grupoTradeBtn.onclick = mostrarCompanion
+                ? () => {
+                    if (typeof window.DCTradeGrupo?.solicitarIntercambio === 'function') {
+                        window.DCTradeGrupo.solicitarIntercambio();
+                    }
+                }
+                : null;
+        }
         if (mostrarCompanion) {
             grupoAvatar.src = String(companion?.avatar || '').trim() || 'https://i.ibb.co/QJvLStm/zzz-Carta-Back.png';
             grupoName.textContent = companion?.nombre || companion?.email || 'Compañero';
-            grupoCompanion.onclick = () => {
-                if (typeof window.DCTradeGrupo?.solicitarIntercambio === 'function') {
-                    window.DCTradeGrupo.solicitarIntercambio();
-                }
-            };
-        } else {
-            grupoCompanion.onclick = null;
         }
     }
     if (grupoLeaveBtn) {
