@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.3
+
+- Etiqueta de versión del menú lateral: **`Versión: 1.2.3`** (`public/js/cartas.js`, `package.json`).
+- **Navegación de mazos**: eliminados «Crear Mazos» y «Mejorar Cartas» del menú lateral global; barra de enlaces con estilo `faccion-tab` en `mazos.html`, `crearMazos.html` y `mejorarCartas.html` (páginas independientes, sin hub unificado).
+- **Cartas** (`public/js/cartas.js`): corrección al deduplicar ítems del usuario por índice numérico.
+- **Apariencias / mazos** (`public/js/seleccionCartaApariencia.js`, `public/css/mazos.css`): ajustes de skins, destrucción de duplicados y modales.
+
 ## 1.2.1
 
 - Etiqueta de versión del menú lateral: **`Versión: 1.2.1`** (`public/js/cartas.js`, `package.json`).

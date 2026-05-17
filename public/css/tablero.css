@@ -142,6 +142,7 @@ body {
     height: 44px;
     border-radius: 50%;
     object-fit: cover;
+    object-position: center top;
     border: 2px solid rgba(0, 209, 255, 0.72);
     box-shadow: 0 0 10px rgba(0, 209, 255, 0.34);
 }

@@ -59,6 +59,24 @@
         return Boolean(skins?.cartaTieneSkinsDisponibles?.(carta));
     }
 
+    async function requiereSeleccionAparienciaAsync(carta) {
+        const skins = obtenerApiSkins();
+        if (!skins || !carta) {
+            return false;
+        }
+        await skins.asegurarSkinsCargados();
+        return requiereSeleccionApariencia(carta);
+    }
+
+    function filaCatalogoTieneStatsRestaurables(fila) {
+        if (!fila) {
+            return false;
+        }
+        const poder = Number(fila.Poder ?? fila.poder);
+        const salud = Number(fila.Salud ?? fila.salud);
+        return (Number.isFinite(poder) && poder > 0) || (Number.isFinite(salud) && salud > 0);
+    }
+
     /** Vista parent para grids de selección: ignora skin guardado en colección/mazo ajeno. */
     function obtenerCartaComoParent(carta, mapaCatalogo) {
         const skins = obtenerApiSkins();
@@ -72,7 +90,29 @@
             return copia;
         }
         const filaParent = resolverFilaCatalogo(copia, mapaCatalogo);
-        return skins.quitarSkinJugadorDeCarta(copia, filaParent);
+        const teniaSkinActiva = copia.skinActivoId != null && copia.skinActivoId !== undefined;
+
+        if (filaParent && filaCatalogoTieneStatsRestaurables(filaParent)) {
+            return skins.quitarSkinJugadorDeCarta(copia, filaParent);
+        }
+
+        copia.skinActivoId = null;
+        delete copia._skinAplicado;
+        const parentNombre = skins.obtenerNombreParentCarta(carta);
+        if (parentNombre) {
+            copia.skinParentNombre = parentNombre;
+        }
+        if (teniaSkinActiva && parentNombre) {
+            copia.Nombre = parentNombre;
+        }
+        if (filaParent && typeof skins.fusionarAspectoDesdeFilaCatalogo === 'function') {
+            const fusionada = skins.fusionarAspectoDesdeFilaCatalogo(copia, filaParent);
+            if (typeof root.recalcularSkillPowerPorNivel === 'function') {
+                root.recalcularSkillPowerPorNivel(fusionada, Number(fusionada.Nivel || 1));
+            }
+            return fusionada;
+        }
+        return copia;
     }
 
     function asegurarModal() {
@@ -256,7 +296,8 @@
 
     async function seleccionarCartaConAparienciaOpcional({ carta, usuario, mapaCatalogo }) {
         const base = obtenerCartaComoParent(carta, mapaCatalogo);
-        if (!requiereSeleccionApariencia(base)) {
+        const necesitaModal = await requiereSeleccionAparienciaAsync(base);
+        if (!necesitaModal) {
             return base;
         }
         try {
@@ -270,6 +311,7 @@
     root.DCSeleccionCartaApariencia = {
         cartaCoincideBusqueda,
         requiereSeleccionApariencia,
+        requiereSeleccionAparienciaAsync,
         obtenerCartaComoParent,
         aplicarSkinTemporalACarta,
         seleccionarCartaConAparienciaOpcional,

@@ -109,8 +109,6 @@
         <!-- Botones del menú -->
         <a href="vistaJuego.html" class="btn btn-menu">Jugar Partida</a>
         <a href="mazos.html" class="btn btn-menu">Mazos</a>
-        <a href="crearMazos.html" class="btn btn-menu">Crear Mazos</a>
-        <a href="mejorarCartas.html" class="btn btn-menu">Mejorar Cartas</a>
         <a href="coleccion.html" class="btn btn-menu">Colección</a>
         <a href="tienda.html" class="btn btn-menu">Tienda</a>
         <a href="asaltos.html" class="btn btn-menu">Asaltos</a>
@@ -122,6 +120,11 @@
     <!-- Contenedor principal de contenido -->
     <div class="content-container">
         <h2>Mejorar Cartas</h2>
+        <nav class="faccion-tabs mazos-seccion-nav" aria-label="Sección Mazos">
+            <a href="mazos.html" class="btn faccion-tab">Mis mazos</a>
+            <a href="crearMazos.html" class="btn faccion-tab">Crear mazo</a>
+            <a href="mejorarCartas.html" class="btn faccion-tab active">Mejorar cartas</a>
+        </nav>
         <div class="faccion-tabs mb-3">
             <button id="tab-mejora-clasica" class="btn faccion-tab active" type="button">Mejora clásica</button>
             <button id="tab-destruir-repetidas" class="btn faccion-tab" type="button">Destruir cartas repetidas</button>

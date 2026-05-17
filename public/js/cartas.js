@@ -101,7 +101,8 @@ function deduplicarItemsCartasUsuarioMejorNivel(items) {
     }
     const mejorPorClave = new Map();
     items.forEach(item => {
-        if (!item || typeof item.index !== 'number' || !item.carta) {
+        const indice = Number(item?.index);
+        if (!item || !Number.isFinite(indice) || !item.carta) {
             return;
         }
         const clave = String(item.carta.Nombre || '').trim().toLowerCase();
@@ -110,13 +111,14 @@ function deduplicarItemsCartasUsuarioMejorNivel(items) {
         }
         const nivel = obtenerNivelCartaSeguro(item.carta);
         const prev = mejorPorClave.get(clave);
+        const itemNormalizado = { carta: item.carta, index: indice };
         if (!prev) {
-            mejorPorClave.set(clave, item);
+            mejorPorClave.set(clave, itemNormalizado);
             return;
         }
         const nivelPrev = obtenerNivelCartaSeguro(prev.carta);
-        if (nivel > nivelPrev || (nivel === nivelPrev && item.index < prev.index)) {
-            mejorPorClave.set(clave, item);
+        if (nivel > nivelPrev || (nivel === nivelPrev && indice < prev.index)) {
+            mejorPorClave.set(clave, itemNormalizado);
         }
     });
     return Array.from(mejorPorClave.values())
@@ -2005,7 +2007,7 @@ function normalizarMenuLateral() {
         linkMultijugador.removeEventListener('click', bloquearNavegacionMultijugador);
     }
 
-    const versionLabelTexto = 'Versión: 1.2.2';
+    const versionLabelTexto = 'Versión: 1.2.3';
     let versionLabel = menu.querySelector('#menu-version-label');
     if (!versionLabel) {
         versionLabel = document.createElement('div');

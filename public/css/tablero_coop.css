@@ -172,11 +172,13 @@ body.tablero-coop-body .tablero-coop-wrap {
     border-color: rgba(255, 95, 95, 0.45);
 }
 
-.coop-panel-info .avatar-round {
+.coop-panel-info .avatar-round,
+.avatar-round {
     width: 48px;
     height: 48px;
     border-radius: 50%;
     object-fit: cover;
+    object-position: center top;
     border: 2px solid rgba(0, 209, 255, 0.55);
 }
 
