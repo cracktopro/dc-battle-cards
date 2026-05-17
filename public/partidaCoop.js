@@ -585,16 +585,14 @@
         }
     }
 
-    /** Cartas enemigas para salud efectiva usando un snapshot concreto (diff visual entre clientes). */
+    /** Cartas enemigas para salud efectiva (heal_debuff) usando un snapshot concreto. */
     function enemigosSaludParaZonaDesdeSnapshot(zonaCarta, snap) {
         if (!snap) return [];
         if (zonaCarta === 'bot') {
             return [...(snap.cartasEnJuegoA || []), ...(snap.cartasEnJuegoB || [])].filter(Boolean);
         }
-        if (zonaCarta === 'A') {
-            return [...(snap.cartasEnJuegoBot || []), ...(snap.cartasEnJuegoB || [])].filter(Boolean);
-        }
-        return [...(snap.cartasEnJuegoBot || []), ...(snap.cartasEnJuegoA || [])].filter(Boolean);
+        /** Aliados humanos: solo el BOT aplica heal_debuff; P1 y P2 no se penalizan entre sí. */
+        return [...(snap.cartasEnJuegoBot || [])].filter(Boolean);
     }
 
     function enemigosSaludParaZonaCoop(zonaCarta) {
@@ -1125,6 +1123,22 @@
             if (c?.tankActiva && cartaViva(c)) return { zona: 'B', slot: i };
         }
         return null;
+    }
+
+    function obtenerCartasHumanosConcatenadasCoop() {
+        return [...(snapshot?.cartasEnJuegoA || []), ...(snapshot?.cartasEnJuegoB || [])];
+    }
+
+    /** Índices en mesa A‖B que el BOT puede dañar (tank humano concentra todo el daño, incl. AoE). */
+    function obtenerIndicesObjetivosBotContraHumanosCoop() {
+        const enemigos = obtenerCartasHumanosConcatenadasCoop();
+        const tank = obtenerTankHumanoCoop();
+        if (tank) {
+            const idx = tank.zona === 'A' ? tank.slot : tank.slot + 2;
+            if (enemigos[idx] && cartaViva(enemigos[idx])) return [idx];
+            return [];
+        }
+        return obtenerIndicesDisponiblesCoop(enemigos);
     }
 
     /** Como `elegirObjetivosBotAleatorios` en partida.js: hasta N objetivos humanos distintos (mezcla). */
@@ -1907,8 +1921,12 @@
             });
             logCoop(`${carta.Nombre} usa ${meta.nombre}: escudo +${escCantidad} para ${objetivo.Nombre}.`);
         } else if (meta.clase === 'stun' || meta.clase === 'dot' || meta.clase === 'extra_attack') {
-            const tank = obtenerIndiceTankActivoEnMesa(enemigos);
-            const disp = tank !== null ? [tank] : obtenerIndicesDisponiblesCoop(enemigos);
+            const disp = zonaActor === 'bot'
+                ? obtenerIndicesObjetivosBotContraHumanosCoop()
+                : (() => {
+                    const tank = obtenerIndiceTankActivoEnMesa(enemigos);
+                    return tank !== null ? [tank] : obtenerIndicesDisponiblesCoop(enemigos);
+                })();
             if (!disp.length) return false;
 
             let selObj = null;
@@ -2081,7 +2099,9 @@
                     salud: cartaAoeCtx?.Salud ?? cartaAoeCtx?.SaludMax ?? poderAoe
                 })
                 : Math.max(1, Math.floor(poderAoe / 2));
-            const disp = obtenerIndicesDisponiblesCoop(enemigos);
+            const disp = zonaActor === 'bot'
+                ? obtenerIndicesObjetivosBotContraHumanosCoop()
+                : obtenerIndicesDisponiblesCoop(enemigos);
             if (!disp.length) return false;
             coopReplayTexto = construirMensajeUsoHabilidadActiva(carta.Nombre, meta.nombre, 'todo el equipo rival');
             const ui = window.tableroCoopCartaUi;
@@ -2421,9 +2441,8 @@
             const tankIdx = ui.obtenerIndiceTankActivo(snapshot.cartasEnJuegoBot);
             const bloqueadaTank = Boolean(eligiendoBotObjetivo && tankIdx !== null && tankIdx !== i);
             const clickBot = Boolean(eligiendoBotObjetivo && !bloqueadaTank);
-            const enemigosSaludBot = [...snapshot.cartasEnJuegoA, ...snapshot.cartasEnJuegoB].filter(Boolean);
             ui.mostrarCartaEnSlotCoop(s, carta, 'oponente', i, {
-                enemigosParaSalud: enemigosSaludBot,
+                enemigosParaSalud: enemigosSaludParaZonaCoop('bot'),
                 dificultadEvento: dificultadEv,
                 onClickCarta: clickBot ? () => onClickSlot('bot', i) : undefined,
                 bloqueadaPorTank: bloqueadaTank,
@@ -2450,10 +2469,9 @@
             const clickA = fase === 'P1' && puede && MI_EMAIL === EMAIL_LEADER;
             const yaAtac = snapshot.cartasYaAtacaronA.includes(i);
             const puedeSelAtacante = clickA && !yaAtac && !cartaEstaAturdidaCoop(raw);
-            const enemigosA = [...snapshot.cartasEnJuegoBot, ...snapshot.cartasEnJuegoB].filter(Boolean);
             const puedeUsarHab = puedeSelAtacante;
             ui.mostrarCartaEnSlotCoop(s, carta, 'jugador', i, {
-                enemigosParaSalud: enemigosA,
+                enemigosParaSalud: enemigosSaludParaZonaCoop('A'),
                 dificultadEvento: dificultadEv,
                 onClickCarta: puedeSelAtacante ? () => onClickSlot('A', i) : undefined,
                 cartaAgotada: yaAtac || cartaEstaAturdidaCoop(raw),
@@ -2484,10 +2502,9 @@
             const clickB = fase === 'P2' && puede && MI_EMAIL === EMAIL_MEMBER;
             const yaAtac = snapshot.cartasYaAtacaronB.includes(i);
             const puedeSelAtacante = clickB && !yaAtac && !cartaEstaAturdidaCoop(raw);
-            const enemigosB = [...snapshot.cartasEnJuegoBot, ...snapshot.cartasEnJuegoA].filter(Boolean);
             const puedeUsarHab = puedeSelAtacante;
             ui.mostrarCartaEnSlotCoop(s, carta, 'jugador', i, {
-                enemigosParaSalud: enemigosB,
+                enemigosParaSalud: enemigosSaludParaZonaCoop('B'),
                 dificultadEvento: dificultadEv,
                 onClickCarta: puedeSelAtacante ? () => onClickSlot('B', i) : undefined,
                 cartaAgotada: yaAtac || cartaEstaAturdidaCoop(raw),
@@ -2526,12 +2543,12 @@
         const cartasB = Array.isArray(snapshot.cartasEnJuegoB) ? snapshot.cartasEnJuegoB : [];
         const cartasBot = Array.isArray(snapshot.cartasEnJuegoBot) ? snapshot.cartasEnJuegoBot : [];
         const equipoHumano = [...cartasA, ...cartasB].filter(Boolean);
-        const enemigosA = [...cartasBot, ...cartasB].filter(Boolean);
-        const enemigosB = [...cartasBot, ...cartasA].filter(Boolean);
-        const enemigosBot = [...cartasA, ...cartasB].filter(Boolean);
+        const enemigosA = cartasBot.filter(Boolean);
+        const enemigosB = cartasBot.filter(Boolean);
+        const enemigosBot = equipoHumano;
 
-        const { afiliacionPrincipal: activaA } = ui.aplicarBonusAfiliaciones(cartasA, enemigosA, equipoHumano);
-        const { afiliacionPrincipal: activaB } = ui.aplicarBonusAfiliaciones(cartasB, enemigosB, equipoHumano);
+        const { afiliacionPrincipal: activaA } = ui.aplicarBonusAfiliaciones(cartasA, enemigosA, equipoHumano, equipoHumano);
+        const { afiliacionPrincipal: activaB } = ui.aplicarBonusAfiliaciones(cartasB, enemigosB, equipoHumano, equipoHumano);
         const { afiliacionPrincipal: activaBot } = ui.aplicarBonusAfiliaciones(cartasBot, enemigosBot);
 
         const anulaA = obtenerCartaBonusDebuffActivaCoop(enemigosA);
@@ -3528,6 +3545,8 @@
                 const objetivosAtaque = esBoss
                     ? elegirObjetivosHumanosBossCoop(2)
                     : (() => {
+                        const tank = obtenerTankHumanoCoop();
+                        if (tank) return [tank];
                         const vivos = objetivosHumanosAleatorios();
                         if (!vivos.length) return [];
                         return [vivos[Math.floor(Math.random() * vivos.length)]];

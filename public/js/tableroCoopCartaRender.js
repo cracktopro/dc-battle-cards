@@ -127,9 +127,11 @@
      * @param {Array} cartasEnemigas Enemigos para debuffs / bonus_debuff.
      * @param {Array|null} cartasParaConteoAfiliacion Si se pasa, el conteo de afiliación (x2/x3) usa este conjunto
      *        (p. ej. A+B en coop para bonus global del equipo humano).
+     * @param {Array|null} cartasParaBuff Si se pasa, buff/bonus_buff se suman desde este pool (p. ej. A+B aliados).
      */
-    function aplicarBonusAfiliaciones(cartas, cartasEnemigas = [], cartasParaConteoAfiliacion = null) {
+    function aplicarBonusAfiliaciones(cartas, cartasEnemigas = [], cartasParaConteoAfiliacion = null, cartasParaBuff = null) {
         const poolAfiliacion = cartasParaConteoAfiliacion != null ? cartasParaConteoAfiliacion : cartas;
+        const poolBuff = cartasParaBuff != null ? cartasParaBuff : cartas;
         const { bonusMaximo, afiliacionPrincipal } = calcularBonusAfiliaciones(poolAfiliacion);
         const debuffGlobal = (Array.isArray(cartasEnemigas) ? cartasEnemigas : []).reduce((total, carta) => {
             if (!carta || !cartaCuentaComoActivaEnMesa(carta)) return total;
@@ -139,7 +141,7 @@
             }
             return total;
         }, 0);
-        const pasivaBuffExtra = cartas.reduce((total, carta) => {
+        const pasivaBuffExtra = (Array.isArray(poolBuff) ? poolBuff : []).reduce((total, carta) => {
             if (!carta || !cartaCuentaComoActivaEnMesa(carta)) return total;
             const meta = obtenerMetaHabilidad(carta);
             if (meta.tieneHabilidad && meta.trigger === 'auto' && meta.clase === 'buff') {
@@ -147,7 +149,7 @@
             }
             return total;
         }, 0);
-        const pasivaBonusBuffExtra = cartas.reduce((total, carta) => {
+        const pasivaBonusBuffExtra = (Array.isArray(poolBuff) ? poolBuff : []).reduce((total, carta) => {
             if (!carta || !cartaCuentaComoActivaEnMesa(carta)) return total;
             const meta = obtenerMetaHabilidad(carta);
             if (meta.tieneHabilidad && meta.trigger === 'auto' && meta.clase === 'bonus_buff') {
@@ -289,16 +291,17 @@
         const a = Array.isArray(snapshot?.cartasEnJuegoA) ? snapshot.cartasEnJuegoA : [];
         const b = Array.isArray(snapshot?.cartasEnJuegoB) ? snapshot.cartasEnJuegoB : [];
 
-        const enemigosDeA = [...bot, ...b].filter(Boolean);
-        const enemigosDeB = [...bot, ...a].filter(Boolean);
+        /** P1/P2 son aliados: debuffs humanos solo vienen del BOT; buffs del equipo A+B. */
+        const enemigosDeA = bot.filter(Boolean);
+        const enemigosDeB = bot.filter(Boolean);
         const enemigosDeBot = [...a, ...b].filter(Boolean);
 
-        /** Equipo humano completo: el umbral x2/x3 de afiliación cuenta cartas vivas en A y B a la vez. */
+        /** Equipo humano completo: afiliación x2/x3 y buffs pasivos compartidos entre A y B. */
         const equipoHumanoAfiliacion = [...a, ...b].filter(Boolean);
 
         const { cartasConBonus: mesaBot } = aplicarBonusAfiliaciones(bot, enemigosDeBot);
-        const { cartasConBonus: mesaA } = aplicarBonusAfiliaciones(a, enemigosDeA, equipoHumanoAfiliacion);
-        const { cartasConBonus: mesaB } = aplicarBonusAfiliaciones(b, enemigosDeB, equipoHumanoAfiliacion);
+        const { cartasConBonus: mesaA } = aplicarBonusAfiliaciones(a, enemigosDeA, equipoHumanoAfiliacion, equipoHumanoAfiliacion);
+        const { cartasConBonus: mesaB } = aplicarBonusAfiliaciones(b, enemigosDeB, equipoHumanoAfiliacion, equipoHumanoAfiliacion);
 
         return { mesaBot, mesaA, mesaB };
     }
