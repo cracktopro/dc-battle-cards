@@ -65,14 +65,14 @@ function normalizarTextoHabilidad(valor) {
     return String(valor || '').trim();
 }
 
-const SKILL_CLASSES_ESCALABLES = new Set(['buff', 'debuff', 'heal', 'shield', 'heal_all', 'bonus_buff']);
+const SKILL_CLASSES_ESCALABLES = new Set(['buff', 'debuff', 'heal', 'shield', 'heal_all', 'shield_aoe', 'bonus_buff']);
 
 /** Pasivas de mesa: el valor de la habilidad no usa poder/salud con buffs de combate ajenos ni propios. */
 const SKILL_CLASSES_CONTEXTO_BASE = new Set(['buff', 'debuff', 'bonus_buff']);
 
 /** Clases que pueden usar fórmulas en skill_power (poder, salud, *, /). */
 const SKILL_CLASSES_CON_FORMULA = new Set([
-    'buff', 'debuff', 'heal', 'shield', 'aoe', 'heal_all', 'bonus_buff',
+    'buff', 'debuff', 'heal', 'shield', 'aoe', 'heal_all', 'shield_aoe', 'bonus_buff',
     'tank', 'extra_attack', 'dot', 'life_steal'
 ]);
 
@@ -542,6 +542,7 @@ const CLASE_BADGE_POR_SKILL = {
     heal: 'badge-habilidad--heal',
     revive: 'badge-habilidad--revive',
     shield: 'badge-habilidad--shield',
+    shield_aoe: 'badge-habilidad--shield-aoe',
     aoe: 'badge-habilidad--aoe',
     heal_all: 'badge-habilidad--heal-all',
     bonus_buff: 'badge-habilidad--bonus-buff',
@@ -560,6 +561,7 @@ const CLASE_COLOR_SKILL_POWER_TOOLTIP = {
     heal: 'tooltip-skill-power--heal',
     revive: 'tooltip-skill-power--revive',
     shield: 'tooltip-skill-power--shield',
+    shield_aoe: 'tooltip-skill-power--shield-aoe',
     aoe: 'tooltip-skill-power--aoe',
     heal_all: 'tooltip-skill-power--heal-all',
     bonus_buff: 'tooltip-skill-power--bonus-buff',

@@ -2087,6 +2087,43 @@
             }
             if (!hubo) return false;
             logCoop(`${carta.Nombre} usa ${meta.nombre}: cura grupal +${Math.floor(valor)}.`);
+        } else if (meta.clase === 'shield_aoe') {
+            if (valor <= 0) return false;
+            let hubo = false;
+            const escCantidad = Math.floor(valor);
+            coopReplayTexto = construirMensajeUsoHabilidadActiva(carta.Nombre, meta.nombre, 'todo su equipo');
+            if (zonaActor === 'A' || zonaActor === 'B') {
+                ['A', 'B'].forEach((z) => {
+                    const mesa = obtenerMesaPorZona(z);
+                    mesa.forEach((objetivo, idx) => {
+                        if (!objetivo) return;
+                        objetivo.escudoActual = Math.max(0, Number(objetivo.escudoActual || 0)) + escCantidad;
+                        hubo = true;
+                        coopReplayFloats.push({
+                            zona: z,
+                            slot: idx,
+                            valor: escCantidad,
+                            tipoImpacto: 'jugador',
+                            claseVisual: 'escudo'
+                        });
+                    });
+                });
+            } else {
+                aliados.forEach((objetivo, idx) => {
+                    if (!objetivo) return;
+                    objetivo.escudoActual = Math.max(0, Number(objetivo.escudoActual || 0)) + escCantidad;
+                    hubo = true;
+                    coopReplayFloats.push({
+                        zona: ctx.zonaAliada,
+                        slot: idx,
+                        valor: escCantidad,
+                        tipoImpacto: ctx.tipoCartaAliada === 'oponente' ? 'oponente' : 'jugador',
+                        claseVisual: 'escudo'
+                    });
+                });
+            }
+            if (!hubo) return false;
+            logCoop(`${carta.Nombre} usa ${meta.nombre}: escudo grupal +${escCantidad}.`);
         } else if (meta.clase === 'aoe') {
             const poderAoe = obtenerPoderAtaqueCoop(ctx.zonaAliada, slotCarta);
             const cartaAoeCtx = ctx.zonaAliada === 'bot'
@@ -2210,7 +2247,7 @@
                     ? 'aoe'
                     : meta.clase === 'extra_attack'
                         ? 'extra_attack'
-                        : meta.clase === 'shield'
+                        : (meta.clase === 'shield' || meta.clase === 'shield_aoe')
                             ? 'shield'
                             : meta.clase === 'heal'
                                 ? 'heal'

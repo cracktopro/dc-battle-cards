@@ -1787,6 +1787,7 @@ a.faccion-tab.active {
 }
 
 .badge-habilidad-carta.badge-habilidad--shield,
+.badge-habilidad-carta.badge-habilidad--shield-aoe,
 .badge-habilidad-carta.badge-habilidad--tank {
     border-color: rgba(100, 200, 255, 0.85);
     background: linear-gradient(180deg, rgba(28, 72, 120, 0.94) 0%, rgba(12, 40, 78, 0.97) 100%);
@@ -1956,6 +1957,7 @@ a.faccion-tab.active {
 }
 
 .tooltip-skill-power--shield,
+.tooltip-skill-power--shield-aoe,
 .tooltip-skill-power--tank {
     color: #95ddff;
 }

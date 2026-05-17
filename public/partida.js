@@ -522,6 +522,41 @@ async function animarCambiosHabilidadPvp(prevJ, prevO, proxJ, proxO, accion = {}
         renderizarTablero();
         return;
     }
+    if (clase === 'shield_aoe') {
+        const tipoAliado = usaYo ? 'jugador' : 'oponente';
+        const arrAntes = usaYo ? prevJ : prevO;
+        const arrDespues = usaYo ? proxJ : proxO;
+        const arrLive = tipoAliado === 'jugador' ? cartasJugadorEnJuego : cartasOponenteEnJuego;
+
+        for (let i = 0; i < 3; i += 1) {
+            const antes = arrAntes[i];
+            const despues = arrDespues[i];
+            if (!antes || !despues) continue;
+            if (firmaCartaMesaPvp(antes) !== firmaCartaMesaPvp(despues)) continue;
+
+            const escAnt = Math.max(0, Number(antes.escudoActual || 0));
+            const escPost = Math.max(0, Number(despues.escudoActual || 0));
+            if (escPost <= escAnt) continue;
+
+            const salAntes = obtenerSaludActualCarta(antes);
+            const salDespues = obtenerSaludActualCarta(despues);
+
+            if (!arrLive[i]) continue;
+            Object.assign(arrLive[i], antes);
+            arrLive[i].Salud = salAntes;
+            arrLive[i].escudoActual = escAnt;
+
+            const escudoMostrar = Math.max(1, Math.floor(escPost - escAnt));
+            mostrarValorFlotante(tipoAliado, i, escudoMostrar, 'escudo');
+            await animarBajadaSaludCarta(arrLive, i, salAntes, salDespues, tipoAliado, {
+                escudoInicial: escAnt,
+                escudoFinal: escPost,
+                esEscudo: true
+            });
+        }
+        renderizarTablero();
+        return;
+    }
     if (clase === 'heal' || clase === 'shield') {
         const slotObjSkill = parseSlotIndicePvp(accion?.slotObjetivo);
         if (slotObjSkill === null) {
@@ -643,6 +678,7 @@ async function animarCambiosHabilidadPvp(prevJ, prevO, proxJ, proxO, accion = {}
         slotObjSkill !== null
         && clase !== 'heal'
         && clase !== 'shield'
+        && clase !== 'shield_aoe'
         && clase !== 'revive'
     ) {
         // stun, dot, etc.: mismo problema letal + robo en el hueco que el ataque básico.
@@ -3005,7 +3041,7 @@ async function anunciarUsoHabilidadActiva(carta, meta, objetivoTexto) {
 
 /** Aviso central "usa habilidad en …" solo en VS BOT offline para estas clases (habilidad activa "usar"). PvP y jugador local sin filtrar. */
 const CLASES_AVISO_HABILIDAD_USAR_BOT = new Set([
-    'heal', 'revive', 'shield', 'aoe', 'heal_all', 'tank', 'extra_attack'
+    'heal', 'revive', 'shield', 'shield_aoe', 'aoe', 'heal_all', 'tank', 'extra_attack'
 ]);
 
 async function anunciarUsoHabilidadActivaSiUI(carta, meta, objetivoTexto, propietario) {
@@ -3477,6 +3513,28 @@ async function usarHabilidadActiva(carta, propietario, slotCarta) {
         });
         objetivo.escudoActual = escNuevo;
         escribirLog(`${carta.Nombre} usa ${meta.nombre}: escudo +${escCantidad} para ${objetivo.Nombre}.`);
+    } else if (meta.clase === 'shield_aoe') {
+        if (valor <= 0) return false;
+        const indicesAliados = obtenerIndicesCartasDisponibles(aliados);
+        if (indicesAliados.length === 0) return false;
+        const escCantidad = Math.floor(valor);
+        await anunciarUsoHabilidadActivaSiUI(carta, meta, 'todo su equipo', propietario);
+        const tipoCartaObjetivo = propietario === 'jugador' ? 'jugador' : 'oponente';
+        for (const idx of indicesAliados) {
+            const objetivo = aliados[idx];
+            if (!objetivo) continue;
+            const escAntes = Math.max(0, Number(objetivo.escudoActual || 0));
+            const escNuevo = escAntes + escCantidad;
+            const saludHp = obtenerSaludActualCarta(objetivo);
+            mostrarValorFlotante(propietario, idx, escCantidad, 'escudo');
+            await animarBajadaSaludCarta(aliados, idx, saludHp, saludHp, tipoCartaObjetivo, {
+                escudoInicial: escAntes,
+                escudoFinal: escNuevo,
+                esEscudo: true
+            });
+            objetivo.escudoActual = escNuevo;
+        }
+        escribirLog(`${carta.Nombre} usa ${meta.nombre}: escudo grupal +${escCantidad}.`);
     } else if (meta.clase === 'aoe') {
         const { cartasConBonus: aliadosConBonusAoe } = aplicarBonusAfiliaciones(aliados, enemigos);
         const cartaAoeConBonus = aliadosConBonusAoe[slotCarta] || carta;
@@ -3856,6 +3914,12 @@ async function manejarUsoHabilidadJugador(event, slotIndex) {
                 escribirLog(`${carta.Nombre} no puede usar ${meta.nombre}: todo tu equipo está con salud completa.`);
                 return;
             }
+        } else if (meta.clase === 'shield_aoe') {
+            const hayAliadosEnMesa = obtenerIndicesCartasDisponibles(cartasJugadorEnJuego).length > 0;
+            if (!hayAliadosEnMesa) {
+                escribirLog(`${carta.Nombre} no puede usar ${meta.nombre}: no hay aliados en juego.`);
+                return;
+            }
         }
         const objetivoTexto = (() => {
             if (meta.clase === 'revive') {
@@ -3864,7 +3928,7 @@ async function manejarUsoHabilidadJugador(event, slotIndex) {
             if (meta.clase === 'aoe') {
                 return 'todo el equipo rival';
             }
-            if (meta.clase === 'heal_all') {
+            if (meta.clase === 'heal_all' || meta.clase === 'shield_aoe') {
                 return 'todo tu equipo';
             }
             if (!Number.isInteger(slotObjetivoPvp)) {

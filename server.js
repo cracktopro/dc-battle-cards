@@ -883,12 +883,12 @@ function calcularBonusAfiliacionesServidor(cartas = []) {
     return principal;
 }
 
-const SKILL_CLASSES_ESCALABLES_SERVIDOR = new Set(['buff', 'debuff', 'heal', 'shield', 'heal_all', 'bonus_buff']);
+const SKILL_CLASSES_ESCALABLES_SERVIDOR = new Set(['buff', 'debuff', 'heal', 'shield', 'heal_all', 'shield_aoe', 'bonus_buff']);
 
 const SKILL_CLASSES_CONTEXTO_BASE_SERVIDOR = new Set(['buff', 'debuff', 'bonus_buff']);
 
 const SKILL_CLASSES_CON_FORMULA_SERVIDOR = new Set([
-    'buff', 'debuff', 'heal', 'shield', 'aoe', 'heal_all', 'bonus_buff',
+    'buff', 'debuff', 'heal', 'shield', 'aoe', 'heal_all', 'shield_aoe', 'bonus_buff',
     'tank', 'extra_attack', 'dot', 'life_steal'
 ]);
 
@@ -1182,6 +1182,15 @@ function aplicarHabilidadCanonicaSnapshot(snapshot, ladoActor, slotAtacante, slo
             }
         });
         if (!huboCuracion) return { ok: false, reason: 'equipo_full_health' };
+    } else if (clase === 'shield_aoe') {
+        if (valorSkill <= 0) return { ok: false, reason: 'valor_invalido' };
+        const indicesAliados = obtenerIndicesCartasVivasServidor(mesaActor);
+        if (indicesAliados.length === 0) return { ok: false, reason: 'objetivo_invalido' };
+        const escCantidad = Math.floor(valorSkill);
+        indicesAliados.forEach((idx) => {
+            if (!mesaActor[idx]) return;
+            mesaActor[idx].escudoActual = Math.max(0, Number(mesaActor[idx].escudoActual || 0)) + escCantidad;
+        });
     } else if (clase === 'life_steal') {
         atacante.lifeStealActiva = true;
     } else if (clase === 'heal') {
