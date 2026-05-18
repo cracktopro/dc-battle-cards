@@ -38,6 +38,10 @@ const OBJETIVO_SINERGIA_POR_DIFICULTAD = {
 const ICONO_MEJORA = '/resources/icons/mejora.png';
 const ICONO_MEJORA_ESPECIAL = '/resources/icons/mejora_especial.png';
 const ICONO_MONEDA = '/resources/icons/moneda.png';
+const ICONO_STAR6 = '/resources/icons/star6.png';
+const ICONO_CARDBACK_RANDOM = '/resources/icons/cardback_random.png';
+const EVENTO_DIFICULTAD_MAX = 6;
+const EVENTO_DIFICULTAD_MIN_MEJORA_ESPECIAL = 6;
 const ROTACION_CONSEJOS_MS = 9500;
 let consejosCarrusel = [];
 let consejoIndexActual = 0;
@@ -725,6 +729,220 @@ function mostrarMensajeEventos(mensaje, tipo = 'warning') {
     el.style.display = 'block';
 }
 
+function crearContenidoEtiquetaDificultadEvento(nivel) {
+    const frag = document.createDocumentFragment();
+    frag.appendChild(document.createTextNode(`Nivel ${nivel} `));
+    const estrellas = document.createElement('span');
+    estrellas.className = 'evento-dificultad-estrellas';
+    estrellas.setAttribute('aria-hidden', 'true');
+    for (let i = 0; i < nivel; i++) {
+        const img = document.createElement('img');
+        img.src = ICONO_STAR6;
+        img.alt = '';
+        img.className = 'evento-dificultad-estrella';
+        img.draggable = false;
+        estrellas.appendChild(img);
+    }
+    frag.appendChild(estrellas);
+    return frag;
+}
+
+function formatearHtmlTooltipCartaAleatoriaEvento() {
+    const raw = 'Al completar este evento recibirás como recompensa una carta aleatoria. Tienes un $80%$ de recibir una carta de enemigo estándar y un $20%$ de recibir como recompensa la carta del Boss. El nivel de la carta obtenida equivaldrá al nivel de dificultad que escojas.';
+    let html = escaparHTMLConsejos(raw);
+    html = html.replace(/\$20%\$/g, '<span class="evento-tooltip-pct-boss">20%</span>');
+    html = html.replace(/\$([^$]+)\$/g, '<span class="consejos-highlight">$1</span>');
+    return html;
+}
+
+function enlazarTooltipCartaAleatoriaEvento(elemento) {
+    if (!elemento) {
+        return;
+    }
+    const meta = {
+        nombre: 'Carta aleatoria',
+        infoHtml: formatearHtmlTooltipCartaAleatoriaEvento(),
+    };
+    if (typeof window.enlazarTooltipHabilidadGlobal === 'function') {
+        window.enlazarTooltipHabilidadGlobal(elemento, meta);
+        return;
+    }
+    elemento.addEventListener('mouseenter', (ev) => {
+        if (typeof window.mostrarTooltipHabilidadGlobal === 'function') {
+            window.mostrarTooltipHabilidadGlobal(ev.clientX, ev.clientY, meta);
+        }
+    });
+    elemento.addEventListener('mouseleave', () => {
+        if (typeof window.ocultarTooltipHabilidadGlobal === 'function') {
+            window.ocultarTooltipHabilidadGlobal();
+        }
+    });
+}
+
+function crearTagRecompensaEvento(iconSrc, alt, texto, { objeto = false } = {}) {
+    const tag = document.createElement('div');
+    tag.className = 'evento-recompensa-item';
+    if (objeto) {
+        tag.classList.add('evento-recompensa-item--objeto');
+    }
+    const img = document.createElement('img');
+    img.src = iconSrc;
+    img.alt = alt;
+    img.className = 'evento-recompensa-item-icon';
+    img.draggable = false;
+    const span = document.createElement('span');
+    span.className = 'evento-recompensa-item-txt';
+    span.textContent = texto;
+    tag.appendChild(img);
+    tag.appendChild(span);
+    return tag;
+}
+
+function calcularMonedasRecompensaEventoUi(puntosExcel, dificultad) {
+    if (!Number.isFinite(Number(dificultad)) || Number(dificultad) < 1) {
+        return null;
+    }
+    if (typeof window.calcularPuntosRecompensaEventoPorDificultad === 'function') {
+        return window.calcularPuntosRecompensaEventoPorDificultad(puntosExcel, dificultad);
+    }
+    const pts = Math.max(0, Number(puntosExcel || 0));
+    const dif = Math.min(EVENTO_DIFICULTAD_MAX, Math.max(1, Number(dificultad)));
+    return Math.max(0, Math.round((dif / EVENTO_DIFICULTAD_MAX) * pts));
+}
+
+function actualizarRecompensasEventoUi(recompensasEl, evento, dificultad) {
+    if (!recompensasEl || !evento) {
+        return;
+    }
+    recompensasEl.innerHTML = '';
+
+    const miniCarta = document.createElement('div');
+    miniCarta.className = 'evento-recompensa-card evento-recompensa-carta-aleatoria';
+    const imgBack = document.createElement('img');
+    imgBack.src = ICONO_CARDBACK_RANDOM;
+    imgBack.alt = 'Carta aleatoria de recompensa';
+    imgBack.className = 'evento-recompensa-cardback-img';
+    miniCarta.appendChild(imgBack);
+    enlazarTooltipCartaAleatoriaEvento(miniCarta);
+    recompensasEl.appendChild(miniCarta);
+
+    const puntosExcel = Math.max(0, Number(evento.puntos || 0));
+    const monedas = calcularMonedasRecompensaEventoUi(puntosExcel, dificultad);
+    const textoMonedas = monedas != null ? monedas.toLocaleString('es-ES') : '—';
+    recompensasEl.appendChild(crearTagRecompensaEvento(ICONO_MONEDA, 'Moneda', textoMonedas));
+
+    const cantidadMejoras = Math.max(0, Number(evento.mejora || 0));
+    if (cantidadMejoras > 0) {
+        recompensasEl.appendChild(
+            crearTagRecompensaEvento(ICONO_MEJORA, 'Mejora', `x${cantidadMejoras}`, { objeto: true })
+        );
+    }
+
+    const cantidadEspeciales = Math.max(0, Number(evento.mejora_especial || 0));
+    const difNum = Number(dificultad);
+    if (cantidadEspeciales > 0 && Number.isFinite(difNum) && difNum >= EVENTO_DIFICULTAD_MIN_MEJORA_ESPECIAL) {
+        recompensasEl.appendChild(
+            crearTagRecompensaEvento(ICONO_MEJORA_ESPECIAL, 'Mejora especial', `x${cantidadEspeciales}`, { objeto: true })
+        );
+    }
+}
+
+function crearSelectorDificultadEvento(evento, onChange) {
+    const wrap = document.createElement('div');
+    wrap.className = 'evento-dificultad-picker';
+
+    const trigger = document.createElement('button');
+    trigger.type = 'button';
+    trigger.className = 'evento-dificultad-picker-trigger';
+    trigger.setAttribute('aria-haspopup', 'listbox');
+    trigger.setAttribute('aria-expanded', 'false');
+
+    const placeholder = document.createElement('span');
+    placeholder.className = 'evento-dificultad-picker-placeholder';
+    placeholder.textContent = 'Selecciona Dificultad';
+
+    const valorEl = document.createElement('span');
+    valorEl.className = 'evento-dificultad-picker-valor';
+    valorEl.hidden = true;
+
+    trigger.appendChild(placeholder);
+    trigger.appendChild(valorEl);
+
+    const lista = document.createElement('ul');
+    lista.className = 'evento-dificultad-picker-lista';
+    lista.setAttribute('role', 'listbox');
+    lista.hidden = true;
+
+    let cerrarFueraHandler = null;
+
+    function cerrarLista() {
+        lista.hidden = true;
+        trigger.setAttribute('aria-expanded', 'false');
+        if (cerrarFueraHandler) {
+            document.removeEventListener('click', cerrarFueraHandler);
+            cerrarFueraHandler = null;
+        }
+    }
+
+    function abrirLista() {
+        lista.hidden = false;
+        trigger.setAttribute('aria-expanded', 'true');
+        cerrarFueraHandler = (ev) => {
+            if (!wrap.contains(ev.target)) {
+                cerrarLista();
+            }
+        };
+        setTimeout(() => document.addEventListener('click', cerrarFueraHandler), 0);
+    }
+
+    function seleccionar(nivel) {
+        const n = Number(nivel);
+        valorEl.innerHTML = '';
+        valorEl.appendChild(crearContenidoEtiquetaDificultadEvento(n));
+        valorEl.hidden = false;
+        placeholder.hidden = true;
+        lista.querySelectorAll('.evento-dificultad-picker-opcion').forEach((op) => {
+            const activa = Number(op.dataset.nivel) === n;
+            op.classList.toggle('evento-dificultad-picker-opcion--activa', activa);
+            op.setAttribute('aria-selected', activa ? 'true' : 'false');
+        });
+        if (typeof onChange === 'function') {
+            onChange(n);
+        }
+    }
+
+    for (let d = 1; d <= EVENTO_DIFICULTAD_MAX; d++) {
+        const li = document.createElement('li');
+        li.className = 'evento-dificultad-picker-opcion';
+        li.setAttribute('role', 'option');
+        li.dataset.nivel = String(d);
+        li.appendChild(crearContenidoEtiquetaDificultadEvento(d));
+        li.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            seleccionar(d);
+            cerrarLista();
+        });
+        lista.appendChild(li);
+    }
+
+    trigger.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        if (lista.hidden) {
+            abrirLista();
+        } else {
+            cerrarLista();
+        }
+    });
+
+    if (evento.dificultadSeleccionada) {
+        seleccionar(Number(evento.dificultadSeleccionada));
+    }
+
+    wrap.appendChild(trigger);
+    wrap.appendChild(lista);
+    return wrap;
+}
+
 async function renderizarEventosActivos() {
     const contenedor = document.getElementById('eventos-grid');
     if (!contenedor) {
@@ -771,77 +989,76 @@ async function renderizarEventosActivos() {
             ...(evento.boss ? [{ nombre: evento.boss, boss: true }] : [])
         ];
 
-        rivales.forEach(rival => {
-            const nombreEnemigo = rival.nombre;
-            const cartaBase = resolverCartaEnemigoVistaSync(nombreEnemigo, mapaCatalogo);
-            const enemigoCard = document.createElement('div');
-            enemigoCard.className = `evento-enemigo-card ${rival.boss ? 'boss' : ''}`;
-            enemigoCard.style.backgroundImage = `url(${obtenerImagenCarta(cartaBase)})`;
-
-            const etiqueta = document.createElement('div');
-            etiqueta.className = 'evento-enemigo-nombre';
-            etiqueta.textContent = cartaBase.Nombre || nombreEnemigo;
-            enemigoCard.appendChild(etiqueta);
-            enemigos.appendChild(enemigoCard);
+        const itemsCarruselEnemigos = rivales.map((rival) => {
+            const cartaBase = resolverCartaEnemigoVistaSync(rival.nombre, mapaCatalogo);
+            return {
+                nombre: cartaBase.Nombre || rival.nombre,
+                imagenUrl: obtenerImagenCarta(cartaBase),
+                boss: Boolean(rival.boss),
+            };
         });
+
+        const carruselMount = document.createElement('div');
+        carruselMount.className = 'evento-enemigos-carrusel-mount';
+
+        if (typeof window.DCCarrusel3d?.montar === 'function') {
+            enemigos.appendChild(etiquetaEnemigos);
+            enemigos.appendChild(carruselMount);
+            window.DCCarrusel3d.montar(carruselMount, {
+                items: itemsCarruselEnemigos,
+                claseExtra: 'evento-enemigos-carrusel',
+                ariaAnterior: 'Enemigo anterior',
+                ariaSiguiente: 'Siguiente enemigo',
+                sufijoBoss: ' (Boss)',
+                iniciarEnBoss: true,
+            });
+        } else {
+            enemigos.classList.add('evento-enemigos--rejilla');
+            enemigos.appendChild(etiquetaEnemigos);
+            rivales.forEach((rival) => {
+                const cartaBase = resolverCartaEnemigoVistaSync(rival.nombre, mapaCatalogo);
+                const enemigoCard = document.createElement('div');
+                enemigoCard.className = `evento-enemigo-card ${rival.boss ? 'boss' : ''}`;
+                enemigoCard.style.backgroundImage = `url(${obtenerImagenCarta(cartaBase)})`;
+
+                const etiqueta = document.createElement('div');
+                etiqueta.className = 'evento-enemigo-nombre';
+                const nombreBase = cartaBase.Nombre || rival.nombre;
+                etiqueta.textContent = rival.boss ? `${nombreBase} (Boss)` : nombreBase;
+                enemigoCard.appendChild(etiqueta);
+                enemigos.appendChild(enemigoCard);
+            });
+        }
+
+        const recompensasBloque = document.createElement('div');
+        recompensasBloque.className = 'evento-recompensas-bloque';
+
         const recompensaLabel = document.createElement('div');
         recompensaLabel.className = 'evento-recompensas-label';
         recompensaLabel.textContent = 'Recompensas';
 
+        const recompensasCaja = document.createElement('div');
+        recompensasCaja.className = 'evento-recompensas-caja';
+
         const recompensas = document.createElement('div');
         recompensas.className = 'evento-recompensas';
-        /** Carta de recompensa aleatoria (80 % enemigo / 20 % BOSS): mismo reverso que coop online. */
-        const miniMisterio = document.createElement('div');
-        miniMisterio.className = 'evento-recompensa-card evento-recompensa-carta-aleatoria';
-        miniMisterio.setAttribute('title', 'Carta de recompensa aleatoria');
-        miniMisterio.innerHTML = '<span class="evento-recompensa-carta-aleatoria-simbolo" aria-hidden="true">?</span>';
-        recompensas.appendChild(miniMisterio);
+        actualizarRecompensasEventoUi(recompensas, evento, evento.dificultadSeleccionada);
 
-        const puntosEvento = Math.max(0, Number(evento.puntos || 0));
-        const metaPuntos = document.createElement('div');
-        metaPuntos.className = 'evento-recompensa-tag';
-        metaPuntos.innerHTML = `<img src="${ICONO_MONEDA}" alt="Moneda" style="width:28px;height:28px;object-fit:contain;"> <span>${puntosEvento}</span>`;
-        recompensas.appendChild(metaPuntos);
-
-        const cantidadMejoras = Math.max(0, Number(evento.mejora || 0));
-        if (cantidadMejoras > 0) {
-            const tagMejora = document.createElement('div');
-            tagMejora.className = 'evento-recompensa-tag';
-            tagMejora.innerHTML = `<img src="${ICONO_MEJORA}" alt="Mejora" style="width:28px;height:28px;object-fit:contain;"> <span>x${cantidadMejoras}</span>`;
-            recompensas.appendChild(tagMejora);
-        }
-        const cantidadEspeciales = Math.max(0, Number(evento.mejora_especial || 0));
-        if (cantidadEspeciales > 0) {
-            const tagEspecial = document.createElement('div');
-            tagEspecial.className = 'evento-recompensa-tag';
-            tagEspecial.innerHTML = `<img src="${ICONO_MEJORA_ESPECIAL}" alt="Mejora especial" style="width:28px;height:28px;object-fit:contain;"> <span>x${cantidadEspeciales}</span>`;
-            recompensas.appendChild(tagEspecial);
-        }
+        recompensasCaja.appendChild(recompensas);
+        recompensasBloque.appendChild(recompensaLabel);
+        recompensasBloque.appendChild(recompensasCaja);
 
         const contenedorDificultad = document.createElement('div');
         contenedorDificultad.className = 'evento-dificultad';
         const dificultadLabel = document.createElement('label');
         dificultadLabel.className = 'evento-dificultad-label';
         dificultadLabel.textContent = 'Dificultad';
-        const selectDificultad = document.createElement('select');
-        selectDificultad.className = 'evento-dificultad-select';
-        const optionPlaceholder = document.createElement('option');
-        optionPlaceholder.value = '';
-        optionPlaceholder.textContent = 'Selecciona Dificultad';
-        selectDificultad.appendChild(optionPlaceholder);
-        for (let d = 1; d <= 6; d++) {
-            const option = document.createElement('option');
-            option.value = String(d);
-            option.textContent = `${'★'.repeat(d)}  Nivel ${d}`;
-            selectDificultad.appendChild(option);
-        }
-        selectDificultad.value = evento.dificultadSeleccionada ? String(Number(evento.dificultadSeleccionada)) : '';
-        selectDificultad.addEventListener('change', () => {
-            const valor = selectDificultad.value;
-            seleccionarDificultadEvento(evento.id, valor ? Number(valor) : null);
+        const pickerDificultad = crearSelectorDificultadEvento(evento, (nivel) => {
+            seleccionarDificultadEvento(evento.id, nivel);
+            actualizarRecompensasEventoUi(recompensas, evento, nivel);
         });
         contenedorDificultad.appendChild(dificultadLabel);
-        contenedorDificultad.appendChild(selectDificultad);
+        contenedorDificultad.appendChild(pickerDificultad);
 
         const botonIniciar = document.createElement('button');
         botonIniciar.className = `btn ${yaJugadoRotacion ? 'btn-success' : 'btn-primary'}`;
@@ -853,14 +1070,12 @@ async function renderizarEventosActivos() {
 
         const bloqueInferior = document.createElement('div');
         bloqueInferior.className = 'evento-bottom';
-        bloqueInferior.appendChild(recompensaLabel);
-        bloqueInferior.appendChild(recompensas);
+        bloqueInferior.appendChild(recompensasBloque);
         bloqueInferior.appendChild(contenedorDificultad);
         bloqueInferior.appendChild(botonIniciar);
 
         card.appendChild(nombre);
         card.appendChild(descripcion);
-        card.appendChild(etiquetaEnemigos);
         card.appendChild(enemigos);
         card.appendChild(bloqueInferior);
         contenedor.appendChild(card);
@@ -1124,7 +1339,11 @@ function renderizarCartasSeleccionEvento() {
         } else if (Number(carta.Nivel || 1) >= 6) {
             cartaDiv.classList.add('nivel-legendaria');
         }
-        cartaDiv.style.backgroundImage = `url(${obtenerImagenCarta(carta)})`;
+        if (typeof window.aplicarImagenFondoCarta === 'function') {
+            window.aplicarImagenFondoCarta(cartaDiv, carta);
+        } else {
+            cartaDiv.style.backgroundImage = `url(${obtenerImagenCarta(carta)})`;
+        }
 
         const estrellasDiv = document.createElement('div');
         estrellasDiv.className = 'estrellas-carta';

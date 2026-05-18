@@ -19,9 +19,13 @@ function cargarCartas(cartas) {
             cartaDiv.classList.add('nivel-legendaria');
         }
 
-        const imagenUrl = obtenerImagenCarta(carta);
-        cartaDiv.style.backgroundImage = `url(${imagenUrl})`;
-        cartaDiv.style.backgroundSize = 'cover';
+        if (typeof window.aplicarImagenFondoCarta === 'function') {
+            window.aplicarImagenFondoCarta(cartaDiv, carta);
+        } else {
+            const imagenUrl = obtenerImagenCarta(carta);
+            cartaDiv.style.backgroundImage = `url(${imagenUrl})`;
+            cartaDiv.style.backgroundSize = 'cover';
+        }
 
         // Añadir nombre de la carta
         const nombreDiv = document.createElement('div');

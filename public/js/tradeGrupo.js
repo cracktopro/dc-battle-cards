@@ -225,12 +225,16 @@
             cartaDiv.classList.add('nivel-legendaria');
         }
 
-        const imagenUrl = typeof window.obtenerImagenCarta === 'function'
-            ? window.obtenerImagenCarta(carta)
-            : (carta?.imagen || AVATAR_FALLBACK);
-        cartaDiv.style.backgroundImage = `url(${imagenUrl})`;
-        cartaDiv.style.backgroundSize = 'cover';
-        cartaDiv.style.backgroundPosition = 'center top';
+        if (typeof window.aplicarImagenFondoCarta === 'function') {
+            window.aplicarImagenFondoCarta(cartaDiv, carta);
+        } else {
+            const imagenUrl = typeof window.obtenerImagenCarta === 'function'
+                ? window.obtenerImagenCarta(carta)
+                : (carta?.imagen || AVATAR_FALLBACK);
+            cartaDiv.style.backgroundImage = `url(${imagenUrl})`;
+            cartaDiv.style.backgroundSize = 'cover';
+            cartaDiv.style.backgroundPosition = 'center top';
+        }
 
         const detallesDiv = document.createElement('div');
         detallesDiv.classList.add('detalles-carta');

@@ -728,7 +728,11 @@
                 } else if (Number(carta.Nivel || 1) >= 6) {
                     cartaDiv.classList.add('nivel-legendaria');
                 }
-                cartaDiv.style.backgroundImage = `url(${obtenerImagenCarta(carta)})`;
+                if (typeof window.aplicarImagenFondoCarta === 'function') {
+                    window.aplicarImagenFondoCarta(cartaDiv, carta);
+                } else {
+                    cartaDiv.style.backgroundImage = `url(${obtenerImagenCarta(carta)})`;
+                }
 
                 const estrellasDiv = document.createElement('div');
                 estrellasDiv.className = 'estrellas-carta';

@@ -208,12 +208,16 @@
         } else if (Number(cartaVista?.Nivel || 1) >= 6) {
             item.classList.add('nivel-legendaria');
         }
-        const imagenUrl = typeof root.obtenerImagenCarta === 'function'
-            ? root.obtenerImagenCarta(cartaVista)
-            : (cartaVista?.Imagen || 'img/default-image.jpg');
-        item.style.backgroundImage = `url(${imagenUrl})`;
-        item.style.backgroundSize = 'cover';
-        item.style.backgroundPosition = 'center top';
+        if (typeof root.aplicarImagenFondoCarta === 'function') {
+            root.aplicarImagenFondoCarta(item, cartaVista);
+        } else {
+            const imagenUrl = typeof root.obtenerImagenCarta === 'function'
+                ? root.obtenerImagenCarta(cartaVista)
+                : (cartaVista?.Imagen || 'img/default-image.jpg');
+            item.style.backgroundImage = `url(${imagenUrl})`;
+            item.style.backgroundSize = 'cover';
+            item.style.backgroundPosition = 'center top';
+        }
 
         const detallesDiv = document.createElement(TAG);
         detallesDiv.className = 'detalles-carta';

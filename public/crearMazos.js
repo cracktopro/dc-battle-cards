@@ -424,8 +424,12 @@ function aplicarFiltroFaccion(usuario) {
         cartaDiv.classList.toggle('oculta-por-faccion', !debeMostrarse);
 
         const cartaVisual = obtenerCartaDisplayCrearMazo(idCarta, usuario);
-        if (cartaVisual && typeof obtenerImagenCarta === 'function') {
-            cartaDiv.style.backgroundImage = `url(${obtenerImagenCarta(cartaVisual)})`;
+        if (cartaVisual) {
+            if (typeof window.aplicarImagenFondoCarta === 'function') {
+                window.aplicarImagenFondoCarta(cartaDiv, cartaVisual);
+            } else if (typeof obtenerImagenCarta === 'function') {
+                cartaDiv.style.backgroundImage = `url(${obtenerImagenCarta(cartaVisual)})`;
+            }
         }
         const nombreEl = cartaDiv.querySelector('.nombre-carta');
         const poderEl = cartaDiv.querySelector('.poder-carta');
@@ -532,10 +536,14 @@ async function cargarCartas() {
         }
         cartaDiv.dataset.id = index;
 
-        const imagenUrl = obtenerImagenCarta(cartaVista);
-        cartaDiv.style.backgroundImage = `url(${imagenUrl})`;
-        cartaDiv.style.backgroundSize = 'cover';
-        cartaDiv.style.backgroundPosition = 'center top';
+        if (typeof window.aplicarImagenFondoCarta === 'function') {
+            window.aplicarImagenFondoCarta(cartaDiv, cartaVista);
+        } else {
+            const imagenUrl = obtenerImagenCarta(cartaVista);
+            cartaDiv.style.backgroundImage = `url(${imagenUrl})`;
+            cartaDiv.style.backgroundSize = 'cover';
+            cartaDiv.style.backgroundPosition = 'center top';
+        }
 
         const detallesDiv = document.createElement('div');
         detallesDiv.classList.add('detalles-carta');

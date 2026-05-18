@@ -331,10 +331,14 @@
             }
         }
 
-        const imagenUrl = obtenerImagenCartaSafe(carta);
-        cartaDiv.style.backgroundImage = `url(${imagenUrl})`;
-        cartaDiv.style.backgroundSize = 'cover';
-        cartaDiv.style.backgroundPosition = 'center top';
+        if (typeof window.aplicarImagenFondoCarta === 'function') {
+            window.aplicarImagenFondoCarta(cartaDiv, carta);
+        } else {
+            const imagenUrl = obtenerImagenCartaSafe(carta);
+            cartaDiv.style.backgroundImage = `url(${imagenUrl})`;
+            cartaDiv.style.backgroundSize = 'cover';
+            cartaDiv.style.backgroundPosition = 'center top';
+        }
 
         if (!soloVista) {
             if (opciones.onClickCarta) {

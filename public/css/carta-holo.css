@@ -1,0 +1,123 @@
+/**
+ * Efecto holográfico nivel 8 — holo.png + holo2.png (scroll opuesto, parpadeo en contrafase).
+ * No altera position de UI de carta (estrellas, detalles, badges siguen absolute).
+ */
+
+.carta--con-holo {
+    isolation: isolate;
+    container-type: size;
+}
+
+.carta-fondo {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    background-size: cover;
+    background-position: center top;
+    background-repeat: no-repeat;
+    border-radius: inherit;
+    filter: contrast(1.1) saturate(1.14);
+}
+
+.carta-holo {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    overflow: hidden;
+    border-radius: inherit;
+}
+
+.carta-holo__textura {
+    position: absolute;
+    inset: 0;
+    background-repeat: repeat-x;
+    background-position: 0 center;
+    background-size: 100cqh 100%;
+    mix-blend-mode: overlay;
+    opacity: 0.36;
+    filter: brightness(1) contrast(1) saturate(1);
+    will-change: background-position, opacity, filter;
+}
+
+.carta-holo__textura--primaria {
+    background-image: url('/resources/icons/holo.png');
+    animation:
+        dc-carta-holo-scroll 5.5s linear infinite,
+        dc-carta-holo-vivo 1.6s ease-in-out infinite;
+}
+
+.carta-holo__textura--secundaria {
+    background-image: url('/resources/icons/holo2.png');
+    animation:
+        dc-carta-holo-scroll-rev 5.5s linear infinite,
+        dc-carta-holo-vivo 1.6s ease-in-out infinite;
+    /* animation-delay: fase global aplicada desde cartas.js (sincronizarAnimacionesHoloCapa) */
+}
+
+/* Por encima del holo; sin cambiar position (respeta absolute de mazos/tablero). */
+.carta--con-holo .estrellas-carta,
+.carta--con-holo .detalles-carta,
+.carta--con-holo .estado-coleccion,
+.carta--con-holo .badge-afiliacion-carta,
+.carta--con-holo .badge-habilidad-carta,
+.carta--con-holo .dc-card-red-dot-nueva,
+.carta--con-holo .barra-salud-contenedor,
+.carta--con-holo .carta-salud-bloque,
+.carta--con-holo .modificador-poder,
+.carta--con-holo .tienda-badge-descuento,
+.carta--con-holo .tienda-badge-ya-obtenida {
+    z-index: 2;
+}
+
+@keyframes dc-carta-holo-scroll {
+    from {
+        background-position: 0 center;
+    }
+    to {
+        background-position: -100cqh center;
+    }
+}
+
+@keyframes dc-carta-holo-scroll-rev {
+    from {
+        background-position: -100cqh center;
+    }
+    to {
+        background-position: 0 center;
+    }
+}
+
+@keyframes dc-carta-holo-vivo {
+    0%,
+    100% {
+        opacity: 0.32;
+        filter: brightness(1) contrast(1) saturate(1);
+    }
+    45% {
+        opacity: 0.5;
+        filter: brightness(1.18) contrast(1.14) saturate(1.28);
+    }
+    55% {
+        opacity: 0.44;
+        filter: brightness(1.1) contrast(1.08) saturate(1.18);
+    }
+}
+
+.carta-coleccion.no-conseguida .carta-fondo {
+    filter: contrast(1.05) saturate(1.06);
+}
+
+.carta-coleccion.no-conseguida .carta-holo__textura {
+    opacity: 0.2;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .carta-holo__textura--primaria,
+    .carta-holo__textura--secundaria {
+        animation: none;
+        background-position: 0 center;
+        opacity: 0.36;
+        filter: none;
+    }
+}

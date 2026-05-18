@@ -1044,19 +1044,6 @@ body > .content-container:has(.asaltos-vista) {
     gap: 10px;
 }
 
-.asaltos-recomp-carta-linea {
-    margin: 0;
-    padding: 8px 10px;
-    text-align: center;
-    font-size: 0.82rem;
-    font-weight: 700;
-    color: #dff4ff;
-    letter-spacing: 0.04em;
-    border-radius: 10px;
-    border: 1px solid rgba(0, 200, 255, 0.28);
-    background: rgba(0, 40, 72, 0.45);
-}
-
 .asaltos-recomp-garant-datos {
     display: flex;
     flex-direction: column;

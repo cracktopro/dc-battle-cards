@@ -757,13 +757,17 @@ function crearCardAdminElemento(carta, indexReal) {
 
     const visual = document.createElement('div');
     visual.className = 'admin-card-visual';
-    const img = String(carta?.Imagen_final || carta?.Imagen || carta?.imagen || '').trim();
-    visual.style.backgroundImage = `url(${img || 'img/default-image.jpg'})`;
+    const nivel = Math.min(ADMIN_NIVEL_CARTA_MAX, Math.max(Number(carta?.Nivel || 1), 1));
+    const cartaNivelUi = { ...carta, Nivel: nivel };
+    if (typeof window.aplicarImagenFondoCarta === 'function') {
+        window.aplicarImagenFondoCarta(visual, cartaNivelUi);
+    } else {
+        const img = String(carta?.Imagen_final || carta?.Imagen || carta?.imagen || '').trim();
+        visual.style.backgroundImage = `url(${img || 'img/default-image.jpg'})`;
+    }
 
     const estrellasDiv = document.createElement('div');
     estrellasDiv.className = 'estrellas-carta';
-    const nivel = Math.min(ADMIN_NIVEL_CARTA_MAX, Math.max(Number(carta?.Nivel || 1), 1));
-    const cartaNivelUi = { ...carta, Nivel: nivel };
     if (typeof window.dcRellenarEstrellasCartaCompleta === 'function') {
         window.dcRellenarEstrellasCartaCompleta(estrellasDiv, cartaNivelUi);
     } else {

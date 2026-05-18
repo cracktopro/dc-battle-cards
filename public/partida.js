@@ -4037,10 +4037,14 @@ function crearCartaElemento(carta, tipo, slotIndex, opciones = {}) {
         }
     }
 
-    const imagenUrl = obtenerImagenCarta(carta);
-    cartaDiv.style.backgroundImage = `url(${imagenUrl})`;
-    cartaDiv.style.backgroundSize = 'cover';
-    cartaDiv.style.backgroundPosition = 'center top';
+    if (typeof window.aplicarImagenFondoCarta === 'function') {
+        window.aplicarImagenFondoCarta(cartaDiv, carta);
+    } else {
+        const imagenUrl = obtenerImagenCarta(carta);
+        cartaDiv.style.backgroundImage = `url(${imagenUrl})`;
+        cartaDiv.style.backgroundSize = 'cover';
+        cartaDiv.style.backgroundPosition = 'center top';
+    }
 
     if (!soloVista) {
         if (tipo === 'jugador' && turnoActual === 'jugador' && !cartasQueYaAtacaron.includes(slotIndex)) {

@@ -524,10 +524,14 @@ function crearElementoCartaSoloVisual(carta, destacarPoder = false, anchoCartaPx
         cartaDiv.style.width = `${anchoCartaPx}px`;
     }
 
-    const imagenUrl = obtenerImagenCarta(carta);
-    cartaDiv.style.backgroundImage = `url(${imagenUrl})`;
-    cartaDiv.style.backgroundSize = 'cover';
-    cartaDiv.style.backgroundPosition = 'center top';
+    if (typeof window.aplicarImagenFondoCarta === 'function') {
+        window.aplicarImagenFondoCarta(cartaDiv, carta);
+    } else {
+        const imagenUrl = obtenerImagenCarta(carta);
+        cartaDiv.style.backgroundImage = `url(${imagenUrl})`;
+        cartaDiv.style.backgroundSize = 'cover';
+        cartaDiv.style.backgroundPosition = 'center top';
+    }
 
     const detallesDiv = document.createElement('div');
     detallesDiv.classList.add('detalles-carta');
@@ -1439,10 +1443,14 @@ function cargarCartas() {
             }
             cartaDiv.dataset.keeperIndex = String(grupo.keeperIndex);
 
-            const imagenUrl = obtenerImagenCarta(carta);
-            cartaDiv.style.backgroundImage = `url(${imagenUrl})`;
-            cartaDiv.style.backgroundSize = 'cover';
-            cartaDiv.style.backgroundPosition = 'center top';
+            if (typeof window.aplicarImagenFondoCarta === 'function') {
+                window.aplicarImagenFondoCarta(cartaDiv, carta);
+            } else {
+                const imagenUrl = obtenerImagenCarta(carta);
+                cartaDiv.style.backgroundImage = `url(${imagenUrl})`;
+                cartaDiv.style.backgroundSize = 'cover';
+                cartaDiv.style.backgroundPosition = 'center top';
+            }
 
             const detallesDiv = document.createElement('div');
             detallesDiv.classList.add('detalles-carta');

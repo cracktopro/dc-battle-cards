@@ -370,10 +370,14 @@ function crearCartaColeccionElemento(carta, estaObtenida) {
         cartaDiv.classList.add('no-conseguida');
     }
 
-    const imagenUrl = obtenerImagenCarta(cartaVisual);
-    cartaDiv.style.backgroundImage = `url(${imagenUrl})`;
-    cartaDiv.style.backgroundSize = 'cover';
-    cartaDiv.style.backgroundPosition = 'center top';
+    if (typeof window.aplicarImagenFondoCarta === 'function') {
+        window.aplicarImagenFondoCarta(cartaDiv, cartaVisual, { modoColeccion: true });
+    } else {
+        const imagenUrl = obtenerImagenCarta(cartaVisual);
+        cartaDiv.style.backgroundImage = `url(${imagenUrl})`;
+        cartaDiv.style.backgroundSize = 'cover';
+        cartaDiv.style.backgroundPosition = 'center top';
+    }
 
     const detallesDiv = document.createElement('div');
     detallesDiv.classList.add('detalles-carta');
@@ -553,10 +557,14 @@ function crearTarjetaRevelacionSobre(carta) {
         cartaDiv.classList.add('apertura-sobre-carta-resplandor-oro');
     }
 
-    const imagenUrl = obtenerImagenCarta(carta);
-    cartaDiv.style.backgroundImage = `url(${imagenUrl})`;
-    cartaDiv.style.backgroundSize = 'cover';
-    cartaDiv.style.backgroundPosition = 'center top';
+    if (typeof window.aplicarImagenFondoCarta === 'function') {
+        window.aplicarImagenFondoCarta(cartaDiv, carta);
+    } else {
+        const imagenUrl = obtenerImagenCarta(carta);
+        cartaDiv.style.backgroundImage = `url(${imagenUrl})`;
+        cartaDiv.style.backgroundSize = 'cover';
+        cartaDiv.style.backgroundPosition = 'center top';
+    }
 
     const detallesDiv = document.createElement('div');
     detallesDiv.classList.add('detalles-carta');

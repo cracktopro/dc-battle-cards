@@ -490,8 +490,11 @@
             <div class="asaltos-recomp-bloque">
                 <div class="asaltos-recomp-bloque-titulo">Recompensas garantizadas</div>
                 <div class="asaltos-recomp-garant-inner">
-                    <div class="asaltos-recomp-carta-linea" title="Una carta aleatoria del pool del asalto">Carta aleatoria</div>
                     <div class="asaltos-recomp-garant-datos">
+                        <div class="asaltos-recomp-fila-obj" title="Una carta aleatoria del pool del asalto">
+                            <img class="asaltos-recomp-obj-icon" src="resources/icons/cardback.png" alt="">
+                            <span class="asaltos-recomp-obj-txt">Carta aleatoria</span>
+                        </div>
                         <div class="asaltos-recomp-meta">
                             <img class="asaltos-recomp-moneda-icon" src="resources/icons/moneda.png" alt="">
                             <span><strong>${pts.toLocaleString('es-ES')}</strong> <span class="asaltos-recomp-dif-tag">(${difLabel})</span></span>

@@ -229,6 +229,65 @@ function renderizarTabsNivelesDesafio(mapaDesafiosNivel, desbloqueadoPorNivel, c
     }
 }
 
+function crearTagRecompensaDesafio(iconSrc, alt, texto, { objeto = false } = {}) {
+    const tag = document.createElement('div');
+    tag.className = 'evento-recompensa-item';
+    if (objeto) {
+        tag.classList.add('evento-recompensa-item--objeto');
+    }
+    const img = document.createElement('img');
+    img.src = iconSrc;
+    img.alt = alt;
+    img.className = 'evento-recompensa-item-icon';
+    img.draggable = false;
+    const span = document.createElement('span');
+    span.className = 'evento-recompensa-item-txt';
+    span.textContent = texto;
+    tag.appendChild(img);
+    tag.appendChild(span);
+    return tag;
+}
+
+function poblarRecompensasDesafioUi(recompensasEl, desafio, mapaCatalogo) {
+    if (!recompensasEl || !desafio) {
+        return;
+    }
+    recompensasEl.innerHTML = '';
+
+    const cartasRecompensa = Array.isArray(desafio.cartas)
+        ? desafio.cartas.map((nombre) => String(nombre || '').trim()).filter(Boolean)
+        : [];
+
+    cartasRecompensa.forEach((nombreCarta) => {
+        const cartaRecompensaCatalogo = mapaCatalogo.get(normalizarNombre(nombreCarta)) || { Nombre: nombreCarta, Nivel: 1 };
+        const mini = document.createElement('div');
+        mini.className = 'evento-recompensa-card evento-recompensa-carta-fija';
+        mini.style.backgroundImage = `url(${obtenerImagenCarta(cartaRecompensaCatalogo)})`;
+        const nombreMini = document.createElement('div');
+        nombreMini.className = 'evento-enemigo-nombre';
+        nombreMini.textContent = cartaRecompensaCatalogo.Nombre || nombreCarta;
+        mini.appendChild(nombreMini);
+        recompensasEl.appendChild(mini);
+    });
+
+    const puntosDesafio = Math.max(0, Number(desafio.puntos || 0));
+    recompensasEl.appendChild(
+        crearTagRecompensaDesafio(ICONO_MONEDA, 'Moneda', puntosDesafio.toLocaleString('es-ES'))
+    );
+
+    if (Number(desafio.mejora || 0) > 0) {
+        recompensasEl.appendChild(
+            crearTagRecompensaDesafio(ICONO_MEJORA, 'Mejora', `x${desafio.mejora}`, { objeto: true })
+        );
+    }
+
+    if (Number(desafio.mejora_especial || 0) > 0) {
+        recompensasEl.appendChild(
+            crearTagRecompensaDesafio(ICONO_MEJORA_ESPECIAL, 'Mejora especial', `x${desafio.mejora_especial}`, { objeto: true })
+        );
+    }
+}
+
 function crearEstrellas(cantidad) {
     const wrapper = document.createElement('div');
     wrapper.className = 'd-flex';
@@ -289,88 +348,93 @@ async function renderizarDesafiosGlobal() {
         const completado = completadosSet.has(Number(desafio.id));
 
         const card = document.createElement('div');
-        card.className = `desafio-card ${completado ? 'completado' : 'pendiente'}`;
+        card.className = `evento-card desafio-card ${completado ? 'completado' : 'pendiente'}`;
 
         const nombre = document.createElement('div');
-        nombre.className = 'desafio-nombre';
+        nombre.className = 'evento-nombre desafio-nombre';
         nombre.textContent = desafio.nombre;
 
         const descripcion = document.createElement('div');
-        descripcion.className = 'desafio-descripcion';
+        descripcion.className = 'evento-descripcion desafio-descripcion';
         descripcion.textContent = desafio.descripcion || 'Sin descripción.';
 
         const dificultad = document.createElement('div');
         dificultad.className = 'desafio-meta';
-        dificultad.textContent = 'Dificultad';
+        dificultad.textContent = 'Dificultad ';
         dificultad.appendChild(crearEstrellas(desafio.dificultad));
 
+        const enemigos = document.createElement('div');
+        enemigos.className = 'evento-enemigos';
         const etiquetaEnemigos = document.createElement('div');
-        etiquetaEnemigos.className = 'desafio-enemigos-label';
+        etiquetaEnemigos.className = 'evento-enemigos-label';
         etiquetaEnemigos.textContent = 'Enemigos';
-
-        const composicion = document.createElement('div');
-        composicion.className = 'desafio-enemigos';
         const rivales = [
             ...(desafio.enemigos || []).map(nombreRival => ({ nombre: nombreRival, boss: false })),
             ...(desafio.boss ? [{ nombre: desafio.boss, boss: true }] : [])
         ];
 
-        rivales.forEach(rival => {
+        const itemsCarruselEnemigos = rivales.map((rival) => {
             const cartaBase = resolverCartaEnemigoVistaSync(rival.nombre, mapaCatalogo);
-            const enemigoCard = document.createElement('div');
-            enemigoCard.className = `desafio-enemigo-card ${rival.boss ? 'boss' : ''}`;
-            enemigoCard.style.backgroundImage = `url(${obtenerImagenCarta(cartaBase)})`;
-
-            const etiqueta = document.createElement('div');
-            etiqueta.className = 'desafio-enemigo-nombre';
-            etiqueta.textContent = cartaBase.Nombre || rival.nombre;
-            enemigoCard.appendChild(etiqueta);
-            composicion.appendChild(enemigoCard);
+            return {
+                nombre: cartaBase.Nombre || rival.nombre,
+                imagenUrl: obtenerImagenCarta(cartaBase),
+                boss: Boolean(rival.boss),
+            };
         });
 
-        const etiquetaRecompensas = document.createElement('div');
-        etiquetaRecompensas.className = 'evento-recompensas-label';
-        etiquetaRecompensas.textContent = 'Recompensas';
+        const tieneBoss = rivales.some((rival) => rival.boss);
+        const carruselMount = document.createElement('div');
+        carruselMount.className = 'evento-enemigos-carrusel-mount';
+
+        if (typeof window.DCCarrusel3d?.montar === 'function') {
+            enemigos.appendChild(etiquetaEnemigos);
+            enemigos.appendChild(carruselMount);
+            window.DCCarrusel3d.montar(carruselMount, {
+                items: itemsCarruselEnemigos,
+                claseExtra: 'evento-enemigos-carrusel',
+                ariaAnterior: 'Enemigo anterior',
+                ariaSiguiente: 'Siguiente enemigo',
+                sufijoBoss: ' (Boss)',
+                iniciarEnBoss: tieneBoss,
+            });
+        } else {
+            enemigos.classList.add('evento-enemigos--rejilla');
+            enemigos.appendChild(etiquetaEnemigos);
+            rivales.forEach((rival) => {
+                const cartaBase = resolverCartaEnemigoVistaSync(rival.nombre, mapaCatalogo);
+                const enemigoCard = document.createElement('div');
+                enemigoCard.className = `evento-enemigo-card ${rival.boss ? 'boss' : ''}`;
+                enemigoCard.style.backgroundImage = `url(${obtenerImagenCarta(cartaBase)})`;
+
+                const etiqueta = document.createElement('div');
+                etiqueta.className = 'evento-enemigo-nombre';
+                const nombreBase = cartaBase.Nombre || rival.nombre;
+                etiqueta.textContent = rival.boss ? `${nombreBase} (Boss)` : nombreBase;
+                enemigoCard.appendChild(etiqueta);
+                enemigos.appendChild(enemigoCard);
+            });
+        }
+
+        const recompensasBloque = document.createElement('div');
+        recompensasBloque.className = 'evento-recompensas-bloque';
+
+        const recompensaLabel = document.createElement('div');
+        recompensaLabel.className = 'evento-recompensas-label';
+        recompensaLabel.textContent = 'Recompensas';
+
+        const recompensasCaja = document.createElement('div');
+        recompensasCaja.className = 'evento-recompensas-caja';
 
         const recompensas = document.createElement('div');
         recompensas.className = 'evento-recompensas';
-        const cartasRecompensa = Array.isArray(desafio.cartas)
-            ? desafio.cartas.map(nombre => String(nombre || '').trim()).filter(Boolean)
-            : [];
-        cartasRecompensa.forEach(nombreCarta => {
-            const cartaRecompensaCatalogo = mapaCatalogo.get(normalizarNombre(nombreCarta)) || { Nombre: nombreCarta, Nivel: 1 };
-            const mini = document.createElement('div');
-            mini.className = 'desafio-recompensa-card';
-            mini.style.backgroundImage = `url(${obtenerImagenCarta(cartaRecompensaCatalogo)})`;
-            const nombreMini = document.createElement('div');
-            nombreMini.className = 'desafio-enemigo-nombre';
-            nombreMini.textContent = cartaRecompensaCatalogo.Nombre || nombreCarta;
-            mini.appendChild(nombreMini);
-            recompensas.appendChild(mini);
-        });
+        poblarRecompensasDesafioUi(recompensas, desafio, mapaCatalogo);
 
-        const puntosDesafio = Math.max(0, Number(desafio.puntos || 0));
-        const metaPuntos = document.createElement('div');
-        metaPuntos.className = 'evento-recompensa-tag';
-        metaPuntos.innerHTML = `<img src="${ICONO_MONEDA}" alt="Moneda" style="width:28px;height:28px;object-fit:contain;"> <span>${puntosDesafio}</span>`;
-        recompensas.appendChild(metaPuntos);
-
-        if (Number(desafio.mejora || 0) > 0) {
-            const tagMejora = document.createElement('div');
-            tagMejora.className = 'evento-recompensa-tag';
-            tagMejora.innerHTML = `<img src="${ICONO_MEJORA}" alt="Mejora" style="width:28px;height:28px;object-fit:contain;"> <span>x${desafio.mejora}</span>`;
-            recompensas.appendChild(tagMejora);
-        }
-
-        if (Number(desafio.mejora_especial || 0) > 0) {
-            const tagEspecial = document.createElement('div');
-            tagEspecial.className = 'evento-recompensa-tag';
-            tagEspecial.innerHTML = `<img src="${ICONO_MEJORA_ESPECIAL}" alt="Mejora especial" style="width:28px;height:28px;object-fit:contain;"> <span>x${desafio.mejora_especial}</span>`;
-            recompensas.appendChild(tagEspecial);
-        }
+        recompensasCaja.appendChild(recompensas);
+        recompensasBloque.appendChild(recompensaLabel);
+        recompensasBloque.appendChild(recompensasCaja);
 
         const boton = document.createElement('button');
-        boton.className = `btn mt-2 ${completado ? 'btn-success' : 'btn-primary'}`;
+        boton.className = `btn ${completado ? 'btn-success' : 'btn-primary'}`;
         boton.textContent = completado ? 'Volver a jugar' : 'Jugar';
         boton.onclick = async () => {
             try {
@@ -382,16 +446,14 @@ async function renderizarDesafiosGlobal() {
         };
 
         const bloqueInferior = document.createElement('div');
-        bloqueInferior.className = 'desafio-bottom';
-        bloqueInferior.appendChild(etiquetaRecompensas);
-        bloqueInferior.appendChild(recompensas);
+        bloqueInferior.className = 'evento-bottom';
+        bloqueInferior.appendChild(recompensasBloque);
         bloqueInferior.appendChild(boton);
 
         card.appendChild(nombre);
         card.appendChild(descripcion);
         card.appendChild(dificultad);
-        card.appendChild(etiquetaEnemigos);
-        card.appendChild(composicion);
+        card.appendChild(enemigos);
         card.appendChild(bloqueInferior);
         grid.appendChild(card);
     });
@@ -604,7 +666,11 @@ function renderizarCartasSeleccionDesafio() {
         } else if (Number(carta.Nivel || 1) >= 6) {
             cartaDiv.classList.add('nivel-legendaria');
         }
-        cartaDiv.style.backgroundImage = `url(${obtenerImagenCarta(carta)})`;
+        if (typeof window.aplicarImagenFondoCarta === 'function') {
+            window.aplicarImagenFondoCarta(cartaDiv, carta);
+        } else {
+            cartaDiv.style.backgroundImage = `url(${obtenerImagenCarta(carta)})`;
+        }
 
         const estrellasDiv = document.createElement('div');
         estrellasDiv.className = 'estrellas-carta';

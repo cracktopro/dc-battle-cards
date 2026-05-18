@@ -66,6 +66,194 @@ function obtenerImagenCarta(carta) {
 window.obtenerImagenCarta = obtenerImagenCarta;
 window.cartaMuestraImagenFinal = cartaMuestraImagenFinal;
 
+const DC_NIVEL_MIN_CARTA_HOLO = 8;
+
+/** Reloj global: nuevas capas holo entran en la misma fase (evita saltos al re-renderizar). */
+const DC_HOLO_ANIM = {
+    scrollMs: 5500,
+    vivoMs: 1600,
+    vivoSecundariaOffsetMs: 800,
+};
+const DC_HOLO_EPOCH_MS = typeof performance !== 'undefined' ? performance.now() : 0;
+
+function holoAnimacionesReducidas() {
+    return typeof window.matchMedia === 'function'
+        && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+function calcularRetrasosAnimacionHoloTextura(vivoOffsetExtraMs = 0) {
+    const t = performance.now() - DC_HOLO_EPOCH_MS;
+    const scrollDelay = -(((t % DC_HOLO_ANIM.scrollMs) + DC_HOLO_ANIM.scrollMs) % DC_HOLO_ANIM.scrollMs);
+    const vivoT = t + vivoOffsetExtraMs;
+    const vivoDelay = -(((vivoT % DC_HOLO_ANIM.vivoMs) + DC_HOLO_ANIM.vivoMs) % DC_HOLO_ANIM.vivoMs);
+    return { scrollDelay, vivoDelay };
+}
+
+function sincronizarAnimacionesHoloTextura(texturaEl, vivoOffsetExtraMs = 0) {
+    if (!texturaEl || holoAnimacionesReducidas()) {
+        return;
+    }
+    const { scrollDelay, vivoDelay } = calcularRetrasosAnimacionHoloTextura(vivoOffsetExtraMs);
+    texturaEl.style.animationDelay = `${scrollDelay}ms, ${vivoDelay}ms`;
+}
+
+function sincronizarAnimacionesHoloCapa(holoEl) {
+    if (!holoEl) {
+        return;
+    }
+    sincronizarAnimacionesHoloTextura(holoEl.querySelector('.carta-holo__textura--primaria'), 0);
+    sincronizarAnimacionesHoloTextura(
+        holoEl.querySelector('.carta-holo__textura--secundaria'),
+        DC_HOLO_ANIM.vivoSecundariaOffsetMs
+    );
+}
+
+function cartaDebeMostrarEfectoHolo(carta) {
+    return Number(carta?.Nivel || 1) >= DC_NIVEL_MIN_CARTA_HOLO;
+}
+
+function quitarCapasHoloDeCarta(cartaDiv) {
+    if (!cartaDiv) {
+        return;
+    }
+    cartaDiv.querySelectorAll(':scope > .carta-fondo, :scope > .carta-holo').forEach((nodo) => nodo.remove());
+    cartaDiv.classList.remove('carta--con-holo');
+    delete cartaDiv.dataset.dcHoloActivo;
+    delete cartaDiv.dataset.dcHoloModo;
+    delete cartaDiv.dataset.dcHoloImagen;
+}
+
+function crearCapaHoloElemento() {
+    const holo = document.createElement('div');
+    holo.className = 'carta-holo';
+    holo.setAttribute('aria-hidden', 'true');
+
+    const texturaPrimaria = document.createElement('div');
+    texturaPrimaria.className = 'carta-holo__textura carta-holo__textura--primaria';
+    const texturaSecundaria = document.createElement('div');
+    texturaSecundaria.className = 'carta-holo__textura carta-holo__textura--secundaria';
+
+    holo.appendChild(texturaPrimaria);
+    holo.appendChild(texturaSecundaria);
+    sincronizarAnimacionesHoloCapa(holo);
+    return holo;
+}
+
+/** Colección: arte en .carta-fondo (filtro sin afectar texto/UI). */
+function insertarCapasArteYHoloEnCarta(cartaDiv, imagenUrl) {
+    const fondo = document.createElement('div');
+    fondo.className = 'carta-fondo';
+    fondo.style.backgroundImage = `url(${imagenUrl})`;
+    fondo.setAttribute('aria-hidden', 'true');
+
+    cartaDiv.insertBefore(crearCapaHoloElemento(), cartaDiv.firstChild);
+    cartaDiv.insertBefore(fondo, cartaDiv.firstChild);
+}
+
+/** Resto de vistas: overlay holo sin quitar background-image del contenedor. */
+function insertarCapaHoloEnCarta(cartaDiv) {
+    if (cartaDiv.querySelector(':scope > .carta-holo')) {
+        return;
+    }
+    cartaDiv.insertBefore(crearCapaHoloElemento(), cartaDiv.firstChild);
+}
+
+/**
+ * Imagen + holo nivel 8.
+ * Por defecto conserva la maquetación existente (background en el mismo nodo).
+ * modoColeccion: capa .carta-fondo + holo (solo vista colección).
+ */
+function aplicarImagenFondoCarta(cartaDiv, carta, opciones = {}) {
+    if (!cartaDiv) {
+        return;
+    }
+    const imagenUrl = opciones.imagenUrl
+        || (typeof obtenerImagenCarta === 'function' ? obtenerImagenCarta(carta) : 'img/default-image.jpg');
+    const modoColeccion = Boolean(opciones.modoColeccion);
+    const mostrarHolo = cartaDebeMostrarEfectoHolo(carta);
+    const modoClave = modoColeccion ? 'coleccion' : 'overlay';
+    const urlFondo = `url(${imagenUrl})`;
+
+    const holoExistente = cartaDiv.querySelector(':scope > .carta-holo');
+    const fondoExistente = cartaDiv.querySelector(':scope > .carta-fondo');
+    const holoActivoPrev = cartaDiv.dataset.dcHoloActivo === '1';
+    const modoPrev = cartaDiv.dataset.dcHoloModo || '';
+    const estructuraHoloIntacta = Boolean(mostrarHolo && holoExistente && holoActivoPrev && modoPrev === modoClave
+        && ((modoColeccion && fondoExistente) || (!modoColeccion && !fondoExistente)));
+
+    if (estructuraHoloIntacta) {
+        if (modoColeccion) {
+            if (fondoExistente.style.backgroundImage !== urlFondo) {
+                fondoExistente.style.backgroundImage = urlFondo;
+            }
+            cartaDiv.style.backgroundImage = '';
+        } else {
+            if (cartaDiv.style.backgroundImage !== urlFondo) {
+                cartaDiv.style.backgroundImage = urlFondo;
+                cartaDiv.style.backgroundSize = 'cover';
+                cartaDiv.style.backgroundPosition = 'center top';
+            }
+        }
+        cartaDiv.classList.add('carta--con-holo');
+        cartaDiv.dataset.dcHoloActivo = '1';
+        cartaDiv.dataset.dcHoloModo = modoClave;
+        cartaDiv.dataset.dcHoloImagen = imagenUrl;
+        return;
+    }
+
+    if (!mostrarHolo && !holoExistente && !fondoExistente && cartaDiv.dataset.dcHoloImagen === imagenUrl
+        && cartaDiv.style.backgroundImage === urlFondo) {
+        return;
+    }
+
+    quitarCapasHoloDeCarta(cartaDiv);
+
+    if (mostrarHolo && modoColeccion) {
+        cartaDiv.classList.add('carta--con-holo');
+        cartaDiv.style.backgroundImage = '';
+        cartaDiv.style.backgroundSize = '';
+        cartaDiv.style.backgroundPosition = '';
+        insertarCapasArteYHoloEnCarta(cartaDiv, imagenUrl);
+        cartaDiv.dataset.dcHoloActivo = '1';
+        cartaDiv.dataset.dcHoloModo = modoClave;
+        cartaDiv.dataset.dcHoloImagen = imagenUrl;
+        return;
+    }
+
+    cartaDiv.style.backgroundImage = urlFondo;
+    cartaDiv.style.backgroundSize = 'cover';
+    cartaDiv.style.backgroundPosition = 'center top';
+
+    if (mostrarHolo) {
+        cartaDiv.classList.add('carta--con-holo');
+        insertarCapaHoloEnCarta(cartaDiv);
+        cartaDiv.dataset.dcHoloActivo = '1';
+        cartaDiv.dataset.dcHoloModo = modoClave;
+    } else {
+        cartaDiv.dataset.dcHoloActivo = '0';
+        cartaDiv.dataset.dcHoloModo = '';
+    }
+    cartaDiv.dataset.dcHoloImagen = imagenUrl;
+}
+
+function asegurarCssCartaHoloCargado() {
+    if (typeof document === 'undefined' || document.querySelector('link[data-dc-carta-holo-css]')) {
+        return;
+    }
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = 'css/carta-holo.css';
+    link.dataset.dcCartaHoloCss = '1';
+    document.head.appendChild(link);
+}
+
+window.DC_NIVEL_MIN_CARTA_HOLO = DC_NIVEL_MIN_CARTA_HOLO;
+window.cartaDebeMostrarEfectoHolo = cartaDebeMostrarEfectoHolo;
+window.aplicarImagenFondoCarta = aplicarImagenFondoCarta;
+window.quitarCapasHoloDeCarta = quitarCapasHoloDeCarta;
+
+asegurarCssCartaHoloCargado();
+
 function normalizarTextoHabilidad(valor) {
     return String(valor || '').trim();
 }
@@ -783,6 +971,9 @@ function crearBadgeAfiliacionCarta(carta) {
 
 window.obtenerMetaHabilidadCarta = obtenerMetaHabilidadCarta;
 window.crearBadgeHabilidadCarta = crearBadgeHabilidadCarta;
+window.enlazarTooltipHabilidadGlobal = enlazarTooltipHabilidadABadge;
+window.mostrarTooltipHabilidadGlobal = mostrarTooltipHabilidadGlobal;
+window.ocultarTooltipHabilidadGlobal = ocultarTooltipHabilidadGlobal;
 window.aplicarPrefijoAfiliacionNombreCarta = aplicarPrefijoAfiliacionNombreCarta;
 window.crearBadgeAfiliacionCarta = crearBadgeAfiliacionCarta;
 window.obtenerSkillPowerNumericoCarta = obtenerSkillPowerNumericoCarta;
@@ -2095,7 +2286,7 @@ function normalizarMenuLateral() {
         linkMultijugador.removeEventListener('click', bloquearNavegacionMultijugador);
     }
 
-    const versionLabelTexto = 'Versión: 1.2.3';
+    const versionLabelTexto = 'Versión: 1.2.4';
     let versionLabel = menu.querySelector('#menu-version-label');
     if (!versionLabel) {
         versionLabel = document.createElement('div');

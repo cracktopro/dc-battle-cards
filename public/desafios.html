@@ -11,6 +11,7 @@
     <link href="css/salud.css" rel="stylesheet">
     <link href="css/scrollbar.css" rel="stylesheet">
     <link href="css/app-layout.css" rel="stylesheet">
+    <link href="css/jugarPartida.css" rel="stylesheet">
 
     <style>
         .desafios-grid {
@@ -54,74 +55,24 @@
             color: #ffd8d8;
         }
 
-        .desafio-card {
-            background: linear-gradient(
-                140deg,
-                rgba(8, 18, 36, 0.9),
-                rgba(var(--dc-accent-user-rgb, 0, 123, 255), 0.16)
-            );
-            border: 1px solid rgba(0, 209, 255, 0.35);
-            border-radius: 14px;
-            box-shadow: 0 0 16px rgba(0, 123, 255, 0.25);
-            padding: 14px;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            min-height: 560px;
-            height: 100%;
+        /* Panel desafío: base visual compartida con eventos (jugarPartida.css → .evento-card) */
+        .desafio-card.evento-card {
+            border-radius: 12px;
+            padding: 12px;
         }
 
-        .desafio-nombre {
-            color: #dff8ff;
-            font-size: 1.15rem;
-            font-weight: 700;
+        .desafio-nombre.evento-nombre {
+            font-size: 1.05rem;
         }
 
-        .desafio-descripcion {
-            color: rgba(var(--dc-accent-user-rgb, 0, 123, 255), 0.86);
-            font-size: 0.9rem;
-            min-height: 48px;
+        .desafio-descripcion.evento-descripcion {
+            font-size: 0.88rem;
+            min-height: 42px;
         }
 
         .desafio-meta {
             color: rgba(var(--dc-accent-user-rgb, 0, 123, 255), 0.9);
             font-size: 0.84rem;
-        }
-
-        /* Misma presentación que paneles de eventos en vistaJuego (jugarPartida.css), solo bloque recompensas */
-        .evento-recompensas-label {
-            color: #ffd700;
-            font-size: 0.68rem;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            text-shadow: 0 0 8px rgba(255, 215, 0, 0.7);
-        }
-
-        .evento-recompensas {
-            background: rgba(255, 215, 0, 0.1);
-            border: 1px solid rgba(255, 215, 0, 0.42);
-            border-radius: 10px;
-            padding: 7px 9px;
-            color: #ffd700;
-            font-size: 0.78rem;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            flex-wrap: wrap;
-        }
-
-        .evento-recompensa-tag {
-            border: 1px solid rgba(255, 215, 0, 0.6);
-            background: rgba(255, 215, 0, 0.14);
-            border-radius: 999px;
-            padding: 3px 8px;
-            color: #ffd700;
-            font-size: 0.66rem;
-            text-transform: uppercase;
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
         }
 
         .desafio-card.pendiente {
@@ -134,77 +85,16 @@
             border-color: rgba(255, 88, 88, 0.48);
         }
 
-        .desafio-enemigos-label {
-            color: #ff5f5f;
-            font-size: 0.68rem;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            text-shadow: 0 0 8px rgba(255, 42, 42, 0.7);
-            margin-bottom: -2px;
-        }
-
-        .desafio-enemigos {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(78px, 78px));
-            gap: 8px;
-        }
-
-        .desafio-enemigo-card {
-            width: 78px;
-            height: 108px;
-            border: 1px solid rgba(0, 123, 255, 0.5);
-            border-radius: 8px;
+        .evento-recompensa-card.evento-recompensa-carta-fija {
             background-size: cover;
             background-position: center top;
-            position: relative;
-            overflow: hidden;
+            border: 1px solid rgba(var(--dc-accent-user-rgb), 0.45);
+            box-shadow: 0 0 8px rgba(var(--dc-accent-user-rgb), 0.2);
         }
 
-        .desafio-enemigo-card.boss {
-            border: 2px solid rgba(255, 102, 40, 0.95);
-            box-shadow: 0 0 10px rgba(255, 95, 31, 0.7), 0 0 16px rgba(255, 42, 42, 0.45);
-        }
-
-        .desafio-enemigo-nombre {
-            position: absolute;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            padding: 3px 4px;
-            font-size: 0.56rem;
-            line-height: 1.1;
-            background: rgba(0, 0, 0, 0.72);
-            color: #fff;
-            text-align: center;
-        }
-
-        .desafio-enemigo-card.boss .desafio-enemigo-nombre {
-            background: linear-gradient(90deg, rgba(150, 22, 22, 0.92), rgba(255, 95, 31, 0.88));
-        }
-
-        .desafio-recompensa-card {
-            width: 62px;
-            height: 88px;
-            border: 1px solid rgba(0, 123, 255, 0.55);
-            border-radius: 7px;
-            background-size: cover;
-            background-position: center top;
-            position: relative;
-            overflow: hidden;
-            box-shadow: 0 0 8px rgba(0, 123, 255, 0.24);
-        }
-
-        .desafio-recompensa-card .desafio-enemigo-nombre {
+        .evento-recompensa-card.evento-recompensa-carta-fija .evento-enemigo-nombre {
             font-size: 0.5rem;
             padding: 2px 3px;
-        }
-
-        .desafio-bottom {
-            margin-top: auto;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
         }
 
         /* Tema villano: reemplaza acentos azules por rojos */
@@ -223,25 +113,27 @@
             color: #fff3f3;
         }
 
-        .content-container.camino-villano-activo .desafio-card {
+        .content-container.camino-villano-activo .desafio-card.evento-card {
             background: linear-gradient(140deg, rgba(40, 8, 12, 0.9), rgba(110, 16, 22, 0.26));
             border-color: rgba(255, 88, 88, 0.36);
             box-shadow: 0 0 16px rgba(255, 52, 52, 0.22);
         }
 
+        .evento-bottom .btn-primary:not(:disabled),
         .desafio-bottom .btn-primary:not(:disabled) {
             background-color: rgba(var(--dc-accent-user-rgb, 0, 123, 255), 0.34);
             border-color: rgba(var(--dc-accent-user-rgb, 0, 123, 255), 0.72);
             box-shadow: 0 0 12px rgba(var(--dc-accent-user-rgb, 0, 123, 255), 0.28);
         }
 
+        .evento-bottom .btn-primary:not(:disabled):hover,
         .desafio-bottom .btn-primary:not(:disabled):hover {
             background-color: rgba(var(--dc-accent-user-rgb, 0, 123, 255), 0.52);
             border-color: rgba(var(--dc-accent-user-rgb, 0, 123, 255), 0.95);
             box-shadow: 0 0 16px rgba(var(--dc-accent-user-rgb, 0, 123, 255), 0.42);
         }
 
-        .content-container.camino-villano-activo .desafio-card.pendiente {
+        .content-container.camino-villano-activo .desafio-card.evento-card.pendiente {
             box-shadow: 0 0 14px rgba(255, 102, 102, 0.28), 0 0 24px rgba(255, 66, 66, 0.16);
             border-color: rgba(255, 108, 108, 0.42);
         }
@@ -501,6 +393,7 @@
     <script src="js/skinsCartas.js"></script>
     <script src="js/seleccionCartaApariencia.js"></script>
     <script src="js/limpiarPvpPartidaLocal.js"></script>
+    <script src="js/carrusel3d.js"></script>
     <script src="desafios.js"></script>
     <script src="js/menu-mobile.js" defer></script>
 </body>

@@ -719,7 +719,11 @@ function crearItemOfertaCartaTienda(oferta, seccionLista, indice) {
     } else if (Number(oferta.carta.Nivel || 1) >= 6) {
         preview.classList.add('nivel-legendaria');
     }
-    preview.style.backgroundImage = `url(${obtenerImagenCarta(oferta.carta)})`;
+    if (typeof window.aplicarImagenFondoCarta === 'function') {
+        window.aplicarImagenFondoCarta(preview, oferta.carta);
+    } else {
+        preview.style.backgroundImage = `url(${obtenerImagenCarta(oferta.carta)})`;
+    }
 
     if (oferta.esOfertaDia && Number(oferta.descuentoPct || 0) > 0) {
         preview.classList.add('preview-carta-tienda--oferta');

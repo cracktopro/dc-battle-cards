@@ -499,10 +499,14 @@ function crearCartaMazoElemento(carta, indiceCarta) {
         cartaDiv.classList.add('nivel-legendaria');
     }
 
-    const imagenUrl = obtenerImagenCarta(carta);
-    cartaDiv.style.backgroundImage = `url(${imagenUrl})`;
-    cartaDiv.style.backgroundSize = 'cover';
-    cartaDiv.style.backgroundPosition = 'center top';
+    if (typeof window.aplicarImagenFondoCarta === 'function') {
+        window.aplicarImagenFondoCarta(cartaDiv, carta);
+    } else {
+        const imagenUrl = obtenerImagenCarta(carta);
+        cartaDiv.style.backgroundImage = `url(${imagenUrl})`;
+        cartaDiv.style.backgroundSize = 'cover';
+        cartaDiv.style.backgroundPosition = 'center top';
+    }
 
     const detallesDiv = document.createElement('div');
     detallesDiv.classList.add('detalles-carta');
@@ -635,10 +639,14 @@ function crearCartaReemplazoElemento(carta) {
         item.classList.add('nivel-legendaria');
     }
 
-    const imagenUrl = obtenerImagenCarta(carta);
-    item.style.backgroundImage = `url(${imagenUrl})`;
-    item.style.backgroundSize = 'cover';
-    item.style.backgroundPosition = 'center top';
+    if (typeof window.aplicarImagenFondoCarta === 'function') {
+        window.aplicarImagenFondoCarta(item, carta);
+    } else {
+        const imagenUrl = obtenerImagenCarta(carta);
+        item.style.backgroundImage = `url(${imagenUrl})`;
+        item.style.backgroundSize = 'cover';
+        item.style.backgroundPosition = 'center top';
+    }
 
     const detallesDiv = document.createElement('div');
     detallesDiv.classList.add('detalles-carta');

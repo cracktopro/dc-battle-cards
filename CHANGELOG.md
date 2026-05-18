@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.2.4
+
+- Etiqueta de versión del menú lateral: **`Versión: 1.2.4`** (`public/js/cartas.js`, `package.json`).
+- **Efecto holográfico nivel 8** (`public/css/carta-holo.css`, `public/js/cartas.js`): holo en cartas nivel 8 en toda la app; sincronización global de animación para evitar saltos al re-renderizar; modo colección con capa `.carta-fondo`.
+- **Paneles de eventos** (`public/jugarPartida.js`, `public/css/jugarPartida.css`, `public/js/carrusel3d.js`): carrusel 3D de enemigos, recompensas dinámicas por dificultad, selector custom con iconos `star6`, tooltip de carta aleatoria y estilo de panel unificado.
+- **Paneles de desafíos** (`public/desafios.js`, `public/desafios.html`): mismo estilo visual que eventos; recompensas fijas del Excel; carrusel con boss al frente si existe.
+- **Asaltos** (`public/js/asaltos.js`): reverso `cardback` en recompensas garantizadas.
+- Iconos: `holo.png`, `holo2.png`, `cardback*.png`, `cardback_random.png`.
+
 ## 1.2.3
 
 - Etiqueta de versión del menú lateral: **`Versión: 1.2.3`** (`public/js/cartas.js`, `package.json`).
