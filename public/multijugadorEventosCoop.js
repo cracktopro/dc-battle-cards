@@ -4,9 +4,6 @@
  */
 (function () {
     const EVENTOS_COOP_GRID_ID = 'multi-eventos-coop-grid';
-    const ICONO_MEJORA = '/resources/icons/mejora.png';
-    const ICONO_MEJORA_ESPECIAL = '/resources/icons/mejora_especial.png';
-    const ICONO_MONEDA = '/resources/icons/moneda.png';
 
     function normalizarNombre(nombre) {
         return String(nombre || '').trim().toLowerCase();
@@ -257,6 +254,8 @@
 
         contenedor.innerHTML = '';
 
+        const panelUi = window.DCEventoPanelUi;
+
         eventos.forEach((evento) => {
             const yaJugado = jugadosActual.has(Number(evento.id));
             const card = document.createElement('div');
@@ -270,91 +269,32 @@
             descripcion.className = 'evento-descripcion';
             descripcion.textContent = evento.descripcion || 'Sin descripción.';
 
-            /* Mismo orden visual que VS BOT: la etiqueta "Enemigos" va FUERA y
-             * encima del grid de enemigos, no dentro. */
-            const etiquetaEnemigos = document.createElement('div');
-            etiquetaEnemigos.className = 'evento-enemigos-label';
-            etiquetaEnemigos.textContent = 'Enemigos';
+            const enemigosEl = panelUi
+                ? panelUi.montarBloqueEnemigosEvento(evento, mapaCatalogo, resolverCartaEnemigoVistaSync)
+                : document.createElement('div');
 
-            const enemigosEl = document.createElement('div');
-            enemigosEl.className = 'evento-enemigos';
-
-            const rivales = [
-                ...(evento.enemigos || []).map((n) => ({ nombre: n, boss: false })),
-                ...(evento.boss ? [{ nombre: evento.boss, boss: true }] : [])
-            ];
-
-            rivales.forEach((rival) => {
-                const nombreEnemigo = rival.nombre;
-                const cartaBase = resolverCartaEnemigoVistaSync(nombreEnemigo, mapaCatalogo);
-                const enemigoCard = document.createElement('div');
-                enemigoCard.className = `evento-enemigo-card ${rival.boss ? 'boss' : ''}`;
-                enemigoCard.style.backgroundImage = `url(${typeof obtenerImagenCarta === 'function' ? obtenerImagenCarta(cartaBase) : ''})`;
-
-                const etiqueta = document.createElement('div');
-                etiqueta.className = 'evento-enemigo-nombre';
-                etiqueta.textContent = cartaBase.Nombre || nombreEnemigo;
-                enemigoCard.appendChild(etiqueta);
-                enemigosEl.appendChild(enemigoCard);
-            });
-
-            const recompensaLabel = document.createElement('div');
-            recompensaLabel.className = 'evento-recompensas-label';
-            recompensaLabel.textContent = 'Recompensas';
-
-            const recompensas = document.createElement('div');
-            recompensas.className = 'evento-recompensas';
-            /** Carta de recompensa aleatoria (no fija en XLSX): reverso con interrogación. */
-            const miniMisterio = document.createElement('div');
-            miniMisterio.className = 'evento-recompensa-card evento-recompensa-carta-aleatoria';
-            miniMisterio.setAttribute('title', 'Carta de recompensa aleatoria');
-            miniMisterio.innerHTML = '<span class="evento-recompensa-carta-aleatoria-simbolo" aria-hidden="true">?</span>';
-            recompensas.appendChild(miniMisterio);
-            const puntosEvento = Math.max(0, Number(evento.puntos || 0));
-            const metaPuntos = document.createElement('div');
-            metaPuntos.className = 'evento-recompensa-tag';
-            metaPuntos.innerHTML = `<img src="${ICONO_MONEDA}" alt="Moneda" style="width:28px;height:28px;object-fit:contain;"> <span>${puntosEvento}</span>`;
-            recompensas.appendChild(metaPuntos);
-            const cantidadMejoras = Math.max(0, Number(evento.mejora || 0));
-            if (cantidadMejoras > 0) {
-                const tagMejora = document.createElement('div');
-                tagMejora.className = 'evento-recompensa-tag';
-                tagMejora.innerHTML = `<img src="${ICONO_MEJORA}" alt="Mejora" style="width:28px;height:28px;object-fit:contain;"> <span>x${cantidadMejoras}</span>`;
-                recompensas.appendChild(tagMejora);
-            }
-            const cantidadEspeciales = Math.max(0, Number(evento.mejora_especial || 0));
-            if (cantidadEspeciales > 0) {
-                const tagEspecial = document.createElement('div');
-                tagEspecial.className = 'evento-recompensa-tag';
-                tagEspecial.innerHTML = `<img src="${ICONO_MEJORA_ESPECIAL}" alt="Mejora especial" style="width:28px;height:28px;object-fit:contain;"> <span>x${cantidadEspeciales}</span>`;
-                recompensas.appendChild(tagEspecial);
-            }
+            const { bloque: recompensasBloque, recompensasEl } = panelUi
+                ? panelUi.crearBloqueRecompensasEvento(evento, evento.dificultadSeleccionada)
+                : { bloque: document.createElement('div'), recompensasEl: document.createElement('div') };
 
             const contenedorDificultad = document.createElement('div');
             contenedorDificultad.className = 'evento-dificultad';
             const dificultadLabel = document.createElement('label');
             dificultadLabel.className = 'evento-dificultad-label';
             dificultadLabel.textContent = 'Dificultad';
-            const selectDificultad = document.createElement('select');
-            selectDificultad.className = 'evento-dificultad-select';
-            const optionPlaceholder = document.createElement('option');
-            optionPlaceholder.value = '';
-            optionPlaceholder.textContent = 'Selecciona Dificultad';
-            selectDificultad.appendChild(optionPlaceholder);
-            for (let d = 1; d <= 6; d += 1) {
-                const option = document.createElement('option');
-                option.value = String(d);
-                option.textContent = `${'★'.repeat(d)}  Nivel ${d}`;
-                selectDificultad.appendChild(option);
-            }
-            selectDificultad.value = evento.dificultadSeleccionada ? String(Number(evento.dificultadSeleccionada)) : '';
-            selectDificultad.disabled = yaJugado;
-            selectDificultad.addEventListener('change', () => {
-                const valor = selectDificultad.value;
-                evento.dificultadSeleccionada = valor ? Number(valor) : null;
-            });
+
+            const pickerDificultad = panelUi
+                ? panelUi.crearSelectorDificultadEvento(
+                    evento,
+                    (nivel) => {
+                        evento.dificultadSeleccionada = nivel;
+                        panelUi.actualizarRecompensasEventoUi(recompensasEl, evento, nivel);
+                    },
+                    { disabled: yaJugado }
+                )
+                : document.createElement('div');
             contenedorDificultad.appendChild(dificultadLabel);
-            contenedorDificultad.appendChild(selectDificultad);
+            contenedorDificultad.appendChild(pickerDificultad);
 
             const empezarBtn = document.createElement('button');
             empezarBtn.type = 'button';
@@ -363,7 +303,7 @@
             empezarBtn.disabled = yaJugado;
             empezarBtn.addEventListener('click', () => {
                 if (yaJugado) return;
-                const dif = Number(selectDificultad.value);
+                const dif = Number(evento.dificultadSeleccionada);
                 if (!Number.isFinite(dif) || dif <= 0) {
                     mostrarMensajeCoop('Selecciona una dificultad antes de empezar el evento.', 'warning');
                     return;
@@ -377,19 +317,14 @@
                 }
             });
 
-            /* Mismo bloque inferior que VS BOT (clase `evento-bottom`) para que
-             * recompensas/dificultad/botón queden anclados al fondo y todas las
-             * cards queden alineadas independientemente del nº de enemigos. */
             const bloqueInferior = document.createElement('div');
             bloqueInferior.className = 'evento-bottom';
-            bloqueInferior.appendChild(recompensaLabel);
-            bloqueInferior.appendChild(recompensas);
+            bloqueInferior.appendChild(recompensasBloque);
             bloqueInferior.appendChild(contenedorDificultad);
             bloqueInferior.appendChild(empezarBtn);
 
             card.appendChild(nombre);
             card.appendChild(descripcion);
-            card.appendChild(etiquetaEnemigos);
             card.appendChild(enemigosEl);
             card.appendChild(bloqueInferior);
             contenedor.appendChild(card);

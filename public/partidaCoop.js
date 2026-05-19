@@ -2810,6 +2810,7 @@
 
     /** Marca local que evita aplicar las recompensas más de una vez por sesión. */
     let coopRecompensasProcesadas = false;
+    let coopMisionOnlinePartidaRegistrada = false;
 
     function coopNormalizarNombre(nombre) {
         return String(nombre || '').trim().toLowerCase();
@@ -3090,6 +3091,16 @@
         return contenedor;
     }
 
+    function registrarMisionOnlinePartidaCoopCompletada() {
+        if (coopMisionOnlinePartidaRegistrada) {
+            return;
+        }
+        coopMisionOnlinePartidaRegistrada = true;
+        if (window.DCMisiones?.track) {
+            window.DCMisiones.track('online', { amount: 1 });
+        }
+    }
+
     function mostrarFin(ganaron) {
         const modal = document.getElementById('ventana-emergente-fin-coop');
         const t = document.getElementById('titulo-fin-partida-coop');
@@ -3099,6 +3110,9 @@
             ? 'Habéis derrotado al BOT en el evento cooperativo.'
             : 'El BOT ha eliminado a tu equipo.';
         if (modal) modal.style.display = 'flex';
+
+        /** Misión `online`: cuenta al terminar la partida (victoria o derrota), no al abandonar. */
+        registrarMisionOnlinePartidaCoopCompletada();
 
         const recompensasContainer = document.getElementById('coop-recompensas-container');
         if (recompensasContainer) recompensasContainer.innerHTML = '';
@@ -3128,7 +3142,6 @@
                 recompensasContainer.innerHTML = '';
                 /** Tras persistir recompensas en LS/Firebase para no pisar puntos/cartas con el POST de misiones. */
                 if (window.DCMisiones?.track) {
-                    window.DCMisiones.track('evento_coop', { amount: 1 });
                     if (recompensa.huboBossMision) {
                         window.DCMisiones.track('boss', { amount: 1 });
                     }

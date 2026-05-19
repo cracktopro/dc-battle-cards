@@ -27,6 +27,28 @@
             .replace(/[\u0300-\u036f]/g, '');
     }
 
+    /** Clase en catálogo XLSX: `pvp` → `online`; `evento_coop` ya no se ofrece. */
+    function normalizarClassKeyCatalogo(classRaw) {
+        const c = normalizarClase(classRaw);
+        if (c === 'pvp') {
+            return 'online';
+        }
+        return c;
+    }
+
+    /** Misiones activas con classKey legacy (`pvp`, `evento_coop`) siguen progresando con track `online`. */
+    function classKeyCoincideConTrack(classKeyMision, classKeyTrack) {
+        const m = normalizarClase(classKeyMision);
+        const t = normalizarClase(classKeyTrack);
+        if (m === t) {
+            return true;
+        }
+        if (t === 'online' && (m === 'pvp' || m === 'evento_coop')) {
+            return true;
+        }
+        return false;
+    }
+
     function leerUsuario() {
         try {
             return JSON.parse(localStorage.getItem('usuario') || 'null');
@@ -200,10 +222,10 @@
         catalogoMisiones = rows.map((r, i) => ({
             id: Number(r.ID ?? r.id ?? i + 1),
             descripcion: String(r.descripcion || '').trim(),
-            classKey: normalizarClase(r.class),
+            classKey: normalizarClassKeyCatalogo(r.class),
             steps: Math.max(1, Number(r.steps || 1)),
             recompensa: Math.max(0, Number(r.recompensa || 0))
-        })).filter((m) => m.descripcion && m.classKey);
+        })).filter((m) => m.descripcion && m.classKey && m.classKey !== 'evento_coop');
         return catalogoMisiones;
     }
 
@@ -437,8 +459,9 @@
         if (cls === 'shop_sobres') incs.push({ classKey: 'shop_sobres', amount: Number(payload.amount || 1) });
         if (cls === 'sobres') incs.push({ classKey: 'sobres', amount: Number(payload.amount || 1) });
         if (cls === 'desafios') incs.push({ classKey: 'desafios', amount: Number(payload.amount || 1) });
-        if (cls === 'pvp') incs.push({ classKey: 'pvp', amount: Number(payload.amount || 1) });
-        if (cls === 'evento_coop') incs.push({ classKey: 'evento_coop', amount: Number(payload.amount || 1) });
+        if (cls === 'online' || cls === 'pvp' || cls === 'evento_coop') {
+            incs.push({ classKey: 'online', amount: Number(payload.amount || 1) });
+        }
         if (cls === 'bot') incs.push({ classKey: 'bot', amount: Number(payload.amount || 1) });
         if (cls === 'bot_defeat') incs.push({ classKey: 'bot_defeat', amount: Number(payload.amount || 1) });
         if (cls === 'boss') incs.push({ classKey: 'boss', amount: Number(payload.amount || 1) });
@@ -464,7 +487,7 @@
         const changedWindow = await ensureWindowsActualizadas(latest);
         let changed = changedWindow;
         incs.forEach((inc) => {
-            const pred = (k) => normalizarClase(k) === normalizarClase(inc.classKey);
+            const pred = (k) => classKeyCoincideConTrack(k, inc.classKey);
             if (incrementarMisionLista(latest.misiones.diarias.lista, pred, inc.amount)) changed = true;
             if (incrementarMisionLista(latest.misiones.semanales.lista, pred, inc.amount)) changed = true;
         });

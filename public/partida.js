@@ -4693,7 +4693,7 @@ async function mostrarVentanaFinPartida(ganador) {
 
     if (esPvp) {
         if (window.DCMisiones?.track) {
-            window.DCMisiones.track('pvp', { amount: 1 });
+            window.DCMisiones.track('online', { amount: 1 });
         }
         const notaPvp = document.createElement('p');
         notaPvp.classList.add('texto-recompensa-estado');

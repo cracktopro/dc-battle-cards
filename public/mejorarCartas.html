@@ -135,6 +135,14 @@
         <div id="mensaje" class="alert alert-warning" style="display: none;"></div>
         <div id="seccion-mejora-clasica">
         <button id="mejorar-duplicados-auto" class="btn btn-warning mb-3">Combinar todas las cartas duplicadas</button>
+        <div class="mejorar-barra-filtros d-flex align-items-center mb-3" style="gap:8px; flex-wrap:wrap;">
+            <input id="busqueda-mejora-clasica" type="text" class="form-control" placeholder="Buscar carta..." style="width:auto; min-width:220px;">
+            <select id="selector-afiliacion-mejora-clasica" class="form-control" style="width:auto; min-width:220px;"></select>
+            <div class="d-flex align-items-center" style="gap:6px; padding:6px 10px; border:1px solid rgba(0, 209, 255, 0.35); border-radius:10px; background:rgba(8, 20, 40, 0.55);">
+                <input id="ordenar-poder-mejora-clasica" type="checkbox" style="transform:scale(1.08);">
+                <label for="ordenar-poder-mejora-clasica" style="margin:0; font-size:0.82rem; color:#dff8ff; white-space:nowrap;">Ordenar por poder</label>
+            </div>
+        </div>
 
         <!-- Contenedor visual de cartas -->
         <div id="contenedor-cartas" class="contenedor-cartas">
@@ -145,6 +153,14 @@
         <div id="seccion-destruir-repetidas" class="mt-2" style="display:none;">
             <div class="panel-info-destruccion-duplicados" style="margin-bottom: 10px;">
                 Aquí se muestran las copias que se destruirán: repetidas de personajes con una carta a 5★ o 6★. Se conserva siempre la de mayor nivel.
+            </div>
+            <div class="mejorar-barra-filtros d-flex align-items-center mb-3" style="gap:8px; flex-wrap:wrap;">
+                <input id="busqueda-destruir-repetidas" type="text" class="form-control" placeholder="Buscar carta..." style="width:auto; min-width:220px;">
+                <select id="selector-afiliacion-destruir-repetidas" class="form-control" style="width:auto; min-width:220px;"></select>
+                <div class="d-flex align-items-center" style="gap:6px; padding:6px 10px; border:1px solid rgba(0, 209, 255, 0.35); border-radius:10px; background:rgba(8, 20, 40, 0.55);">
+                    <input id="ordenar-poder-destruir-repetidas" type="checkbox" style="transform:scale(1.08);">
+                    <label for="ordenar-poder-destruir-repetidas" style="margin:0; font-size:0.82rem; color:#dff8ff; white-space:nowrap;">Ordenar por poder</label>
+                </div>
             </div>
             <button id="destruir-duplicados-todo" class="btn btn-danger mb-3">Destruir Todas las cartas</button>
             <div id="contenedor-cartas-destruccion" class="contenedor-cartas"></div>
@@ -168,7 +184,9 @@
                     <button type="button" id="tab-mejoras-objetos-heroes" class="btn faccion-tab active" data-faccion="H">Héroes</button>
                     <button type="button" id="tab-mejoras-objetos-villanos" class="btn faccion-tab" data-faccion="V">Villanos</button>
                 </div>
-                <div class="d-flex align-items-center" style="gap:6px; flex-wrap:wrap;">
+                <div class="d-flex align-items-center mejorar-barra-filtros" style="gap:8px; flex-wrap:wrap;">
+                    <input id="busqueda-mejoras-objetos" type="text" class="form-control" placeholder="Buscar carta..." style="width:auto; min-width:220px;">
+                    <select id="selector-afiliacion-mejoras-objetos" class="form-control" style="width:auto; min-width:220px;"></select>
                     <div class="d-flex align-items-center" style="gap:6px; padding:6px 10px; border:1px solid rgba(0, 209, 255, 0.35); border-radius:10px; background:rgba(8, 20, 40, 0.55);">
                         <input id="ordenar-poder-mejoras-objetos" type="checkbox" style="transform:scale(1.08);">
                         <label for="ordenar-poder-mejoras-objetos" style="margin:0; font-size:0.82rem; color:#dff8ff; white-space:nowrap;">Ordenar por poder</label>
@@ -192,7 +210,9 @@
                     <button type="button" id="tab-fragmentos-heroes" class="btn faccion-tab active" data-faccion="H">Héroes</button>
                     <button type="button" id="tab-fragmentos-villanos" class="btn faccion-tab" data-faccion="V">Villanos</button>
                 </div>
-                <div class="d-flex align-items-center" style="gap:6px; flex-wrap:wrap;">
+                <div class="d-flex align-items-center mejorar-barra-filtros" style="gap:8px; flex-wrap:wrap;">
+                    <input id="busqueda-fragmentos" type="text" class="form-control" placeholder="Buscar carta..." style="width:auto; min-width:220px;">
+                    <select id="selector-afiliacion-fragmentos" class="form-control" style="width:auto; min-width:220px;"></select>
                     <div class="d-flex align-items-center" style="gap:6px; padding:6px 10px; border:1px solid rgba(255, 200, 120, 0.35); border-radius:10px; background:rgba(8, 20, 40, 0.55);">
                         <input id="ordenar-poder-fragmentos" type="checkbox" style="transform:scale(1.08);">
                         <label for="ordenar-poder-fragmentos" style="margin:0; font-size:0.82rem; color:#dff8ff; white-space:nowrap;">Ordenar por poder</label>

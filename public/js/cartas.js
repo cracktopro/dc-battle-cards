@@ -1689,7 +1689,6 @@ function construirLineaObjetosMejoraMenu(resumen) {
     `;
 }
 
-const RECOMPENSA_DIARIA_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 const RECOMPENSA_DIARIA_CHECK_INTERVAL_MS = 60 * 1000;
 const RECOMPENSA_DIARIA_LOCK_KEY = 'dc_daily_reward_claim_lock_v1';
 /** Respaldo del último claim (evita perder cooldown si otra rutina pisa `usuario` en localStorage). */
@@ -1772,6 +1771,34 @@ function formatearHMSGlobal(ms) {
     return dcFormatearCuentaAtrasMs(ms);
 }
 
+/** Inicio del día civil local (00:00). Misma convención que `misionesDiarias.js`. */
+function inicioDelDiaLocalRecompensa(ts = Date.now()) {
+    const d = new Date(ts);
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+function idDiaCalendarioLocalRecompensa(ts = Date.now()) {
+    const d = new Date(ts);
+    const yy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yy}-${mm}-${dd}`;
+}
+
+function obtenerProximaMedianocheLocalRecompensa(ts = Date.now()) {
+    const siguiente = inicioDelDiaLocalRecompensa(ts);
+    siguiente.setDate(siguiente.getDate() + 1);
+    return siguiente.getTime();
+}
+
+function yaReclamoRecompensaDiariaHoy(usuario) {
+    const ultima = obtenerTimestampUltimaRecompensaDiaria(usuario || {});
+    if (!(ultima > 0)) {
+        return false;
+    }
+    return idDiaCalendarioLocalRecompensa(ultima) === idDiaCalendarioLocalRecompensa(Date.now());
+}
+
 function obtenerTimestampUltimaRecompensaDiaria(usuario) {
     const fromUser = Number(usuario?.recompensas?.diariaSobres?.lastClaimAt || 0);
     const fromLs = Number(localStorage.getItem(DC_DIARIA_LAST_CLAIM_LS_KEY) || 0);
@@ -1797,19 +1824,25 @@ function aplicarRespaldoClaimLocalUsuario(usuario) {
     return usuario;
 }
 
+/**
+ * Una recompensa por día civil (00:00 local → 00:00). No se acumulan días perdidos:
+ * si el jugador vuelve tras varios días sin entrar, solo puede reclamar una vez ese día.
+ */
 function obtenerEstadoRecompensaDiaria(usuario) {
     const ahora = Date.now();
-    const ultimaValida = obtenerTimestampUltimaRecompensaDiaria(usuario || {});
-    const siguiente = ultimaValida > 0 ? (ultimaValida + RECOMPENSA_DIARIA_COOLDOWN_MS) : ahora;
-    const restante = Math.max(0, siguiente - ahora);
-    const progreso = ultimaValida <= 0
+    const disponible = !yaReclamoRecompensaDiariaHoy(usuario || {});
+    const inicioHoy = inicioDelDiaLocalRecompensa(ahora).getTime();
+    const proximaMedianoche = obtenerProximaMedianocheLocalRecompensa(ahora);
+    const duracionVentana = Math.max(1, proximaMedianoche - inicioHoy);
+    const restante = disponible ? 0 : Math.max(0, proximaMedianoche - ahora);
+    const progreso = disponible
         ? 100
-        : Math.max(0, Math.min(((RECOMPENSA_DIARIA_COOLDOWN_MS - restante) / RECOMPENSA_DIARIA_COOLDOWN_MS) * 100, 100));
+        : Math.max(0, Math.min(((ahora - inicioHoy) / duracionVentana) * 100, 100));
     return {
-        disponible: restante <= 0,
+        disponible,
         restanteMs: restante,
         progreso,
-        siguienteClaimAt: siguiente
+        siguienteClaimAt: proximaMedianoche,
     };
 }
 
@@ -1827,7 +1860,7 @@ function renderTimerRecompensaDiariaMenu() {
         wrapEl.classList.add('ready');
         return;
     }
-    tiempoEl.textContent = `Siguiente recompensa en: ${formatearHMSGlobal(estado.restanteMs)}`;
+    tiempoEl.textContent = `Reinicio a las 00:00 en: ${formatearHMSGlobal(estado.restanteMs)}`;
     barEl.style.width = `${estado.progreso}%`;
     wrapEl.classList.remove('ready');
 }

@@ -94,6 +94,22 @@ let ordenarPoderFragmentos = false;
 let filtrosFragmentosRegistrados = false;
 let fragmentoAnimEnCurso = false;
 
+let busquedaMejoraClasica = '';
+let afiliacionMejoraClasica = 'todas';
+let ordenarPoderMejoraClasica = false;
+let filtrosMejoraClasicaRegistrados = false;
+
+let busquedaDestruirRepetidas = '';
+let afiliacionDestruirRepetidas = 'todas';
+let ordenarPoderDestruirRepetidas = false;
+let filtrosDestruirRepetidasRegistrados = false;
+
+let busquedaMejorasObjetos = '';
+let afiliacionMejorasObjetos = 'todas';
+
+let busquedaFragmentos = '';
+let afiliacionFragmentos = 'todas';
+
 function esperar(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -101,6 +117,91 @@ function esperar(ms) {
 function normalizarFaccion(valor) {
     const faccion = String(valor || '').trim().toUpperCase();
     return faccion === 'H' || faccion === 'V' ? faccion : '';
+}
+
+function normalizarAfiliacionMejorar(valor) {
+    return String(valor || '').trim().toLowerCase();
+}
+
+function obtenerAfiliacionesCartaMejorar(carta) {
+    const raw = String(carta?.Afiliacion || carta?.afiliacion || '').trim();
+    if (!raw) {
+        return [];
+    }
+    return raw.split(';').map((item) => item.trim()).filter(Boolean);
+}
+
+function cartaCoincideBusquedaMejorar(carta, busqueda) {
+    if (!busqueda) {
+        return true;
+    }
+    return String(carta?.Nombre || '').toLowerCase().includes(busqueda);
+}
+
+function cartaCoincideAfiliacionMejorar(carta, afiliacionActiva) {
+    if (!afiliacionActiva || afiliacionActiva === 'todas') {
+        return true;
+    }
+    const clave = normalizarAfiliacionMejorar(afiliacionActiva);
+    return obtenerAfiliacionesCartaMejorar(carta)
+        .map(normalizarAfiliacionMejorar)
+        .includes(clave);
+}
+
+function compararCartasMejorarPorNombrePoder(a, b, ordenarPoder) {
+    if (ordenarPoder) {
+        const diffPoder = Number(b?.Poder || 0) - Number(a?.Poder || 0);
+        if (diffPoder !== 0) {
+            return diffPoder;
+        }
+    }
+    return String(a?.Nombre || '').localeCompare(String(b?.Nombre || ''), undefined, { sensitivity: 'base' });
+}
+
+function compararGruposMejorarPorNombrePoder(a, b, ordenarPoder) {
+    if (ordenarPoder) {
+        const diffPoder = Number(b?.keeperCarta?.Poder || 0) - Number(a?.keeperCarta?.Poder || 0);
+        if (diffPoder !== 0) {
+            return diffPoder;
+        }
+    }
+    return String(a?.nombre || '').localeCompare(String(b?.nombre || ''), undefined, { sensitivity: 'base' });
+}
+
+function poblarSelectorAfiliacionMejorar(selectorId, cartas, valorGuardado) {
+    const selector = document.getElementById(selectorId);
+    if (!selector) {
+        return valorGuardado;
+    }
+    const mapa = new Map();
+    (Array.isArray(cartas) ? cartas : []).forEach((carta) => {
+        obtenerAfiliacionesCartaMejorar(carta).forEach((afi) => {
+            const key = normalizarAfiliacionMejorar(afi);
+            if (key && !mapa.has(key)) {
+                mapa.set(key, afi);
+            }
+        });
+    });
+    const valorPrevio = valorGuardado;
+    selector.innerHTML = '';
+    const optTodas = document.createElement('option');
+    optTodas.value = 'todas';
+    optTodas.textContent = 'Todas las afiliaciones';
+    selector.appendChild(optTodas);
+    [...mapa.entries()]
+        .sort((a, b) => String(a[1]).localeCompare(String(b[1]), undefined, { sensitivity: 'base' }))
+        .forEach(([, afiliacion]) => {
+            const option = document.createElement('option');
+            option.value = afiliacion;
+            option.textContent = afiliacion;
+            selector.appendChild(option);
+        });
+    const existePrevio = [...selector.options].some(
+        (option) => normalizarAfiliacionMejorar(option.value) === normalizarAfiliacionMejorar(valorPrevio)
+    );
+    const next = existePrevio ? valorPrevio : 'todas';
+    selector.value = next;
+    return next;
 }
 
 function refrescarPanelPerfilLateral() {
@@ -647,17 +748,11 @@ function obtenerFaccionCartaMejorasObjetos(carta) {
 
 function filtrarYOrdenarCartasMejorasObjetos(cartas) {
     const lista = (Array.isArray(cartas) ? cartas : []).filter((carta) => {
-        return obtenerFaccionCartaMejorasObjetos(carta) === faccionMejorasObjetosActiva;
+        return obtenerFaccionCartaMejorasObjetos(carta) === faccionMejorasObjetosActiva
+            && cartaCoincideBusquedaMejorar(carta, busquedaMejorasObjetos)
+            && cartaCoincideAfiliacionMejorar(carta, afiliacionMejorasObjetos);
     });
-    lista.sort((a, b) => {
-        if (ordenarPoderMejorasObjetos) {
-            const diffPoder = Number(b.Poder || 0) - Number(a.Poder || 0);
-            if (diffPoder !== 0) {
-                return diffPoder;
-            }
-        }
-        return String(a.Nombre || '').localeCompare(String(b.Nombre || ''), undefined, { sensitivity: 'base' });
-    });
+    lista.sort((a, b) => compararCartasMejorarPorNombrePoder(a, b, ordenarPoderMejorasObjetos));
     return lista;
 }
 
@@ -696,6 +791,21 @@ function configurarFiltrosMejorasObjetos() {
         const usuario = JSON.parse(localStorage.getItem('usuario') || 'null');
         renderizarSeccionMejorasObjetos(usuario);
     });
+    const inputBusqueda = document.getElementById('busqueda-mejoras-objetos');
+    const selectorAfiliacion = document.getElementById('selector-afiliacion-mejoras-objetos');
+
+    inputBusqueda?.addEventListener('input', function () {
+        busquedaMejorasObjetos = String(this.value || '').trim().toLowerCase();
+        const usuario = JSON.parse(localStorage.getItem('usuario') || 'null');
+        renderizarSeccionMejorasObjetos(usuario);
+    });
+
+    selectorAfiliacion?.addEventListener('change', function () {
+        afiliacionMejorasObjetos = normalizarAfiliacionMejorar(this.value || 'todas') || 'todas';
+        const usuario = JSON.parse(localStorage.getItem('usuario') || 'null');
+        renderizarSeccionMejorasObjetos(usuario);
+    });
+
     chkPoder?.addEventListener('change', function () {
         ordenarPoderMejorasObjetos = Boolean(this.checked);
         const usuario = JSON.parse(localStorage.getItem('usuario') || 'null');
@@ -817,6 +927,11 @@ function renderizarSeccionMejorasObjetos(usuario) {
 
     contenedor.innerHTML = '';
     const todas = obtenerCartasPanelMejorasObjetos(usuario);
+    afiliacionMejorasObjetos = poblarSelectorAfiliacionMejorar(
+        'selector-afiliacion-mejoras-objetos',
+        todas,
+        afiliacionMejorasObjetos
+    );
     const cartas = filtrarYOrdenarCartasMejorasObjetos(todas);
 
     if (todas.length === 0) {
@@ -830,7 +945,10 @@ function renderizarSeccionMejorasObjetos(usuario) {
     if (cartas.length === 0) {
         const vacio = document.createElement('div');
         vacio.className = 'alert alert-info';
-        vacio.textContent = `No tienes cartas de ${faccionMejorasObjetosActiva === 'H' ? 'héroes' : 'villanos'} de nivel 1 a 5 en esta vista. Prueba la otra facción.`;
+        const enFaccion = todas.filter((c) => obtenerFaccionCartaMejorasObjetos(c) === faccionMejorasObjetosActiva);
+        vacio.textContent = enFaccion.length === 0
+            ? `No tienes cartas de ${faccionMejorasObjetosActiva === 'H' ? 'héroes' : 'villanos'} de nivel 1 a 5 en esta vista. Prueba la otra facción.`
+            : 'Ninguna carta coincide con los filtros aplicados.';
         contenedor.appendChild(vacio);
         return;
     }
@@ -908,17 +1026,11 @@ function obtenerCartasPanelFragmentos(usuario) {
 
 function filtrarYOrdenarCartasFragmentos(cartas) {
     const lista = (Array.isArray(cartas) ? cartas : []).filter((carta) => {
-        return obtenerFaccionCartaMejorasObjetos(carta) === faccionFragmentosActiva;
+        return obtenerFaccionCartaMejorasObjetos(carta) === faccionFragmentosActiva
+            && cartaCoincideBusquedaMejorar(carta, busquedaFragmentos)
+            && cartaCoincideAfiliacionMejorar(carta, afiliacionFragmentos);
     });
-    lista.sort((a, b) => {
-        if (ordenarPoderFragmentos) {
-            const diffPoder = Number(b.Poder || 0) - Number(a.Poder || 0);
-            if (diffPoder !== 0) {
-                return diffPoder;
-            }
-        }
-        return String(a.Nombre || '').localeCompare(String(b.Nombre || ''), undefined, { sensitivity: 'base' });
-    });
+    lista.sort((a, b) => compararCartasMejorarPorNombrePoder(a, b, ordenarPoderFragmentos));
     return lista;
 }
 
@@ -957,6 +1069,21 @@ function configurarFiltrosFragmentos() {
         const usuario = JSON.parse(localStorage.getItem('usuario') || 'null');
         renderizarSeccionFragmentos(usuario);
     });
+    const inputBusqueda = document.getElementById('busqueda-fragmentos');
+    const selectorAfiliacion = document.getElementById('selector-afiliacion-fragmentos');
+
+    inputBusqueda?.addEventListener('input', function () {
+        busquedaFragmentos = String(this.value || '').trim().toLowerCase();
+        const usuario = JSON.parse(localStorage.getItem('usuario') || 'null');
+        renderizarSeccionFragmentos(usuario);
+    });
+
+    selectorAfiliacion?.addEventListener('change', function () {
+        afiliacionFragmentos = normalizarAfiliacionMejorar(this.value || 'todas') || 'todas';
+        const usuario = JSON.parse(localStorage.getItem('usuario') || 'null');
+        renderizarSeccionFragmentos(usuario);
+    });
+
     chkPoder?.addEventListener('change', function () {
         ordenarPoderFragmentos = Boolean(this.checked);
         const usuario = JSON.parse(localStorage.getItem('usuario') || 'null');
@@ -1086,6 +1213,11 @@ function renderizarSeccionFragmentos(usuario) {
 
     contenedor.innerHTML = '';
     const todas = obtenerCartasPanelFragmentos(usuario);
+    afiliacionFragmentos = poblarSelectorAfiliacionMejorar(
+        'selector-afiliacion-fragmentos',
+        todas,
+        afiliacionFragmentos
+    );
     const cartas = filtrarYOrdenarCartasFragmentos(todas);
 
     if (todas.length === 0) {
@@ -1099,7 +1231,10 @@ function renderizarSeccionFragmentos(usuario) {
     if (cartas.length === 0) {
         const vacio = document.createElement('div');
         vacio.className = 'alert alert-info';
-        vacio.textContent = `No tienes cartas de ${faccionFragmentosActiva === 'H' ? 'héroes' : 'villanos'} de nivel 6 o 7 en esta vista. Prueba la otra facción.`;
+        const enFaccion = todas.filter((c) => obtenerFaccionCartaMejorasObjetos(c) === faccionFragmentosActiva);
+        vacio.textContent = enFaccion.length === 0
+            ? `No tienes cartas de ${faccionFragmentosActiva === 'H' ? 'héroes' : 'villanos'} de nivel 6 o 7 en esta vista. Prueba la otra facción.`
+            : 'Ninguna carta coincide con los filtros aplicados.';
         contenedor.appendChild(vacio);
         return;
     }
@@ -1414,19 +1549,114 @@ function analizarDestruccionDuplicados(cartas) {
     };
 }
 
-function cargarCartas() {
-    console.log('Cargando cartas del usuario...');
+function configurarFiltrosMejoraClasica() {
+    if (filtrosMejoraClasicaRegistrados) {
+        return;
+    }
+    const inputBusqueda = document.getElementById('busqueda-mejora-clasica');
+    const selectorAfiliacion = document.getElementById('selector-afiliacion-mejora-clasica');
+    const chkPoder = document.getElementById('ordenar-poder-mejora-clasica');
+    if (!inputBusqueda && !selectorAfiliacion && !chkPoder) {
+        return;
+    }
+    filtrosMejoraClasicaRegistrados = true;
 
-    const usuario = JSON.parse(localStorage.getItem('usuario'));
-    normalizarObjetosUsuario(usuario);
-    console.log('Datos del usuario cargados:', usuario);
+    inputBusqueda?.addEventListener('input', function () {
+        busquedaMejoraClasica = String(this.value || '').trim().toLowerCase();
+        const usuario = JSON.parse(localStorage.getItem('usuario') || 'null');
+        if (usuario) {
+            renderizarSeccionMejoraClasica(usuario);
+        }
+    });
 
-    if (usuario && usuario.cartas) {
-        const contenedorCartas = document.getElementById('contenedor-cartas');
-        contenedorCartas.innerHTML = ''; // Limpiar el contenedor antes de agregar nuevas cartas
+    selectorAfiliacion?.addEventListener('change', function () {
+        afiliacionMejoraClasica = normalizarAfiliacionMejorar(this.value || 'todas') || 'todas';
+        const usuario = JSON.parse(localStorage.getItem('usuario') || 'null');
+        if (usuario) {
+            renderizarSeccionMejoraClasica(usuario);
+        }
+    });
 
-        const grupos = construirGruposMejoraClasica(usuario);
-        grupos.filter(grupoVisibleEnVistaClasica).forEach(grupo => {
+    chkPoder?.addEventListener('change', function () {
+        ordenarPoderMejoraClasica = Boolean(this.checked);
+        const usuario = JSON.parse(localStorage.getItem('usuario') || 'null');
+        if (usuario) {
+            renderizarSeccionMejoraClasica(usuario);
+        }
+    });
+}
+
+function configurarFiltrosDestruirRepetidas() {
+    if (filtrosDestruirRepetidasRegistrados) {
+        return;
+    }
+    const inputBusqueda = document.getElementById('busqueda-destruir-repetidas');
+    const selectorAfiliacion = document.getElementById('selector-afiliacion-destruir-repetidas');
+    const chkPoder = document.getElementById('ordenar-poder-destruir-repetidas');
+    if (!inputBusqueda && !selectorAfiliacion && !chkPoder) {
+        return;
+    }
+    filtrosDestruirRepetidasRegistrados = true;
+
+    inputBusqueda?.addEventListener('input', function () {
+        busquedaDestruirRepetidas = String(this.value || '').trim().toLowerCase();
+        const usuario = JSON.parse(localStorage.getItem('usuario') || 'null');
+        if (usuario) {
+            renderizarSeccionDestruccion(usuario);
+        }
+    });
+
+    selectorAfiliacion?.addEventListener('change', function () {
+        afiliacionDestruirRepetidas = normalizarAfiliacionMejorar(this.value || 'todas') || 'todas';
+        const usuario = JSON.parse(localStorage.getItem('usuario') || 'null');
+        if (usuario) {
+            renderizarSeccionDestruccion(usuario);
+        }
+    });
+
+    chkPoder?.addEventListener('change', function () {
+        ordenarPoderDestruirRepetidas = Boolean(this.checked);
+        const usuario = JSON.parse(localStorage.getItem('usuario') || 'null');
+        if (usuario) {
+            renderizarSeccionDestruccion(usuario);
+        }
+    });
+}
+
+function renderizarSeccionMejoraClasica(usuario) {
+    const contenedorCartas = document.getElementById('contenedor-cartas');
+    if (!contenedorCartas || !usuario?.cartas) {
+        return;
+    }
+
+    contenedorCartas.innerHTML = '';
+
+    const fuenteAfiliacion = construirGruposMejoraClasica(usuario)
+        .filter(grupoVisibleEnVistaClasica)
+        .map((grupo) => grupo.keeperCarta);
+    afiliacionMejoraClasica = poblarSelectorAfiliacionMejorar(
+        'selector-afiliacion-mejora-clasica',
+        fuenteAfiliacion,
+        afiliacionMejoraClasica
+    );
+
+    const grupos = construirGruposMejoraClasica(usuario)
+        .filter(grupoVisibleEnVistaClasica)
+        .filter((grupo) => cartaCoincideBusquedaMejorar(grupo.keeperCarta, busquedaMejoraClasica))
+        .filter((grupo) => cartaCoincideAfiliacionMejorar(grupo.keeperCarta, afiliacionMejoraClasica))
+        .sort((a, b) => compararGruposMejorarPorNombrePoder(a, b, ordenarPoderMejoraClasica));
+
+    if (grupos.length === 0) {
+        const vacio = document.createElement('div');
+        vacio.className = 'alert alert-info';
+        vacio.textContent = fuenteAfiliacion.length === 0
+            ? 'No hay cartas disponibles para mejora clásica en esta vista.'
+            : 'Ninguna carta coincide con los filtros aplicados.';
+        contenedorCartas.appendChild(vacio);
+        return;
+    }
+
+    grupos.forEach((grupo) => {
             const carta = grupo.keeperCarta;
             const wrap = document.createElement('div');
             wrap.className = 'carta-grupo-duplicados-wrap';
@@ -1513,6 +1743,17 @@ function cargarCartas() {
 
             contenedorCartas.appendChild(wrap);
         });
+}
+
+function cargarCartas() {
+    console.log('Cargando cartas del usuario...');
+
+    const usuario = JSON.parse(localStorage.getItem('usuario'));
+    normalizarObjetosUsuario(usuario);
+    console.log('Datos del usuario cargados:', usuario);
+
+    if (usuario && usuario.cartas) {
+        renderizarSeccionMejoraClasica(usuario);
         renderizarSeccionDestruccion(usuario);
         renderizarSeccionMejorasObjetos(usuario);
         renderizarSeccionFragmentos(usuario);
@@ -1634,6 +1875,8 @@ function configurarEventos() {
         });
     }
 
+    configurarFiltrosMejoraClasica();
+    configurarFiltrosDestruirRepetidas();
     configurarFiltrosMejorasObjetos();
     configurarFiltrosFragmentos();
 }
@@ -2015,12 +2258,35 @@ function renderizarSeccionDestruccion(usuario) {
     const boton = document.getElementById('destruir-duplicados-todo');
     if (!contenedor) return;
 
-    const grupos = construirGruposDestruccion(usuario);
+    const gruposBase = construirGruposDestruccion(usuario);
+    const fuenteAfiliacion = gruposBase.map((grupo) => grupo.keeperCarta);
+    afiliacionDestruirRepetidas = poblarSelectorAfiliacionMejorar(
+        'selector-afiliacion-destruir-repetidas',
+        fuenteAfiliacion,
+        afiliacionDestruirRepetidas
+    );
+
+    const grupos = gruposBase
+        .filter((grupo) => cartaCoincideBusquedaMejorar(grupo.keeperCarta, busquedaDestruirRepetidas))
+        .filter((grupo) => cartaCoincideAfiliacionMejorar(grupo.keeperCarta, afiliacionDestruirRepetidas));
+
     contenedor.innerHTML = '';
     let puntosTotales = 0;
     let totalCartasDestruibles = 0;
+
+    const itemsDestruibles = [];
     grupos.forEach((grupo) => {
         grupo.copiasDestruibles.forEach((item) => {
+            itemsDestruibles.push({ item, grupo });
+        });
+    });
+    itemsDestruibles.sort((a, b) => compararCartasMejorarPorNombrePoder(
+        a.item.carta,
+        b.item.carta,
+        ordenarPoderDestruirRepetidas
+    ));
+
+    itemsDestruibles.forEach(({ item, grupo }) => {
             const puntos = Number(item.puntos || 0);
             puntosTotales += puntos;
             totalCartasDestruibles += 1;
@@ -2039,20 +2305,23 @@ function renderizarSeccionDestruccion(usuario) {
             wrap.appendChild(puntosTag);
 
             contenedor.appendChild(wrap);
-        });
     });
+
+    const haySinFiltrar = gruposBase.some((g) => g.copiasDestruibles.length > 0);
 
     if (boton) {
         boton.disabled = totalCartasDestruibles === 0;
         boton.textContent = totalCartasDestruibles === 0
-            ? 'No hay cartas para destruir'
+            ? (haySinFiltrar && grupos.length === 0 ? 'Ninguna carta coincide con los filtros' : 'No hay cartas para destruir')
             : `Destruir Todas las cartas (+${puntosTotales})`;
     }
 
     if (totalCartasDestruibles === 0) {
         const vacio = document.createElement('div');
         vacio.className = 'alert alert-info';
-        vacio.textContent = 'No hay cartas repetidas para destruir en personajes con copia a 5★ o 6★.';
+        vacio.textContent = haySinFiltrar && grupos.length === 0
+            ? 'Ninguna carta coincide con los filtros aplicados.'
+            : 'No hay cartas repetidas para destruir en personajes con copia a 5★ o 6★.';
         contenedor.appendChild(vacio);
     }
 }
