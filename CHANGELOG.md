@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.5
+
+- Etiqueta de versión del menú lateral: **`Versión: 1.2.5`** (`public/js/cartas.js`, `package.json`).
+- **Mejorar cartas** (`public/mejorarCartas.html`, `public/mejorarCartas.js`): modal de revelación ampliado y animación unificada (icono → flash → carta) para fragmentos y mejoras especiales.
+
 ## 1.2.4
 
 - Etiqueta de versión del menú lateral: **`Versión: 1.2.4`** (`public/js/cartas.js`, `package.json`).

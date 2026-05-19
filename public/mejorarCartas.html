@@ -16,7 +16,7 @@
     <link href="css/app-layout.css" rel="stylesheet">
 
     <style>
-        #modal-animacion-fragmento {
+        #modal-animacion-mejora {
             position: fixed;
             inset: 0;
             z-index: 2350;
@@ -24,35 +24,47 @@
             align-items: center;
             justify-content: center;
             background: rgba(0, 0, 0, 0.88);
-            padding: 16px;
+            padding: 20px;
         }
 
-        .modal-anim-fragmento-inner {
+        .modal-anim-mejora-inner {
             position: relative;
-            width: min(520px, 96vw);
-            min-height: 320px;
+            width: min(760px, 96vw);
+            min-height: min(520px, 88vh);
+            max-height: 94vh;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
             background: rgba(10, 18, 34, 0.96);
             border: 1px solid rgba(255, 215, 120, 0.35);
-            border-radius: 16px;
-            box-shadow: 0 0 28px rgba(0, 0, 0, 0.55);
+            border-radius: 18px;
+            box-shadow: 0 0 36px rgba(0, 0, 0, 0.55);
             overflow: hidden;
         }
 
-        #fragmento-anim-fase-icono {
+        #mejora-anim-fase-icono {
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            gap: 14px;
-            padding: 28px 20px;
-            min-height: 260px;
+            gap: clamp(16px, 2.5vmin, 24px);
+            padding: clamp(32px, 5vmin, 48px) clamp(24px, 4vmin, 36px);
+            min-height: min(380px, 72vh);
+            width: 100%;
+            box-sizing: border-box;
         }
 
-        #fragmento-anim-flash {
+        #modal-animacion-mejora .apertura-sobre-img-envelope {
+            width: min(280px, 48vmin);
+            max-height: min(58%, 400px);
+        }
+
+        #modal-animacion-mejora .apertura-sobre-texto-estado {
+            font-size: clamp(1rem, 2.6vmin, 1.2rem);
+        }
+
+        #mejora-anim-flash {
             position: absolute;
             inset: 0;
             pointer-events: none;
@@ -61,29 +73,37 @@
             z-index: 3;
         }
 
-        #fragmento-anim-flash.fragmento-anim-flash--on {
-            animation: fragmento-destello 0.48s ease-out forwards;
+        #mejora-anim-flash.mejora-anim-flash--on {
+            animation: mejora-destello 0.48s ease-out forwards;
         }
 
-        @keyframes fragmento-destello {
+        @keyframes mejora-destello {
             0% { opacity: 0; }
             40% { opacity: 0.92; }
             100% { opacity: 0; }
         }
 
-        #fragmento-anim-resultado {
+        #mejora-anim-resultado {
             display: none;
             width: 100%;
             flex: 1 1 auto;
             align-items: center;
             justify-content: center;
-            padding: 20px 16px 24px;
+            padding: clamp(24px, 4vmin, 36px) clamp(20px, 3vmin, 28px);
+            min-height: min(360px, 68vh);
+            box-sizing: border-box;
         }
 
-        .fragmento-anim-resultado-wrap {
+        .mejora-anim-resultado-wrap {
             display: flex;
             justify-content: center;
             align-items: center;
+            width: 100%;
+        }
+
+        #modal-animacion-mejora .mejora-anim-carta-revelada {
+            width: min(320px, 78vw);
+            max-width: 100%;
         }
 
         .modal-fragmentos-bloque-titulo {
@@ -274,13 +294,13 @@
         </div>
     </div>
 
-    <div id="modal-animacion-fragmento" role="dialog" aria-modal="true" aria-label="Revelación de mejora con fragmentos">
-        <div class="modal-anim-fragmento-inner">
-            <div id="fragmento-anim-fase-icono"></div>
-            <div id="fragmento-anim-flash" aria-hidden="true"></div>
-            <div id="fragmento-anim-resultado"></div>
-            <div class="text-center pb-3" style="width:100%;">
-                <button type="button" id="btn-cerrar-animacion-fragmento" class="btn btn-primary" style="display:none;">Cerrar</button>
+    <div id="modal-animacion-mejora" role="dialog" aria-modal="true" aria-label="Revelación de mejora">
+        <div class="modal-anim-mejora-inner">
+            <div id="mejora-anim-fase-icono"></div>
+            <div id="mejora-anim-flash" aria-hidden="true"></div>
+            <div id="mejora-anim-resultado"></div>
+            <div class="text-center pb-3 pt-1" style="width:100%;">
+                <button type="button" id="btn-cerrar-animacion-mejora" class="btn btn-primary" style="display:none;">Cerrar</button>
             </div>
         </div>
     </div>

@@ -92,7 +92,7 @@ let indiceCartaModalFragmentos = null;
 let faccionFragmentosActiva = 'H';
 let ordenarPoderFragmentos = false;
 let filtrosFragmentosRegistrados = false;
-let fragmentoAnimEnCurso = false;
+let mejoraAnimEnCurso = false;
 
 let busquedaMejoraClasica = '';
 let afiliacionMejoraClasica = 'todas';
@@ -1274,22 +1274,35 @@ function crearCartaMejoradaPorFragmento(cartaOriginal, tipoFragmento) {
     return { original, mejorada: mejoradaFinal };
 }
 
-function cerrarModalAnimacionFragmento() {
-    const modal = document.getElementById('modal-animacion-fragmento');
+function obtenerMetaAnimacionMejora(tipo) {
+    const map = {
+        elite: { iconSrc: ICONO_ANIM_ELITE, statusText: 'Forjando nivel élite…', resplandorOro: true, alt: 'Fragmentos élite' },
+        legendario: { iconSrc: ICONO_ANIM_LEGENDARY, statusText: 'Ascendiendo a legendario…', resplandorOro: true, alt: 'Fragmentos legendarios' },
+        mejoraCarta: { iconSrc: ICONO_MEJORA, statusText: 'Aplicando mejora de carta…', resplandorOro: false, alt: 'Mejora de carta' },
+        mejoraEspecial: { iconSrc: ICONO_MEJORA_ESPECIAL, statusText: 'Ascendiendo a nivel 6…', resplandorOro: true, alt: 'Mejora especial' },
+        mejoraSuprema: { iconSrc: ICONO_MEJORA_SUPREMA, statusText: 'Elevando a nivel 5…', resplandorOro: false, alt: 'Mejora suprema' },
+        mejoraDefinitiva: { iconSrc: ICONO_MEJORA_DEFINITIVA, statusText: 'Elevando a nivel 6…', resplandorOro: true, alt: 'Mejora definitiva' }
+    };
+    return map[tipo] || { iconSrc: ICONO_MEJORA, statusText: 'Mejorando carta…', resplandorOro: false, alt: 'Mejora' };
+}
+
+function cerrarModalAnimacionMejora() {
+    const modal = document.getElementById('modal-animacion-mejora');
     if (modal) {
         modal.style.display = 'none';
     }
-    const flash = document.getElementById('fragmento-anim-flash');
-    flash?.classList.remove('fragmento-anim-flash--on');
-    fragmentoAnimEnCurso = false;
+    const flash = document.getElementById('mejora-anim-flash');
+    flash?.classList.remove('mejora-anim-flash--on');
+    mejoraAnimEnCurso = false;
 }
 
-async function ejecutarAnimacionRevelacionFragmento(tipoFragmento, cartaMejorada) {
-    const modal = document.getElementById('modal-animacion-fragmento');
-    const faseIcono = document.getElementById('fragmento-anim-fase-icono');
-    const flash = document.getElementById('fragmento-anim-flash');
-    const resultado = document.getElementById('fragmento-anim-resultado');
-    const btnCerrar = document.getElementById('btn-cerrar-animacion-fragmento');
+async function ejecutarAnimacionRevelacionMejora(tipo, cartaMejorada) {
+    const meta = obtenerMetaAnimacionMejora(tipo);
+    const modal = document.getElementById('modal-animacion-mejora');
+    const faseIcono = document.getElementById('mejora-anim-fase-icono');
+    const flash = document.getElementById('mejora-anim-flash');
+    const resultado = document.getElementById('mejora-anim-resultado');
+    const btnCerrar = document.getElementById('btn-cerrar-animacion-mejora');
     if (!modal || !faseIcono || !flash || !resultado || !btnCerrar) {
         return;
     }
@@ -1299,18 +1312,17 @@ async function ejecutarAnimacionRevelacionFragmento(tipoFragmento, cartaMejorada
     resultado.style.display = 'none';
     faseIcono.innerHTML = '';
     faseIcono.style.display = '';
-    flash.classList.remove('fragmento-anim-flash--on');
+    flash.classList.remove('mejora-anim-flash--on');
     void flash.offsetWidth;
 
-    const imgSrc = tipoFragmento === 'elite' ? ICONO_ANIM_ELITE : ICONO_ANIM_LEGENDARY;
     const img = document.createElement('img');
     img.className = 'apertura-sobre-img-envelope';
-    img.src = imgSrc;
-    img.alt = tipoFragmento === 'elite' ? 'Élite' : 'Legendario';
+    img.src = meta.iconSrc;
+    img.alt = meta.alt;
 
     const envTxt = document.createElement('p');
     envTxt.className = 'apertura-sobre-texto-estado';
-    envTxt.textContent = tipoFragmento === 'elite' ? 'Forjando nivel élite…' : 'Ascendiendo a legendario…';
+    envTxt.textContent = meta.statusText;
     faseIcono.appendChild(img);
     faseIcono.appendChild(envTxt);
 
@@ -1318,16 +1330,19 @@ async function ejecutarAnimacionRevelacionFragmento(tipoFragmento, cartaMejorada
 
     await esperar(1650);
 
-    flash.classList.add('fragmento-anim-flash--on');
+    flash.classList.add('mejora-anim-flash--on');
     await esperar(460);
-    flash.classList.remove('fragmento-anim-flash--on');
+    flash.classList.remove('mejora-anim-flash--on');
 
     faseIcono.style.display = 'none';
     resultado.style.display = 'flex';
     const wrap = document.createElement('div');
-    wrap.className = 'fragmento-anim-resultado-wrap';
-    const cartaEl = crearElementoCartaSoloVisual(cartaMejorada, true, 268);
-    cartaEl.classList.add('apertura-sobre-mini-carta', 'apertura-sobre-carta-resplandor-oro');
+    wrap.className = 'mejora-anim-resultado-wrap';
+    const cartaEl = crearElementoCartaSoloVisual(cartaMejorada, true, 300);
+    cartaEl.classList.add('apertura-sobre-mini-carta', 'mejora-anim-carta-revelada');
+    if (meta.resplandorOro) {
+        cartaEl.classList.add('apertura-sobre-carta-resplandor-oro');
+    }
     wrap.appendChild(cartaEl);
     resultado.appendChild(wrap);
 
@@ -1343,7 +1358,7 @@ async function ejecutarAnimacionRevelacionFragmento(tipoFragmento, cartaMejorada
 }
 
 async function aplicarMejoraFragmentoDesdeModal(tipoFragmento) {
-    if (fragmentoAnimEnCurso) {
+    if (mejoraAnimEnCurso) {
         return;
     }
     const usuario = JSON.parse(localStorage.getItem('usuario') || 'null');
@@ -1408,15 +1423,15 @@ async function aplicarMejoraFragmentoDesdeModal(tipoFragmento) {
         refrescarPanelPerfilLateral();
         cerrarModalSeleccionFragmentos();
         cargarCartas();
-        fragmentoAnimEnCurso = true;
+        mejoraAnimEnCurso = true;
         try {
-            await ejecutarAnimacionRevelacionFragmento(tipoFragmento, mejorada);
+            await ejecutarAnimacionRevelacionMejora(tipoFragmento, mejorada);
         } finally {
-            fragmentoAnimEnCurso = false;
+            mejoraAnimEnCurso = false;
         }
     } catch (error) {
         console.error('Error al aplicar mejora con fragmentos:', error);
-        fragmentoAnimEnCurso = false;
+        mejoraAnimEnCurso = false;
         mostrarMensaje('Error al guardar la mejora con fragmentos.', 'danger');
     }
 }
@@ -1862,15 +1877,15 @@ function configurarEventos() {
         });
     }
 
-    const modalAnimFragmento = document.getElementById('modal-animacion-fragmento');
-    const btnCerrarAnimFragmento = document.getElementById('btn-cerrar-animacion-fragmento');
-    if (btnCerrarAnimFragmento) {
-        btnCerrarAnimFragmento.onclick = cerrarModalAnimacionFragmento;
+    const modalAnimMejora = document.getElementById('modal-animacion-mejora');
+    const btnCerrarAnimMejora = document.getElementById('btn-cerrar-animacion-mejora');
+    if (btnCerrarAnimMejora) {
+        btnCerrarAnimMejora.onclick = cerrarModalAnimacionMejora;
     }
-    if (modalAnimFragmento) {
-        modalAnimFragmento.addEventListener('click', (event) => {
-            if (event.target === modalAnimFragmento) {
-                cerrarModalAnimacionFragmento();
+    if (modalAnimMejora) {
+        modalAnimMejora.addEventListener('click', (event) => {
+            if (event.target === modalAnimMejora) {
+                cerrarModalAnimacionMejora();
             }
         });
     }
@@ -2051,6 +2066,9 @@ function mostrarResultadoMejoraObjeto(cartaOriginal, cartaMejorada) {
 }
 
 async function aplicarMejoraObjetoDesdeModal(tipo, indiceCarta) {
+    if (mejoraAnimEnCurso) {
+        return;
+    }
     const usuario = JSON.parse(localStorage.getItem('usuario') || 'null');
     const email = localStorage.getItem('email');
     normalizarObjetosUsuario(usuario);
@@ -2097,10 +2115,16 @@ async function aplicarMejoraObjetoDesdeModal(tipo, indiceCarta) {
         refrescarPanelPerfilLateral();
         cerrarModalSeleccionObjetoMejora();
         cargarCartas();
-        mostrarResultadoMejoraObjeto(original, mejorada);
+        mejoraAnimEnCurso = true;
+        try {
+            await ejecutarAnimacionRevelacionMejora(tipo, mejorada);
+        } finally {
+            mejoraAnimEnCurso = false;
+        }
         mostrarMensaje('Mejora con objeto aplicada correctamente.', 'success');
     } catch (error) {
         console.error('Error al aplicar mejora con objeto:', error);
+        mejoraAnimEnCurso = false;
         mostrarMensaje('Error al aplicar mejora con objeto en Firebase.', 'danger');
     }
 }
