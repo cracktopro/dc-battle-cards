@@ -1305,6 +1305,10 @@ async function persistirMigracionSkillsUsuario(usuario, email) {
         return;
     }
     try {
+        if (typeof window.actualizarUsuarioConSyncFirebase === 'function') {
+            await window.actualizarUsuarioConSyncFirebase(usuario, email, { maxIntentos: 3 });
+            return;
+        }
         const response = await fetch('/update-user', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1313,14 +1317,21 @@ async function persistirMigracionSkillsUsuario(usuario, email) {
         const data = await response.json().catch(() => ({}));
         if (!response.ok) {
             if (response.status === 409 && data?.usuario) {
-                localStorage.setItem('usuario', JSON.stringify(data.usuario));
+                const fusionado = fusionarUsuarioSesionTrasUpdate(
+                    leerUsuarioSesionSeguro() || {},
+                    usuario,
+                    data.usuario
+                );
+                localStorage.setItem('usuario', JSON.stringify(fusionado));
                 window.dispatchEvent(new Event('dc:usuario-actualizado'));
             }
             throw new Error(data?.mensaje || 'No se pudo persistir la migración de skills');
         }
         if (data?.usuario && usuario && typeof usuario === 'object') {
+            const fusionado = fusionarUsuarioSesionTrasUpdate(leerUsuarioSesionSeguro() || {}, usuario, data.usuario);
             Object.keys(usuario).forEach((k) => delete usuario[k]);
-            Object.assign(usuario, data.usuario);
+            Object.assign(usuario, fusionado);
+            localStorage.setItem('usuario', JSON.stringify(fusionado));
         }
     } catch (error) {
         console.warn('No se pudo persistir la migración de skills en backend:', error);
@@ -1714,6 +1725,29 @@ function leerUsuarioSesionSeguro() {
  * Respuestas de /update-user con payload parcial (p. ej. solo objetos + recompensas diarias)
  * no deben sustituir el perfil completo en localStorage.
  */
+function elegirCartasTrasUpdate(base, pendiente, servidor) {
+    const arrB = Array.isArray(base) ? base : [];
+    const arrP = Array.isArray(pendiente) ? pendiente : [];
+    const arrS = Array.isArray(servidor) ? servidor : [];
+    if (arrP.length >= arrS.length && arrP.length >= arrB.length) {
+        return arrP;
+    }
+    if (arrS.length >= arrB.length) {
+        return arrS;
+    }
+    return arrB.length > 0 ? arrB : arrP;
+}
+
+function fusionarMisionesSesionTrasUpdate(base, pendiente, servidor) {
+    if (typeof window.DCMisiones?.fusionarMisionesCliente === 'function') {
+        return window.DCMisiones.fusionarMisionesCliente(servidor || {}, pendiente || {});
+    }
+    const b = base && typeof base === 'object' ? base : {};
+    const p = pendiente && typeof pendiente === 'object' ? pendiente : {};
+    const s = servidor && typeof servidor === 'object' ? servidor : {};
+    return (Object.keys(p).length > 0) ? p : ((Object.keys(s).length > 0) ? s : b);
+}
+
 function fusionarUsuarioSesionTrasUpdate(base, pendiente, servidor) {
     const b = base && typeof base === 'object' ? base : {};
     const p = pendiente && typeof pendiente === 'object' ? pendiente : {};
@@ -1727,34 +1761,142 @@ function fusionarUsuarioSesionTrasUpdate(base, pendiente, servidor) {
     const puntosServidor = Number(s.puntos);
     const puntosPendiente = Number(p.puntos);
     const puntosBase = Number(b.puntos);
+    const puntosFinal = Math.max(
+        Number.isFinite(puntosBase) ? puntosBase : 0,
+        Number.isFinite(puntosServidor) ? puntosServidor : 0,
+        Number.isFinite(puntosPendiente) ? puntosPendiente : 0
+    );
 
     return {
         ...b,
-        ...p,
         ...s,
+        ...p,
         nickname: nickServidor || nickPendiente || nickBase || b.nickname,
         avatar: avatarServidor || avatarPendiente || avatarBase || b.avatar,
-        puntos: Number.isFinite(puntosServidor) ? puntosServidor
-            : (Number.isFinite(puntosPendiente) ? puntosPendiente
-                : (Number.isFinite(puntosBase) ? puntosBase : b.puntos)),
+        puntos: puntosFinal,
         preferencias: (s.preferencias && typeof s.preferencias === 'object')
-            ? { ...(b.preferencias && typeof b.preferencias === 'object' ? b.preferencias : {}), ...s.preferencias }
+            ? { ...(b.preferencias && typeof b.preferencias === 'object' ? b.preferencias : {}), ...s.preferencias, ...(p.preferencias && typeof p.preferencias === 'object' ? p.preferencias : {}) }
             : ((p.preferencias && typeof p.preferencias === 'object') ? p.preferencias : b.preferencias),
-        cartas: Array.isArray(s.cartas) && s.cartas.length > 0 ? s.cartas
-            : (Array.isArray(p.cartas) ? p.cartas : b.cartas),
-        mazos: Array.isArray(s.mazos) && s.mazos.length > 0 ? s.mazos
-            : (Array.isArray(p.mazos) ? p.mazos : b.mazos),
-        skinsObtenidos: Array.isArray(s.skinsObtenidos) ? s.skinsObtenidos
-            : (Array.isArray(p.skinsObtenidos) ? p.skinsObtenidos : b.skinsObtenidos),
-        objetos: { ...(b.objetos || {}), ...(p.objetos || {}), ...(s.objetos || {}) },
-        recompensas: { ...(b.recompensas || {}), ...(p.recompensas || {}), ...(s.recompensas || {}) },
-        misiones: (s.misiones && typeof s.misiones === 'object')
-            ? s.misiones
-            : ((p.misiones && typeof p.misiones === 'object') ? p.misiones : b.misiones),
+        cartas: elegirCartasTrasUpdate(b.cartas, p.cartas, s.cartas),
+        mazos: Array.isArray(p.mazos) && p.mazos.length > 0
+            ? p.mazos
+            : (Array.isArray(s.mazos) && s.mazos.length > 0 ? s.mazos : b.mazos),
+        skinsObtenidos: Array.isArray(p.skinsObtenidos) && p.skinsObtenidos.length > 0
+            ? p.skinsObtenidos
+            : (Array.isArray(s.skinsObtenidos) ? s.skinsObtenidos : b.skinsObtenidos),
+        objetos: { ...(b.objetos || {}), ...(s.objetos || {}), ...(p.objetos || {}) },
+        recompensas: { ...(b.recompensas || {}), ...(s.recompensas || {}), ...(p.recompensas || {}) },
+        misiones: fusionarMisionesSesionTrasUpdate(b.misiones, p.misiones, s.misiones),
+        tienda: (p.tienda && typeof p.tienda === 'object')
+            ? p.tienda
+            : ((s.tienda && typeof s.tienda === 'object') ? s.tienda : b.tienda),
         syncToken: s.syncToken || p.syncToken || b.syncToken,
         syncUpdatedAt: s.syncUpdatedAt || p.syncUpdatedAt || b.syncUpdatedAt
     };
 }
+
+async function refrescarUsuarioSesionDesdeServidor() {
+    const email = String(localStorage.getItem('email') || '').trim();
+    if (!email) {
+        return null;
+    }
+    try {
+        const response = await fetch('/get-user', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email })
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data?.usuario) {
+            return null;
+        }
+        const local = leerUsuarioSesionSeguro() || {};
+        const fusionado = fusionarUsuarioSesionTrasUpdate(local, local, data.usuario);
+        localStorage.setItem('usuario', JSON.stringify(fusionado));
+        window.dispatchEvent(new Event('dc:usuario-actualizado'));
+        return fusionado;
+    } catch (error) {
+        console.warn('[sesión] No se pudo refrescar usuario desde servidor:', error);
+        return null;
+    }
+}
+
+function aplicarSyncTokenDesdeLocalStorage(usuario) {
+    if (!usuario || typeof usuario !== 'object') {
+        return;
+    }
+    const desdeLs = leerUsuarioSesionSeguro();
+    if (!desdeLs) {
+        return;
+    }
+    const tok = String(desdeLs.syncToken || '').trim();
+    if (tok) {
+        usuario.syncToken = desdeLs.syncToken;
+    }
+    const su = Number(desdeLs.syncUpdatedAt);
+    if (Number.isFinite(su) && su > 0) {
+        usuario.syncUpdatedAt = su;
+    }
+}
+
+/**
+ * POST /update-user con reintento ante 409 (syncToken desfasado entre pestañas o módulos).
+ * Fusiona la respuesta sin vaciar cartas/mazos/tienda del cliente.
+ */
+async function actualizarUsuarioConSyncFirebase(usuario, email, opciones = {}) {
+    const maxIntentos = Math.max(1, Number(opciones.maxIntentos || 3));
+    let ultimoError = null;
+    let refrescoTokenHecho = false;
+
+    for (let intento = 0; intento < maxIntentos; intento += 1) {
+        aplicarSyncTokenDesdeLocalStorage(usuario);
+        if (!String(usuario?.syncToken || '').trim() && !refrescoTokenHecho) {
+            refrescoTokenHecho = true;
+            await refrescarUsuarioSesionDesdeServidor();
+            aplicarSyncTokenDesdeLocalStorage(usuario);
+        }
+        const response = await fetch('/update-user', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ usuario, email })
+        });
+        const data = await response.json().catch(() => ({}));
+
+        if (response.ok) {
+            const baseLs = leerUsuarioSesionSeguro() || {};
+            const fusionado = fusionarUsuarioSesionTrasUpdate(baseLs, usuario, data?.usuario);
+            if (usuario && typeof usuario === 'object') {
+                Object.keys(usuario).forEach((k) => delete usuario[k]);
+                Object.assign(usuario, fusionado);
+            }
+            localStorage.setItem('usuario', JSON.stringify(fusionado));
+            window.dispatchEvent(new Event('dc:usuario-actualizado'));
+            return data;
+        }
+
+        if (response.status === 409 && data?.usuario) {
+            const baseLs = leerUsuarioSesionSeguro() || {};
+            const fusionado = fusionarUsuarioSesionTrasUpdate(baseLs, usuario, data.usuario);
+            if (usuario && typeof usuario === 'object') {
+                Object.keys(usuario).forEach((k) => delete usuario[k]);
+                Object.assign(usuario, fusionado);
+            }
+            localStorage.setItem('usuario', JSON.stringify(fusionado));
+            window.dispatchEvent(new Event('dc:usuario-actualizado'));
+            ultimoError = new Error(data?.mensaje || 'Conflicto de sincronización');
+            continue;
+        }
+
+        throw new Error(data?.mensaje || 'No se pudieron guardar los datos del usuario en Firebase.');
+    }
+
+    throw ultimoError || new Error('No se pudo sincronizar con Firebase tras varios intentos.');
+}
+
+window.fusionarUsuarioSesionTrasUpdate = fusionarUsuarioSesionTrasUpdate;
+window.actualizarUsuarioConSyncFirebase = actualizarUsuarioConSyncFirebase;
+window.aplicarSyncTokenDesdeLocalStorage = aplicarSyncTokenDesdeLocalStorage;
+window.refrescarUsuarioSesionDesdeServidor = refrescarUsuarioSesionDesdeServidor;
 
 function normalizarObjetosConSobresGlobal(usuario) {
     if (!usuario || typeof usuario !== 'object') return;

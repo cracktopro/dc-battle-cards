@@ -2490,6 +2490,11 @@ async function actualizarUsuarioFirebase(usuario, email) {
     console.log('Actualizando usuario en Firebase...', { usuario, email });
 
     try {
+        if (typeof window.actualizarUsuarioConSyncFirebase === 'function') {
+            const data = await window.actualizarUsuarioConSyncFirebase(usuario, email, { maxIntentos: 3 });
+            console.log('Respuesta de actualización de Firebase:', data);
+            return data;
+        }
         const response = await fetch('/update-user', {
             method: 'POST',
             headers: {

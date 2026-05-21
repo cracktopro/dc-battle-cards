@@ -154,6 +154,10 @@
             escribirUsuario(usuario);
             return;
         }
+        if (!reintento409 && typeof window.actualizarUsuarioConSyncFirebase === 'function') {
+            await window.actualizarUsuarioConSyncFirebase(usuario, email, { maxIntentos: 3 });
+            return;
+        }
         const response = await fetch('/update-user', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -163,7 +167,9 @@
         if (!response.ok) {
             if (response.status === 409 && data?.usuario) {
                 if (!reintento409 && usuario?.misiones && typeof usuario.misiones === 'object') {
-                    const merged = { ...data.usuario };
+                    const merged = typeof window.fusionarUsuarioSesionTrasUpdate === 'function'
+                        ? window.fusionarUsuarioSesionTrasUpdate(data.usuario, usuario, data.usuario)
+                        : { ...data.usuario };
                     merged.misiones = fusionarMisionesCliente(data.usuario.misiones || {}, usuario.misiones);
                     escribirUsuario(merged);
                     return persistirUsuario(merged, true);
@@ -173,8 +179,12 @@
             throw new Error(data?.mensaje || 'No se pudo guardar progreso de misiones');
         }
         if (data?.usuario && usuario && typeof usuario === 'object') {
-            Object.keys(usuario).forEach((k) => delete usuario[k]);
-            Object.assign(usuario, data.usuario);
+            const baseLs = leerUsuario();
+            const fusionado = typeof window.fusionarUsuarioSesionTrasUpdate === 'function'
+                ? window.fusionarUsuarioSesionTrasUpdate(baseLs || {}, usuario, data.usuario)
+                : { ...(baseLs || {}), ...usuario, ...data.usuario };
+            escribirUsuario(fusionado);
+            return;
         }
         escribirUsuario(usuario);
     }
@@ -586,6 +596,7 @@
         track,
         awaitPersistenciaPendiente,
         registrarPartidaOnlineCompletada,
+        fusionarMisionesCliente,
         refresh: () => void inicializar()
     };
 

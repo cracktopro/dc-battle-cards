@@ -2817,6 +2817,9 @@
     }
 
     async function coopActualizarUsuarioFirebase(usuario, email) {
+        if (typeof window.actualizarUsuarioConSyncFirebase === 'function') {
+            return window.actualizarUsuarioConSyncFirebase(usuario, email, { maxIntentos: 3 });
+        }
         const response = await fetch('/update-user', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

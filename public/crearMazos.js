@@ -888,6 +888,9 @@ async function guardarMazo() {
 
 async function actualizarUsuarioFirebase(usuario, email) {
     try {
+        if (typeof window.actualizarUsuarioConSyncFirebase === 'function') {
+            return window.actualizarUsuarioConSyncFirebase(usuario, email, { maxIntentos: 3 });
+        }
         const response = await fetch('/update-user', {
             method: 'POST',
             headers: {

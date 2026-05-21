@@ -3562,6 +3562,43 @@ function generarSyncTokenUsuario() {
     return `sync_${Date.now()}_${Math.random().toString(36).slice(2, 12)}`;
 }
 
+/** Elimina `undefined`, NaN e infinitos antes de escribir en Firestore (evita 500 silenciosos). */
+function sanitizarValorFirestore(valor) {
+    if (valor === undefined) {
+        return undefined;
+    }
+    if (valor === null) {
+        return null;
+    }
+    if (typeof valor === 'number') {
+        return Number.isFinite(valor) ? valor : 0;
+    }
+    if (typeof valor === 'string' || typeof valor === 'boolean') {
+        return valor;
+    }
+    if (Array.isArray(valor)) {
+        return valor
+            .map((item) => sanitizarValorFirestore(item))
+            .filter((item) => item !== undefined);
+    }
+    if (typeof valor === 'object') {
+        const limpio = {};
+        Object.keys(valor).forEach((clave) => {
+            const hijo = sanitizarValorFirestore(valor[clave]);
+            if (hijo !== undefined) {
+                limpio[clave] = hijo;
+            }
+        });
+        return limpio;
+    }
+    return undefined;
+}
+
+function sanitizarDocumentoUsuario(usuario) {
+    const limpio = sanitizarValorFirestore(usuario);
+    return (limpio && typeof limpio === 'object') ? limpio : {};
+}
+
 function esEmailAdmin(email) {
     return String(email || '').trim().toLowerCase() === 'lorenzopablo93@gmail.com';
 }
@@ -3645,17 +3682,25 @@ async function guardarUsuarioConControlConcurrencia(email, usuarioPayload = {}) 
     const docActual = await getDoc(docRef);
     const datosActuales = docActual.data() || {};
     const tokenServidor = String(datosActuales.syncToken || '').trim();
-    const tokenCliente = String(usuarioPayload.syncToken || '').trim();
+    let tokenCliente = String(usuarioPayload.syncToken || '').trim();
 
-    if (tokenServidor && tokenCliente !== tokenServidor) {
+    if (tokenServidor && tokenCliente && tokenCliente !== tokenServidor) {
         return {
             ok: false,
             conflict: true,
-            usuario: datosActuales
+            usuario: await asegurarMetadataSyncUsuario(email, datosActuales)
         };
     }
 
     const usuario = (usuarioPayload && typeof usuarioPayload === 'object') ? { ...usuarioPayload } : {};
+    if (tokenServidor && !tokenCliente) {
+        usuario.syncToken = tokenServidor;
+        const su = Number(datosActuales.syncUpdatedAt);
+        if (Number.isFinite(su) && su > 0) {
+            usuario.syncUpdatedAt = su;
+        }
+        tokenCliente = tokenServidor;
+    }
     if (!Array.isArray(usuario.cartas)) {
         usuario.cartas = datosActuales.cartas || [];
     }
@@ -3702,11 +3747,15 @@ async function guardarUsuarioConControlConcurrencia(email, usuarioPayload = {}) 
     if (usuario.email === undefined) {
         usuario.email = datosActuales.email;
     }
+    if (usuario.tienda === undefined && datosActuales.tienda && typeof datosActuales.tienda === 'object') {
+        usuario.tienda = datosActuales.tienda;
+    }
 
     usuario.syncToken = generarSyncTokenUsuario();
     usuario.syncUpdatedAt = Date.now();
 
-    await setDoc(docRef, { ...usuario }, { merge: true });
+    const documentoLimpio = sanitizarDocumentoUsuario(usuario);
+    await setDoc(docRef, documentoLimpio, { merge: true });
     const docFinal = await getDoc(docRef);
     const usuarioFinal = docFinal.exists() ? { ...docFinal.data() } : { ...datosActuales, ...usuario };
     return {

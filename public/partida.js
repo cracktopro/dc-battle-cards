@@ -2191,6 +2191,9 @@ async function animarBajadaSaludCarta(cartasObjetivo, slotObjetivo, saludRawInic
 }
 
 async function actualizarUsuarioFirebase(usuario, email) {
+    if (typeof window.actualizarUsuarioConSyncFirebase === 'function') {
+        return window.actualizarUsuarioConSyncFirebase(usuario, email, { maxIntentos: 3 });
+    }
     const response = await fetch('/update-user', {
         method: 'POST',
         headers: {
@@ -2206,8 +2209,16 @@ async function actualizarUsuarioFirebase(usuario, email) {
         throw new Error(data?.mensaje || 'No se pudieron guardar los datos del usuario en Firebase.');
     }
     if (data?.usuario && usuario && typeof usuario === 'object') {
+        const fusionado = typeof window.fusionarUsuarioSesionTrasUpdate === 'function'
+            ? window.fusionarUsuarioSesionTrasUpdate(
+                JSON.parse(localStorage.getItem('usuario') || '{}'),
+                usuario,
+                data.usuario
+            )
+            : data.usuario;
         Object.keys(usuario).forEach((k) => delete usuario[k]);
-        Object.assign(usuario, data.usuario);
+        Object.assign(usuario, fusionado);
+        localStorage.setItem('usuario', JSON.stringify(fusionado));
     }
     return data;
 }

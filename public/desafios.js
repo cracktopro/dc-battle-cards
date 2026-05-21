@@ -586,8 +586,10 @@ function configurarModalSeleccion() {
         if (faccionFijadaModalDesafio && faccionFijadaModalDesafio !== 'H') return;
         faccionFiltroActiva = 'H';
         afiliacionFiltroActiva = 'todas';
+        skillClassFiltroDesafio = 'todas';
         actualizarBotonesFaccion();
         renderizarFiltroAfiliacion();
+        sincronizarFiltroSkillClassDesafio();
         renderizarCartasSeleccionDesafio();
     };
 
@@ -595,10 +597,20 @@ function configurarModalSeleccion() {
         if (faccionFijadaModalDesafio && faccionFijadaModalDesafio !== 'V') return;
         faccionFiltroActiva = 'V';
         afiliacionFiltroActiva = 'todas';
+        skillClassFiltroDesafio = 'todas';
         actualizarBotonesFaccion();
         renderizarFiltroAfiliacion();
+        sincronizarFiltroSkillClassDesafio();
         renderizarCartasSeleccionDesafio();
     };
+}
+
+function sincronizarFiltroSkillClassDesafio() {
+    const filtro = document.getElementById('filtro-skill-class-desafio');
+    if (!filtro || !window.DCFiltrosCartas) {
+        return;
+    }
+    skillClassFiltroDesafio = window.DCFiltrosCartas.poblarSelectorSkillClass(filtro, skillClassFiltroDesafio);
 }
 
 function actualizarBotonesFaccion() {
