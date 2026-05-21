@@ -3679,13 +3679,39 @@ async function guardarUsuarioConControlConcurrencia(email, usuarioPayload = {}) 
     } else if (datosActuales.misiones && typeof datosActuales.misiones === 'object') {
         usuario.misiones = datosActuales.misiones;
     }
+    if (usuario.recompensas && typeof usuario.recompensas === 'object') {
+        usuario.recompensas = {
+            ...(datosActuales.recompensas && typeof datosActuales.recompensas === 'object' ? datosActuales.recompensas : {}),
+            ...usuario.recompensas
+        };
+    } else if (datosActuales.recompensas && typeof datosActuales.recompensas === 'object') {
+        usuario.recompensas = datosActuales.recompensas;
+    }
+    if (usuario.preferencias === undefined && datosActuales.preferencias) {
+        usuario.preferencias = datosActuales.preferencias;
+    }
+    if (usuario.nickname === undefined) {
+        usuario.nickname = datosActuales.nickname;
+    }
+    if (usuario.avatar === undefined) {
+        usuario.avatar = datosActuales.avatar;
+    }
+    if (usuario.puntos === undefined) {
+        usuario.puntos = datosActuales.puntos;
+    }
+    if (usuario.email === undefined) {
+        usuario.email = datosActuales.email;
+    }
+
     usuario.syncToken = generarSyncTokenUsuario();
     usuario.syncUpdatedAt = Date.now();
 
     await setDoc(docRef, { ...usuario }, { merge: true });
+    const docFinal = await getDoc(docRef);
+    const usuarioFinal = docFinal.exists() ? { ...docFinal.data() } : { ...datosActuales, ...usuario };
     return {
         ok: true,
-        usuario
+        usuario: usuarioFinal
     };
 }
 

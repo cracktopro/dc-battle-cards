@@ -21,7 +21,21 @@ function obtenerCartaDisplaySeleccionEvento(item) {
     }
     return item.carta;
 }
+
+function cartaCoincideSkillClassEvento(carta) {
+    return window.DCFiltrosCartas?.cartaCoincideSkillClass(carta, skillClassEventoActiva) ?? true;
+}
+
+function sincronizarFiltroSkillClassEvento() {
+    const filtro = document.getElementById('filtro-skill-class-evento');
+    if (!filtro || !window.DCFiltrosCartas) {
+        return;
+    }
+    skillClassEventoActiva = window.DCFiltrosCartas.poblarSelectorSkillClass(filtro, skillClassEventoActiva);
+}
+
 let afiliacionEventoActiva = 'todas';
+let skillClassEventoActiva = 'todas';
 let catalogoCartasCache = null;
 let eventosEnRotacion = [];
 let temporizadorRotacionEventos = null;
@@ -171,17 +185,20 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Manejo de la selección de mazo
     selectMazo.addEventListener('change', function () {
-        const selectedIndex = selectMazo.value; // Selecciona el índice del mazo
-        const usuario = JSON.parse(localStorage.getItem('usuario')); // Obtiene el usuario del localStorage
-        mazoSeleccionado = usuario.mazos[selectedIndex]; // Selecciona el mazo correcto
-    
-        console.log('Mazo seleccionado:', mazoSeleccionado); // Verificación del mazo
-    
-        // Guarda el mazo seleccionado en localStorage
+        const selectedIndex = selectMazo.value;
+        if (selectedIndex === '') {
+            mazoSeleccionado = null;
+            verificarSeleccion();
+            return;
+        }
+        const usuario = JSON.parse(localStorage.getItem('usuario'));
+        mazoSeleccionado = usuario.mazos[selectedIndex];
+
+        console.log('Mazo seleccionado:', mazoSeleccionado);
+
         localStorage.setItem('mazoJugador', JSON.stringify({ Cartas: mazoSeleccionado.Cartas }));
         localStorage.setItem('mazoJugadorBase', JSON.stringify({ Cartas: mazoSeleccionado.Cartas }));
-    
-        // Verifica si tanto el mazo como la dificultad están seleccionados para habilitar el botón
+
         verificarSeleccion();
     });
 
@@ -192,6 +209,11 @@ document.addEventListener('DOMContentLoaded', function () {
             ? document.getElementById('configuracion-partida')
             : document.getElementById('aviso-sin-mazo-modal');
         if (modal) {
+            if (usuarioTieneMazos && selectMazo) {
+                selectMazo.value = '';
+                mazoSeleccionado = null;
+                verificarSeleccion();
+            }
             console.log('Modal encontrado, intentando mostrar...');
             modal.style.display = 'block';
             console.log('Modal debería estar visible ahora.');
@@ -1138,6 +1160,17 @@ function configurarModalEvento() {
         renderizarCartasSeleccionEvento();
     };
 
+    const filtroSkill = document.getElementById('filtro-skill-class-evento');
+    if (filtroSkill && window.DCFiltrosCartas) {
+        window.DCFiltrosCartas.configurarSelectorSkillClass(filtroSkill, {
+            valorInicial: skillClassEventoActiva,
+            onChange: (valor) => {
+                skillClassEventoActiva = valor;
+                renderizarCartasSeleccionEvento();
+            }
+        });
+    }
+
     const inputBusqueda = document.getElementById('busqueda-seleccion-evento');
     if (inputBusqueda) {
         inputBusqueda.addEventListener('input', function () {
@@ -1149,16 +1182,20 @@ function configurarModalEvento() {
     btnH.onclick = () => {
         faccionEventoActiva = 'H';
         afiliacionEventoActiva = 'todas';
+        skillClassEventoActiva = 'todas';
         actualizarBotonesFaccionEvento();
         renderizarFiltroAfiliacionEvento();
+        sincronizarFiltroSkillClassEvento();
         renderizarCartasSeleccionEvento();
     };
 
     btnV.onclick = () => {
         faccionEventoActiva = 'V';
         afiliacionEventoActiva = 'todas';
+        skillClassEventoActiva = 'todas';
         actualizarBotonesFaccionEvento();
         renderizarFiltroAfiliacionEvento();
+        sincronizarFiltroSkillClassEvento();
         renderizarCartasSeleccionEvento();
     };
 }
@@ -1256,6 +1293,7 @@ async function abrirModalSeleccionEvento(evento) {
 
     faccionEventoActiva = 'H';
     afiliacionEventoActiva = 'todas';
+    skillClassEventoActiva = 'todas';
     seleccionCartasEvento = new Set();
     cartasVistaSeleccionEvento.clear();
     busquedaSeleccionEvento = '';
@@ -1265,6 +1303,7 @@ async function abrirModalSeleccionEvento(evento) {
     }
     actualizarBotonesFaccionEvento();
     renderizarFiltroAfiliacionEvento();
+    sincronizarFiltroSkillClassEvento();
     renderizarCartasSeleccionEvento();
     actualizarEstadoSeleccionEvento();
     document.getElementById('modal-seleccion-evento').style.display = 'flex';
@@ -1328,7 +1367,8 @@ function renderizarCartasSeleccionEvento() {
             return typeof window.DCSeleccionCartaApariencia?.cartaCoincideBusqueda === 'function'
                 ? window.DCSeleccionCartaApariencia.cartaCoincideBusqueda(cartaBusqueda, busquedaSeleccionEvento)
                 : String(cartaBusqueda?.Nombre || '').toLowerCase().includes(busquedaSeleccionEvento);
-        });
+        })
+        .filter((item) => cartaCoincideSkillClassEvento(obtenerCartaDisplaySeleccionEvento(item)));
 
     cartasFiltradas.forEach(item => {
         const carta = obtenerCartaDisplaySeleccionEvento(item);
@@ -1435,6 +1475,8 @@ function cerrarModalSeleccionEvento() {
     seleccionCartasEvento = new Set();
     cartasVistaSeleccionEvento.clear();
     busquedaSeleccionEvento = '';
+    skillClassEventoActiva = 'todas';
+    sincronizarFiltroSkillClassEvento();
 }
 
 function limpiarEstadoPvpAntesDePartidaVsBot() {
@@ -1634,23 +1676,24 @@ function verificarMazosUsuario() {
     if (usuario && usuario.mazos && usuario.mazos.length > 0) {
         usuarioTieneMazos = true;
         console.log('Mazos del usuario:', usuario.mazos);
-    
+
+        const placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.textContent = 'Selecciona un mazo';
+        placeholder.selected = true;
+        selectMazo.appendChild(placeholder);
+
         usuario.mazos.forEach((mazo, index) => {
             const option = document.createElement('option');
             option.value = index;
             option.textContent = mazo.Nombre;
             selectMazo.appendChild(option);
         });
-    
-        // Seleccionar el primer mazo por defecto
-        mazoSeleccionado = usuario.mazos[0];
-        localStorage.setItem('mazoJugador', JSON.stringify({ Cartas: mazoSeleccionado.Cartas }));
-        localStorage.setItem('mazoJugadorBase', JSON.stringify({ Cartas: mazoSeleccionado.Cartas }));
 
-        // Habilitar el botón "Jugar" porque ya hay mazos disponibles
+        mazoSeleccionado = null;
+        selectMazo.value = '';
+
         jugarBtn.disabled = false;
-    
-        // Habilitar el botón de iniciar partida si ya se seleccionaron mazo y dificultad
         verificarSeleccion();
     } else {
         usuarioTieneMazos = false;

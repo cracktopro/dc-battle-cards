@@ -122,6 +122,32 @@
         };
     }
 
+    function clonarScopeMisiones(scope) {
+        const s = scope && typeof scope === 'object' ? scope : { windowId: '', lista: [] };
+        return {
+            windowId: String(s.windowId || ''),
+            lista: (Array.isArray(s.lista) ? s.lista : []).map((m) => ({ ...m })),
+        };
+    }
+
+    /**
+     * Tras track: si un scope se regeneró en esta pasada, usar solo el estado trackeado
+     * (evita que fusionar con LS antiguo aplique Math.max y borre el +1 diario).
+     */
+    function fusionarMisionesPostTrack(misionesLs, misionesTrack, regeneradas = {}) {
+        const ls = misionesLs && typeof misionesLs === 'object' ? misionesLs : {};
+        const tr = misionesTrack && typeof misionesTrack === 'object' ? misionesTrack : {};
+        return {
+            version: String(tr.version || ls.version || 'v1'),
+            diarias: regeneradas.diarias
+                ? clonarScopeMisiones(tr.diarias)
+                : fusionarScopeMisionesCliente(ls.diarias, tr.diarias),
+            semanales: regeneradas.semanales
+                ? clonarScopeMisiones(tr.semanales)
+                : fusionarScopeMisionesCliente(ls.semanales, tr.semanales),
+        };
+    }
+
     async function persistirUsuario(usuario, reintento409 = false) {
         const email = leerEmail();
         if (!email) {
@@ -267,7 +293,10 @@
     async function ensureWindowsActualizadas(usuario) {
         normalizarEstadoMisiones(usuario);
         const catalogo = await cargarCatalogoMisiones();
-        if (!catalogo.length) return false;
+        const regeneradas = { diarias: false, semanales: false };
+        if (!catalogo.length) {
+            return { changed: false, regeneradas };
+        }
         const email = leerEmail() || 'anon';
         const dId = idDiario();
         const wId = idSemanal();
@@ -280,6 +309,7 @@
                 windowId: dId,
                 lista: picks.map((p) => crearEntradaMision(p, `d-${dId}`, 1))
             };
+            regeneradas.diarias = true;
             changed = true;
         }
 
@@ -290,9 +320,10 @@
                 windowId: wId,
                 lista: picks.map((p) => crearEntradaMision(p, `w-${wId}`, WEEKLY_MULT))
             };
+            regeneradas.semanales = true;
             changed = true;
         }
-        return changed;
+        return { changed, regeneradas };
     }
 
     function reemplazarStepsDescripcion(desc, steps) {
@@ -481,21 +512,22 @@
         const incs = mapearEventoAIncrementos(tipo, payload);
         if (incs.length === 0) return;
 
-        const latest = leerUsuario();
-        if (!latest) return;
+        const tracked = leerUsuario();
+        if (!tracked) return;
 
-        const changedWindow = await ensureWindowsActualizadas(latest);
+        const { changed: changedWindow, regeneradas } = await ensureWindowsActualizadas(tracked);
         let changed = changedWindow;
         incs.forEach((inc) => {
             const pred = (k) => classKeyCoincideConTrack(k, inc.classKey);
-            if (incrementarMisionLista(latest.misiones.diarias.lista, pred, inc.amount)) changed = true;
-            if (incrementarMisionLista(latest.misiones.semanales.lista, pred, inc.amount)) changed = true;
+            if (incrementarMisionLista(tracked.misiones.diarias.lista, pred, inc.amount)) changed = true;
+            if (incrementarMisionLista(tracked.misiones.semanales.lista, pred, inc.amount)) changed = true;
         });
         if (!changed) return;
 
         const fresh = leerUsuario();
         if (!fresh) return;
-        fresh.misiones = fusionarMisionesCliente(fresh.misiones || {}, latest.misiones);
+        fresh.misiones = fusionarMisionesPostTrack(fresh.misiones || {}, tracked.misiones, regeneradas);
+        escribirUsuario(fresh);
         await persistirUsuarioDebounced(fresh);
         render();
     }
@@ -514,10 +546,21 @@
         return run;
     }
 
+    /** Espera a que terminen los guardados encolados (p. ej. antes de otorgar recompensas coop). */
+    function awaitPersistenciaPendiente() {
+        return persistMisionesChain;
+    }
+
+    /** Partida multijugador terminada (PvP online o evento coop online), victoria o derrota. */
+    function registrarPartidaOnlineCompletada(opciones = {}) {
+        const amount = Math.max(1, Number(opciones.amount || 1));
+        return track('online', { amount });
+    }
+
     async function inicializar() {
         const usuario = leerUsuario();
         if (!usuario) return;
-        const changed = await ensureWindowsActualizadas(usuario);
+        const { changed } = await ensureWindowsActualizadas(usuario);
         if (changed) {
             await persistirUsuarioDebounced(usuario);
         }
@@ -527,7 +570,7 @@
             renderTimer = setInterval(async () => {
                 const u = leerUsuario();
                 if (!u) return;
-                const c = await ensureWindowsActualizadas(u);
+                const { changed: c } = await ensureWindowsActualizadas(u);
                 if (c) {
                     await persistirUsuarioDebounced(u);
                 } else {
@@ -541,6 +584,8 @@
     window.DCMisiones = {
         init: () => void inicializar(),
         track,
+        awaitPersistenciaPendiente,
+        registrarPartidaOnlineCompletada,
         refresh: () => void inicializar()
     };
 

@@ -34,6 +34,7 @@ function obtenerCartaDisplaySeleccionDesafio(item) {
     return item.carta;
 }
 let afiliacionFiltroActiva = 'todas';
+let skillClassFiltroDesafio = 'todas';
 let faccionCaminoActiva = 'H';
 let faccionFijadaModalDesafio = null;
 let nivelDesafioActivo = 1;
@@ -562,6 +563,17 @@ function configurarModalSeleccion() {
         renderizarCartasSeleccionDesafio();
     };
 
+    const filtroSkill = document.getElementById('filtro-skill-class-desafio');
+    if (filtroSkill && window.DCFiltrosCartas) {
+        window.DCFiltrosCartas.configurarSelectorSkillClass(filtroSkill, {
+            valorInicial: skillClassFiltroDesafio,
+            onChange: (valor) => {
+                skillClassFiltroDesafio = valor;
+                renderizarCartasSeleccionDesafio();
+            }
+        });
+    }
+
     const inputBusqueda = document.getElementById('busqueda-seleccion-desafio');
     if (inputBusqueda) {
         inputBusqueda.addEventListener('input', function () {
@@ -655,7 +667,11 @@ function renderizarCartasSeleccionDesafio() {
             return typeof window.DCSeleccionCartaApariencia?.cartaCoincideBusqueda === 'function'
                 ? window.DCSeleccionCartaApariencia.cartaCoincideBusqueda(cartaBusqueda, busquedaSeleccionDesafio)
                 : String(cartaBusqueda?.Nombre || '').toLowerCase().includes(busquedaSeleccionDesafio);
-        });
+        })
+        .filter((item) => window.DCFiltrosCartas?.cartaCoincideSkillClass(
+            obtenerCartaDisplaySeleccionDesafio(item),
+            skillClassFiltroDesafio
+        ) ?? true);
 
     cartasFiltradas.forEach(item => {
         const carta = obtenerCartaDisplaySeleccionDesafio(item);
@@ -828,6 +844,7 @@ async function abrirModalSeleccionDesafio(desafio) {
 
     faccionFiltroActiva = faccionFijadaModalDesafio;
     afiliacionFiltroActiva = 'todas';
+    skillClassFiltroDesafio = 'todas';
     seleccionCartasDesafio.clear();
     cartasVistaSeleccionDesafio.clear();
     busquedaSeleccionDesafio = '';
@@ -835,6 +852,7 @@ async function abrirModalSeleccionDesafio(desafio) {
     if (inputBusqueda) {
         inputBusqueda.value = '';
     }
+    sincronizarFiltroSkillClassDesafio();
     const tabsFaccion = document.getElementById('filtro-faccion-tabs-desafio');
     if (tabsFaccion) {
         tabsFaccion.style.display = 'none';
@@ -872,6 +890,8 @@ function cerrarModalSeleccionDesafio() {
     seleccionCartasDesafio.clear();
     cartasVistaSeleccionDesafio.clear();
     busquedaSeleccionDesafio = '';
+    skillClassFiltroDesafio = 'todas';
+    sincronizarFiltroSkillClassDesafio();
 }
 
 function confirmarSeleccionDesafio() {

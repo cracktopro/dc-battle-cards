@@ -1,0 +1,73 @@
+/* Select y opciones del filtro por tipo de habilidad (mismos colores que badges) */
+select.filtro-skill-class {
+    min-width: 240px;
+    font-weight: 600;
+}
+
+select.filtro-skill-class option {
+    font-weight: 600;
+}
+
+select.filtro-skill-class.badge-habilidad--heal,
+select.filtro-skill-class.badge-habilidad--heal-all,
+select.filtro-skill-class option.badge-habilidad--heal,
+select.filtro-skill-class option.badge-habilidad--heal-all {
+    background-color: #18462a;
+    color: #c8ffd8;
+}
+
+select.filtro-skill-class.badge-habilidad--debuff,
+select.filtro-skill-class option.badge-habilidad--debuff {
+    background-color: #281248;
+    color: #f0e4ff;
+}
+
+select.filtro-skill-class.badge-habilidad--aoe,
+select.filtro-skill-class.badge-habilidad--extra-attack,
+select.filtro-skill-class option.badge-habilidad--aoe,
+select.filtro-skill-class option.badge-habilidad--extra-attack {
+    background-color: #3c0e0e;
+    color: #ffd4d4;
+}
+
+select.filtro-skill-class.badge-habilidad--stun,
+select.filtro-skill-class.badge-habilidad--dot,
+select.filtro-skill-class option.badge-habilidad--stun,
+select.filtro-skill-class option.badge-habilidad--dot {
+    background-color: #582e0a;
+    color: #ffe7c8;
+}
+
+select.filtro-skill-class.badge-habilidad--life-steal,
+select.filtro-skill-class option.badge-habilidad--life-steal {
+    background-color: #18462a;
+    color: #c8ffd8;
+}
+
+select.filtro-skill-class.badge-habilidad--revive,
+select.filtro-skill-class.badge-habilidad--heal-debuff,
+select.filtro-skill-class.badge-habilidad--bonus-debuff,
+select.filtro-skill-class option.badge-habilidad--revive,
+select.filtro-skill-class option.badge-habilidad--heal-debuff,
+select.filtro-skill-class option.badge-habilidad--bonus-debuff {
+    background-color: #281248;
+    color: #f0e4ff;
+}
+
+select.filtro-skill-class.badge-habilidad--shield,
+select.filtro-skill-class.badge-habilidad--shield-aoe,
+select.filtro-skill-class.badge-habilidad--tank,
+select.filtro-skill-class option.badge-habilidad--shield,
+select.filtro-skill-class option.badge-habilidad--shield-aoe,
+select.filtro-skill-class option.badge-habilidad--tank {
+    background-color: #0c284e;
+    color: #d8f6ff;
+}
+
+select.filtro-skill-class.badge-habilidad--bonus-buff,
+select.filtro-skill-class.badge-habilidad--buff,
+select.filtro-skill-class option.badge-habilidad--bonus-buff,
+select.filtro-skill-class option.badge-habilidad--buff {
+    background-color: #c89400;
+    color: #1a1200;
+}

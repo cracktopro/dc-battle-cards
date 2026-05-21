@@ -3091,13 +3091,15 @@
         return contenedor;
     }
 
-    function registrarMisionOnlinePartidaCoopCompletada() {
+    async function registrarMisionOnlinePartidaCoopCompletada() {
         if (coopMisionOnlinePartidaRegistrada) {
             return;
         }
         coopMisionOnlinePartidaRegistrada = true;
-        if (window.DCMisiones?.track) {
-            window.DCMisiones.track('online', { amount: 1 });
+        if (typeof window.DCMisiones?.registrarPartidaOnlineCompletada === 'function') {
+            await window.DCMisiones.registrarPartidaOnlineCompletada({ amount: 1 });
+        } else if (window.DCMisiones?.track) {
+            await window.DCMisiones.track('online', { amount: 1 });
         }
     }
 
@@ -3111,13 +3113,14 @@
             : 'El BOT ha eliminado a tu equipo.';
         if (modal) modal.style.display = 'flex';
 
-        /** Misión `online`: cuenta al terminar la partida (victoria o derrota), no al abandonar. */
-        registrarMisionOnlinePartidaCoopCompletada();
-
         const recompensasContainer = document.getElementById('coop-recompensas-container');
         if (recompensasContainer) recompensasContainer.innerHTML = '';
 
-        if (!ganaron || !recompensasContainer) return;
+        if (!ganaron || !recompensasContainer) {
+            /** Derrota: solo misión online (sin recompensas que pisen el guardado de misiones). */
+            void registrarMisionOnlinePartidaCoopCompletada();
+            return;
+        }
 
         if (coopRecompensasProcesadas) {
             const aviso = document.createElement('p');
@@ -3138,9 +3141,13 @@
 
         (async () => {
             try {
+                if (typeof window.DCMisiones?.awaitPersistenciaPendiente === 'function') {
+                    await window.DCMisiones.awaitPersistenciaPendiente();
+                }
                 const recompensa = await otorgarRecompensasCoop();
                 recompensasContainer.innerHTML = '';
-                /** Tras persistir recompensas en LS/Firebase para no pisar puntos/cartas con el POST de misiones. */
+                /** Misión `online` y resto tras persistir recompensas (evita que update-user pise el progreso). */
+                await registrarMisionOnlinePartidaCoopCompletada();
                 if (window.DCMisiones?.track) {
                     if (recompensa.huboBossMision) {
                         window.DCMisiones.track('boss', { amount: 1 });

@@ -9,6 +9,7 @@ const cartasVistaSeleccionCrearMazo = new Map();
 let faccionVistaActiva = 'H';
 let mapaDatosCartasCatalogo = null;
 let afiliacionFiltroActiva = 'todas';
+let skillClassFiltroActiva = 'todas';
 let busquedaCrearMazo = '';
 
 function obtenerCartaDisplayCrearMazo(idCarta, usuario) {
@@ -226,6 +227,54 @@ function asegurarBusquedaCrearMazo() {
     return input;
 }
 
+function asegurarSelectorSkillClass() {
+    let wrapper = document.getElementById('skill-class-filter-wrapper');
+    let selector = document.getElementById('selector-skill-class');
+
+    if (wrapper && selector) {
+        return selector;
+    }
+
+    const toolbar = document.querySelector('.faccion-toolbar');
+    if (!toolbar) {
+        return null;
+    }
+
+    wrapper = document.createElement('div');
+    wrapper.id = 'skill-class-filter-wrapper';
+    wrapper.className = 'd-flex align-items-center';
+    wrapper.style.gap = '8px';
+
+    const etiqueta = document.createElement('label');
+    etiqueta.htmlFor = 'selector-skill-class';
+    etiqueta.textContent = 'Habilidad:';
+    etiqueta.style.margin = '0';
+
+    selector = document.createElement('select');
+    selector.id = 'selector-skill-class';
+    selector.className = 'form-control filtro-skill-class';
+    selector.style.width = 'auto';
+    selector.style.minWidth = '240px';
+
+    selector.addEventListener('change', (event) => {
+        skillClassFiltroActiva = String(event.target.value || 'todas').trim().toLowerCase() || 'todas';
+        const usuario = JSON.parse(localStorage.getItem('usuario'));
+        if (usuario) {
+            actualizarSeleccionUI(usuario);
+        }
+    });
+
+    wrapper.appendChild(etiqueta);
+    wrapper.appendChild(selector);
+    toolbar.appendChild(wrapper);
+
+    if (window.DCFiltrosCartas) {
+        skillClassFiltroActiva = window.DCFiltrosCartas.poblarSelectorSkillClass(selector, skillClassFiltroActiva);
+    }
+
+    return selector;
+}
+
 function actualizarSelectorAfiliacion(usuario) {
     const selector = asegurarSelectorAfiliacion();
     if (!selector) {
@@ -419,7 +468,8 @@ function aplicarFiltroFaccion(usuario) {
             || (typeof window.DCSeleccionCartaApariencia?.cartaCoincideBusqueda === 'function'
                 ? window.DCSeleccionCartaApariencia.cartaCoincideBusqueda(cartaDatos, busquedaCrearMazo)
                 : String(cartaDatos?.Nombre || '').toLowerCase().includes(busquedaCrearMazo));
-        const debeMostrarse = faccionCarta === faccionVistaActiva && coincideAfiliacion && coincideBusqueda;
+        const coincideSkillClass = window.DCFiltrosCartas?.cartaCoincideSkillClass(cartaDatos, skillClassFiltroActiva) ?? true;
+        const debeMostrarse = faccionCarta === faccionVistaActiva && coincideAfiliacion && coincideBusqueda && coincideSkillClass;
 
         cartaDiv.classList.toggle('oculta-por-faccion', !debeMostrarse);
 
@@ -592,6 +642,7 @@ async function cargarCartas() {
     });
 
     asegurarBusquedaCrearMazo();
+    asegurarSelectorSkillClass();
     actualizarSeleccionUI(usuario);
 }
 
@@ -600,6 +651,7 @@ function actualizarSeleccionUI(usuario) {
     const formulario = document.getElementById('formulario-mazo');
     const botonGuardar = document.getElementById('guardar-mazo');
     const botonDeseleccionarTodo = document.getElementById('btn-deseleccionar-todo');
+    asegurarSelectorSkillClass();
     actualizarSelectorAfiliacion(usuario);
 
     document.querySelectorAll('#contenedor-cartas .carta').forEach(cartaDiv => {
@@ -755,6 +807,11 @@ function cambiarVistaFaccion(faccion) {
 
     faccionVistaActiva = faccionNormalizada;
     afiliacionFiltroActiva = 'todas';
+    skillClassFiltroActiva = 'todas';
+    const selectorSkill = document.getElementById('selector-skill-class');
+    if (selectorSkill && window.DCFiltrosCartas) {
+        skillClassFiltroActiva = window.DCFiltrosCartas.poblarSelectorSkillClass(selectorSkill, 'todas');
+    }
     actualizarSeleccionUI(usuario);
 }
 

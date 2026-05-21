@@ -411,6 +411,7 @@
         return item.carta;
     }
     let afiliacionEventoCoopActiva = 'todas';
+    let skillClassEventoCoopActiva = 'todas';
 
     /**
      * Modal de selección de 6 cartas para el evento coop. Replica el formato
@@ -491,6 +492,7 @@
         busquedaSeleccionCoop = '';
         faccionEventoCoopActiva = 'H';
         afiliacionEventoCoopActiva = 'todas';
+        skillClassEventoCoopActiva = 'todas';
 
         /* Cualquier instancia previa colgada se elimina antes de abrir. */
         document.getElementById('modal-seleccion-evento-coop')?.remove();
@@ -511,6 +513,7 @@
                         <button type="button" class="btn faccion-tab" data-coop-tab="V">Villanos</button>
                     </div>
                     <select class="form-control" data-coop-filtro-afi style="width:auto; min-width:220px;"></select>
+                    <select class="form-control filtro-skill-class" data-coop-filtro-skill style="width:auto; min-width:240px;"></select>
                     <input type="search" class="form-control busqueda-seleccion-cartas" data-coop-busqueda placeholder="Buscar carta..." autocomplete="off" style="flex:1; min-width:180px;">
                 </div>
                 <div class="cartas-seleccion-grid" data-coop-grid></div>
@@ -525,11 +528,22 @@
         const grid = modal.querySelector('[data-coop-grid]');
         const estadoEl = modal.querySelector('[data-coop-estado]');
         const filtroAfi = modal.querySelector('[data-coop-filtro-afi]');
+        const filtroSkill = modal.querySelector('[data-coop-filtro-skill]');
         const inputBusqueda = modal.querySelector('[data-coop-busqueda]');
         const btnTabH = modal.querySelector('[data-coop-tab="H"]');
         const btnTabV = modal.querySelector('[data-coop-tab="V"]');
         const btnCancelar = modal.querySelector('[data-coop-cancelar]');
         const btnConfirmar = modal.querySelector('[data-coop-confirmar]');
+
+        if (filtroSkill && window.DCFiltrosCartas) {
+            window.DCFiltrosCartas.configurarSelectorSkillClass(filtroSkill, {
+                valorInicial: skillClassEventoCoopActiva,
+                onChange: (valor) => {
+                    skillClassEventoCoopActiva = valor;
+                    renderizarGrid();
+                }
+            });
+        }
 
         const clavesBloqueadasInvitador = new Set();
 
@@ -650,7 +664,11 @@
                     return typeof window.DCSeleccionCartaApariencia?.cartaCoincideBusqueda === 'function'
                         ? window.DCSeleccionCartaApariencia.cartaCoincideBusqueda(cartaBusqueda, busquedaSeleccionCoop)
                         : String(cartaBusqueda?.Nombre || '').toLowerCase().includes(busquedaSeleccionCoop);
-                });
+                })
+                .filter((item) => window.DCFiltrosCartas?.cartaCoincideSkillClass(
+                    obtenerCartaDisplaySeleccionCoop(item),
+                    skillClassEventoCoopActiva
+                ) ?? true);
 
             cartasFiltradas.forEach((item) => {
                 const carta = obtenerCartaDisplaySeleccionCoop(item);
@@ -750,15 +768,23 @@
         btnTabH.addEventListener('click', () => {
             faccionEventoCoopActiva = 'H';
             afiliacionEventoCoopActiva = 'todas';
+            skillClassEventoCoopActiva = 'todas';
             actualizarBotonesFaccion();
             renderizarFiltroAfiliacion();
+            if (filtroSkill && window.DCFiltrosCartas) {
+                skillClassEventoCoopActiva = window.DCFiltrosCartas.poblarSelectorSkillClass(filtroSkill, 'todas');
+            }
             renderizarGrid();
         });
         btnTabV.addEventListener('click', () => {
             faccionEventoCoopActiva = 'V';
             afiliacionEventoCoopActiva = 'todas';
+            skillClassEventoCoopActiva = 'todas';
             actualizarBotonesFaccion();
             renderizarFiltroAfiliacion();
+            if (filtroSkill && window.DCFiltrosCartas) {
+                skillClassEventoCoopActiva = window.DCFiltrosCartas.poblarSelectorSkillClass(filtroSkill, 'todas');
+            }
             renderizarGrid();
         });
         filtroAfi.addEventListener('change', () => {

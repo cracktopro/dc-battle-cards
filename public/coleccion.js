@@ -5,6 +5,7 @@ let todasLasCartasCatalogo = [];
 let nombresCartasConseguidas = new Set();
 let busquedaColeccion = '';
 let afiliacionFiltroActiva = 'todas';
+let skillClassFiltroColeccion = 'todas';
 let ordenarPorPoderActivo = false;
 let mapaCatalogo = new Map();
 let mapaMejorVersionUsuario = new Map();
@@ -108,6 +109,7 @@ function actualizarIndicadorNuevoSobres() {
 function configurarFiltrosColeccion() {
     const inputBusqueda = document.getElementById('busqueda-coleccion');
     const selectorAfiliacion = document.getElementById('selector-afiliacion-coleccion');
+    const selectorSkill = document.getElementById('selector-skill-class-coleccion');
     const toggleOrdenPoder = document.getElementById('ordenar-poder-coleccion');
 
     inputBusqueda?.addEventListener('input', function () {
@@ -119,6 +121,16 @@ function configurarFiltrosColeccion() {
         afiliacionFiltroActiva = normalizarAfiliacion(this.value || 'todas') || 'todas';
         renderizarVistaColeccion();
     });
+
+    if (selectorSkill && window.DCFiltrosCartas) {
+        window.DCFiltrosCartas.configurarSelectorSkillClass(selectorSkill, {
+            valorInicial: skillClassFiltroColeccion,
+            onChange: (valor) => {
+                skillClassFiltroColeccion = valor;
+                renderizarVistaColeccion();
+            }
+        });
+    }
 
     toggleOrdenPoder?.addEventListener('change', function () {
         ordenarPorPoderActivo = Boolean(this.checked);
@@ -379,19 +391,26 @@ function crearCartaColeccionElemento(carta, estaObtenida) {
         cartaDiv.style.backgroundPosition = 'center top';
     }
 
+    const badgeHabilidad = window.crearBadgeHabilidadCarta ? window.crearBadgeHabilidadCarta(cartaVisual) : null;
+    if (badgeHabilidad) {
+        cartaDiv.appendChild(badgeHabilidad);
+    }
+    const badgeAfiliacion = window.crearBadgeAfiliacionCarta ? window.crearBadgeAfiliacionCarta(cartaVisual) : null;
+    if (badgeAfiliacion) {
+        cartaDiv.appendChild(badgeAfiliacion);
+    }
+    cartaDiv.appendChild(crearBarraSaludMini(cartaVisual));
+
     const detallesDiv = document.createElement('div');
     detallesDiv.classList.add('detalles-carta');
 
     const nombreSpan = document.createElement('span');
     nombreSpan.classList.add('nombre-carta');
-    nombreSpan.textContent = cartaVisual.Nombre;
+    nombreSpan.textContent = cartaVisual.Nombre || 'Carta';
 
     const poderSpan = document.createElement('span');
     poderSpan.classList.add('poder-carta');
-    poderSpan.textContent = cartaVisual.Poder;
-    if (Number(cartaVisual.Nivel || 1) >= 6) {
-        poderSpan.style.color = '#d5b5ff';
-    }
+    poderSpan.textContent = cartaVisual.Poder ?? 0;
 
     detallesDiv.appendChild(nombreSpan);
     detallesDiv.appendChild(poderSpan);
@@ -411,22 +430,21 @@ function crearCartaColeccionElemento(carta, estaObtenida) {
         }
     }
 
-    const estadoDiv = document.createElement('div');
-    estadoDiv.classList.add('estado-coleccion', estaObtenida ? 'obtenida' : 'no-obtenida');
-    estadoDiv.textContent = estaObtenida ? 'Obtenida' : 'No conseguida';
-
     cartaDiv.appendChild(detallesDiv);
-    const badgeAfiliacion = window.crearBadgeAfiliacionCarta ? window.crearBadgeAfiliacionCarta(cartaVisual) : null;
-    if (badgeAfiliacion) {
-        cartaDiv.appendChild(badgeAfiliacion);
-    }
     cartaDiv.appendChild(estrellasDiv);
-    cartaDiv.appendChild(estadoDiv);
     if (estaObtenida && window.DCRedDot && typeof window.DCRedDot.attachCardBadge === 'function') {
         window.DCRedDot.attachCardBadge(cartaDiv, cartaVisual.Nombre);
     }
 
     return cartaDiv;
+}
+
+function obtenerSkillClassVisualColeccion(carta) {
+    const claveCarta = obtenerClaveCarta(carta?.Nombre);
+    const estaObtenida = nombresCartasConseguidas.has(claveCarta);
+    const versionJugador = mapaMejorVersionUsuario.get(claveCarta);
+    const fuente = estaObtenida && versionJugador ? versionJugador : carta;
+    return window.DCFiltrosCartas?.normalizarSkillClassCarta(fuente) || '';
 }
 
 function obtenerPoderVisualColeccion(carta) {
@@ -466,6 +484,10 @@ function renderizarGrillaCartasColeccion() {
             const afiliaciones = obtenerAfiliacionesCarta(carta).map(normalizarAfiliacion);
             return afiliaciones.includes(normalizarAfiliacion(afiliacionFiltroActiva));
         })
+        .filter(carta => window.DCFiltrosCartas?.cartaCoincideSkillClass(
+            { skill_class: obtenerSkillClassVisualColeccion(carta) },
+            skillClassFiltroColeccion
+        ) ?? true)
         .sort((a, b) => {
             if (ordenarPorPoderActivo) {
                 const diffPoder = obtenerPoderVisualColeccion(b) - obtenerPoderVisualColeccion(a);

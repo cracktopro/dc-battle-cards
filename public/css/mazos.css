@@ -246,13 +246,18 @@ select:disabled,
     text-align: center;
 }
 
-.coleccion-progreso-envoltorio {
+.coleccion-progreso-envoltorio,
+.coleccion-cartas-envoltorio {
     margin: 0 0 18px;
     padding: 12px 14px;
     border-radius: 14px;
     background: rgba(8, 18, 36, 0.55);
     border: 1px solid rgba(0, 209, 255, 0.22);
     box-shadow: 0 0 14px rgba(0, 123, 255, 0.25);
+}
+
+.coleccion-cartas-envoltorio .contenedor-cartas {
+    margin: 0;
 }
 
 .coleccion-progreso-titulo {
@@ -1662,35 +1667,6 @@ a.faccion-tab.active {
     filter: grayscale(75%) opacity(0.5);
 }
 
-.estado-coleccion {
-    position: absolute;
-    left: 6px;
-    right: 6px;
-    bottom: 36px;
-    text-align: center;
-    font-size: 0.66rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    border-radius: 999px;
-    padding: 4px 6px;
-    z-index: 3;
-}
-
-.estado-coleccion.obtenida {
-    color: #bfffd8;
-    background: rgba(21, 120, 66, 0.78);
-    border: 1px solid rgba(64, 255, 170, 0.6);
-    box-shadow: 0 0 8px rgba(64, 255, 170, 0.3);
-}
-
-.estado-coleccion.no-obtenida {
-    color: #ffd0d0;
-    background: rgba(136, 26, 26, 0.72);
-    border: 1px solid rgba(255, 109, 109, 0.55);
-    box-shadow: 0 0 8px rgba(255, 109, 109, 0.22);
-}
-
 .badge-habilidad-carta {
     position: absolute;
     left: 6px;
@@ -1976,6 +1952,7 @@ a.faccion-tab.active {
 
 /* Barra de salud y badge de habilidad más anchos (Mazos, crear mazos, mejorar, modal cambio, tienda) */
 .contenedor-cartas .carta .barra-salud-contenedor,
+.contenedor-cartas .carta-coleccion .barra-salud-contenedor,
 #contenedor-mejora-carta-objeto .carta .barra-salud-contenedor,
 #contenedor-mejora-especial-objeto .carta .barra-salud-contenedor,
 .modal-cambio-carta .carta .barra-salud-contenedor,
@@ -1986,6 +1963,7 @@ a.faccion-tab.active {
 }
 
 .contenedor-cartas .carta .badge-habilidad-carta,
+.contenedor-cartas .carta-coleccion .badge-habilidad-carta,
 #contenedor-mejora-carta-objeto .carta .badge-habilidad-carta,
 #contenedor-mejora-especial-objeto .carta .badge-habilidad-carta,
 .modal-cambio-carta .carta .badge-habilidad-carta,

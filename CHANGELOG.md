@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.6
+
+- Etiqueta de versión del menú lateral: **`Versión: 1.2.6`** (`public/js/cartas.js`, `package.json`).
+- **Filtro por tipo de habilidad** (`public/js/filtrosCartas.js`, `public/css/filtros-cartas.css`): selector `skill_class` con etiquetas en español y colores de badge en colección, mazos, crear mazos, mejorar cartas (4 pestañas), eventos offline/coop, desafíos y modal de reemplazo de carta.
+- **Misión online** (`public/js/misionesDiarias.js`, `public/partida.js`, `public/partidaCoop.js`): el progreso de partidas multijugador (PvP y coop online) se registra al terminar la partida sin perderse por carreras con el guardado de recompensas; API `registrarPartidaOnlineCompletada`.
+- **Colección** (`public/coleccion.js`, `public/coleccion.html`): alineación visual con mazos/mejorar cartas, holo nivel 8 y panel de filtros unificado.
+- **Recompensa diaria / perfil** (`public/js/cartas.js`, `server.js`): fusión segura del usuario tras reclamar recompensa diaria (sin vaciar el perfil en cliente).
+
 ## 1.2.5
 
 - Etiqueta de versión del menú lateral: **`Versión: 1.2.5`** (`public/js/cartas.js`, `package.json`).

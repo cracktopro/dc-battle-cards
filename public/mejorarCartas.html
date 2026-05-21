@@ -158,6 +158,7 @@
         <div class="mejorar-barra-filtros d-flex align-items-center mb-3" style="gap:8px; flex-wrap:wrap;">
             <input id="busqueda-mejora-clasica" type="text" class="form-control" placeholder="Buscar carta..." style="width:auto; min-width:220px;">
             <select id="selector-afiliacion-mejora-clasica" class="form-control" style="width:auto; min-width:220px;"></select>
+            <select id="selector-skill-class-mejora-clasica" class="form-control filtro-skill-class" style="width:auto; min-width:240px;"></select>
             <div class="d-flex align-items-center" style="gap:6px; padding:6px 10px; border:1px solid rgba(0, 209, 255, 0.35); border-radius:10px; background:rgba(8, 20, 40, 0.55);">
                 <input id="ordenar-poder-mejora-clasica" type="checkbox" style="transform:scale(1.08);">
                 <label for="ordenar-poder-mejora-clasica" style="margin:0; font-size:0.82rem; color:#dff8ff; white-space:nowrap;">Ordenar por poder</label>
@@ -177,6 +178,7 @@
             <div class="mejorar-barra-filtros d-flex align-items-center mb-3" style="gap:8px; flex-wrap:wrap;">
                 <input id="busqueda-destruir-repetidas" type="text" class="form-control" placeholder="Buscar carta..." style="width:auto; min-width:220px;">
                 <select id="selector-afiliacion-destruir-repetidas" class="form-control" style="width:auto; min-width:220px;"></select>
+                <select id="selector-skill-class-destruir-repetidas" class="form-control filtro-skill-class" style="width:auto; min-width:240px;"></select>
                 <div class="d-flex align-items-center" style="gap:6px; padding:6px 10px; border:1px solid rgba(0, 209, 255, 0.35); border-radius:10px; background:rgba(8, 20, 40, 0.55);">
                     <input id="ordenar-poder-destruir-repetidas" type="checkbox" style="transform:scale(1.08);">
                     <label for="ordenar-poder-destruir-repetidas" style="margin:0; font-size:0.82rem; color:#dff8ff; white-space:nowrap;">Ordenar por poder</label>
@@ -233,6 +235,7 @@
                 <div class="d-flex align-items-center mejorar-barra-filtros" style="gap:8px; flex-wrap:wrap;">
                     <input id="busqueda-fragmentos" type="text" class="form-control" placeholder="Buscar carta..." style="width:auto; min-width:220px;">
                     <select id="selector-afiliacion-fragmentos" class="form-control" style="width:auto; min-width:220px;"></select>
+                    <select id="selector-skill-class-fragmentos" class="form-control filtro-skill-class" style="width:auto; min-width:240px;"></select>
                     <div class="d-flex align-items-center" style="gap:6px; padding:6px 10px; border:1px solid rgba(255, 200, 120, 0.35); border-radius:10px; background:rgba(8, 20, 40, 0.55);">
                         <input id="ordenar-poder-fragmentos" type="checkbox" style="transform:scale(1.08);">
                         <label for="ordenar-poder-fragmentos" style="margin:0; font-size:0.82rem; color:#dff8ff; white-space:nowrap;">Ordenar por poder</label>
@@ -374,6 +377,8 @@
 <script src="js/tradeGrupo.js"></script>
 <script src="js/escaladoStatsCarta.js"></script>
 <script src="js/cartas.js"></script>
+    <link rel="stylesheet" href="css/filtros-cartas.css">
+    <script src="js/filtrosCartas.js"></script>
     <script src="js/sobresCartas.js"></script>
     <script src="js/misionesDiarias.js"></script>
     <script src="mejorarCartas.js"></script>

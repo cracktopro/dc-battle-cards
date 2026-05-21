@@ -58,7 +58,6 @@
 /* Por encima del holo; sin cambiar position (respeta absolute de mazos/tablero). */
 .carta--con-holo .estrellas-carta,
 .carta--con-holo .detalles-carta,
-.carta--con-holo .estado-coleccion,
 .carta--con-holo .badge-afiliacion-carta,
 .carta--con-holo .badge-habilidad-carta,
 .carta--con-holo .dc-card-red-dot-nueva,

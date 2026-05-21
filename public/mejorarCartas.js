@@ -96,19 +96,23 @@ let mejoraAnimEnCurso = false;
 
 let busquedaMejoraClasica = '';
 let afiliacionMejoraClasica = 'todas';
+let skillClassMejoraClasica = 'todas';
 let ordenarPoderMejoraClasica = false;
 let filtrosMejoraClasicaRegistrados = false;
 
 let busquedaDestruirRepetidas = '';
 let afiliacionDestruirRepetidas = 'todas';
+let skillClassDestruirRepetidas = 'todas';
 let ordenarPoderDestruirRepetidas = false;
 let filtrosDestruirRepetidasRegistrados = false;
 
 let busquedaMejorasObjetos = '';
 let afiliacionMejorasObjetos = 'todas';
+let skillClassMejorasObjetos = 'todas';
 
 let busquedaFragmentos = '';
 let afiliacionFragmentos = 'todas';
+let skillClassFragmentos = 'todas';
 
 function esperar(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
@@ -117,6 +121,37 @@ function esperar(ms) {
 function normalizarFaccion(valor) {
     const faccion = String(valor || '').trim().toUpperCase();
     return faccion === 'H' || faccion === 'V' ? faccion : '';
+}
+
+async function registrarMisionesTrasMejoraCarta({
+    faccion,
+    subeANivel6 = false,
+    mejorasH = 0,
+    mejorasV = 0,
+    mejorasLleganNivel6 = 0,
+    contarMejorarNivel = false
+} = {}) {
+    if (!window.DCMisiones?.track) {
+        return;
+    }
+    const tracks = [];
+    const fac = normalizarFaccion(faccion);
+    const h = Number(mejorasH) > 0 ? Number(mejorasH) : (fac === 'H' ? 1 : 0);
+    const v = Number(mejorasV) > 0 ? Number(mejorasV) : (fac === 'V' ? 1 : 0);
+    if (h > 0) {
+        tracks.push(window.DCMisiones.track('mejorar_cartas_h', { amount: h }));
+    }
+    if (v > 0) {
+        tracks.push(window.DCMisiones.track('mejorar_cartas_v', { amount: v }));
+    }
+    if (subeANivel6 || contarMejorarNivel || Number(mejorasLleganNivel6) > 0) {
+        const amt = Number(mejorasLleganNivel6) > 0 ? Number(mejorasLleganNivel6) : 1;
+        tracks.push(window.DCMisiones.track('mejorar_nivel', { amount: amt }));
+    }
+    if (tracks.length === 0) {
+        return;
+    }
+    await Promise.allSettled(tracks);
 }
 
 function normalizarAfiliacionMejorar(valor) {
@@ -146,6 +181,10 @@ function cartaCoincideAfiliacionMejorar(carta, afiliacionActiva) {
     return obtenerAfiliacionesCartaMejorar(carta)
         .map(normalizarAfiliacionMejorar)
         .includes(clave);
+}
+
+function cartaCoincideSkillClassMejorar(carta, filtroActivo) {
+    return window.DCFiltrosCartas?.cartaCoincideSkillClass(carta, filtroActivo) ?? true;
 }
 
 function compararCartasMejorarPorNombrePoder(a, b, ordenarPoder) {
@@ -532,11 +571,7 @@ async function confirmarCombinacionDuplicados() {
     try {
         await actualizarUsuarioFirebase(usuario, email);
         localStorage.setItem('usuario', JSON.stringify(usuario));
-        if (window.DCMisiones?.track) {
-            if (facFusion === 'H') window.DCMisiones.track('mejorar_cartas_h', { amount: 1 });
-            if (facFusion === 'V') window.DCMisiones.track('mejorar_cartas_v', { amount: 1 });
-            if (fusionLlegaNivel6) window.DCMisiones.track('mejorar_nivel', { amount: 1 });
-        }
+        await registrarMisionesTrasMejoraCarta({ faccion: facFusion, subeANivel6: fusionLlegaNivel6 });
         refrescarPanelPerfilLateral();
         const { cartaAntes, cartaMejorada } = resultado;
         cerrarModalCombinarDuplicados();
@@ -750,7 +785,8 @@ function filtrarYOrdenarCartasMejorasObjetos(cartas) {
     const lista = (Array.isArray(cartas) ? cartas : []).filter((carta) => {
         return obtenerFaccionCartaMejorasObjetos(carta) === faccionMejorasObjetosActiva
             && cartaCoincideBusquedaMejorar(carta, busquedaMejorasObjetos)
-            && cartaCoincideAfiliacionMejorar(carta, afiliacionMejorasObjetos);
+            && cartaCoincideAfiliacionMejorar(carta, afiliacionMejorasObjetos)
+            && cartaCoincideSkillClassMejorar(carta, skillClassMejorasObjetos);
     });
     lista.sort((a, b) => compararCartasMejorarPorNombrePoder(a, b, ordenarPoderMejorasObjetos));
     return lista;
@@ -805,6 +841,18 @@ function configurarFiltrosMejorasObjetos() {
         const usuario = JSON.parse(localStorage.getItem('usuario') || 'null');
         renderizarSeccionMejorasObjetos(usuario);
     });
+
+    const selectorSkill = document.getElementById('selector-skill-class-mejoras-objetos');
+    if (selectorSkill && window.DCFiltrosCartas) {
+        window.DCFiltrosCartas.configurarSelectorSkillClass(selectorSkill, {
+            valorInicial: skillClassMejorasObjetos,
+            onChange: (valor) => {
+                skillClassMejorasObjetos = valor;
+                const usuario = JSON.parse(localStorage.getItem('usuario') || 'null');
+                renderizarSeccionMejorasObjetos(usuario);
+            }
+        });
+    }
 
     chkPoder?.addEventListener('change', function () {
         ordenarPoderMejorasObjetos = Boolean(this.checked);
@@ -1028,7 +1076,8 @@ function filtrarYOrdenarCartasFragmentos(cartas) {
     const lista = (Array.isArray(cartas) ? cartas : []).filter((carta) => {
         return obtenerFaccionCartaMejorasObjetos(carta) === faccionFragmentosActiva
             && cartaCoincideBusquedaMejorar(carta, busquedaFragmentos)
-            && cartaCoincideAfiliacionMejorar(carta, afiliacionFragmentos);
+            && cartaCoincideAfiliacionMejorar(carta, afiliacionFragmentos)
+            && cartaCoincideSkillClassMejorar(carta, skillClassFragmentos);
     });
     lista.sort((a, b) => compararCartasMejorarPorNombrePoder(a, b, ordenarPoderFragmentos));
     return lista;
@@ -1083,6 +1132,18 @@ function configurarFiltrosFragmentos() {
         const usuario = JSON.parse(localStorage.getItem('usuario') || 'null');
         renderizarSeccionFragmentos(usuario);
     });
+
+    const selectorSkill = document.getElementById('selector-skill-class-fragmentos');
+    if (selectorSkill && window.DCFiltrosCartas) {
+        window.DCFiltrosCartas.configurarSelectorSkillClass(selectorSkill, {
+            valorInicial: skillClassFragmentos,
+            onChange: (valor) => {
+                skillClassFragmentos = valor;
+                const usuario = JSON.parse(localStorage.getItem('usuario') || 'null');
+                renderizarSeccionFragmentos(usuario);
+            }
+        });
+    }
 
     chkPoder?.addEventListener('change', function () {
         ordenarPoderFragmentos = Boolean(this.checked);
@@ -1415,11 +1476,7 @@ async function aplicarMejoraFragmentoDesdeModal(tipoFragmento) {
     try {
         await actualizarUsuarioFirebase(usuario, email);
         localStorage.setItem('usuario', JSON.stringify(usuario));
-        if (window.DCMisiones?.track) {
-            if (faccionMejorada === 'H') window.DCMisiones.track('mejorar_cartas_h', { amount: 1 });
-            if (faccionMejorada === 'V') window.DCMisiones.track('mejorar_cartas_v', { amount: 1 });
-            window.DCMisiones.track('mejorar_nivel', { amount: 1 });
-        }
+        await registrarMisionesTrasMejoraCarta({ faccion: faccionMejorada, contarMejorarNivel: true });
         refrescarPanelPerfilLateral();
         cerrarModalSeleccionFragmentos();
         cargarCartas();
@@ -1592,6 +1649,20 @@ function configurarFiltrosMejoraClasica() {
         }
     });
 
+    const selectorSkill = document.getElementById('selector-skill-class-mejora-clasica');
+    if (selectorSkill && window.DCFiltrosCartas) {
+        window.DCFiltrosCartas.configurarSelectorSkillClass(selectorSkill, {
+            valorInicial: skillClassMejoraClasica,
+            onChange: (valor) => {
+                skillClassMejoraClasica = valor;
+                const usuario = JSON.parse(localStorage.getItem('usuario') || 'null');
+                if (usuario) {
+                    renderizarSeccionMejoraClasica(usuario);
+                }
+            }
+        });
+    }
+
     chkPoder?.addEventListener('change', function () {
         ordenarPoderMejoraClasica = Boolean(this.checked);
         const usuario = JSON.parse(localStorage.getItem('usuario') || 'null');
@@ -1629,6 +1700,20 @@ function configurarFiltrosDestruirRepetidas() {
         }
     });
 
+    const selectorSkill = document.getElementById('selector-skill-class-destruir-repetidas');
+    if (selectorSkill && window.DCFiltrosCartas) {
+        window.DCFiltrosCartas.configurarSelectorSkillClass(selectorSkill, {
+            valorInicial: skillClassDestruirRepetidas,
+            onChange: (valor) => {
+                skillClassDestruirRepetidas = valor;
+                const usuario = JSON.parse(localStorage.getItem('usuario') || 'null');
+                if (usuario) {
+                    renderizarSeccionDestruccion(usuario);
+                }
+            }
+        });
+    }
+
     chkPoder?.addEventListener('change', function () {
         ordenarPoderDestruirRepetidas = Boolean(this.checked);
         const usuario = JSON.parse(localStorage.getItem('usuario') || 'null');
@@ -1659,6 +1744,7 @@ function renderizarSeccionMejoraClasica(usuario) {
         .filter(grupoVisibleEnVistaClasica)
         .filter((grupo) => cartaCoincideBusquedaMejorar(grupo.keeperCarta, busquedaMejoraClasica))
         .filter((grupo) => cartaCoincideAfiliacionMejorar(grupo.keeperCarta, afiliacionMejoraClasica))
+        .filter((grupo) => cartaCoincideSkillClassMejorar(grupo.keeperCarta, skillClassMejoraClasica))
         .sort((a, b) => compararGruposMejorarPorNombrePoder(a, b, ordenarPoderMejoraClasica));
 
     if (grupos.length === 0) {
@@ -2107,11 +2193,7 @@ async function aplicarMejoraObjetoDesdeModal(tipo, indiceCarta) {
     try {
         await actualizarUsuarioFirebase(usuario, email);
         localStorage.setItem('usuario', JSON.stringify(usuario));
-        if (window.DCMisiones?.track) {
-            if (faccionMejorada === 'H') window.DCMisiones.track('mejorar_cartas_h', { amount: 1 });
-            if (faccionMejorada === 'V') window.DCMisiones.track('mejorar_cartas_v', { amount: 1 });
-            if (subeANivel6) window.DCMisiones.track('mejorar_nivel', { amount: 1 });
-        }
+        await registrarMisionesTrasMejoraCarta({ faccion: faccionMejorada, subeANivel6 });
         refrescarPanelPerfilLateral();
         cerrarModalSeleccionObjetoMejora();
         cargarCartas();
@@ -2167,11 +2249,7 @@ async function mejorarDuplicadosAutomaticamente() {
     try {
         await actualizarUsuarioFirebase(usuario, email);
         localStorage.setItem('usuario', JSON.stringify(usuario));
-        if (window.DCMisiones?.track) {
-            if (mejorasH > 0) window.DCMisiones.track('mejorar_cartas_h', { amount: mejorasH });
-            if (mejorasV > 0) window.DCMisiones.track('mejorar_cartas_v', { amount: mejorasV });
-            if (mejorasLleganNivel6 > 0) window.DCMisiones.track('mejorar_nivel', { amount: mejorasLleganNivel6 });
-        }
+        await registrarMisionesTrasMejoraCarta({ mejorasH, mejorasV, mejorasLleganNivel6 });
         refrescarPanelPerfilLateral();
         cargarCartas();
         mostrarResultadoMejoraAutomatica(analisis);
@@ -2292,7 +2370,8 @@ function renderizarSeccionDestruccion(usuario) {
 
     const grupos = gruposBase
         .filter((grupo) => cartaCoincideBusquedaMejorar(grupo.keeperCarta, busquedaDestruirRepetidas))
-        .filter((grupo) => cartaCoincideAfiliacionMejorar(grupo.keeperCarta, afiliacionDestruirRepetidas));
+        .filter((grupo) => cartaCoincideAfiliacionMejorar(grupo.keeperCarta, afiliacionDestruirRepetidas))
+        .filter((grupo) => cartaCoincideSkillClassMejorar(grupo.keeperCarta, skillClassDestruirRepetidas));
 
     contenedor.innerHTML = '';
     let puntosTotales = 0;

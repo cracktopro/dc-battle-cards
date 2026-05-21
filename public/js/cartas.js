@@ -280,6 +280,8 @@ function normalizarClaseSkill(carta) {
     return claseRaw;
 }
 
+window.normalizarClaseSkill = normalizarClaseSkill;
+
 function obtenerNivelCartaSeguro(carta) {
     return Math.max(1, Number(carta?.Nivel || 1));
 }
@@ -1708,6 +1710,52 @@ function leerUsuarioSesionSeguro() {
     }
 }
 
+/**
+ * Respuestas de /update-user con payload parcial (p. ej. solo objetos + recompensas diarias)
+ * no deben sustituir el perfil completo en localStorage.
+ */
+function fusionarUsuarioSesionTrasUpdate(base, pendiente, servidor) {
+    const b = base && typeof base === 'object' ? base : {};
+    const p = pendiente && typeof pendiente === 'object' ? pendiente : {};
+    const s = servidor && typeof servidor === 'object' ? servidor : {};
+    const nickServidor = String(s.nickname || '').trim();
+    const nickPendiente = String(p.nickname || '').trim();
+    const nickBase = String(b.nickname || '').trim();
+    const avatarServidor = String(s.avatar || '').trim();
+    const avatarPendiente = String(p.avatar || '').trim();
+    const avatarBase = String(b.avatar || '').trim();
+    const puntosServidor = Number(s.puntos);
+    const puntosPendiente = Number(p.puntos);
+    const puntosBase = Number(b.puntos);
+
+    return {
+        ...b,
+        ...p,
+        ...s,
+        nickname: nickServidor || nickPendiente || nickBase || b.nickname,
+        avatar: avatarServidor || avatarPendiente || avatarBase || b.avatar,
+        puntos: Number.isFinite(puntosServidor) ? puntosServidor
+            : (Number.isFinite(puntosPendiente) ? puntosPendiente
+                : (Number.isFinite(puntosBase) ? puntosBase : b.puntos)),
+        preferencias: (s.preferencias && typeof s.preferencias === 'object')
+            ? { ...(b.preferencias && typeof b.preferencias === 'object' ? b.preferencias : {}), ...s.preferencias }
+            : ((p.preferencias && typeof p.preferencias === 'object') ? p.preferencias : b.preferencias),
+        cartas: Array.isArray(s.cartas) && s.cartas.length > 0 ? s.cartas
+            : (Array.isArray(p.cartas) ? p.cartas : b.cartas),
+        mazos: Array.isArray(s.mazos) && s.mazos.length > 0 ? s.mazos
+            : (Array.isArray(p.mazos) ? p.mazos : b.mazos),
+        skinsObtenidos: Array.isArray(s.skinsObtenidos) ? s.skinsObtenidos
+            : (Array.isArray(p.skinsObtenidos) ? p.skinsObtenidos : b.skinsObtenidos),
+        objetos: { ...(b.objetos || {}), ...(p.objetos || {}), ...(s.objetos || {}) },
+        recompensas: { ...(b.recompensas || {}), ...(p.recompensas || {}), ...(s.recompensas || {}) },
+        misiones: (s.misiones && typeof s.misiones === 'object')
+            ? s.misiones
+            : ((p.misiones && typeof p.misiones === 'object') ? p.misiones : b.misiones),
+        syncToken: s.syncToken || p.syncToken || b.syncToken,
+        syncUpdatedAt: s.syncUpdatedAt || p.syncUpdatedAt || b.syncUpdatedAt
+    };
+}
+
 function normalizarObjetosConSobresGlobal(usuario) {
     if (!usuario || typeof usuario !== 'object') return;
     const base = (usuario.objetos && typeof usuario.objetos === 'object') ? { ...usuario.objetos } : {};
@@ -2007,20 +2055,23 @@ async function persistirUsuarioConRecompensaDiaria(usuario) {
         const data = await response.json().catch(() => ({}));
 
         if (response.ok) {
-            if (data?.usuario && usuario && typeof usuario === 'object') {
-                Object.keys(usuario).forEach((k) => delete usuario[k]);
-                Object.assign(usuario, data.usuario);
-            }
-            finalizarPersistenciaRecompensaDiariaOk(usuario);
+            const baseLs = leerUsuarioSesionSeguro() || {};
+            const fusionado = fusionarUsuarioSesionTrasUpdate(baseLs, usuario, data?.usuario);
+            normalizarObjetosConSobresGlobal(fusionado);
+            aplicarRespaldoClaimLocalUsuario(fusionado);
+            finalizarPersistenciaRecompensaDiariaOk(fusionado);
             return true;
         }
 
         if (response.status === 409 && data?.usuario) {
-            localStorage.setItem('usuario', JSON.stringify(data.usuario));
+            const baseLs = leerUsuarioSesionSeguro() || {};
+            const fusionado = fusionarUsuarioSesionTrasUpdate(baseLs, usuario, data.usuario);
+            normalizarObjetosConSobresGlobal(fusionado);
+            aplicarRespaldoClaimLocalUsuario(fusionado);
+            localStorage.setItem('usuario', JSON.stringify(fusionado));
             window.dispatchEvent(new Event('dc:usuario-actualizado'));
             Object.keys(usuario).forEach((k) => delete usuario[k]);
-            Object.assign(usuario, data.usuario);
-            normalizarObjetosConSobresGlobal(usuario);
+            Object.assign(usuario, fusionado);
 
             const estadoTrasConflicto = obtenerEstadoRecompensaDiaria(usuario);
             if (!estadoTrasConflicto.disponible) {
@@ -2319,7 +2370,7 @@ function normalizarMenuLateral() {
         linkMultijugador.removeEventListener('click', bloquearNavegacionMultijugador);
     }
 
-    const versionLabelTexto = 'Versión: 1.2.5';
+    const versionLabelTexto = 'Versión: 1.2.6';
     let versionLabel = menu.querySelector('#menu-version-label');
     if (!versionLabel) {
         versionLabel = document.createElement('div');

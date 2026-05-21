@@ -10,6 +10,7 @@ let skinAparienciaSeleccionada = null;
 let candidatasReemplazoCache = [];
 let busquedaReemplazoMazo = '';
 let afiliacionFiltroReemplazoMazo = 'todas';
+let skillClassFiltroReemplazoMazo = 'todas';
 
 document.addEventListener('DOMContentLoaded', async function () {
     configurarEventos();
@@ -361,6 +362,17 @@ function configurarEventos() {
         selectorAfiliacionReemplazo.addEventListener('change', function () {
             afiliacionFiltroReemplazoMazo = normalizarAfiliacionMazo(this.value || 'todas') || 'todas';
             renderizarListaCartasReemplazo();
+        });
+    }
+
+    const selectorSkillReemplazo = document.getElementById('selector-skill-class-reemplazo');
+    if (selectorSkillReemplazo && window.DCFiltrosCartas) {
+        window.DCFiltrosCartas.configurarSelectorSkillClass(selectorSkillReemplazo, {
+            valorInicial: skillClassFiltroReemplazoMazo,
+            onChange: (valor) => {
+                skillClassFiltroReemplazoMazo = valor;
+                renderizarListaCartasReemplazo();
+            }
         });
     }
 
@@ -960,6 +972,7 @@ function renderizarListaCartasReemplazo() {
             const afiliaciones = obtenerAfiliacionesCartaMazo(carta).map(normalizarAfiliacionMazo);
             return afiliaciones.includes(normalizarAfiliacionMazo(afiliacionFiltroReemplazoMazo));
         })
+        .filter((carta) => window.DCFiltrosCartas?.cartaCoincideSkillClass(carta, skillClassFiltroReemplazoMazo) ?? true)
         .sort(compararCartasPorPoderDesc);
 
     if (candidatasFiltradas.length === 0) {
@@ -993,10 +1006,15 @@ function abrirModalCambioCarta(indiceCarta) {
     cartaReemplazoSeleccionada = null;
     busquedaReemplazoMazo = '';
     afiliacionFiltroReemplazoMazo = 'todas';
+    skillClassFiltroReemplazoMazo = 'todas';
 
     const inputBusqueda = document.getElementById('busqueda-reemplazo-mazo');
     if (inputBusqueda) {
         inputBusqueda.value = '';
+    }
+    const selectorSkill = document.getElementById('selector-skill-class-reemplazo');
+    if (selectorSkill && window.DCFiltrosCartas) {
+        skillClassFiltroReemplazoMazo = window.DCFiltrosCartas.poblarSelectorSkillClass(selectorSkill, 'todas');
     }
 
     document.getElementById('carta-a-reemplazar-texto').textContent =
@@ -1014,6 +1032,11 @@ function cerrarModalCambioCarta() {
     cartaReemplazoSeleccionada = null;
     busquedaReemplazoMazo = '';
     afiliacionFiltroReemplazoMazo = 'todas';
+    skillClassFiltroReemplazoMazo = 'todas';
+    const selectorSkill = document.getElementById('selector-skill-class-reemplazo');
+    if (selectorSkill && window.DCFiltrosCartas) {
+        window.DCFiltrosCartas.poblarSelectorSkillClass(selectorSkill, 'todas');
+    }
     candidatasReemplazoCache = [];
     document.getElementById('cambiar-carta-modal').style.display = 'none';
 }

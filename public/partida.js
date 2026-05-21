@@ -7,6 +7,7 @@ let partidaFinalizada = false;
 let cartaJugadorDestacada = null;
 let cartaOponenteDestacada = null;
 let recompensasProcesadas = false;
+let pvpMisionOnlinePartidaRegistrada = false;
 let temporizadorAvisoTurno = null;
 let cementerioJugador = [];
 let cementerioOponente = [];
@@ -4692,8 +4693,13 @@ async function mostrarVentanaFinPartida(ganador) {
             : (esEventoActivo ? 'Terminar Evento' : (estadoDesafio.activo ? 'Terminar Desafío' : 'Volver al menú')));
 
     if (esPvp) {
-        if (window.DCMisiones?.track) {
-            window.DCMisiones.track('online', { amount: 1 });
+        if (!pvpMisionOnlinePartidaRegistrada) {
+            pvpMisionOnlinePartidaRegistrada = true;
+            if (typeof window.DCMisiones?.registrarPartidaOnlineCompletada === 'function') {
+                await window.DCMisiones.registrarPartidaOnlineCompletada({ amount: 1 });
+            } else if (window.DCMisiones?.track) {
+                await window.DCMisiones.track('online', { amount: 1 });
+            }
         }
         const notaPvp = document.createElement('p');
         notaPvp.classList.add('texto-recompensa-estado');
