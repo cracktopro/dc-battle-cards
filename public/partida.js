@@ -2480,6 +2480,12 @@ async function otorgarRecompensasVictoria() {
     let nuevasV = conteo.nuevasV;
     usuario.cartas.push(...cartasPremio);
 
+    if (typeof window.prepararUsuarioTrasRecompensaPartida === 'function') {
+        window.prepararUsuarioTrasRecompensaPartida(usuario);
+    } else {
+        usuario.syncUpdatedAt = Date.now();
+        localStorage.setItem('usuario', JSON.stringify(usuario));
+    }
     await actualizarUsuarioFirebase(usuario, email);
     localStorage.setItem('usuario', JSON.stringify(usuario));
     if (window.DCMisiones?.track) {
@@ -2701,6 +2707,12 @@ async function otorgarRecompensasDesafio() {
         }
     }
 
+    if (typeof window.prepararUsuarioTrasRecompensaPartida === 'function') {
+        window.prepararUsuarioTrasRecompensaPartida(usuario);
+    } else {
+        usuario.syncUpdatedAt = Date.now();
+        localStorage.setItem('usuario', JSON.stringify(usuario));
+    }
     await actualizarUsuarioFirebase(usuario, email);
     localStorage.setItem('usuario', JSON.stringify(usuario));
     if (window.DCMisiones?.track) {
@@ -2904,6 +2916,15 @@ async function otorgarRecompensasAsalto() {
         ? window.dcContarCartasNuevasPorFaccion(cartasParaMision, snapshotPrevias, cartasDisponibles)
         : { nuevasH: 0, nuevasV: 0 };
 
+    if (typeof window.prepararUsuarioTrasRecompensaPartida === 'function') {
+        window.prepararUsuarioTrasRecompensaPartida(usuario);
+    } else {
+        usuario.syncUpdatedAt = Date.now();
+        if (typeof window.DCNormalizarObjetosUsuario === 'function') {
+            window.DCNormalizarObjetosUsuario(usuario);
+        }
+        localStorage.setItem('usuario', JSON.stringify(usuario));
+    }
     await actualizarUsuarioFirebase(usuario, email);
     if (typeof window.DCNormalizarObjetosUsuario === 'function') {
         window.DCNormalizarObjetosUsuario(usuario);

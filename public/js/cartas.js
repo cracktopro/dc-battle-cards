@@ -1870,20 +1870,29 @@ function leerUsuarioSesionSeguro() {
  * Respuestas de /update-user con payload parcial (p. ej. solo objetos + recompensas diarias)
  * no deben sustituir el perfil completo en localStorage.
  */
-function elegirCartasTrasUpdate(base, pendiente, servidor) {
+function elegirCartasTrasUpdate(base, pendiente, servidor, opts = {}) {
     const arrB = Array.isArray(base) ? base : [];
     const arrP = Array.isArray(pendiente) ? pendiente : [];
     const arrS = Array.isArray(servidor) ? servidor : [];
     const lenP = arrP.length;
     const lenS = arrS.length;
     const lenB = arrB.length;
-    // Fusión en otro cliente: el servidor tiene menos copias que un LS/cliente antiguo.
-    if (lenS > 0 && lenP > lenS) {
-        return arrS;
-    }
+    const tsB = Number(opts.tsBase) || 0;
+    const tsP = Number(opts.tsPendiente) || 0;
+    const tsS = Number(opts.tsServidor) || 0;
+    const tsMaxP = Math.max(tsP, tsB);
+
     // Fusión/destrucción en este cliente: menos copias que el LS aún no actualizado.
     if (lenP > 0 && (lenP < lenB || lenP < lenS)) {
         return arrP;
+    }
+    // Recompensas / colección ampliada: el payload enviado es la fuente si es el write más reciente.
+    if (lenP > lenS && tsMaxP >= tsS && tsMaxP >= tsB) {
+        return arrP;
+    }
+    // Otro dispositivo o servidor más nuevo con más cartas.
+    if (lenS > lenP && tsS > tsMaxP) {
+        return arrS;
     }
     if (lenP >= lenS && lenP >= lenB) {
         return arrP;
@@ -1892,6 +1901,22 @@ function elegirCartasTrasUpdate(base, pendiente, servidor) {
         return arrS;
     }
     return lenB > 0 ? arrB : arrP;
+}
+
+/** Marca el write como reciente y persiste en LS antes de /update-user (recompensas de partida). */
+function prepararUsuarioTrasRecompensaPartida(usuario) {
+    if (!usuario || typeof usuario !== 'object') {
+        return;
+    }
+    usuario.syncUpdatedAt = Date.now();
+    if (typeof window.DCNormalizarObjetosUsuario === 'function') {
+        window.DCNormalizarObjetosUsuario(usuario);
+    }
+    try {
+        localStorage.setItem('usuario', JSON.stringify(usuario));
+    } catch (_err) {
+        /* ignore */
+    }
 }
 
 function fusionarMisionesSesionTrasUpdate(base, pendiente, servidor) {
@@ -2024,7 +2049,11 @@ function fusionarUsuarioSesionTrasUpdate(base, pendiente, servidor) {
         avatar: avatarServidor || avatarPendiente || avatarBase || b.avatar,
         puntos: puntosFinal,
         preferencias: fusionarPreferenciasUsuario(b, p, s),
-        cartas: elegirCartasTrasUpdate(b.cartas, p.cartas, s.cartas),
+        cartas: elegirCartasTrasUpdate(b.cartas, p.cartas, s.cartas, {
+            tsBase: Number(b.syncUpdatedAt) || 0,
+            tsPendiente: Number(p.syncUpdatedAt) || 0,
+            tsServidor: Number(s.syncUpdatedAt) || 0
+        }),
         mazos: Array.isArray(p.mazos) && p.mazos.length > 0
             ? p.mazos
             : (Array.isArray(s.mazos) && s.mazos.length > 0 ? s.mazos : b.mazos),
@@ -2163,6 +2192,7 @@ window.aplicarSyncTokenDesdeLocalStorage = aplicarSyncTokenDesdeLocalStorage;
 window.refrescarUsuarioSesionDesdeServidor = refrescarUsuarioSesionDesdeServidor;
 window.obtenerClaveParentCartaColeccion = obtenerClaveParentCartaColeccion;
 window.calcularProgresoColeccionDesdeCatalogo = calcularProgresoColeccionDesdeCatalogo;
+window.prepararUsuarioTrasRecompensaPartida = prepararUsuarioTrasRecompensaPartida;
 window.DCCatalogoCartas = {
     cargarFilas: cargarFilasCatalogoCartasCompartido,
     obtenerFilas: cargarFilasCatalogoCartasCompartido,

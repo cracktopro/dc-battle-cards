@@ -3864,14 +3864,6 @@ async function guardarUsuarioConControlConcurrencia(email, usuarioPayload = {}) 
         && datosActuales.cartas.length > 0
     ) {
         usuario.cartas = datosActuales.cartas;
-    } else if (
-        Array.isArray(datosActuales.cartas)
-        && datosActuales.cartas.length > 0
-        && Array.isArray(usuario.cartas)
-        && usuario.cartas.length > datosActuales.cartas.length
-        && tsSrvInicial >= tsCliInicial
-    ) {
-        usuario.cartas = datosActuales.cartas;
     }
     if (!Array.isArray(usuario.mazos)) {
         usuario.mazos = datosActuales.mazos || [];
@@ -3880,6 +3872,21 @@ async function guardarUsuarioConControlConcurrencia(email, usuarioPayload = {}) 
         usuario.skinsObtenidos = Array.isArray(datosActuales.skinsObtenidos)
             ? datosActuales.skinsObtenidos
             : [];
+    } else if (tsCliInicial >= tsSrvInicial) {
+        const idsSkins = new Set();
+        (Array.isArray(datosActuales.skinsObtenidos) ? datosActuales.skinsObtenidos : []).forEach((id) => {
+            const n = Number(id);
+            if (Number.isFinite(n)) {
+                idsSkins.add(Math.round(n));
+            }
+        });
+        usuario.skinsObtenidos.forEach((id) => {
+            const n = Number(id);
+            if (Number.isFinite(n)) {
+                idsSkins.add(Math.round(n));
+            }
+        });
+        usuario.skinsObtenidos = Array.from(idsSkins);
     }
     const objsPrev = datosActuales.objetos && typeof datosActuales.objetos === 'object'
         ? datosActuales.objetos

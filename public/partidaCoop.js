@@ -3023,6 +3023,12 @@
             nuevasV = c.nuevasV;
         }
 
+        if (typeof window.prepararUsuarioTrasRecompensaPartida === 'function') {
+            window.prepararUsuarioTrasRecompensaPartida(usuario);
+        } else {
+            usuario.syncUpdatedAt = Date.now();
+            localStorage.setItem('usuario', JSON.stringify(usuario));
+        }
         await coopActualizarUsuarioFirebase(usuario, email);
         localStorage.setItem('usuario', JSON.stringify(usuario));
 
