@@ -1935,6 +1935,7 @@ io.on('connection', (socket) => {
 
         const historial = await obtenerHistorialChat();
         socket.emit('chatHistorial', historial);
+        socket.emit('socket:registrado', { email: emailUsuario });
     });
 
     // Manejar mensajes de chat recibidos
@@ -3104,6 +3105,24 @@ io.on('connection', (socket) => {
         }
     });
 
+    function unirSocketASalaCoopSiMiembro(socketRef, sesion) {
+        if (!socketRef || !sesion || sesion.finalizada) {
+            return false;
+        }
+        const usuario = obtenerUsuarioConectadoPorSocketId(socketRef.id);
+        if (!usuario) {
+            return false;
+        }
+        const emailNorm = normalizarTexto(usuario.email);
+        const ok = emailNorm === normalizarTexto(sesion.emailLeader)
+            || emailNorm === normalizarTexto(sesion.emailMember);
+        if (!ok) {
+            return false;
+        }
+        socketRef.join(obtenerRoomSesionCoop(sesion.sessionId));
+        return true;
+    }
+
     socket.on('multiplayer:coop:join', ({ sessionId }) => {
         const usuario = obtenerUsuarioConectadoPorSocketId(socket.id);
         const sesion = sesionesCoopEventoActivas.get(String(sessionId || '').trim());
@@ -3117,7 +3136,7 @@ io.on('connection', (socket) => {
             io.to(socket.id).emit('grupo:notificacion', { tipo: 'error', mensaje: 'No perteneces a esta sesión.' });
             return;
         }
-        socket.join(obtenerRoomSesionCoop(sesion.sessionId));
+        unirSocketASalaCoopSiMiembro(socket, sesion);
         sesion.updatedAt = Date.now();
         if (sesion.snapshotEstado) {
             io.to(socket.id).emit('multiplayer:coop:estado', {
@@ -3151,6 +3170,7 @@ io.on('connection', (socket) => {
         const emailNorm = normalizarTexto(usuario.email);
         const miembro = emailNorm === normalizarTexto(sesion.emailLeader) || emailNorm === normalizarTexto(sesion.emailMember);
         if (!miembro) return;
+        unirSocketASalaCoopSiMiembro(socket, sesion);
         const esEjecutorBot = emailNorm === normalizarTexto(sesion.ejecutorBotEmail || sesion.emailLeader);
         const esLeader = emailNorm === normalizarTexto(sesion.emailLeader);
         const esMember = emailNorm === normalizarTexto(sesion.emailMember);
@@ -3229,6 +3249,7 @@ io.on('connection', (socket) => {
         const emailNorm = normalizarTexto(usuario.email);
         const miembro = emailNorm === normalizarTexto(sesion.emailLeader) || emailNorm === normalizarTexto(sesion.emailMember);
         if (!miembro) return;
+        unirSocketASalaCoopSiMiembro(socket, sesion);
         if (!accion || typeof accion !== 'object') return;
         const revisionNum = Number(revisionNueva);
         if (!Number.isInteger(revisionNum) || revisionNum <= 0) return;

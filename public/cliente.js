@@ -13,16 +13,32 @@ let timerInvitacionGrupoInterval = null;
 
 console.log(`Nombre de usuario extraído del email: ${nombreUsuario}`);
 
-// Registrar usuario con email + nickname + avatar.
-const sessionId = String(localStorage.getItem('dc_active_session_id_v1') || '').trim();
-socket.emit('registrarUsuario', { email, nickname: nombreUsuario, avatar: avatarUsuario, sessionId });
+function emitirRegistroSocketCliente() {
+    const sessionId = String(localStorage.getItem('dc_active_session_id_v1') || '').trim();
+    const emailActual = String(localStorage.getItem('email') || email || '').trim();
+    if (!emailActual) {
+        return;
+    }
+    socket.emit('registrarUsuario', {
+        email: emailActual,
+        nickname: nombreUsuario,
+        avatar: avatarUsuario,
+        sessionId
+    });
+}
 
-console.log('Usuario registrado en el servidor:', nombreUsuario);
+emitirRegistroSocketCliente();
 
 // Escuchar eventos de conexión y desconexión
 socket.on('connect', () => {
     console.log('Conectado al servidor de Socket.IO');
+    emitirRegistroSocketCliente();
     depurarEstadoInvitacionGrupo();
+});
+
+socket.on('socket:registrado', () => {
+    window.__dcSocketRegistrado = true;
+    window.dispatchEvent(new Event('dc:socket-registrado'));
 });
 
 socket.on('disconnect', () => {

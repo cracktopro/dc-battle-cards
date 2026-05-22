@@ -2655,6 +2655,42 @@
         actualizarAvisoTurnoCoopSiNuevaFase();
     }
 
+    /** Espera a que el socket haya completado `registrarUsuario` (sesión única 1.2.7+) antes del join coop. */
+    async function asegurarSesionCoopEnRed(timeoutMs = 5000) {
+        const unir = () => {
+            if (typeof window.emitMultiplayerCoopJoin === 'function') {
+                window.emitMultiplayerCoopJoin(SESSION_ID);
+            }
+            if (typeof window.emitMultiplayerCoopEstadoSolicitar === 'function') {
+                window.emitMultiplayerCoopEstadoSolicitar(SESSION_ID);
+            }
+        };
+        if (window.__dcSocketRegistrado) {
+            unir();
+            return;
+        }
+        unir();
+        await new Promise((resolve) => {
+            let listo = false;
+            const done = () => {
+                if (listo) return;
+                listo = true;
+                window.removeEventListener('dc:socket-registrado', onReg);
+                clearTimeout(timer);
+                resolve();
+            };
+            const onReg = () => {
+                unir();
+                done();
+            };
+            const timer = setTimeout(done, timeoutMs);
+            window.addEventListener('dc:socket-registrado', onReg);
+        });
+        if (window.__dcSocketRegistrado) {
+            unir();
+        }
+    }
+
     function emitirEstadoServidor(snapshotWire) {
         if (typeof window.emitMultiplayerCoopEstado !== 'function') return;
         window.emitMultiplayerCoopEstado({
@@ -3013,10 +3049,9 @@
         const separadoCoop = skinsApiCoop?.separarRecompensasCartasYSkins
             ? skinsApiCoop.separarRecompensasCartasYSkins(cartasGanadas)
             : { cartas: cartasGanadas, skins: [] };
-        if (separadoCoop.cartas.length > 0 && typeof window.dcContarCartasNuevasPorFaccion === 'function') {
-            const c = window.dcContarCartasNuevasPorFaccion(
+        if (separadoCoop.cartas.length > 0 && typeof window.dcContarCartasObtenidasPorFaccion === 'function') {
+            const c = window.dcContarCartasObtenidasPorFaccion(
                 separadoCoop.cartas,
-                cartasUsuarioAntesRecompensa,
                 catalogoCoopParaMision
             );
             nuevasH = c.nuevasH;
@@ -3941,6 +3976,12 @@
         }
     });
 
+    /** Tras reconectar el socket (p. ej. cambio de pestaña), volver a unirse a la sala coop. */
+    window.addEventListener('dc:socket-registrado', () => {
+        if (partidaFinalizada) return;
+        void asegurarSesionCoopEnRed(3000);
+    });
+
     window.addEventListener('dc:coop-resultado', (ev) => {
         const det = ev.detail || {};
         if (String(det.sessionId || '') !== SESSION_ID) return;
@@ -4099,12 +4140,7 @@
             });
         }
         renderTodo();
-        if (typeof window.emitMultiplayerCoopJoin === 'function') {
-            window.emitMultiplayerCoopJoin(SESSION_ID);
-        }
-        if (typeof window.emitMultiplayerCoopEstadoSolicitar === 'function') {
-            window.emitMultiplayerCoopEstadoSolicitar(SESSION_ID);
-        }
+        await asegurarSesionCoopEnRed();
 
         /**
          * Entrada inicial solo cuando el snapshot local representa la apertura de partida (revisión 0).

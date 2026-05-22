@@ -310,6 +310,21 @@ function obtenerClaveCarta(nombreCarta) {
     return String(nombreCarta || '').trim().toLowerCase();
 }
 
+/** Solo cartas parent realmente desbloqueadas (no apariencias sin copia base en colección). */
+function cartaEsElegibleCrearMazo(carta) {
+    if (typeof window.esCopiaBaseParentEnColeccion === 'function') {
+        return window.esCopiaBaseParentEnColeccion(carta);
+    }
+    if (!carta || carta.tipoRecompensa === 'skin') {
+        return false;
+    }
+    const nombreKey = obtenerClaveCarta(carta.Nombre);
+    const parentKey = typeof window.obtenerClaveParentCartaColeccion === 'function'
+        ? window.obtenerClaveParentCartaColeccion(carta)
+        : nombreKey;
+    return Boolean(parentKey) && nombreKey === parentKey;
+}
+
 async function obtenerMapaDatosCartasCatalogo() {
     if (mapaDatosCartasCatalogo) {
         return mapaDatosCartasCatalogo;
@@ -524,14 +539,17 @@ async function cargarCartas() {
     contenedorCartas.innerHTML = '';
 
     const itemsCartas = usuario.cartas
-        .map((carta, index) => ({ carta, index }));
+        .map((carta, index) => ({ carta, index }))
+        .filter((item) => cartaEsElegibleCrearMazo(item.carta));
 
     const cartasSinDuplicados = typeof window.deduplicarItemsCartasUsuarioMejorNivel === 'function'
         ? window.deduplicarItemsCartasUsuarioMejorNivel(itemsCartas)
         : (() => {
             const mejorPorNombre = new Map();
             itemsCartas.forEach((item) => {
-                const clave = String(item?.carta?.Nombre || '').trim().toLowerCase();
+                const clave = typeof window.obtenerClaveDedupItemCartaUsuario === 'function'
+                    ? window.obtenerClaveDedupItemCartaUsuario(item.carta)
+                    : String(item?.carta?.Nombre || '').trim().toLowerCase();
                 if (!clave) {
                     return;
                 }

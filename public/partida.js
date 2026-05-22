@@ -2473,11 +2473,11 @@ async function otorgarRecompensasVictoria() {
     usuario.cartas = Array.isArray(usuario.cartas) ? usuario.cartas : [];
     usuario.puntos = Number(usuario.puntos || 0) + puntosGanados;
     const snapshotPrevias = usuario.cartas.slice();
-    const conteo = typeof window.dcContarCartasNuevasPorFaccion === 'function'
-        ? window.dcContarCartasNuevasPorFaccion(cartasPremio, snapshotPrevias, cartasDisponibles)
+    const conteoMision = typeof window.dcContarCartasObtenidasPorFaccion === 'function'
+        ? window.dcContarCartasObtenidasPorFaccion(cartasPremio, cartasDisponibles)
         : { nuevasH: 0, nuevasV: 0 };
-    let nuevasH = conteo.nuevasH;
-    let nuevasV = conteo.nuevasV;
+    let nuevasH = conteoMision.nuevasH;
+    let nuevasV = conteoMision.nuevasV;
     usuario.cartas.push(...cartasPremio);
 
     if (typeof window.prepararUsuarioTrasRecompensaPartida === 'function') {
@@ -2698,11 +2698,11 @@ async function otorgarRecompensasDesafio() {
             skinsApiDesafio.persistirSkinsRecompensaEnUsuario(usuario, separado.skins);
         }
         if (separado.cartas.length > 0) {
-            const conteo = typeof window.dcContarCartasNuevasPorFaccion === 'function'
-                ? window.dcContarCartasNuevasPorFaccion(separado.cartas, snapshotPrevias, cartasDisponibles)
+            const conteoMision = typeof window.dcContarCartasObtenidasPorFaccion === 'function'
+                ? window.dcContarCartasObtenidasPorFaccion(separado.cartas, cartasDisponibles)
                 : { nuevasH: 0, nuevasV: 0 };
-            nuevasH = conteo.nuevasH;
-            nuevasV = conteo.nuevasV;
+            nuevasH = conteoMision.nuevasH;
+            nuevasV = conteoMision.nuevasV;
             usuario.cartas.push(...separado.cartas);
         }
     }
@@ -2912,8 +2912,8 @@ async function otorgarRecompensasAsalto() {
 
     const cartasDisponibles = await obtenerCartasDisponibles();
     const cartasParaMision = esRecompensaSkin ? [] : cartasPremio;
-    const conteo = typeof window.dcContarCartasNuevasPorFaccion === 'function'
-        ? window.dcContarCartasNuevasPorFaccion(cartasParaMision, snapshotPrevias, cartasDisponibles)
+    const conteo = typeof window.dcContarCartasObtenidasPorFaccion === 'function'
+        ? window.dcContarCartasObtenidasPorFaccion(cartasParaMision, cartasDisponibles)
         : { nuevasH: 0, nuevasV: 0 };
 
     if (typeof window.prepararUsuarioTrasRecompensaPartida === 'function') {

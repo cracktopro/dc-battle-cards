@@ -182,6 +182,11 @@ function sincronizarEstadoUsuarioColeccionDesdeLs() {
     const cartasUsuario = usuario && Array.isArray(usuario.cartas) ? usuario.cartas : [];
     nombresCartasConseguidas = new Set(
         cartasUsuario
+            .filter((carta) => (
+                typeof window.esCopiaBaseParentEnColeccion === 'function'
+                    ? window.esCopiaBaseParentEnColeccion(carta)
+                    : true
+            ))
             .map(carta => obtenerClaveCartaUsuario(carta))
             .filter(Boolean)
     );
@@ -300,6 +305,9 @@ function construirMapaMejorVersionUsuario(cartasUsuario) {
     const mapa = new Map();
 
     (Array.isArray(cartasUsuario) ? cartasUsuario : []).forEach(carta => {
+        if (typeof window.esCopiaBaseParentEnColeccion === 'function' && !window.esCopiaBaseParentEnColeccion(carta)) {
+            return;
+        }
         const clave = obtenerClaveCartaUsuario(carta);
         if (!clave) {
             return;
@@ -785,8 +793,8 @@ async function ejecutarAnimacionYAperturaSobre(inventarioKey) {
                 cartasGeneradas.forEach((carta) => {
                     usuario.cartas.push({ ...carta });
                 });
-                const conteo = typeof window.dcContarCartasNuevasPorFaccion === 'function'
-                    ? window.dcContarCartasNuevasPorFaccion(cartasGeneradas, snapshotPrevias, todasLasCartasCatalogo)
+                const conteo = typeof window.dcContarCartasObtenidasPorFaccion === 'function'
+                    ? window.dcContarCartasObtenidasPorFaccion(cartasGeneradas, todasLasCartasCatalogo)
                     : { nuevasH: 0, nuevasV: 0 };
                 nuevasH = conteo.nuevasH;
                 nuevasV = conteo.nuevasV;

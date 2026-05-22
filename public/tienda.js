@@ -1311,8 +1311,8 @@ async function comprarCarta(seccion, indexOferta) {
     lista[indexOferta].agotada = true;
     usuarioActual.syncUpdatedAt = Date.now();
     guardarUsuarioActualEnLocalStorage();
-    const conteoCompra = typeof window.dcContarCartasNuevasPorFaccion === 'function'
-        ? window.dcContarCartasNuevasPorFaccion([oferta.carta], snapshotPrevias, null)
+    const conteoCompra = typeof window.dcContarCartasObtenidasPorFaccion === 'function'
+        ? window.dcContarCartasObtenidasPorFaccion([oferta.carta], null)
         : { nuevasH: 0, nuevasV: 0 };
 
     try {

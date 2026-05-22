@@ -287,7 +287,31 @@ function obtenerNivelCartaSeguro(carta) {
 }
 
 /**
- * Lista de { index, carta } (index en usuario.cartas). Deja una entrada por nombre de carta:
+ * Copia real desbloqueada del catálogo (nombre = parent). Las apariencias guardadas solo
+ * con `skinParentNombre` y otro `Nombre` no cuentan como tener la carta parent.
+ */
+function esCopiaBaseParentEnColeccion(carta) {
+    if (!carta || typeof carta !== 'object' || carta.tipoRecompensa === 'skin') {
+        return false;
+    }
+    const parentKey = obtenerClaveParentCartaColeccion(carta);
+    if (!parentKey) {
+        return false;
+    }
+    const nombreKey = normalizarClaveNombreCatalogo(carta.Nombre);
+    return nombreKey === parentKey;
+}
+
+function obtenerClaveDedupItemCartaUsuario(carta) {
+    const porParent = obtenerClaveParentCartaColeccion(carta);
+    if (porParent) {
+        return porParent;
+    }
+    return normalizarClaveNombreCatalogo(carta?.Nombre);
+}
+
+/**
+ * Lista de { index, carta } (index en usuario.cartas). Deja una entrada por parent del catálogo:
  * la de mayor nivel; si empatan, conserva la de menor índice en la colección.
  */
 function deduplicarItemsCartasUsuarioMejorNivel(items) {
@@ -300,7 +324,7 @@ function deduplicarItemsCartasUsuarioMejorNivel(items) {
         if (!item || !Number.isFinite(indice) || !item.carta) {
             return;
         }
-        const clave = String(item.carta.Nombre || '').trim().toLowerCase();
+        const clave = obtenerClaveDedupItemCartaUsuario(item.carta);
         if (!clave) {
             return;
         }
@@ -321,6 +345,8 @@ function deduplicarItemsCartasUsuarioMejorNivel(items) {
 }
 
 window.deduplicarItemsCartasUsuarioMejorNivel = deduplicarItemsCartasUsuarioMejorNivel;
+window.esCopiaBaseParentEnColeccion = esCopiaBaseParentEnColeccion;
+window.obtenerClaveDedupItemCartaUsuario = obtenerClaveDedupItemCartaUsuario;
 
 function parsearNumeroSeguro(valor) {
     if (typeof valor === 'number' && Number.isFinite(valor)) {
@@ -1307,6 +1333,9 @@ function calcularProgresoColeccionDesdeCatalogo(usuario, catalogoEntrada) {
     const cartasUsuario = Array.isArray(usuario?.cartas) ? usuario.cartas : [];
     const nombresObtenidos = new Set();
     cartasUsuario.forEach((carta) => {
+        if (!esCopiaBaseParentEnColeccion(carta)) {
+            return;
+        }
         const clave = obtenerClaveParentCartaColeccion(carta);
         if (clave) {
             nombresObtenidos.add(clave);
@@ -1769,11 +1798,49 @@ function dcLeerFaccionHVBruta(obj) {
     return v != null && String(v).trim() !== '' ? v : '';
 }
 
-function dcContarCartasNuevasPorFaccion(cartasAAñadir, cartasUsuarioPrevias, catalogoOpcional) {
-    const prev = new Set((cartasUsuarioPrevias || []).map((c) => dcNormalizarNombreCartaColeccion(c?.Nombre)));
-    const mapaCat = Array.isArray(catalogoOpcional) && catalogoOpcional.length > 0
+function dcMapaCatalogoPorNombre(catalogoOpcional) {
+    return Array.isArray(catalogoOpcional) && catalogoOpcional.length > 0
         ? new Map(catalogoOpcional.map((c) => [dcNormalizarNombreCartaColeccion(c?.Nombre), c]))
         : null;
+}
+
+function dcResolverFaccionHVDeCarta(carta, mapaCat) {
+    const clave = dcNormalizarNombreCartaColeccion(carta?.Nombre);
+    if (!clave) {
+        return '';
+    }
+    let fac = dcNormalizarFaccionHeroeVillano(dcLeerFaccionHVBruta(carta));
+    if (!fac && mapaCat) {
+        const base = mapaCat.get(clave);
+        if (base) {
+            fac = dcNormalizarFaccionHeroeVillano(dcLeerFaccionHVBruta(base));
+        }
+    }
+    return fac;
+}
+
+/**
+ * Cuenta todas las cartas obtenidas por facción (H/V), aunque ya estuvieran en colección.
+ * Usar para misiones diarias/semanales `coleccion_h` / `coleccion_v`.
+ */
+function dcContarCartasObtenidasPorFaccion(cartasAAñadir, catalogoOpcional) {
+    const mapaCat = dcMapaCatalogoPorNombre(catalogoOpcional);
+    let h = 0;
+    let v = 0;
+    (cartasAAñadir || []).forEach((carta) => {
+        const fac = dcResolverFaccionHVDeCarta(carta, mapaCat);
+        if (fac === 'H') {
+            h += 1;
+        } else if (fac === 'V') {
+            v += 1;
+        }
+    });
+    return { nuevasH: h, nuevasV: v };
+}
+
+function dcContarCartasNuevasPorFaccion(cartasAAñadir, cartasUsuarioPrevias, catalogoOpcional) {
+    const prev = new Set((cartasUsuarioPrevias || []).map((c) => dcNormalizarNombreCartaColeccion(c?.Nombre)));
+    const mapaCat = dcMapaCatalogoPorNombre(catalogoOpcional);
     let nuevasH = 0;
     let nuevasV = 0;
     (cartasAAñadir || []).forEach((carta) => {
@@ -1781,13 +1848,7 @@ function dcContarCartasNuevasPorFaccion(cartasAAñadir, cartasUsuarioPrevias, ca
         if (!clave || prev.has(clave)) {
             return;
         }
-        let fac = dcNormalizarFaccionHeroeVillano(dcLeerFaccionHVBruta(carta));
-        if (!fac && mapaCat) {
-            const base = mapaCat.get(clave);
-            if (base) {
-                fac = dcNormalizarFaccionHeroeVillano(dcLeerFaccionHVBruta(base));
-            }
-        }
+        const fac = dcResolverFaccionHVDeCarta(carta, mapaCat);
         if (fac === 'H') {
             nuevasH++;
         } else if (fac === 'V') {
@@ -1798,6 +1859,7 @@ function dcContarCartasNuevasPorFaccion(cartasAAñadir, cartasUsuarioPrevias, ca
     return { nuevasH, nuevasV };
 }
 
+window.dcContarCartasObtenidasPorFaccion = dcContarCartasObtenidasPorFaccion;
 window.dcContarCartasNuevasPorFaccion = dcContarCartasNuevasPorFaccion;
 window.fusionarCartaCompletaDesdeCatalogo = fusionarCartaCompletaDesdeCatalogo;
 window.migrarCatalogoCartasDesdeExcel = migrarSkillsUsuarioDesdeCatalogo;
