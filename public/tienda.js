@@ -111,6 +111,7 @@ let emailActual = null;
 const VERSION_TIENDA_GLOBAL = 'global-rotation-v2-shop-tabs';
 const ROTACION_TIENDA_MS = 2 * 60 * 60 * 1000;
 let temporizadorRotacion = null;
+let _promesaPrepararTiendaEnCurso = null;
 
 /** Alinea token de concurrencia con `localStorage` (p. ej. tras guardar misiones) sin perder cambios en memoria. */
 function mergeSyncUsuarioDesdeLocalStorage(ref) {
@@ -136,23 +137,11 @@ function mergeSyncUsuarioDesdeLocalStorage(ref) {
     }
 }
 
-document.addEventListener('DOMContentLoaded', async () => {
-    emailActual = localStorage.getItem('email');
-
-    if (!emailActual) {
-        window.location.href = '/login.html';
-        return;
-    }
-
-    if (typeof window.refrescarUsuarioSesionDesdeServidor === 'function') {
-        await window.refrescarUsuarioSesionDesdeServidor();
-    }
-
+function aplicarUsuarioActualDesdeStorage() {
     usuarioActual = JSON.parse(localStorage.getItem('usuario'));
 
     if (!usuarioActual) {
-        window.location.href = '/login.html';
-        return;
+        return false;
     }
 
     usuarioActual.cartas = Array.isArray(usuarioActual.cartas) ? usuarioActual.cartas : [];
@@ -168,17 +157,97 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (typeof window.DC_SOBRES_MEZCLAR_INVENTARIO === 'function') {
         usuarioActual.objetos = window.DC_SOBRES_MEZCLAR_INVENTARIO(usuarioActual.objetos);
     }
+    return true;
+}
 
+/**
+ * La tienda global usa RNG con semilla `ventanaId` (paneles H/V cada 2 h)
+ * y `fechaDia` (ofertas del día). Solo mostramos caché local si ya coincide
+ * con la ventana y el día actuales; si no, esperamos a `prepararTiendaDiaria`.
+ */
+function tiendaCoincideConRotacionGlobal(tienda) {
+    if (!tiendaTieneEstructuraActual(tienda)) {
+        return false;
+    }
+    const { idVentana } = obtenerVentanaRotacion();
+    const hoy = obtenerFechaHoy();
+    return Number(tienda.ventanaId) === idVentana
+        && String(tienda.version || '') === VERSION_TIENDA_GLOBAL
+        && fechaOfertasDiaEfectiva(tienda) === hoy;
+}
+
+function puedeRenderizarTiendaDesdeCache() {
+    return Boolean(usuarioActual && tiendaCoincideConRotacionGlobal(usuarioActual.tienda));
+}
+
+function guardarUsuarioActualEnLocalStorage() {
+    if (!usuarioActual) {
+        return;
+    }
     try {
-        await prepararTiendaDiaria();
-        inicializarPestanasTienda();
+        localStorage.setItem('usuario', JSON.stringify(usuarioActual));
+    } catch (_err) {
+        /* ignore */
+    }
+}
+
+function tiendaListaParaComprar() {
+    aplicarUsuarioActualDesdeStorage();
+    return tiendaCoincideConRotacionGlobal(usuarioActual?.tienda);
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    emailActual = localStorage.getItem('email');
+
+    if (!emailActual) {
+        window.location.href = '/login.html';
+        return;
+    }
+
+    if (!aplicarUsuarioActualDesdeStorage()) {
+        window.location.href = '/login.html';
+        return;
+    }
+
+    inicializarPestanasTienda();
+    if (puedeRenderizarTiendaDesdeCache()) {
         renderizarTienda();
         iniciarTemporizadorRotacion();
-    } catch (error) {
-        console.error('Error al preparar la tienda:', error);
-        mostrarMensaje('No se pudo cargar la tienda diaria.', 'danger');
     }
+
+    void prepararTiendaEnSegundoPlano();
 });
+
+async function prepararTiendaEnSegundoPlano() {
+    if (_promesaPrepararTiendaEnCurso) {
+        return _promesaPrepararTiendaEnCurso;
+    }
+    _promesaPrepararTiendaEnCurso = (async () => {
+        try {
+            if (typeof window.refrescarUsuarioSesionDesdeServidor === 'function') {
+                await window.refrescarUsuarioSesionDesdeServidor();
+            }
+            if (!aplicarUsuarioActualDesdeStorage()) {
+                window.location.href = '/login.html';
+                return;
+            }
+            await prepararTiendaDiaria();
+            renderizarTienda();
+            if (!temporizadorRotacion) {
+                iniciarTemporizadorRotacion();
+            }
+        } catch (error) {
+            console.error('Error al preparar la tienda:', error);
+            if (!puedeRenderizarTiendaDesdeCache()) {
+                mostrarMensaje('No se pudo cargar la tienda diaria.', 'danger');
+            }
+            throw error;
+        } finally {
+            _promesaPrepararTiendaEnCurso = null;
+        }
+    })();
+    return _promesaPrepararTiendaEnCurso;
+}
 
 function obtenerFechaHoy() {
     const fecha = new Date();
@@ -329,6 +398,9 @@ function seleccionarSinDuplicados(pool, cantidad, nombresUsados, rng) {
 }
 
 async function cargarCatalogoCartas() {
+    if (typeof window.DCCatalogoCartas?.obtenerFilas === 'function') {
+        return window.DCCatalogoCartas.obtenerFilas();
+    }
     const response = await fetch('resources/cartas.xlsx');
     if (!response.ok) {
         throw new Error('No se pudo cargar el catálogo de cartas.');
@@ -842,7 +914,10 @@ function renderizarCartasTienda() {
         return;
     }
     contenedor.innerHTML = '';
-    const t = usuarioActual.tienda;
+    const t = usuarioActual?.tienda;
+    if (!t) {
+        return;
+    }
     anadirSeccionCartasTienda(contenedor, 'Ofertas del día', t.ofertasDia, 'ofertasDia');
     anadirSeccionCartasTienda(contenedor, 'Cartas de Héroe', t.cartasHeroes, 'heroes');
     anadirSeccionCartasTienda(contenedor, 'Cartas de Villano', t.cartasVillanos, 'villanos');
@@ -1207,6 +1282,11 @@ function obtenerListaOfertasPorSeccion(seccion) {
 }
 
 async function comprarCarta(seccion, indexOferta) {
+    if (!tiendaListaParaComprar()) {
+        mostrarMensaje('La tienda se está actualizando. Inténtalo de nuevo en un momento.', 'warning');
+        void prepararTiendaEnSegundoPlano();
+        return;
+    }
     mergeSyncUsuarioDesdeLocalStorage(usuarioActual);
     const lista = obtenerListaOfertasPorSeccion(seccion);
     const oferta = lista ? lista[indexOferta] : null;
@@ -1229,6 +1309,8 @@ async function comprarCarta(seccion, indexOferta) {
     usuarioActual.puntos -= oferta.precio;
     usuarioActual.cartas.push({ ...oferta.carta });
     lista[indexOferta].agotada = true;
+    usuarioActual.syncUpdatedAt = Date.now();
+    guardarUsuarioActualEnLocalStorage();
     const conteoCompra = typeof window.dcContarCartasNuevasPorFaccion === 'function'
         ? window.dcContarCartasNuevasPorFaccion([oferta.carta], snapshotPrevias, null)
         : { nuevasH: 0, nuevasV: 0 };
@@ -1260,6 +1342,11 @@ async function comprarCarta(seccion, indexOferta) {
 }
 
 async function comprarObjeto(identificador) {
+    if (!tiendaListaParaComprar()) {
+        mostrarMensaje('La tienda se está actualizando. Inténtalo de nuevo en un momento.', 'warning');
+        void prepararTiendaEnSegundoPlano();
+        return;
+    }
     mergeSyncUsuarioDesdeLocalStorage(usuarioActual);
     const objeto = typeof identificador === 'number'
         ? null
@@ -1343,6 +1430,9 @@ async function comprarObjeto(identificador) {
     } else if (objeto.id === 'obj-fragmento-mejora-legendaria') {
         usuarioActual.objetos.mejoraLegendaria = Number(usuarioActual.objetos.mejoraLegendaria || 0) + 1;
     }
+
+    usuarioActual.syncUpdatedAt = Date.now();
+    guardarUsuarioActualEnLocalStorage();
 
     try {
         await persistirUsuario();

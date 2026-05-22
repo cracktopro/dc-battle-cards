@@ -14,9 +14,11 @@
                 const usuarioRaw = localStorage.getItem('usuario');
                 const email = String(localStorage.getItem('email') || '').trim();
                 const usuario = usuarioRaw ? JSON.parse(usuarioRaw) : null;
+                const sessionId = String(localStorage.getItem('dc_active_session_id_v1') || '').trim();
                 const sesionValida = Boolean(
-                    (usuario && typeof usuario === 'object' && Object.keys(usuario).length > 0)
-                    || email
+                    email
+                    && sessionId
+                    && usuario && typeof usuario === 'object' && Object.keys(usuario).length > 0
                 );
                 window.location.replace(sesionValida ? '/vistaJuego.html' : '/login.html');
             } catch (_error) {

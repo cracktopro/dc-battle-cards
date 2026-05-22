@@ -39,13 +39,6 @@
         }
     }
 
-    function normalizarNombreCarta(valor) {
-        if (typeof window.DCSkinsCartas !== 'undefined' && typeof window.DCSkinsCartas.obtenerNombreParentCarta === 'function') {
-            return String(window.DCSkinsCartas.obtenerNombreParentCarta({ Nombre: valor }) || '').trim().toLowerCase();
-        }
-        return String(valor || '').trim().toLowerCase();
-    }
-
     function normalizarFaccion(valor) {
         const f = String(valor || '').trim().toUpperCase();
         return f === 'H' || f === 'V' ? f : '';
@@ -80,6 +73,11 @@
             return catalogoCarga;
         }
         catalogoCarga = (async () => {
+            if (typeof window.DCCatalogoCartas?.obtenerMapaPorNombre === 'function') {
+                const mapa = await window.DCCatalogoCartas.obtenerMapaPorNombre();
+                catalogoCache = { filas: Array.from(mapa.values()), mapa };
+                return catalogoCache;
+            }
             const response = await fetch('resources/cartas.xlsx');
             if (!response.ok) {
                 throw new Error('No se pudo cargar el catálogo');
@@ -100,7 +98,7 @@
                 }
                 mapa.set(clave, fila);
             });
-            catalogoCache = { filas, mapa };
+            catalogoCache = { filas: Array.from(mapa.values()), mapa };
             return catalogoCache;
         })().catch((error) => {
             catalogoCarga = null;
@@ -110,46 +108,17 @@
     }
 
     function calcularProgresoColeccion(usuario, catalogo) {
-        const cartasUsuario = Array.isArray(usuario?.cartas) ? usuario.cartas : [];
-        const nombresObtenidos = new Set();
-        cartasUsuario.forEach((carta) => {
-            const clave = normalizarNombreCarta(carta?.Nombre);
-            if (clave) {
-                nombresObtenidos.add(clave);
-            }
-        });
-
-        const filas = catalogo?.filas || [];
-        const total = filas.length;
-        let obtenidas = 0;
-        let heroesObtenidos = 0;
-        let villanosObtenidos = 0;
-        const heroesCat = filas.filter((c) => normalizarFaccion(c.faccion || c.Faccion) === 'H').length;
-        const villCat = filas.filter((c) => normalizarFaccion(c.faccion || c.Faccion) === 'V').length;
-
-        filas.forEach((fila) => {
-            const clave = String(fila?.Nombre || '').trim().toLowerCase();
-            if (!clave || !nombresObtenidos.has(clave)) {
-                return;
-            }
-            obtenidas += 1;
-            const fac = normalizarFaccion(fila.faccion || fila.Faccion);
-            if (fac === 'H') {
-                heroesObtenidos += 1;
-            } else if (fac === 'V') {
-                villanosObtenidos += 1;
-            }
-        });
-
-        const pct = total > 0 ? Math.round((obtenidas / total) * 100) : 0;
+        if (typeof window.calcularProgresoColeccionDesdeCatalogo === 'function') {
+            return window.calcularProgresoColeccionDesdeCatalogo(usuario, catalogo);
+        }
         return {
-            total,
-            obtenidas,
-            pct,
-            heroesObtenidos,
-            heroesCat,
-            villanosObtenidos,
-            villCat
+            total: 0,
+            obtenidas: 0,
+            pct: 0,
+            heroesObtenidos: 0,
+            heroesCat: 0,
+            villanosObtenidos: 0,
+            villCat: 0
         };
     }
 
@@ -505,7 +474,11 @@
 
     function enlazarAvatarMenu() {
         const avatar = document.getElementById('menu-user-avatar');
-        if (!avatar || avatar.dataset.perfilModalBound === '1') {
+        if (!avatar) {
+            return;
+        }
+        delete avatar.dataset.perfilModalPending;
+        if (avatar.dataset.perfilModalBound === '1') {
             return;
         }
         avatar.dataset.perfilModalBound = '1';

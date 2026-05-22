@@ -1886,6 +1886,7 @@ function logout() {
     console.log('Cerrando sesión y limpiando localStorage...');
     localStorage.removeItem('usuario');
     localStorage.removeItem('email');
+    localStorage.removeItem('dc_active_session_id_v1');
     localStorage.removeItem('grupoActual');
     localStorage.removeItem('grupoInvitacionEnCurso');
     localStorage.removeItem('jugandoPartida');

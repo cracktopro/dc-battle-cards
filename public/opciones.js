@@ -42,10 +42,20 @@ function adminClaveRotacionAsaltosActual() {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
-    usuarioActual = JSON.parse(localStorage.getItem('usuario'));
     emailActual = localStorage.getItem('email');
 
-    if (!usuarioActual || !emailActual) {
+    if (!emailActual) {
+        window.location.href = '/login.html';
+        return;
+    }
+
+    if (typeof window.refrescarUsuarioSesionDesdeServidor === 'function') {
+        await window.refrescarUsuarioSesionDesdeServidor();
+    }
+
+    usuarioActual = JSON.parse(localStorage.getItem('usuario'));
+
+    if (!usuarioActual) {
         window.location.href = '/login.html';
         return;
     }
@@ -975,28 +985,42 @@ async function guardarUsuarioObjetivoAdmin() {
 
 async function persistirUsuario(mensajeExito, tipo = 'success') {
     try {
-        const response = await fetch('/update-user', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ usuario: usuarioActual, email: emailActual })
-        });
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok) {
-            if (response.status === 409 && data?.usuario) {
-                localStorage.setItem('usuario', JSON.stringify(data.usuario));
-                usuarioActual = data.usuario;
-                window.dispatchEvent(new Event('dc:usuario-actualizado'));
+        if (typeof window.actualizarUsuarioConSyncFirebase === 'function') {
+            await window.actualizarUsuarioConSyncFirebase(usuarioActual, emailActual, { maxIntentos: 3 });
+        } else {
+            const response = await fetch('/update-user', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ usuario: usuarioActual, email: emailActual })
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                if (response.status === 409 && data?.usuario) {
+                    const fusionado = typeof window.fusionarUsuarioSesionTrasUpdate === 'function'
+                        ? window.fusionarUsuarioSesionTrasUpdate(
+                            JSON.parse(localStorage.getItem('usuario') || '{}'),
+                            usuarioActual,
+                            data.usuario
+                        )
+                        : data.usuario;
+                    localStorage.setItem('usuario', JSON.stringify(fusionado));
+                    usuarioActual = fusionado;
+                    window.dispatchEvent(new Event('dc:usuario-actualizado'));
+                }
+                throw new Error(data?.mensaje || 'Error al actualizar los datos de usuario.');
             }
-            throw new Error(data?.mensaje || 'Error al actualizar los datos de usuario.');
+            if (data?.usuario) {
+                usuarioActual = data.usuario;
+            }
+            localStorage.setItem('usuario', JSON.stringify(usuarioActual));
+            window.dispatchEvent(new Event('dc:usuario-actualizado'));
         }
-        if (data?.usuario) {
-            usuarioActual = data.usuario;
+        const enLs = JSON.parse(localStorage.getItem('usuario') || 'null');
+        if (enLs && typeof enLs === 'object') {
+            usuarioActual = enLs;
         }
-
-        localStorage.setItem('usuario', JSON.stringify(usuarioActual));
-        window.dispatchEvent(new Event('dc:usuario-actualizado'));
         mostrarMensaje(mensajeExito, tipo);
     } catch (error) {
         console.error(error);
@@ -1007,6 +1031,7 @@ async function persistirUsuario(mensajeExito, tipo = 'success') {
 function logout() {
     localStorage.removeItem('usuario');
     localStorage.removeItem('email');
+    localStorage.removeItem('dc_active_session_id_v1');
     localStorage.removeItem('jugandoPartida');
     localStorage.removeItem('mazoJugador');
     localStorage.removeItem('mazoOponente');

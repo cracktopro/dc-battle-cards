@@ -1,6 +1,19 @@
 document.addEventListener('DOMContentLoaded', function () {
     const registroForm = document.getElementById('registroForm');
     const loginForm = document.getElementById('loginForm');
+    const mensajeDivLogin = document.getElementById('mensaje');
+    if (mensajeDivLogin) {
+        try {
+            const aviso = sessionStorage.getItem('dc_sesion_cerrada_aviso');
+            if (aviso) {
+                mensajeDivLogin.textContent = aviso;
+                mensajeDivLogin.className = 'text-warning';
+                sessionStorage.removeItem('dc_sesion_cerrada_aviso');
+            }
+        } catch (_e) {
+            /* ignore */
+        }
+    }
 
     if (registroForm) {
         registroForm.addEventListener('submit', function (e) {
@@ -75,11 +88,16 @@ document.addEventListener('DOMContentLoaded', function () {
                 mensajeDiv.textContent = data.mensaje;
 
                 if (data.mensaje === 'Inicio de sesión exitoso') {
-                    mensajeDiv.className = 'text-success'; // Aplica la clase de éxito (verde)
-                    // Almacena los datos del usuario en el localStorage
-                    localStorage.setItem('usuario', JSON.stringify(data.usuario));
-                    // Almacena el email del usuario por separado
-                    localStorage.setItem('email', email);
+                    mensajeDiv.className = 'text-success';
+                    if (typeof window.DCSesionUnica?.guardarSesionActivaTrasLogin === 'function') {
+                        window.DCSesionUnica.guardarSesionActivaTrasLogin(email, data.usuario, data.sessionId);
+                    } else {
+                        localStorage.setItem('usuario', JSON.stringify(data.usuario));
+                        localStorage.setItem('email', email);
+                        if (data.sessionId) {
+                            localStorage.setItem('dc_active_session_id_v1', data.sessionId);
+                        }
+                    }
                     setTimeout(() => window.location.href = '/vistaJuego.html', 2000);
                 } else {
                     mensajeDiv.className = 'text-danger'; // Aplica la clase de error (rojo)
@@ -103,8 +121,9 @@ document.addEventListener('DOMContentLoaded', function () {
 // Verifica si existe un objeto de usuario en el localStorage
 function verificarSesion() {
     const usuario = localStorage.getItem('usuario');
-    console.log("Usuario desde localStorage:", usuario); // Añade esta línea para depurar
-    if (!usuario) {
+    const email = localStorage.getItem('email');
+    const sessionId = localStorage.getItem('dc_active_session_id_v1');
+    if (!usuario || !email || !sessionId) {
         window.location.href = '/login.html';
     }
 }

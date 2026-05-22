@@ -449,6 +449,8 @@ select:disabled,
     letter-spacing: 0.02em;
     text-align: center;
     text-shadow: 0 0 8px rgba(255, 216, 111, 0.35);
+    white-space: pre-line;
+    line-height: 1.35;
 }
 
 .menu-recompensa-diaria-progress {

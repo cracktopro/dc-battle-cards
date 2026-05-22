@@ -97,6 +97,10 @@ async function obtenerMapaFilasCatalogoCompleto() {
     if (mapaFilasCatalogoCompleto) {
         return mapaFilasCatalogoCompleto;
     }
+    if (typeof window.DCCatalogoCartas?.obtenerMapaPorNombre === 'function') {
+        mapaFilasCatalogoCompleto = await window.DCCatalogoCartas.obtenerMapaPorNombre();
+        return mapaFilasCatalogoCompleto;
+    }
     const response = await fetch('resources/cartas.xlsx');
     if (!response.ok) {
         throw new Error('No se pudo cargar cartas.xlsx');
@@ -115,41 +119,87 @@ async function obtenerMapaFilasCatalogoCompleto() {
     return mapaFilasCatalogoCompleto;
 }
 
-async function inicializarVistaMazos() {
-    await sincronizarLocalStorage();
-    if (typeof window.DCSkinsCartas !== 'undefined' && typeof window.DCSkinsCartas.asegurarSkinsCargados === 'function') {
-        try {
-            await window.DCSkinsCartas.asegurarSkinsCargados();
-        } catch (error) {
-            console.warn('No se pudieron cargar los skins:', error);
-        }
-    }
-    try {
-        await obtenerMapaFilasCatalogoCompleto();
-    } catch (error) {
-        console.warn('No se pudo cargar el catálogo completo de cartas:', error);
-    }
-    try {
-        await enriquecerSaludDesdeCatalogo();
-    } catch (error) {
-        console.warn('No se pudo enriquecer la salud de las cartas desde el catálogo:', error);
-    }
+function pintarVistaMazosDesdeStorage() {
     const usuario = JSON.parse(localStorage.getItem('usuario'));
     const tieneMazos = Boolean(usuario?.mazos?.length);
 
     if (!tieneMazos) {
         mostrarModalSinMazos();
         bloquearGestionMazos(true);
-        return;
+        return false;
     }
 
     bloquearGestionMazos(false);
     configurarSelectorMazo();
     cargarCartasDelMazo();
+    return true;
+}
+
+async function inicializarVistaMazos() {
+    const teniaMazos = pintarVistaMazosDesdeStorage();
+
+    void (async () => {
+        await sincronizarLocalStorage();
+        const usuario = JSON.parse(localStorage.getItem('usuario'));
+        const tieneMazos = Boolean(usuario?.mazos?.length);
+
+        if (!tieneMazos) {
+            if (teniaMazos) {
+                mostrarModalSinMazos();
+                bloquearGestionMazos(true);
+            }
+            return;
+        }
+
+        if (!teniaMazos) {
+            bloquearGestionMazos(false);
+            configurarSelectorMazo();
+            cargarCartasDelMazo();
+        }
+
+        void enriquecerVistaMazosEnSegundoPlano();
+    })();
+}
+
+async function enriquecerVistaMazosEnSegundoPlano() {
+    const tareas = [];
+    if (typeof window.DCSkinsCartas !== 'undefined' && typeof window.DCSkinsCartas.asegurarSkinsCargados === 'function') {
+        tareas.push(
+            window.DCSkinsCartas.asegurarSkinsCargados().catch((error) => {
+                console.warn('No se pudieron cargar los skins:', error);
+            })
+        );
+    }
+    if (typeof window.DCCatalogoCartas?.cargarFilas === 'function') {
+        tareas.push(
+            window.DCCatalogoCartas.cargarFilas().catch((error) => {
+                console.warn('No se pudo cargar el catálogo completo de cartas:', error);
+            })
+        );
+    } else {
+        tareas.push(
+            obtenerMapaFilasCatalogoCompleto().catch((error) => {
+                console.warn('No se pudo cargar el catálogo completo de cartas:', error);
+            })
+        );
+    }
+    if (tareas.length) {
+        await Promise.all(tareas);
+    }
+    try {
+        await enriquecerSaludDesdeCatalogo();
+        cargarCartasDelMazo();
+    } catch (error) {
+        console.warn('No se pudo enriquecer la salud de las cartas desde el catálogo:', error);
+    }
 }
 
 async function obtenerMapaSaludCatalogo() {
     if (mapaSaludCatalogo) {
+        return mapaSaludCatalogo;
+    }
+    if (typeof window.DCCatalogoCartas?.obtenerMapaSalud === 'function') {
+        mapaSaludCatalogo = await window.DCCatalogoCartas.obtenerMapaSalud();
         return mapaSaludCatalogo;
     }
 
@@ -207,20 +257,10 @@ async function enriquecerSaludDesdeCatalogo() {
         return;
     }
 
-    const mapaCatalogo = await obtenerMapaSaludCatalogo();
-    let mapaFilas = mapaFilasCatalogoCompleto;
-    try {
-        mapaFilas = await obtenerMapaFilasCatalogoCompleto();
-    } catch (_error) {
-        mapaFilas = null;
-    }
-    if (typeof window.DCSkinsCartas !== 'undefined' && typeof window.DCSkinsCartas.asegurarSkinsCargados === 'function') {
-        try {
-            await window.DCSkinsCartas.asegurarSkinsCargados();
-        } catch (_error) {
-            /* sin skins */
-        }
-    }
+    const [mapaCatalogo, mapaFilas] = await Promise.all([
+        obtenerMapaSaludCatalogo(),
+        obtenerMapaFilasCatalogoCompleto().catch(() => null)
+    ]);
 
     const normalizarCarta = (carta) => {
         if (!carta) {
@@ -409,6 +449,11 @@ async function sincronizarLocalStorage() {
     }
 
     try {
+        if (typeof window.refrescarUsuarioSesionDesdeServidor === 'function') {
+            await window.refrescarUsuarioSesionDesdeServidor();
+            return;
+        }
+
         const response = await fetch('/get-user', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -421,7 +466,14 @@ async function sincronizarLocalStorage() {
 
         const data = await response.json();
         if (data?.usuario) {
-            localStorage.setItem('usuario', JSON.stringify(data.usuario));
+            const local = JSON.parse(localStorage.getItem('usuario') || '{}');
+            const fusionado = typeof window.fusionarUsuarioSesionTrasUpdate === 'function'
+                ? window.fusionarUsuarioSesionTrasUpdate(local, {}, data.usuario)
+                : data.usuario;
+            if (typeof window.aplicarRespaldoClaimLocalUsuario === 'function') {
+                window.aplicarRespaldoClaimLocalUsuario(fusionado);
+            }
+            localStorage.setItem('usuario', JSON.stringify(fusionado));
         }
     } catch (error) {
         console.error('Error al sincronizar los datos del usuario:', error);
@@ -1161,6 +1213,7 @@ function mostrarMensaje(mensaje, tipo = 'warning') {
 function logout() {
     localStorage.removeItem('usuario');
     localStorage.removeItem('email');
+    localStorage.removeItem('dc_active_session_id_v1');
     localStorage.removeItem('jugandoPartida');
     localStorage.removeItem('mazoJugador');
     localStorage.removeItem('mazoOponente');

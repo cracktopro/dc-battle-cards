@@ -1891,6 +1891,16 @@ io.on('connection', (socket) => {
             return;
         }
 
+        const sessionIdPayload = typeof payload === 'object' ? String(payload?.sessionId || '').trim() : '';
+        const valSesion = await validarSesionActiva(emailUsuario, sessionIdPayload);
+        if (!valSesion.ok) {
+            socket.emit('sesion:invalida', {
+                codigo: valSesion.codigo,
+                mensaje: valSesion.mensaje
+            });
+            return;
+        }
+
         const nicknameRaw = typeof payload === 'object' ? String(payload?.nickname || '').trim() : '';
         const nombreVisible = nicknameRaw || emailUsuario.split('@')[0];
         const avatar = typeof payload === 'object' ? String(payload?.avatar || '').trim() : '';
@@ -3562,6 +3572,69 @@ function generarSyncTokenUsuario() {
     return `sync_${Date.now()}_${Math.random().toString(36).slice(2, 12)}`;
 }
 
+function generarSessionIdUsuario() {
+    return `sess_${Date.now()}_${Math.random().toString(36).slice(2, 14)}`;
+}
+
+function limpiarCamposSesionDelPayload(usuario) {
+    if (!usuario || typeof usuario !== 'object') {
+        return usuario;
+    }
+    const copia = { ...usuario };
+    delete copia.activeSessionId;
+    delete copia.activeSessionAt;
+    return copia;
+}
+
+async function crearSesionActivaUsuario(email, userData = {}) {
+    const activeSessionId = generarSessionIdUsuario();
+    const activeSessionAt = Date.now();
+    const docRef = doc(db, 'users', email);
+    await setDoc(docRef, { activeSessionId, activeSessionAt }, { merge: true });
+    return {
+        sessionId: activeSessionId,
+        usuario: { ...userData, activeSessionId, activeSessionAt }
+    };
+}
+
+async function validarSesionActiva(email, sessionIdCliente) {
+    const emailNorm = String(email || '').trim();
+    if (!emailNorm) {
+        return {
+            ok: false,
+            codigo: 'SESSION_MISSING',
+            mensaje: 'Sesión no válida.'
+        };
+    }
+    const docRef = doc(db, 'users', emailNorm);
+    const docSnap = await getDoc(docRef);
+    if (!docSnap.exists()) {
+        return {
+            ok: false,
+            codigo: 'USER_NOT_FOUND',
+            mensaje: 'Usuario no encontrado.'
+        };
+    }
+    const data = docSnap.data() || {};
+    const servidor = String(data.activeSessionId || '').trim();
+    const cliente = String(sessionIdCliente || '').trim();
+    if (!servidor) {
+        return {
+            ok: false,
+            codigo: 'SESSION_REPLACED',
+            mensaje: 'Debes iniciar sesión de nuevo para continuar.'
+        };
+    }
+    if (!cliente || cliente !== servidor) {
+        return {
+            ok: false,
+            codigo: 'SESSION_REPLACED',
+            mensaje: 'Tu sesión se cerró porque iniciaste sesión en otro dispositivo.'
+        };
+    }
+    return { ok: true, datos: data };
+}
+
 /** Elimina `undefined`, NaN e infinitos antes de escribir en Firestore (evita 500 silenciosos). */
 function sanitizarValorFirestore(valor) {
     if (valor === undefined) {
@@ -3677,10 +3750,89 @@ function fusionarMisionesServidor(misionesServidor, misionesCliente) {
     };
 }
 
+function tiendaClientePareceDesactualizada(tiendaCli, tiendaSrv) {
+    if (!tiendaSrv || typeof tiendaSrv !== 'object') {
+        return false;
+    }
+    if (!tiendaCli || typeof tiendaCli !== 'object') {
+        return true;
+    }
+    const vSrv = Number(tiendaSrv.ventanaId);
+    const vCli = Number(tiendaCli.ventanaId);
+    if (Number.isFinite(vSrv) && Number.isFinite(vCli) && vSrv > vCli) {
+        return true;
+    }
+    const fSrv = String(tiendaSrv.ofertasDiaFecha || tiendaSrv.fecha || '').trim();
+    const fCli = String(tiendaCli.ofertasDiaFecha || tiendaCli.fecha || '').trim();
+    if (fSrv && fCli && fSrv > fCli) {
+        return true;
+    }
+    if (fSrv && !fCli) {
+        return true;
+    }
+    return false;
+}
+
+/**
+ * Cliente con caché antigua puede enviar el documento completo y pisar tienda, tema, etc.
+ * No usar solo syncUpdatedAt en tienda: un cliente con token válido puede comprar con timestamp local viejo.
+ */
+function preservarCamposServidorAnteClienteDesactualizado(usuario, datosActuales, opciones = {}) {
+    const adopto = Boolean(opciones.forceServidor);
+    const tiendaStale = adopto || tiendaClientePareceDesactualizada(usuario.tienda, datosActuales.tienda);
+    if (!tiendaStale) {
+        return;
+    }
+    if (datosActuales.tienda && typeof datosActuales.tienda === 'object') {
+        usuario.tienda = datosActuales.tienda;
+    }
+    if (datosActuales.preferencias && typeof datosActuales.preferencias === 'object') {
+        usuario.preferencias = {
+            ...(usuario.preferencias && typeof usuario.preferencias === 'object' ? usuario.preferencias : {}),
+            ...datosActuales.preferencias
+        };
+        if (datosActuales.preferencias.colorPrincipal) {
+            usuario.preferencias.colorPrincipal = datosActuales.preferencias.colorPrincipal;
+        }
+    }
+    if (Number.isFinite(Number(datosActuales.puntos))) {
+        const ptsCli = Number(usuario.puntos) || 0;
+        const ptsSrv = Number(datosActuales.puntos) || 0;
+        const tsCli = Number(usuario.syncUpdatedAt) || 0;
+        const tsSrv = Number(datosActuales.syncUpdatedAt) || 0;
+        if (tsCli < tsSrv) {
+            usuario.puntos = Math.max(ptsCli, ptsSrv);
+        }
+    }
+    const skinsSrv = Array.isArray(datosActuales.skinsObtenidos) ? datosActuales.skinsObtenidos : [];
+    const skinsCli = Array.isArray(usuario.skinsObtenidos) ? usuario.skinsObtenidos : [];
+    if (skinsSrv.length > skinsCli.length) {
+        usuario.skinsObtenidos = skinsSrv;
+    }
+    const tsClaimSrv = Number(datosActuales.recompensas?.diariaSobres?.lastClaimAt) || 0;
+    const tsClaimCli = Number(usuario.recompensas?.diariaSobres?.lastClaimAt) || 0;
+    const maxClaim = Math.max(tsClaimSrv, tsClaimCli);
+    if (maxClaim > 0) {
+        usuario.recompensas = (usuario.recompensas && typeof usuario.recompensas === 'object')
+            ? usuario.recompensas
+            : {};
+        usuario.recompensas.diariaSobres = {
+            ...(datosActuales.recompensas?.diariaSobres && typeof datosActuales.recompensas.diariaSobres === 'object'
+                ? datosActuales.recompensas.diariaSobres
+                : {}),
+            ...(usuario.recompensas.diariaSobres && typeof usuario.recompensas.diariaSobres === 'object'
+                ? usuario.recompensas.diariaSobres
+                : {}),
+            lastClaimAt: maxClaim
+        };
+    }
+}
+
 async function guardarUsuarioConControlConcurrencia(email, usuarioPayload = {}) {
     const docRef = doc(db, "users", email);
     const docActual = await getDoc(docRef);
     const datosActuales = docActual.data() || {};
+    usuarioPayload = limpiarCamposSesionDelPayload(usuarioPayload);
     const tokenServidor = String(datosActuales.syncToken || '').trim();
     let tokenCliente = String(usuarioPayload.syncToken || '').trim();
 
@@ -3693,7 +3845,10 @@ async function guardarUsuarioConControlConcurrencia(email, usuarioPayload = {}) 
     }
 
     const usuario = (usuarioPayload && typeof usuarioPayload === 'object') ? { ...usuarioPayload } : {};
-    if (tokenServidor && !tokenCliente) {
+    const adoptoTokenServidor = Boolean(tokenServidor && !tokenCliente);
+    const tsCliInicial = Number(usuario.syncUpdatedAt) || 0;
+    const tsSrvInicial = Number(datosActuales.syncUpdatedAt) || 0;
+    if (adoptoTokenServidor) {
         usuario.syncToken = tokenServidor;
         const su = Number(datosActuales.syncUpdatedAt);
         if (Number.isFinite(su) && su > 0) {
@@ -3703,6 +3858,20 @@ async function guardarUsuarioConControlConcurrencia(email, usuarioPayload = {}) 
     }
     if (!Array.isArray(usuario.cartas)) {
         usuario.cartas = datosActuales.cartas || [];
+    } else if (
+        tsSrvInicial > tsCliInicial
+        && Array.isArray(datosActuales.cartas)
+        && datosActuales.cartas.length > 0
+    ) {
+        usuario.cartas = datosActuales.cartas;
+    } else if (
+        Array.isArray(datosActuales.cartas)
+        && datosActuales.cartas.length > 0
+        && Array.isArray(usuario.cartas)
+        && usuario.cartas.length > datosActuales.cartas.length
+        && tsSrvInicial >= tsCliInicial
+    ) {
+        usuario.cartas = datosActuales.cartas;
     }
     if (!Array.isArray(usuario.mazos)) {
         usuario.mazos = datosActuales.mazos || [];
@@ -3729,11 +3898,30 @@ async function guardarUsuarioConControlConcurrencia(email, usuarioPayload = {}) 
             ...(datosActuales.recompensas && typeof datosActuales.recompensas === 'object' ? datosActuales.recompensas : {}),
             ...usuario.recompensas
         };
+        const tsSrv = Number(datosActuales.recompensas?.diariaSobres?.lastClaimAt) || 0;
+        const tsCli = Number(usuario.recompensas?.diariaSobres?.lastClaimAt) || 0;
+        const maxClaim = Math.max(tsSrv, tsCli);
+        if (maxClaim > 0) {
+            usuario.recompensas.diariaSobres = {
+                ...(datosActuales.recompensas?.diariaSobres && typeof datosActuales.recompensas.diariaSobres === 'object'
+                    ? datosActuales.recompensas.diariaSobres
+                    : {}),
+                ...(usuario.recompensas.diariaSobres && typeof usuario.recompensas.diariaSobres === 'object'
+                    ? usuario.recompensas.diariaSobres
+                    : {}),
+                lastClaimAt: maxClaim
+            };
+        }
     } else if (datosActuales.recompensas && typeof datosActuales.recompensas === 'object') {
         usuario.recompensas = datosActuales.recompensas;
     }
     if (usuario.preferencias === undefined && datosActuales.preferencias) {
         usuario.preferencias = datosActuales.preferencias;
+    } else if (datosActuales.preferencias && typeof datosActuales.preferencias === 'object') {
+        usuario.preferencias = {
+            ...datosActuales.preferencias,
+            ...(usuario.preferencias && typeof usuario.preferencias === 'object' ? usuario.preferencias : {})
+        };
     }
     if (usuario.nickname === undefined) {
         usuario.nickname = datosActuales.nickname;
@@ -3743,6 +3931,14 @@ async function guardarUsuarioConControlConcurrencia(email, usuarioPayload = {}) 
     }
     if (usuario.puntos === undefined) {
         usuario.puntos = datosActuales.puntos;
+    } else if (Number.isFinite(Number(datosActuales.puntos))) {
+        const ptsCli = Number(usuario.puntos) || 0;
+        const ptsSrv = Number(datosActuales.puntos) || 0;
+        if (tsCliInicial >= tsSrvInicial) {
+            usuario.puntos = ptsCli;
+        } else {
+            usuario.puntos = Math.max(ptsCli, ptsSrv);
+        }
     }
     if (usuario.email === undefined) {
         usuario.email = datosActuales.email;
@@ -3750,6 +3946,10 @@ async function guardarUsuarioConControlConcurrencia(email, usuarioPayload = {}) 
     if (usuario.tienda === undefined && datosActuales.tienda && typeof datosActuales.tienda === 'object') {
         usuario.tienda = datosActuales.tienda;
     }
+
+    preservarCamposServidorAnteClienteDesactualizado(usuario, datosActuales, {
+        forceServidor: adoptoTokenServidor
+    });
 
     usuario.syncToken = generarSyncTokenUsuario();
     usuario.syncUpdatedAt = Date.now();
@@ -3863,7 +4063,13 @@ app.post('/login', async (req, res) => {
 
         if (esCorrecta) {
             userData = await asegurarMetadataSyncUsuario(email, userData);
-            res.status(200).json({ mensaje: 'Inicio de sesión exitoso', usuario: userData });
+            const sesion = await crearSesionActivaUsuario(email, userData);
+            const usuarioCliente = limpiarCamposSesionDelPayload(sesion.usuario);
+            res.status(200).json({
+                mensaje: 'Inicio de sesión exitoso',
+                usuario: usuarioCliente,
+                sessionId: sesion.sessionId
+            });
         } else {
             res.status(400).json({ mensaje: 'Contraseña incorrecta' });
         }
@@ -3876,19 +4082,27 @@ app.post('/login', async (req, res) => {
 
 // Ruta para obtener el usuario desde Firebase
 app.post('/get-user', async (req, res) => {
-    const { email } = req.body; // Obtener el email del cuerpo de la solicitud
+    const { email, sessionId } = req.body;
 
     if (!email) {
         return res.status(400).json({ mensaje: 'Email no proporcionado.' });
     }
 
     try {
+        const valSesion = await validarSesionActiva(email, sessionId);
+        if (!valSesion.ok) {
+            return res.status(401).json({
+                codigo: valSesion.codigo,
+                mensaje: valSesion.mensaje
+            });
+        }
         const docRef = doc(db, "users", email);
         const docSnap = await getDoc(docRef);
 
         if (docSnap.exists()) {
             const userData = await asegurarMetadataSyncUsuario(email, docSnap.data());
-            res.status(200).json({ usuario: userData });
+            const usuarioCliente = limpiarCamposSesionDelPayload(userData);
+            res.status(200).json({ usuario: usuarioCliente });
         } else {
             res.status(404).json({ mensaje: 'Usuario no encontrado.' });
         }
@@ -3898,12 +4112,30 @@ app.post('/get-user', async (req, res) => {
     }
 });
 
+app.post('/validate-session', async (req, res) => {
+    const { email, sessionId } = req.body || {};
+    if (!email) {
+        return res.status(400).json({ codigo: 'SESSION_MISSING', mensaje: 'Email no proporcionado.' });
+    }
+    try {
+        const valSesion = await validarSesionActiva(email, sessionId);
+        if (!valSesion.ok) {
+            return res.status(401).json({
+                codigo: valSesion.codigo,
+                mensaje: valSesion.mensaje
+            });
+        }
+        return res.status(200).json({ ok: true });
+    } catch (error) {
+        console.error('Error en /validate-session:', error.message);
+        return res.status(500).json({ mensaje: 'No se pudo validar la sesión.' });
+    }
+});
 
 // Ruta para actualizar el usuario en Firebase
 app.post('/update-user', async (req, res) => {
-    const { usuario, email } = req.body; // Obtener el usuario y el email del cuerpo de la solicitud
+    const { usuario, email, sessionId } = req.body;
 
-    // Log para verificar los datos recibidos del cliente
     console.log("Datos recibidos en /update-user:");
     console.log("Usuario:", usuario);
     console.log("Email:", email);
@@ -3914,6 +4146,13 @@ app.post('/update-user', async (req, res) => {
     }
 
     try {
+        const valSesion = await validarSesionActiva(email, sessionId);
+        if (!valSesion.ok) {
+            return res.status(401).json({
+                codigo: valSesion.codigo,
+                mensaje: valSesion.mensaje
+            });
+        }
         console.log("Actualizando documento en Firebase para el usuario con email:", email);
         console.log("Datos del usuario para actualizar:", usuario);
         const resultado = await guardarUsuarioConControlConcurrencia(email, usuario);

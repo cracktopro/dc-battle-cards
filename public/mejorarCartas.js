@@ -1,12 +1,26 @@
+function sincronizarVistaMejorarCartasDesdeSesion() {
+    const usuario = JSON.parse(localStorage.getItem('usuario') || 'null');
+    if (!usuario) {
+        return;
+    }
+    normalizarObjetosUsuario(usuario);
+    cargarCartas();
+}
+
 document.addEventListener('DOMContentLoaded', async function () {
+    if (typeof window.refrescarUsuarioSesionDesdeServidor === 'function') {
+        await window.refrescarUsuarioSesionDesdeServidor();
+    }
     try {
         await enriquecerUsuarioSkillsDesdeCatalogoMejorar();
     } catch (error) {
         console.warn('No se pudieron fusionar habilidades desde el catálogo:', error);
     }
-    cargarCartas(); // Carga inicial de cartas para mejorar
-    configurarEventos(); // Configurar eventos de la página
+    sincronizarVistaMejorarCartasDesdeSesion();
+    configurarEventos();
 });
+
+window.addEventListener('dc:usuario-actualizado', sincronizarVistaMejorarCartasDesdeSesion);
 
 async function enriquecerUsuarioSkillsDesdeCatalogoMejorar() {
     if (typeof XLSX === 'undefined' || typeof window.fusionarSkillDesdeFilaCatalogo !== 'function') {
@@ -565,10 +579,14 @@ async function confirmarCombinacionDuplicados() {
 
     usuario.cartas = resultado.nuevasCartas;
     sincronizarMazosConColeccion(usuario);
+    localStorage.setItem('usuario', JSON.stringify(usuario));
     const facFusion = normalizarFaccion(resultado?.cartaMejorada?.faccion || resultado?.cartaMejorada?.Faccion || '');
     const fusionLlegaNivel6 = Number(resultado?.cartaAntes?.Nivel || 1) < 6 && Number(resultado?.cartaMejorada?.Nivel || 1) === 6;
 
     try {
+        if (typeof window.aplicarSyncTokenDesdeLocalStorage === 'function') {
+            window.aplicarSyncTokenDesdeLocalStorage(usuario);
+        }
         await actualizarUsuarioFirebase(usuario, email);
         localStorage.setItem('usuario', JSON.stringify(usuario));
         await registrarMisionesTrasMejoraCarta({ faccion: facFusion, subeANivel6: fusionLlegaNivel6 });
@@ -2234,6 +2252,7 @@ async function mejorarDuplicadosAutomaticamente() {
 
     usuario.cartas = analisis.cartasActualizadas;
     sincronizarMazosConColeccion(usuario);
+    localStorage.setItem('usuario', JSON.stringify(usuario));
     let mejorasH = 0;
     let mejorasV = 0;
     let mejorasLleganNivel6 = 0;
@@ -2341,10 +2360,14 @@ async function confirmarDestruirDuplicadoIndividual() {
     usuario.cartas = usuario.cartas.filter((_, idx) => idx !== pendiente.index);
     usuario.puntos = Number(usuario.puntos || 0) + puntos;
     sincronizarMazosConColeccion(usuario);
+    localStorage.setItem('usuario', JSON.stringify(usuario));
 
     try {
         await actualizarUsuarioFirebase(usuario, email);
-        localStorage.setItem('usuario', JSON.stringify(usuario));
+        const enLs = JSON.parse(localStorage.getItem('usuario') || 'null');
+        if (enLs?.cartas) {
+            usuario.cartas = enLs.cartas;
+        }
         refrescarPanelPerfilLateral();
         cerrarModalDestruirDuplicado();
         cargarCartas();
@@ -2472,10 +2495,10 @@ async function destruirDuplicadosNivel6() {
     usuario.cartas = analisis.cartasActualizadas;
     usuario.puntos = Number(usuario.puntos || 0) + analisis.puntosGanados;
     sincronizarMazosConColeccion(usuario);
+    localStorage.setItem('usuario', JSON.stringify(usuario));
 
     try {
         await actualizarUsuarioFirebase(usuario, email);
-        localStorage.setItem('usuario', JSON.stringify(usuario));
         refrescarPanelPerfilLateral();
         cargarCartas();
         mostrarResultadoDestruccion(analisis);
@@ -2540,6 +2563,7 @@ function logout() {
     console.log('Cerrando sesión y limpiando localStorage...');
     localStorage.removeItem('usuario');
     localStorage.removeItem('email');
+    localStorage.removeItem('dc_active_session_id_v1');
     localStorage.removeItem('jugandoPartida');
     localStorage.removeItem('mazoJugador');
     localStorage.removeItem('mazoOponente');

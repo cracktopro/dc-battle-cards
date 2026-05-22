@@ -30,6 +30,13 @@ function obtenerClaveCarta(nombre) {
     return String(nombre || '').trim().toLowerCase();
 }
 
+function obtenerClaveCartaUsuario(carta) {
+    if (typeof window.obtenerClaveParentCartaColeccion === 'function') {
+        return window.obtenerClaveParentCartaColeccion(carta);
+    }
+    return obtenerClaveCarta(carta?.Nombre);
+}
+
 function obtenerFaccionCarta(carta) {
     return normalizarFaccion(carta?.faccion || carta?.Faccion || '');
 }
@@ -175,7 +182,7 @@ function sincronizarEstadoUsuarioColeccionDesdeLs() {
     const cartasUsuario = usuario && Array.isArray(usuario.cartas) ? usuario.cartas : [];
     nombresCartasConseguidas = new Set(
         cartasUsuario
-            .map(carta => obtenerClaveCarta(carta?.Nombre))
+            .map(carta => obtenerClaveCartaUsuario(carta))
             .filter(Boolean)
     );
     mapaMejorVersionUsuario = construirMapaMejorVersionUsuario(cartasUsuario);
@@ -189,6 +196,18 @@ function actualizarTextosProgresoColeccion() {
     const elH = document.getElementById('progreso-coleccion-heroes');
     const elV = document.getElementById('progreso-coleccion-villanos');
     if (!elTotal || !elH || !elV) {
+        return;
+    }
+
+    const usuario = JSON.parse(localStorage.getItem('usuario') || 'null');
+    const progreso = typeof window.calcularProgresoColeccionDesdeCatalogo === 'function'
+        ? window.calcularProgresoColeccionDesdeCatalogo(usuario, todasLasCartasCatalogo)
+        : null;
+
+    if (progreso) {
+        elTotal.textContent = progreso.total > 0 ? `${progreso.obtenidas}/${progreso.total}` : '0/0';
+        elH.textContent = progreso.heroesCat > 0 ? `${progreso.heroesObtenidos}/${progreso.heroesCat}` : '0/0';
+        elV.textContent = progreso.villCat > 0 ? `${progreso.villanosObtenidos}/${progreso.villCat}` : '0/0';
         return;
     }
 
@@ -281,7 +300,7 @@ function construirMapaMejorVersionUsuario(cartasUsuario) {
     const mapa = new Map();
 
     (Array.isArray(cartasUsuario) ? cartasUsuario : []).forEach(carta => {
-        const clave = obtenerClaveCarta(carta?.Nombre);
+        const clave = obtenerClaveCartaUsuario(carta);
         if (!clave) {
             return;
         }
@@ -865,6 +884,7 @@ function logout() {
     console.log('Cerrando sesión y limpiando localStorage...');
     localStorage.removeItem('usuario');
     localStorage.removeItem('email');
+    localStorage.removeItem('dc_active_session_id_v1');
     localStorage.removeItem('jugandoPartida');
     localStorage.removeItem('mazoJugador');
     localStorage.removeItem('mazoOponente');

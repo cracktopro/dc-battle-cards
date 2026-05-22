@@ -14,7 +14,8 @@ let timerInvitacionGrupoInterval = null;
 console.log(`Nombre de usuario extraído del email: ${nombreUsuario}`);
 
 // Registrar usuario con email + nickname + avatar.
-socket.emit('registrarUsuario', { email, nickname: nombreUsuario, avatar: avatarUsuario });
+const sessionId = String(localStorage.getItem('dc_active_session_id_v1') || '').trim();
+socket.emit('registrarUsuario', { email, nickname: nombreUsuario, avatar: avatarUsuario, sessionId });
 
 console.log('Usuario registrado en el servidor:', nombreUsuario);
 
@@ -26,6 +27,15 @@ socket.on('connect', () => {
 
 socket.on('disconnect', () => {
     console.log('Desconectado del servidor de Socket.IO');
+});
+
+socket.on('sesion:invalida', (payload) => {
+    if (typeof window.DCSesionUnica?.cerrarSesionPorReemplazo === 'function') {
+        window.DCSesionUnica.cerrarSesionPorReemplazo(payload?.mensaje);
+    } else {
+        localStorage.clear();
+        window.location.replace('/login.html?sesion=cerrada');
+    }
 });
 
 function guardarEstadoGrupoLocal(estado = {}) {

@@ -1,19 +1,38 @@
-document.addEventListener('DOMContentLoaded', async () => {
+document.addEventListener('DOMContentLoaded', () => {
+    if (!localStorage.getItem('email')) {
+        window.location.href = '/login.html';
+        return;
+    }
     const usuario = JSON.parse(localStorage.getItem('usuario'));
     if (!usuario) {
         window.location.href = '/login.html';
         return;
     }
 
+    configurarModalSeleccion();
+    void inicializarVistaDesafios();
+});
+
+async function inicializarVistaDesafios() {
     try {
-        const desafios = await cargarDesafiosDesdeExcel();
-        configurarModalSeleccion();
+        const tareas = [cargarDesafiosDesdeExcel()];
+        if (typeof window.DCCatalogoCartas?.cargarFilas === 'function') {
+            tareas.push(window.DCCatalogoCartas.cargarFilas());
+        }
+        if (typeof window.DCSkinsCartas?.asegurarSkinsCargados === 'function') {
+            tareas.push(window.DCSkinsCartas.asegurarSkinsCargados());
+        }
+        if (typeof window.refrescarUsuarioSesionDesdeServidor === 'function') {
+            tareas.push(window.refrescarUsuarioSesionDesdeServidor());
+        }
+        const resultados = await Promise.all(tareas);
+        const desafios = resultados[0];
         await renderizarDesafios(desafios);
     } catch (error) {
         console.error('Error al cargar desafíos:', error);
         mostrarMensaje('No se pudieron cargar los desafíos.', 'danger');
     }
-});
+}
 
 let desafioPendiente = null;
 let usuarioCartasSeleccion = [];
@@ -65,18 +84,28 @@ function normalizarFaccionCamino(valor) {
     return faccion === 'V' ? 'V' : 'H';
 }
 
+let _desafiosListaCache = null;
+let _promesaDesafiosXlsx = null;
+
 async function cargarDesafiosDesdeExcel() {
-    const response = await fetch('resources/desafios.xlsx');
-    if (!response.ok) {
-        throw new Error('No se pudo cargar desafios.xlsx.');
+    if (_desafiosListaCache) {
+        return _desafiosListaCache;
     }
+    if (_promesaDesafiosXlsx) {
+        return _promesaDesafiosXlsx;
+    }
+    _promesaDesafiosXlsx = (async () => {
+        const response = await fetch('resources/desafios.xlsx');
+        if (!response.ok) {
+            throw new Error('No se pudo cargar desafios.xlsx.');
+        }
 
-    const data = await response.arrayBuffer();
-    const workbook = XLSX.read(data, { type: 'array' });
-    const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    const filas = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+        const data = await response.arrayBuffer();
+        const workbook = XLSX.read(data, { type: 'array' });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const filas = XLSX.utils.sheet_to_json(sheet, { defval: '' });
 
-    return filas.map(fila => {
+        _desafiosListaCache = filas.map(fila => {
         const enemigos = [];
         for (let i = 1; i <= 6; i++) {
             const nombreEnemigo = String(fila[`enemigo${i}`] || '').trim();
@@ -105,7 +134,13 @@ async function cargarDesafiosDesdeExcel() {
             cartas: cartasRecompensa,
             tablero: String(fila.tablero ?? fila.Tablero ?? '').trim()
         };
+        });
+        return _desafiosListaCache;
+    })().catch((error) => {
+        _promesaDesafiosXlsx = null;
+        throw error;
     });
+    return _promesaDesafiosXlsx;
 }
 
 function obtenerCompletadosDesafiosSet(idsDesafios = new Set()) {
@@ -333,9 +368,6 @@ async function renderizarDesafiosGlobal() {
     const mapaCatalogo = new Map(
         catalogo.map(carta => [normalizarNombre(carta.Nombre), carta])
     );
-    if (typeof window.DCSkinsCartas !== 'undefined' && typeof window.DCSkinsCartas.asegurarSkinsCargados === 'function') {
-        await window.DCSkinsCartas.asegurarSkinsCargados();
-    }
 
     if (desafiosVisibles.length === 0) {
         const vacio = document.createElement('div');
@@ -481,6 +513,9 @@ function iniciarDesafio(desafio, cartasSeleccionadas) {
 }
 
 async function cargarCatalogoCartas() {
+    if (typeof window.DCCatalogoCartas?.obtenerFilas === 'function') {
+        return window.DCCatalogoCartas.obtenerFilas();
+    }
     const response = await fetch('resources/cartas.xlsx');
     if (!response.ok) {
         throw new Error('No se pudo cargar el catálogo de cartas.');

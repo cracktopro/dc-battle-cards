@@ -1254,17 +1254,162 @@ function construirMapaCatalogoPorNombre(cartasExcel = []) {
     return mapa;
 }
 
-async function cargarCatalogoCartasExcelParaMigracion() {
-    const response = await fetch('resources/cartas.xlsx');
-    if (!response.ok) {
-        throw new Error('No se pudo cargar cartas.xlsx para migración de skills.');
+/** Clave de catálogo (parent); las apariencias/skin no cuentan como carta distinta en colección. */
+function normalizarClaveNombreCatalogo(nombre) {
+    return String(nombre ?? '').trim().toLowerCase();
+}
+
+function obtenerClaveParentCartaColeccion(carta) {
+    if (!carta || typeof carta !== 'object') {
+        return '';
     }
-    const data = await response.arrayBuffer();
-    const workbook = XLSX.read(data, { type: 'array' });
-    const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    const cartasExcel = XLSX.utils.sheet_to_json(sheet, { defval: '' });
-    registrarImagenesCatalogoEnMemoria(cartasExcel);
-    return cartasExcel;
+    const parentGuardado = String(carta.skinParentNombre || '').trim();
+    if (parentGuardado) {
+        return normalizarClaveNombreCatalogo(parentGuardado);
+    }
+    if (typeof window.DCSkinsCartas !== 'undefined' && typeof window.DCSkinsCartas.obtenerNombreParentCarta === 'function') {
+        return normalizarClaveNombreCatalogo(window.DCSkinsCartas.obtenerNombreParentCarta(carta));
+    }
+    const nombre = String(carta.Nombre || '').trim();
+    if (!nombre) {
+        return '';
+    }
+    if (typeof window.DCSkinsCartas !== 'undefined' && typeof window.DCSkinsCartas.obtenerNombreCatalogoDesdeReferencia === 'function') {
+        return normalizarClaveNombreCatalogo(window.DCSkinsCartas.obtenerNombreCatalogoDesdeReferencia(nombre));
+    }
+    return normalizarClaveNombreCatalogo(nombre);
+}
+
+function normalizarFaccionCatalogoColeccion(valor) {
+    const faccion = String(valor || '').trim().toUpperCase();
+    return faccion === 'H' || faccion === 'V' ? faccion : '';
+}
+
+function filasCatalogoUnicasParaProgreso(catalogoEntrada) {
+    if (catalogoEntrada instanceof Map) {
+        return Array.from(catalogoEntrada.values());
+    }
+    if (catalogoEntrada && typeof catalogoEntrada === 'object' && catalogoEntrada.mapa instanceof Map) {
+        return Array.from(catalogoEntrada.mapa.values());
+    }
+    const mapa = new Map();
+    (Array.isArray(catalogoEntrada) ? catalogoEntrada : []).forEach((fila) => {
+        const clave = normalizarClaveNombreCatalogo(fila?.Nombre);
+        if (!clave || mapa.has(clave)) {
+            return;
+        }
+        mapa.set(clave, fila);
+    });
+    return Array.from(mapa.values());
+}
+
+function calcularProgresoColeccionDesdeCatalogo(usuario, catalogoEntrada) {
+    const cartasUsuario = Array.isArray(usuario?.cartas) ? usuario.cartas : [];
+    const nombresObtenidos = new Set();
+    cartasUsuario.forEach((carta) => {
+        const clave = obtenerClaveParentCartaColeccion(carta);
+        if (clave) {
+            nombresObtenidos.add(clave);
+        }
+    });
+
+    const filas = filasCatalogoUnicasParaProgreso(catalogoEntrada);
+    const total = filas.length;
+    let obtenidas = 0;
+    let heroesObtenidos = 0;
+    let villanosObtenidos = 0;
+    let heroesCat = 0;
+    let villCat = 0;
+
+    filas.forEach((fila) => {
+        const fac = normalizarFaccionCatalogoColeccion(fila.faccion || fila.Faccion);
+        if (fac === 'H') {
+            heroesCat += 1;
+        } else if (fac === 'V') {
+            villCat += 1;
+        }
+        const clave = normalizarClaveNombreCatalogo(fila?.Nombre);
+        if (!clave || !nombresObtenidos.has(clave)) {
+            return;
+        }
+        obtenidas += 1;
+        if (fac === 'H') {
+            heroesObtenidos += 1;
+        } else if (fac === 'V') {
+            villanosObtenidos += 1;
+        }
+    });
+
+    const pct = total > 0 ? Math.round((obtenidas / total) * 100) : 0;
+    return {
+        total,
+        obtenidas,
+        pct,
+        heroesObtenidos,
+        heroesCat,
+        villanosObtenidos,
+        villCat
+    };
+}
+
+function construirMapaSaludCatalogoDesdeFilas(cartasExcel = []) {
+    const mapa = new Map();
+    (Array.isArray(cartasExcel) ? cartasExcel : []).forEach((carta) => {
+        const nombre = String(carta?.Nombre || '').trim().toLowerCase();
+        if (!nombre) {
+            return;
+        }
+        mapa.set(nombre, {
+            nivelBase: Number(carta.Nivel || carta.nivel || 1),
+            saludBase: Number(carta.Salud ?? carta.salud ?? carta.Poder ?? 0),
+            skill_name: String(carta.skill_name || '').trim(),
+            skill_info: String(carta.skill_info || '').trim(),
+            skill_class: String(carta.skill_class || '').trim().toLowerCase(),
+            skill_power: carta.skill_power ?? '',
+            skill_trigger: String(carta.skill_trigger || '').trim().toLowerCase()
+        });
+    });
+    return mapa;
+}
+
+let _promesaCatalogoCartasXlsx = null;
+let _filasCatalogoCartasCache = null;
+let _mapaCatalogoPorNombreCache = null;
+let _mapaSaludCatalogoCache = null;
+
+async function cargarFilasCatalogoCartasCompartido() {
+    if (_filasCatalogoCartasCache) {
+        return _filasCatalogoCartasCache;
+    }
+    if (_promesaCatalogoCartasXlsx) {
+        return _promesaCatalogoCartasXlsx;
+    }
+    _promesaCatalogoCartasXlsx = (async () => {
+        if (typeof XLSX === 'undefined') {
+            throw new Error('XLSX no disponible');
+        }
+        const response = await fetch('resources/cartas.xlsx');
+        if (!response.ok) {
+            throw new Error('No se pudo cargar cartas.xlsx');
+        }
+        const data = await response.arrayBuffer();
+        const workbook = XLSX.read(data, { type: 'array' });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const filas = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+        _filasCatalogoCartasCache = filas;
+        _mapaCatalogoPorNombreCache = construirMapaCatalogoPorNombre(filas);
+        _mapaSaludCatalogoCache = construirMapaSaludCatalogoDesdeFilas(filas);
+        registrarImagenesCatalogoEnMemoria(filas);
+        return filas;
+    })().catch((error) => {
+        _promesaCatalogoCartasXlsx = null;
+        throw error;
+    });
+    return _promesaCatalogoCartasXlsx;
+}
+
+async function cargarCatalogoCartasExcelParaMigracion() {
+    return cargarFilasCatalogoCartasCompartido();
 }
 
 function aplicarMigracionSkillsAColeccion(cartasUsuario, mapaCatalogo) {
@@ -1729,13 +1874,24 @@ function elegirCartasTrasUpdate(base, pendiente, servidor) {
     const arrB = Array.isArray(base) ? base : [];
     const arrP = Array.isArray(pendiente) ? pendiente : [];
     const arrS = Array.isArray(servidor) ? servidor : [];
-    if (arrP.length >= arrS.length && arrP.length >= arrB.length) {
-        return arrP;
-    }
-    if (arrS.length >= arrB.length) {
+    const lenP = arrP.length;
+    const lenS = arrS.length;
+    const lenB = arrB.length;
+    // Fusión en otro cliente: el servidor tiene menos copias que un LS/cliente antiguo.
+    if (lenS > 0 && lenP > lenS) {
         return arrS;
     }
-    return arrB.length > 0 ? arrB : arrP;
+    // Fusión/destrucción en este cliente: menos copias que el LS aún no actualizado.
+    if (lenP > 0 && (lenP < lenB || lenP < lenS)) {
+        return arrP;
+    }
+    if (lenP >= lenS && lenP >= lenB) {
+        return arrP;
+    }
+    if (lenS >= lenB) {
+        return arrS;
+    }
+    return lenB > 0 ? arrB : arrP;
 }
 
 function fusionarMisionesSesionTrasUpdate(base, pendiente, servidor) {
@@ -1748,6 +1904,106 @@ function fusionarMisionesSesionTrasUpdate(base, pendiente, servidor) {
     return (Object.keys(p).length > 0) ? p : ((Object.keys(s).length > 0) ? s : b);
 }
 
+function tienePreferenciasDefinidas(preferencias) {
+    return preferencias && typeof preferencias === 'object' && Object.keys(preferencias).length > 0;
+}
+
+/** Evita que caché local pise color/tema guardados en otro dispositivo. */
+function fusionarPreferenciasUsuario(base, pendiente, servidor) {
+    const b = tienePreferenciasDefinidas(base?.preferencias) ? base.preferencias : {};
+    const p = tienePreferenciasDefinidas(pendiente?.preferencias) ? pendiente.preferencias : {};
+    const s = tienePreferenciasDefinidas(servidor?.preferencias) ? servidor.preferencias : {};
+    const tieneP = Object.keys(p).length > 0;
+    const tieneS = Object.keys(s).length > 0;
+    if (!tieneP && !tieneS) {
+        return Object.keys(b).length > 0 ? b : base?.preferencias;
+    }
+    if (!tieneP && tieneS) {
+        return { ...b, ...s };
+    }
+    if (tieneP && !tieneS) {
+        return { ...b, ...p };
+    }
+    const tsP = Number(pendiente?.syncUpdatedAt) || 0;
+    const tsS = Number(servidor?.syncUpdatedAt) || 0;
+    const colorP = p.colorPrincipal && typeof p.colorPrincipal === 'object';
+    const merged = { ...b, ...s, ...p };
+    if (s.colorPrincipal && typeof s.colorPrincipal === 'object' && (!colorP || tsS > tsP)) {
+        merged.colorPrincipal = s.colorPrincipal;
+    }
+    return merged;
+}
+
+function timestampRecompensaDiariaDe(usuario) {
+    if (!usuario || typeof usuario !== 'object') {
+        return 0;
+    }
+    const t = Number(usuario?.recompensas?.diariaSobres?.lastClaimAt || 0);
+    return (Number.isFinite(t) && t > 0) ? t : 0;
+}
+
+/** El cooldown diario usa el claim más reciente (servidor > caché antigua). */
+function fusionarRecompensasSesionTrasUpdate(base, pendiente, servidor) {
+    const merged = {
+        ...(base?.recompensas && typeof base.recompensas === 'object' ? base.recompensas : {}),
+        ...(servidor?.recompensas && typeof servidor.recompensas === 'object' ? servidor.recompensas : {}),
+        ...(pendiente?.recompensas && typeof pendiente.recompensas === 'object' ? pendiente.recompensas : {})
+    };
+    const maxClaim = Math.max(
+        timestampRecompensaDiariaDe(base),
+        timestampRecompensaDiariaDe(pendiente),
+        timestampRecompensaDiariaDe(servidor)
+    );
+    if (maxClaim > 0) {
+        merged.diariaSobres = {
+            ...(merged.diariaSobres && typeof merged.diariaSobres === 'object' ? merged.diariaSobres : {}),
+            lastClaimAt: maxClaim
+        };
+    }
+    return Object.keys(merged).length > 0 ? merged : undefined;
+}
+
+function elegirTiendaTrasUpdate(base, pendiente, servidor) {
+    const b = base?.tienda;
+    const p = pendiente?.tienda;
+    const s = servidor?.tienda;
+    const pActiva = p && typeof p === 'object' && Object.keys(p).length > 0;
+    const sActiva = s && typeof s === 'object';
+    if (!pActiva && sActiva) {
+        return s;
+    }
+    if (pActiva && !sActiva) {
+        return p;
+    }
+    if (!pActiva && !sActiva) {
+        return b;
+    }
+    const tsP = Number(pendiente?.syncUpdatedAt) || 0;
+    const tsS = Number(servidor?.syncUpdatedAt) || 0;
+    const tsB = Number(base?.syncUpdatedAt) || 0;
+    if (tsS >= tsP && tsS >= tsB) {
+        return s;
+    }
+    if (tsP >= tsS && tsP >= tsB) {
+        return p;
+    }
+    return s || p || b;
+}
+
+/** Prioriza el snapshot con `syncUpdatedAt` más reciente (compras, recompensas, etc.). */
+function elegirPuntosTrasUpdate(base, pendiente, servidor) {
+    const candidatos = [
+        { pts: Number(base?.puntos), ts: Number(base?.syncUpdatedAt) || 0 },
+        { pts: Number(pendiente?.puntos), ts: Number(pendiente?.syncUpdatedAt) || 0 },
+        { pts: Number(servidor?.puntos), ts: Number(servidor?.syncUpdatedAt) || 0 }
+    ].filter((c) => Number.isFinite(c.pts));
+    if (candidatos.length === 0) {
+        return 0;
+    }
+    candidatos.sort((a, b) => b.ts - a.ts);
+    return candidatos[0].pts;
+}
+
 function fusionarUsuarioSesionTrasUpdate(base, pendiente, servidor) {
     const b = base && typeof base === 'object' ? base : {};
     const p = pendiente && typeof pendiente === 'object' ? pendiente : {};
@@ -1758,14 +2014,7 @@ function fusionarUsuarioSesionTrasUpdate(base, pendiente, servidor) {
     const avatarServidor = String(s.avatar || '').trim();
     const avatarPendiente = String(p.avatar || '').trim();
     const avatarBase = String(b.avatar || '').trim();
-    const puntosServidor = Number(s.puntos);
-    const puntosPendiente = Number(p.puntos);
-    const puntosBase = Number(b.puntos);
-    const puntosFinal = Math.max(
-        Number.isFinite(puntosBase) ? puntosBase : 0,
-        Number.isFinite(puntosServidor) ? puntosServidor : 0,
-        Number.isFinite(puntosPendiente) ? puntosPendiente : 0
-    );
+    const puntosFinal = elegirPuntosTrasUpdate(b, p, s);
 
     return {
         ...b,
@@ -1774,9 +2023,7 @@ function fusionarUsuarioSesionTrasUpdate(base, pendiente, servidor) {
         nickname: nickServidor || nickPendiente || nickBase || b.nickname,
         avatar: avatarServidor || avatarPendiente || avatarBase || b.avatar,
         puntos: puntosFinal,
-        preferencias: (s.preferencias && typeof s.preferencias === 'object')
-            ? { ...(b.preferencias && typeof b.preferencias === 'object' ? b.preferencias : {}), ...s.preferencias, ...(p.preferencias && typeof p.preferencias === 'object' ? p.preferencias : {}) }
-            : ((p.preferencias && typeof p.preferencias === 'object') ? p.preferencias : b.preferencias),
+        preferencias: fusionarPreferenciasUsuario(b, p, s),
         cartas: elegirCartasTrasUpdate(b.cartas, p.cartas, s.cartas),
         mazos: Array.isArray(p.mazos) && p.mazos.length > 0
             ? p.mazos
@@ -1785,40 +2032,53 @@ function fusionarUsuarioSesionTrasUpdate(base, pendiente, servidor) {
             ? p.skinsObtenidos
             : (Array.isArray(s.skinsObtenidos) ? s.skinsObtenidos : b.skinsObtenidos),
         objetos: { ...(b.objetos || {}), ...(s.objetos || {}), ...(p.objetos || {}) },
-        recompensas: { ...(b.recompensas || {}), ...(s.recompensas || {}), ...(p.recompensas || {}) },
+        recompensas: fusionarRecompensasSesionTrasUpdate(b, p, s),
         misiones: fusionarMisionesSesionTrasUpdate(b.misiones, p.misiones, s.misiones),
-        tienda: (p.tienda && typeof p.tienda === 'object')
-            ? p.tienda
-            : ((s.tienda && typeof s.tienda === 'object') ? s.tienda : b.tienda),
+        tienda: elegirTiendaTrasUpdate(b, p, s),
         syncToken: s.syncToken || p.syncToken || b.syncToken,
-        syncUpdatedAt: s.syncUpdatedAt || p.syncUpdatedAt || b.syncUpdatedAt
+        syncUpdatedAt: Math.max(
+            Number(s.syncUpdatedAt) || 0,
+            Number(p.syncUpdatedAt) || 0,
+            Number(b.syncUpdatedAt) || 0
+        ) || (s.syncUpdatedAt || p.syncUpdatedAt || b.syncUpdatedAt)
     };
 }
 
+let _promesaRefrescoSesionServidor = null;
+
 async function refrescarUsuarioSesionDesdeServidor() {
-    const email = String(localStorage.getItem('email') || '').trim();
-    if (!email) {
-        return null;
+    if (_promesaRefrescoSesionServidor) {
+        return _promesaRefrescoSesionServidor;
     }
-    try {
-        const response = await fetch('/get-user', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email })
-        });
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok || !data?.usuario) {
+    _promesaRefrescoSesionServidor = (async () => {
+        const email = String(localStorage.getItem('email') || '').trim();
+        if (!email) {
             return null;
         }
-        const local = leerUsuarioSesionSeguro() || {};
-        const fusionado = fusionarUsuarioSesionTrasUpdate(local, local, data.usuario);
-        localStorage.setItem('usuario', JSON.stringify(fusionado));
-        window.dispatchEvent(new Event('dc:usuario-actualizado'));
-        return fusionado;
-    } catch (error) {
-        console.warn('[sesión] No se pudo refrescar usuario desde servidor:', error);
-        return null;
-    }
+        try {
+            const response = await fetch('/get-user', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email })
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok || !data?.usuario) {
+                return null;
+            }
+            const local = leerUsuarioSesionSeguro() || {};
+            const fusionado = fusionarUsuarioSesionTrasUpdate(local, {}, data.usuario);
+            aplicarRespaldoClaimLocalUsuario(fusionado);
+            localStorage.setItem('usuario', JSON.stringify(fusionado));
+            window.dispatchEvent(new Event('dc:usuario-actualizado'));
+            return fusionado;
+        } catch (error) {
+            console.warn('[sesión] No se pudo refrescar usuario desde servidor:', error);
+            return null;
+        } finally {
+            _promesaRefrescoSesionServidor = null;
+        }
+    })();
+    return _promesaRefrescoSesionServidor;
 }
 
 function aplicarSyncTokenDesdeLocalStorage(usuario) {
@@ -1874,6 +2134,10 @@ async function actualizarUsuarioConSyncFirebase(usuario, email, opciones = {}) {
             return data;
         }
 
+        if (response.status === 401 && data?.codigo === 'SESSION_REPLACED') {
+            throw new Error(data?.mensaje || 'Sesión cerrada en otro dispositivo.');
+        }
+
         if (response.status === 409 && data?.usuario) {
             const baseLs = leerUsuarioSesionSeguro() || {};
             const fusionado = fusionarUsuarioSesionTrasUpdate(baseLs, usuario, data.usuario);
@@ -1897,6 +2161,83 @@ window.fusionarUsuarioSesionTrasUpdate = fusionarUsuarioSesionTrasUpdate;
 window.actualizarUsuarioConSyncFirebase = actualizarUsuarioConSyncFirebase;
 window.aplicarSyncTokenDesdeLocalStorage = aplicarSyncTokenDesdeLocalStorage;
 window.refrescarUsuarioSesionDesdeServidor = refrescarUsuarioSesionDesdeServidor;
+window.obtenerClaveParentCartaColeccion = obtenerClaveParentCartaColeccion;
+window.calcularProgresoColeccionDesdeCatalogo = calcularProgresoColeccionDesdeCatalogo;
+window.DCCatalogoCartas = {
+    cargarFilas: cargarFilasCatalogoCartasCompartido,
+    obtenerFilas: cargarFilasCatalogoCartasCompartido,
+    async obtenerMapaPorNombre() {
+        await cargarFilasCatalogoCartasCompartido();
+        return _mapaCatalogoPorNombreCache;
+    },
+    async obtenerMapaSalud() {
+        await cargarFilasCatalogoCartasCompartido();
+        return _mapaSaludCatalogoCache;
+    }
+};
+window.aplicarRespaldoClaimLocalUsuario = aplicarRespaldoClaimLocalUsuario;
+
+const DC_SYNC_REFRESH_DEBOUNCE_MS = 1200;
+let _dcSyncRefreshTimer = null;
+let _dcSyncRefreshEnCurso = false;
+
+function debeOmitirRefrescoSesionPorVistaActiva() {
+    const ruta = String(window.location.pathname || '').toLowerCase();
+    return /partida|tablero/i.test(ruta);
+}
+
+async function refrescarSesionDesdeServidorSiAplica() {
+    if (debeOmitirRefrescoSesionPorVistaActiva() || !localStorage.getItem('email')) {
+        return null;
+    }
+    if (_dcSyncRefreshEnCurso) {
+        return null;
+    }
+    _dcSyncRefreshEnCurso = true;
+    try {
+        if (typeof window.DCSesionUnica?.validarSesionActivaEnServidor === 'function') {
+            const sesionOk = await window.DCSesionUnica.validarSesionActivaEnServidor();
+            if (!sesionOk) {
+                return null;
+            }
+        }
+        return await refrescarUsuarioSesionDesdeServidor();
+    } finally {
+        _dcSyncRefreshEnCurso = false;
+    }
+}
+
+function programarRefrescoSesionDesdeServidor() {
+    if (debeOmitirRefrescoSesionPorVistaActiva() || !localStorage.getItem('email')) {
+        return;
+    }
+    clearTimeout(_dcSyncRefreshTimer);
+    _dcSyncRefreshTimer = setTimeout(() => {
+        void refrescarSesionDesdeServidorSiAplica();
+    }, DC_SYNC_REFRESH_DEBOUNCE_MS);
+}
+
+function iniciarSincronizacionSesionMultiCliente() {
+    window.addEventListener('storage', (evento) => {
+        if (evento.key !== 'usuario' || !evento.newValue) {
+            return;
+        }
+        window.dispatchEvent(new Event('dc:usuario-actualizado'));
+    });
+    window.addEventListener('focus', () => {
+        programarRefrescoSesionDesdeServidor();
+        renderTimerRecompensaDiariaMenu();
+    });
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+            programarRefrescoSesionDesdeServidor();
+            renderTimerRecompensaDiariaMenu();
+        }
+    });
+}
+
+window.programarRefrescoSesionDesdeServidor = programarRefrescoSesionDesdeServidor;
+window.refrescarSesionDesdeServidorSiAplica = refrescarSesionDesdeServidorSiAplica;
 
 function normalizarObjetosConSobresGlobal(usuario) {
     if (!usuario || typeof usuario !== 'object') return;
@@ -1990,27 +2331,35 @@ function yaReclamoRecompensaDiariaHoy(usuario) {
 }
 
 function obtenerTimestampUltimaRecompensaDiaria(usuario) {
-    const fromUser = Number(usuario?.recompensas?.diariaSobres?.lastClaimAt || 0);
+    const fromUser = timestampRecompensaDiariaDe(usuario);
     const fromLs = Number(localStorage.getItem(DC_DIARIA_LAST_CLAIM_LS_KEY) || 0);
     const v = (t) => (Number.isFinite(t) && t > 0 ? t : 0);
     return Math.max(v(fromUser), v(fromLs));
 }
 
-/** Fusiona en memoria el respaldo local si Firebase/`usuario` llegaron sin recompensa diaria (p. ej. tras GET /get-user). */
+/**
+ * Alinea `recompensas.diariaSobres` y el respaldo LS con el claim más reciente
+ * (p. ej. tras GET /get-user o claim en otra pestaña).
+ */
 function aplicarRespaldoClaimLocalUsuario(usuario) {
     if (!usuario || typeof usuario !== 'object') {
         return usuario;
     }
     const claimLs = Number(localStorage.getItem(DC_DIARIA_LAST_CLAIM_LS_KEY) || 0);
-    if (!(claimLs > 0)) {
+    const desdeUsuario = timestampRecompensaDiariaDe(usuario);
+    const maxTs = Math.max(
+        Number.isFinite(desdeUsuario) && desdeUsuario > 0 ? desdeUsuario : 0,
+        Number.isFinite(claimLs) && claimLs > 0 ? claimLs : 0
+    );
+    if (!(maxTs > 0)) {
         return usuario;
     }
-    const prev = Number(usuario?.recompensas?.diariaSobres?.lastClaimAt || 0);
     usuario.recompensas = (usuario.recompensas && typeof usuario.recompensas === 'object') ? usuario.recompensas : {};
     usuario.recompensas.diariaSobres = {
         ...(usuario.recompensas.diariaSobres || {}),
-        lastClaimAt: Math.max(prev, claimLs)
+        lastClaimAt: maxTs
     };
+    localStorage.setItem(DC_DIARIA_LAST_CLAIM_LS_KEY, String(maxTs));
     return usuario;
 }
 
@@ -2050,7 +2399,7 @@ function renderTimerRecompensaDiariaMenu() {
         wrapEl.classList.add('ready');
         return;
     }
-    tiempoEl.textContent = `Reinicio a las 00:00 en: ${formatearHMSGlobal(estado.restanteMs)}`;
+    tiempoEl.textContent = `Próxima recompensa en:\n${formatearHMSGlobal(estado.restanteMs)}`;
     barEl.style.width = `${estado.progreso}%`;
     wrapEl.classList.remove('ready');
 }
@@ -2303,6 +2652,319 @@ function iniciarChequeoRecompensaDiariaGlobal() {
     }, RECOMPENSA_DIARIA_CHECK_INTERVAL_MS);
 }
 
+const DC_MENU_PROFILE_SNAPSHOT_KEY = 'dc_menu_profile_snapshot_v1';
+let _menuLateralEstructuraLista = false;
+
+function obtenerHtmlPlantillaPerfilMenu() {
+    return `
+            <img id="menu-user-avatar" class="menu-user-avatar" alt="Avatar">
+            <div id="menu-user-name" class="menu-user-name"></div>
+            <div id="menu-group-companion" class="menu-group-companion" style="display:none;" aria-label="Compañero de grupo">
+                <img id="menu-group-avatar" class="menu-group-avatar" alt="Compañero">
+                <span id="menu-group-name" class="menu-group-name"></span>
+            </div>
+            <button type="button" id="menu-group-trade-btn" class="btn btn-menu menu-group-trade-btn" style="display:none;" title="Intercambiar cartas con tu compañero">Intercambiar</button>
+            <button id="menu-group-leave-btn" class="btn btn-menu menu-group-leave-btn" type="button" style="display:none;">
+                <svg class="menu-group-leave-icon" viewBox="0 0 600 600" aria-hidden="true" focusable="false">
+                    <path d="M130 0C58.672245 0 0 58.672245 0 130V470C0 541.32776 58.672245 600 130 600H301.57812C367.83331 600 423.13643 549.36696 430.67188 485H349.43555C343.32179 505.66026 324.7036 520 301.57812 520H130C101.60826 520 80 498.39174 80 470V130C80 101.60826 101.60826 80 130 80H301.57812C324.7036 80 343.32179 94.339739 349.43555 115H430.67188C423.13642 50.633038 367.83331 0 301.57812 0H130Z"></path>
+                    <path d="M476.86328 179.99911A40 40 0 0 0 448.57812 191.71395A40 40 0 0 0 448.57812 248.28427L460.29297 259.99911H163.72656A40 40 0 0 0 123.72656 299.99911A40 40 0 0 0 163.72656 339.99911H460.29297L448.57812 351.71395A40 40 0 0 0 448.57812 408.28427A40 40 0 0 0 505.14844 408.28427L577.93945 335.49325A40 40 0 0 0 600 299.99911A40 40 0 0 0 577.5293 264.09481L505.14844 191.71395A40 40 0 0 0 476.86328 179.99911Z"></path>
+                </svg>
+                <span class="menu-group-leave-text">Dejar grupo</span>
+            </button>
+            <div id="menu-user-stats" class="menu-user-stats">
+                <div class="menu-user-stat-row" id="menu-user-puntos"></div>
+                <div class="menu-user-stat-row menu-user-objetos-mejora-line" id="menu-user-objetos-mejora-line"></div>
+            </div>
+            <div id="menu-recompensa-diaria" class="menu-recompensa-diaria">
+                <div id="menu-recompensa-diaria-tiempo" class="menu-recompensa-diaria-tiempo">Siguiente recompensa en: 0s</div>
+                <div class="menu-recompensa-diaria-progress">
+                    <div id="menu-recompensa-diaria-bar" class="menu-recompensa-diaria-progress-fill"></div>
+                </div>
+            </div>
+        `;
+}
+
+function limpiarEstadoEnlacePerfilModalEnPerfil(perfil) {
+    const avatar = perfil?.querySelector?.('#menu-user-avatar');
+    if (!avatar) {
+        return;
+    }
+    delete avatar.dataset.perfilModalBound;
+    avatar.classList.remove('perfil-avatar-btn');
+    avatar.removeAttribute('role');
+    avatar.removeAttribute('tabindex');
+    avatar.removeAttribute('aria-label');
+    avatar.removeAttribute('title');
+}
+
+function guardarSnapshotPerfilMenu(perfil) {
+    if (!perfil) {
+        return;
+    }
+    try {
+        const clon = perfil.cloneNode(true);
+        limpiarEstadoEnlacePerfilModalEnPerfil(clon);
+        sessionStorage.setItem(DC_MENU_PROFILE_SNAPSHOT_KEY, clon.outerHTML);
+    } catch (_err) {
+        /* ignore */
+    }
+}
+
+function restaurarPerfilMenuDesdeSnapshot(menu) {
+    try {
+        const html = sessionStorage.getItem(DC_MENU_PROFILE_SNAPSHOT_KEY);
+        if (!html) {
+            return null;
+        }
+        const temp = document.createElement('div');
+        temp.innerHTML = html.trim();
+        const perfil = temp.querySelector('#menu-user-profile') || temp.firstElementChild;
+        if (!perfil || perfil.id !== 'menu-user-profile') {
+            return null;
+        }
+        menu.insertBefore(perfil, menu.firstChild);
+        limpiarEstadoEnlacePerfilModalEnPerfil(perfil);
+        return perfil;
+    } catch (_err) {
+        return null;
+    }
+}
+
+function ordenarEnlacesMenuLateral(menu) {
+    const linkCentro = menu.querySelector('a[href="vistaJuego.html"]');
+    const linkDesafios = menu.querySelector('a[href="desafios.html"]');
+    const linkAsaltos = menu.querySelector('a[href="asaltos.html"]');
+    if (linkCentro) {
+        if (linkCentro.textContent !== 'Centro de Operaciones') {
+            linkCentro.textContent = 'Centro de Operaciones';
+        }
+    }
+    if (!linkCentro || !linkDesafios) {
+        return;
+    }
+    if (linkAsaltos && linkAsaltos.previousElementSibling !== linkCentro) {
+        menu.insertBefore(linkAsaltos, linkCentro.nextElementSibling);
+    }
+    if (linkAsaltos) {
+        if (linkDesafios.previousElementSibling !== linkAsaltos) {
+            menu.insertBefore(linkDesafios, linkAsaltos.nextElementSibling);
+        }
+    } else if (linkDesafios.previousElementSibling !== linkCentro) {
+        menu.insertBefore(linkDesafios, linkCentro.nextElementSibling);
+    }
+}
+
+function asegurarFilasStatsMenu(perfil) {
+    const statsWrap = perfil.querySelector('#menu-user-stats');
+    if (!statsWrap) {
+        return;
+    }
+    if (!statsWrap.querySelector('#menu-user-puntos')) {
+        statsWrap.innerHTML = `
+            <div class="menu-user-stat-row" id="menu-user-puntos"></div>
+            <div class="menu-user-stat-row menu-user-objetos-mejora-line" id="menu-user-objetos-mejora-line"></div>
+        `;
+    }
+}
+
+function asegurarEnlaceMultijugadorMenu(menu) {
+    const linkDesafios = menu.querySelector('a[href="desafios.html"]');
+    let linkMultijugador = menu.querySelector('#menu-link-multijugador');
+    if (!linkMultijugador) {
+        linkMultijugador = document.createElement('a');
+        linkMultijugador.id = 'menu-link-multijugador';
+        linkMultijugador.href = 'multijugador.html';
+        linkMultijugador.className = 'btn btn-menu btn-menu-disabled';
+        linkMultijugador.textContent = 'Multijugador';
+        if (linkDesafios?.nextElementSibling) {
+            menu.insertBefore(linkMultijugador, linkDesafios.nextElementSibling);
+        } else {
+            menu.appendChild(linkMultijugador);
+        }
+    }
+    return linkMultijugador;
+}
+
+function asegurarVersionLabelMenu(menu) {
+    const versionLabelTexto = 'Versión: 1.2.7';
+    let versionLabel = menu.querySelector('#menu-version-label');
+    if (!versionLabel) {
+        versionLabel = document.createElement('div');
+        versionLabel.id = 'menu-version-label';
+        versionLabel.className = 'menu-version-label';
+    }
+    versionLabel.textContent = versionLabelTexto;
+    const botonLogout = menu.querySelector('.btn-logout');
+    if (botonLogout && versionLabel.parentElement !== menu) {
+        botonLogout.insertAdjacentElement('afterend', versionLabel);
+    } else if (!versionLabel.parentElement) {
+        menu.appendChild(versionLabel);
+    }
+}
+
+function asegurarEstructuraMenuLateral() {
+    const menu = document.querySelector('.menu-container');
+    if (!menu) {
+        return null;
+    }
+
+    if (!_menuLateralEstructuraLista) {
+        ordenarEnlacesMenuLateral(menu);
+    }
+
+    let perfil = document.getElementById('menu-user-profile');
+    if (!perfil) {
+        perfil = restaurarPerfilMenuDesdeSnapshot(menu);
+    }
+    if (!perfil) {
+        perfil = document.createElement('div');
+        perfil.id = 'menu-user-profile';
+        perfil.className = 'menu-user-profile';
+        perfil.innerHTML = obtenerHtmlPlantillaPerfilMenu();
+        menu.insertBefore(perfil, menu.firstChild);
+    }
+
+    asegurarFilasStatsMenu(perfil);
+    asegurarEstructuraGrupoMenu(perfil);
+    asegurarEnlaceMultijugadorMenu(menu);
+    asegurarVersionLabelMenu(menu);
+    guardarSnapshotPerfilMenu(perfil);
+    _menuLateralEstructuraLista = true;
+    menu.classList.add('dc-menu-listo');
+    return menu;
+}
+
+function actualizarDatosMenuLateral() {
+    const menu = asegurarEstructuraMenuLateral();
+    if (!menu) {
+        return;
+    }
+
+    const perfil = document.getElementById('menu-user-profile');
+    if (!perfil) {
+        return;
+    }
+
+    const avatar = menu.querySelector('#menu-user-avatar');
+    const nombre = menu.querySelector('#menu-user-name');
+    const puntosEl = menu.querySelector('#menu-user-puntos');
+    const objetosMejoraLineEl = menu.querySelector('#menu-user-objetos-mejora-line');
+    const grupoCompanion = menu.querySelector('#menu-group-companion');
+    const grupoAvatar = menu.querySelector('#menu-group-avatar');
+    const grupoName = menu.querySelector('#menu-group-name');
+    const grupoTradeBtn = menu.querySelector('#menu-group-trade-btn');
+    const grupoLeaveBtn = menu.querySelector('#menu-group-leave-btn');
+    const resumen = obtenerResumenInventarioSesion();
+    const grupoEstado = obtenerEstadoGrupoSesion();
+
+    const avatarSrc = obtenerAvatarSesion();
+    if (avatar && avatar.src !== avatarSrc) {
+        avatar.src = avatarSrc;
+    }
+    enlazarAvatarPerfilMenu(avatar);
+
+    const nombreVisible = obtenerNombreVisibleSesion();
+    if (nombre && nombre.textContent !== nombreVisible) {
+        nombre.textContent = nombreVisible;
+    }
+
+    if (puntosEl) {
+        const puntosHtml = construirFilaStatMenu({
+            icono: '/resources/icons/moneda.png',
+            alt: 'Puntos',
+            valor: resumen.puntos,
+            titulo: 'Puntos'
+        });
+        if (puntosEl.innerHTML !== puntosHtml) {
+            puntosEl.innerHTML = puntosHtml;
+        }
+    }
+    if (objetosMejoraLineEl) {
+        const objetosHtml = construirLineaObjetosMejoraMenu(resumen);
+        if (objetosMejoraLineEl.innerHTML !== objetosHtml) {
+            objetosMejoraLineEl.innerHTML = objetosHtml;
+        }
+    }
+
+    if (grupoCompanion && grupoAvatar && grupoName) {
+        const companion = grupoEstado?.companero;
+        const mostrarCompanion = Boolean(grupoEstado?.enGrupo && companion?.email);
+        const displayCompanion = mostrarCompanion ? 'flex' : 'none';
+        if (grupoCompanion.style.display !== displayCompanion) {
+            grupoCompanion.style.display = displayCompanion;
+        }
+        if (grupoTradeBtn) {
+            const displayTrade = mostrarCompanion ? 'inline-flex' : 'none';
+            if (grupoTradeBtn.style.display !== displayTrade) {
+                grupoTradeBtn.style.display = displayTrade;
+            }
+            grupoTradeBtn.onclick = mostrarCompanion
+                ? () => {
+                    if (typeof window.DCTradeGrupo?.solicitarIntercambio === 'function') {
+                        window.DCTradeGrupo.solicitarIntercambio();
+                    }
+                }
+                : null;
+        }
+        if (mostrarCompanion) {
+            const srcCompanion = String(companion?.avatar || '').trim() || 'https://i.ibb.co/QJvLStm/zzz-Carta-Back.png';
+            if (grupoAvatar.src !== srcCompanion) {
+                grupoAvatar.src = srcCompanion;
+            }
+            const nombreCompanion = companion?.nombre || companion?.email || 'Compañero';
+            if (grupoName.textContent !== nombreCompanion) {
+                grupoName.textContent = nombreCompanion;
+            }
+        }
+    }
+
+    if (grupoLeaveBtn) {
+        const enGrupo = Boolean(grupoEstado?.enGrupo);
+        const displayLeave = enGrupo ? 'inline-flex' : 'none';
+        if (grupoLeaveBtn.style.display !== displayLeave) {
+            grupoLeaveBtn.style.display = displayLeave;
+        }
+        if (!grupoLeaveBtn.dataset.dcLeaveBound) {
+            grupoLeaveBtn.dataset.dcLeaveBound = '1';
+            grupoLeaveBtn.onclick = () => {
+                if (typeof window.confirmarAbandonoGrupo === 'function') {
+                    window.confirmarAbandonoGrupo().then((confirmado) => {
+                        if (confirmado && typeof window.abandonarGrupoActual === 'function') {
+                            window.abandonarGrupoActual();
+                        }
+                    });
+                    return;
+                }
+                if (typeof window.abandonarGrupoActual === 'function') {
+                    window.abandonarGrupoActual();
+                }
+            };
+        }
+    }
+
+    const linkMultijugador = menu.querySelector('#menu-link-multijugador');
+    if (linkMultijugador) {
+        const multijugadorHabilitado = Boolean(grupoEstado?.enGrupo && grupoEstado?.puedeMultijugador);
+        linkMultijugador.classList.toggle('btn-menu-disabled', !multijugadorHabilitado);
+        linkMultijugador.setAttribute('aria-disabled', multijugadorHabilitado ? 'false' : 'true');
+        linkMultijugador.tabIndex = multijugadorHabilitado ? 0 : -1;
+        linkMultijugador.title = multijugadorHabilitado
+            ? 'Acceder a sala multijugador'
+            : 'Debes estar en un grupo para habilitar Multijugador';
+        if (!linkMultijugador.dataset.dcMultijugadorBound) {
+            linkMultijugador.dataset.dcMultijugadorBound = '1';
+            linkMultijugador.addEventListener('click', (event) => {
+                if (linkMultijugador.classList.contains('btn-menu-disabled')) {
+                    bloquearNavegacionMultijugador(event);
+                }
+            });
+        }
+    }
+
+    renderTimerRecompensaDiariaMenu();
+    guardarSnapshotPerfilMenu(perfil);
+}
+
 function asegurarEstructuraGrupoMenu(perfil) {
     if (!perfil) {
         return;
@@ -2348,188 +3010,12 @@ function asegurarEstructuraGrupoMenu(perfil) {
 }
 
 function normalizarMenuLateral() {
-    const menu = document.querySelector('.menu-container');
-    if (!menu) {
-        return;
-    }
-
-    const linkCentro = menu.querySelector('a[href="vistaJuego.html"]');
-    const linkDesafios = menu.querySelector('a[href="desafios.html"]');
-    const linkAsaltos = menu.querySelector('a[href="asaltos.html"]');
-    if (linkCentro) {
-        linkCentro.textContent = 'Centro de Operaciones';
-    }
-    /**
-     * Orden fijo: Centro de Operaciones → Asaltos → Desafíos (resto sin cambiar la lógica de Multijugador).
-     */
-    if (linkCentro && linkDesafios) {
-        if (linkAsaltos && linkAsaltos.previousElementSibling !== linkCentro) {
-            menu.insertBefore(linkAsaltos, linkCentro.nextElementSibling);
-        }
-        if (linkAsaltos) {
-            if (linkDesafios.previousElementSibling !== linkAsaltos) {
-                menu.insertBefore(linkDesafios, linkAsaltos.nextElementSibling);
-            }
-        } else if (linkDesafios.previousElementSibling !== linkCentro) {
-            menu.insertBefore(linkDesafios, linkCentro.nextElementSibling);
-        }
-    }
-
-    let perfil = document.getElementById('menu-user-profile');
-    if (!perfil) {
-        perfil = document.createElement('div');
-        perfil.id = 'menu-user-profile';
-        perfil.className = 'menu-user-profile';
-        perfil.innerHTML = `
-            <img id="menu-user-avatar" class="menu-user-avatar" alt="Avatar">
-            <div id="menu-user-name" class="menu-user-name"></div>
-            <div id="menu-group-companion" class="menu-group-companion" style="display:none;" aria-label="Compañero de grupo">
-                <img id="menu-group-avatar" class="menu-group-avatar" alt="Compañero">
-                <span id="menu-group-name" class="menu-group-name"></span>
-            </div>
-            <button type="button" id="menu-group-trade-btn" class="btn btn-menu menu-group-trade-btn" style="display:none;" title="Intercambiar cartas con tu compañero">Intercambiar</button>
-            <button id="menu-group-leave-btn" class="btn btn-menu menu-group-leave-btn" type="button" style="display:none;">
-                <svg class="menu-group-leave-icon" viewBox="0 0 600 600" aria-hidden="true" focusable="false">
-                    <path d="M130 0C58.672245 0 0 58.672245 0 130V470C0 541.32776 58.672245 600 130 600H301.57812C367.83331 600 423.13643 549.36696 430.67188 485H349.43555C343.32179 505.66026 324.7036 520 301.57812 520H130C101.60826 520 80 498.39174 80 470V130C80 101.60826 101.60826 80 130 80H301.57812C324.7036 80 343.32179 94.339739 349.43555 115H430.67188C423.13642 50.633038 367.83331 0 301.57812 0H130Z"></path>
-                    <path d="M476.86328 179.99911A40 40 0 0 0 448.57812 191.71395A40 40 0 0 0 448.57812 248.28427L460.29297 259.99911H163.72656A40 40 0 0 0 123.72656 299.99911A40 40 0 0 0 163.72656 339.99911H460.29297L448.57812 351.71395A40 40 0 0 0 448.57812 408.28427A40 40 0 0 0 505.14844 408.28427L577.93945 335.49325A40 40 0 0 0 600 299.99911A40 40 0 0 0 577.5293 264.09481L505.14844 191.71395A40 40 0 0 0 476.86328 179.99911Z"></path>
-                </svg>
-                <span class="menu-group-leave-text">Dejar grupo</span>
-            </button>
-            <div id="menu-user-stats" class="menu-user-stats">
-                <div class="menu-user-stat-row" id="menu-user-puntos"></div>
-                <div class="menu-user-stat-row menu-user-objetos-mejora-line" id="menu-user-objetos-mejora-line"></div>
-            </div>
-            <div id="menu-recompensa-diaria" class="menu-recompensa-diaria">
-                <div id="menu-recompensa-diaria-tiempo" class="menu-recompensa-diaria-tiempo">Siguiente recompensa en: 0s</div>
-                <div class="menu-recompensa-diaria-progress">
-                    <div id="menu-recompensa-diaria-bar" class="menu-recompensa-diaria-progress-fill"></div>
-                </div>
-            </div>
-        `;
-        menu.insertBefore(perfil, menu.firstChild);
-    }
-
-    const statsWrap = perfil.querySelector('#menu-user-stats');
-    if (statsWrap) {
-        statsWrap.innerHTML = `
-            <div class="menu-user-stat-row" id="menu-user-puntos"></div>
-            <div class="menu-user-stat-row menu-user-objetos-mejora-line" id="menu-user-objetos-mejora-line"></div>
-        `;
-    }
-
-    const avatar = menu.querySelector('#menu-user-avatar');
-    const nombre = menu.querySelector('#menu-user-name');
-    const puntosEl = menu.querySelector('#menu-user-puntos');
-    const objetosMejoraLineEl = menu.querySelector('#menu-user-objetos-mejora-line');
-    asegurarEstructuraGrupoMenu(perfil);
-    const grupoCompanion = menu.querySelector('#menu-group-companion');
-    const grupoAvatar = menu.querySelector('#menu-group-avatar');
-    const grupoName = menu.querySelector('#menu-group-name');
-    const grupoTradeBtn = menu.querySelector('#menu-group-trade-btn');
-    const grupoLeaveBtn = menu.querySelector('#menu-group-leave-btn');
-    const resumen = obtenerResumenInventarioSesion();
-    const grupoEstado = obtenerEstadoGrupoSesion();
-    if (avatar) {
-        avatar.src = obtenerAvatarSesion();
-        if (typeof window.DCPerfilModal?.enlazarAvatarMenu === 'function') {
-            window.DCPerfilModal.enlazarAvatarMenu();
-        }
-    }
-    if (nombre) {
-        nombre.textContent = obtenerNombreVisibleSesion();
-    }
-    if (puntosEl) {
-        puntosEl.innerHTML = construirFilaStatMenu({
-            icono: '/resources/icons/moneda.png',
-            alt: 'Puntos',
-            valor: resumen.puntos,
-            titulo: 'Puntos'
-        });
-    }
-    if (objetosMejoraLineEl) {
-        objetosMejoraLineEl.innerHTML = construirLineaObjetosMejoraMenu(resumen);
-    }
-    if (grupoCompanion && grupoAvatar && grupoName) {
-        const companion = grupoEstado?.companero;
-        const mostrarCompanion = Boolean(grupoEstado?.enGrupo && companion?.email);
-        grupoCompanion.style.display = mostrarCompanion ? 'flex' : 'none';
-        if (grupoTradeBtn) {
-            grupoTradeBtn.style.display = mostrarCompanion ? 'inline-flex' : 'none';
-            grupoTradeBtn.onclick = mostrarCompanion
-                ? () => {
-                    if (typeof window.DCTradeGrupo?.solicitarIntercambio === 'function') {
-                        window.DCTradeGrupo.solicitarIntercambio();
-                    }
-                }
-                : null;
-        }
-        if (mostrarCompanion) {
-            grupoAvatar.src = String(companion?.avatar || '').trim() || 'https://i.ibb.co/QJvLStm/zzz-Carta-Back.png';
-            grupoName.textContent = companion?.nombre || companion?.email || 'Compañero';
-        }
-    }
-    if (grupoLeaveBtn) {
-        const enGrupo = Boolean(grupoEstado?.enGrupo);
-        grupoLeaveBtn.style.display = enGrupo ? 'inline-flex' : 'none';
-        grupoLeaveBtn.onclick = () => {
-            if (typeof window.confirmarAbandonoGrupo === 'function') {
-                window.confirmarAbandonoGrupo().then(confirmado => {
-                    if (confirmado && typeof window.abandonarGrupoActual === 'function') {
-                        window.abandonarGrupoActual();
-                    }
-                });
-                return;
-            }
-            if (typeof window.abandonarGrupoActual === 'function') {
-                window.abandonarGrupoActual();
-            }
-        };
-    }
-    renderTimerRecompensaDiariaMenu();
-
-    let linkMultijugador = menu.querySelector('#menu-link-multijugador');
-    if (!linkMultijugador) {
-        linkMultijugador = document.createElement('a');
-        linkMultijugador.id = 'menu-link-multijugador';
-        linkMultijugador.href = 'multijugador.html';
-        linkMultijugador.className = 'btn btn-menu btn-menu-disabled';
-        linkMultijugador.textContent = 'Multijugador';
-        if (linkDesafios?.nextElementSibling) {
-            menu.insertBefore(linkMultijugador, linkDesafios.nextElementSibling);
-        } else {
-            menu.appendChild(linkMultijugador);
-        }
-    }
-    const multijugadorHabilitado = Boolean(grupoEstado?.enGrupo && grupoEstado?.puedeMultijugador);
-    linkMultijugador.classList.toggle('btn-menu-disabled', !multijugadorHabilitado);
-    linkMultijugador.setAttribute('aria-disabled', multijugadorHabilitado ? 'false' : 'true');
-    linkMultijugador.tabIndex = multijugadorHabilitado ? 0 : -1;
-    if (!multijugadorHabilitado) {
-        linkMultijugador.title = 'Debes estar en un grupo para habilitar Multijugador';
-        linkMultijugador.addEventListener('click', bloquearNavegacionMultijugador);
-    } else {
-        linkMultijugador.title = 'Acceder a sala multijugador';
-        linkMultijugador.removeEventListener('click', bloquearNavegacionMultijugador);
-    }
-
-    const versionLabelTexto = 'Versión: 1.2.6';
-    let versionLabel = menu.querySelector('#menu-version-label');
-    if (!versionLabel) {
-        versionLabel = document.createElement('div');
-        versionLabel.id = 'menu-version-label';
-        versionLabel.className = 'menu-version-label';
-    }
-    versionLabel.textContent = versionLabelTexto;
-    const botonLogout = menu.querySelector('.btn-logout');
-    if (botonLogout) {
-        botonLogout.insertAdjacentElement('afterend', versionLabel);
-    } else if (!versionLabel.parentElement) {
-        menu.appendChild(versionLabel);
-    }
+    asegurarEstructuraMenuLateral();
+    actualizarDatosMenuLateral();
 }
 
 function actualizarPanelPerfilTiempoReal() {
-    normalizarMenuLateral();
+    actualizarDatosMenuLateral();
 }
 
 window.actualizarPanelPerfilTiempoReal = actualizarPanelPerfilTiempoReal;
@@ -2582,6 +3068,8 @@ function confirmarLogoutSistema() {
     localStorage.removeItem('usuario');
     localStorage.removeItem(DC_DIARIA_LAST_CLAIM_LS_KEY);
     localStorage.removeItem('email');
+    localStorage.removeItem('dc_active_session_id_v1');
+    sessionStorage.removeItem(DC_MENU_PROFILE_SNAPSHOT_KEY);
     localStorage.removeItem('grupoActual');
     localStorage.removeItem('grupoInvitacionEnCurso');
     localStorage.removeItem('jugandoPartida');
@@ -2595,8 +3083,61 @@ window.abrirModalLogout = abrirModalLogout;
 window.cerrarModalLogout = cerrarModalLogout;
 window.confirmarLogoutSistema = confirmarLogoutSistema;
 
+function reemplazarAvatarMenuSinListeners() {
+    const avatar = document.getElementById('menu-user-avatar');
+    if (!avatar || !avatar.parentNode) {
+        return null;
+    }
+    const nuevo = avatar.cloneNode(true);
+    delete nuevo.dataset.perfilModalPending;
+    delete nuevo.dataset.perfilModalBound;
+    avatar.parentNode.replaceChild(nuevo, avatar);
+    return nuevo;
+}
+
+function enlazarAvatarPerfilMenu(avatarEl) {
+    const avatar = avatarEl || document.getElementById('menu-user-avatar');
+    if (!avatar) {
+        return;
+    }
+    if (typeof window.DCPerfilModal?.enlazarAvatarMenu === 'function') {
+        window.DCPerfilModal.enlazarAvatarMenu();
+        return;
+    }
+    if (document.querySelector('script[data-dc-perfil-modal-js]')) {
+        return;
+    }
+    if (avatar.dataset.perfilModalPending === '1') {
+        return;
+    }
+    avatar.dataset.perfilModalPending = '1';
+    avatar.classList.add('perfil-avatar-btn');
+    avatar.setAttribute('role', 'button');
+    avatar.setAttribute('tabindex', '0');
+    avatar.setAttribute('aria-label', 'Abrir perfil del jugador');
+    avatar.title = 'Ver perfil';
+    const abrir = () => {
+        if (typeof window.DCPerfilModal?.abrir === 'function') {
+            void window.DCPerfilModal.abrir();
+            return;
+        }
+        cargarRecursosPerfilModal();
+    };
+    avatar.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        abrir();
+    });
+    avatar.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            abrir();
+        }
+    });
+}
+
 function cargarRecursosPerfilModal() {
-    if (document.querySelector('link[data-dc-perfil-modal-css]')) {
+    if (document.querySelector('script[data-dc-perfil-modal-js]')) {
         if (typeof window.DCPerfilModal?.init === 'function') {
             window.DCPerfilModal.init();
         }
@@ -2610,9 +3151,9 @@ function cargarRecursosPerfilModal() {
 
     const script = document.createElement('script');
     script.src = 'js/perfilModal.js';
-    script.defer = true;
     script.dataset.dcPerfilModalJs = '1';
     script.onload = () => {
+        reemplazarAvatarMenuSinListeners();
         if (typeof window.DCPerfilModal?.init === 'function') {
             window.DCPerfilModal.init();
         }
@@ -2623,40 +3164,54 @@ function cargarRecursosPerfilModal() {
     document.body.appendChild(script);
 }
 
-document.addEventListener('DOMContentLoaded', async () => {
+document.addEventListener('DOMContentLoaded', () => {
+    iniciarSincronizacionSesionMultiCliente();
+    asegurarEstructuraMenuLateral();
+    actualizarDatosMenuLateral();
+    if (typeof window.DCSesionUnica?.exigirSesionActivaLocal === 'function') {
+        if (!window.DCSesionUnica.exigirSesionActivaLocal()) {
+            return;
+        }
+    }
     aplicarColorPrincipalDesdeSesion();
-    normalizarMenuLateral();
-    cargarRecursosPerfilModal();
     asegurarModalLogout();
-    await migrarSkillsUsuarioDesdeCatalogo();
     iniciarTimerRecompensaDiariaMenu();
-    iniciarChequeoRecompensaDiariaGlobal();
-    void procesarRecompensaDiariaGlobal();
+    cargarRecursosPerfilModal();
+
+    void (async () => {
+        try {
+            if (typeof XLSX !== 'undefined' && typeof window.DCCatalogoCartas?.cargarFilas === 'function') {
+                void window.DCCatalogoCartas.cargarFilas().catch(() => {});
+            }
+            if (localStorage.getItem('email') && typeof window.refrescarUsuarioSesionDesdeServidor === 'function') {
+                await window.refrescarUsuarioSesionDesdeServidor();
+            }
+            actualizarDatosMenuLateral();
+            await migrarSkillsUsuarioDesdeCatalogo();
+            iniciarChequeoRecompensaDiariaGlobal();
+            void procesarRecompensaDiariaGlobal();
+        } catch (error) {
+            console.warn('[cartas] Inicialización en segundo plano:', error);
+        }
+    })();
 });
 
 window.addEventListener('dc:usuario-actualizado', () => {
     aplicarColorPrincipalDesdeSesion();
     actualizarPanelPerfilTiempoReal();
     renderTimerRecompensaDiariaMenu();
-    if (typeof window.DCPerfilModal?.enlazarAvatarMenu === 'function') {
-        window.DCPerfilModal.enlazarAvatarMenu();
-    }
+    enlazarAvatarPerfilMenu();
 });
 
 window.addEventListener('dc:grupo-actualizado', () => {
     actualizarPanelPerfilTiempoReal();
 });
 
-window.addEventListener('focus', () => {
-    renderTimerRecompensaDiariaMenu();
-});
-
-document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') {
-        renderTimerRecompensaDiariaMenu();
-    }
-});
-
 function bloquearNavegacionMultijugador(event) {
     event.preventDefault();
+}
+
+if (document.querySelector('.menu-container')) {
+    asegurarEstructuraMenuLateral();
+    actualizarDatosMenuLateral();
 }

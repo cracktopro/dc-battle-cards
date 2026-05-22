@@ -492,7 +492,7 @@
                 <div class="asaltos-recomp-garant-inner">
                     <div class="asaltos-recomp-garant-datos">
                         <div class="asaltos-recomp-fila-obj" title="Una carta aleatoria del pool del asalto">
-                            <img class="asaltos-recomp-obj-icon" src="resources/icons/cardback.png" alt="">
+                            <img class="asaltos-recomp-obj-icon" src="resources/icons/cardback_random.png" alt="">
                             <span class="asaltos-recomp-obj-txt">Carta aleatoria</span>
                         </div>
                         <div class="asaltos-recomp-meta">

@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.2.7
+
+- Etiqueta de versión del menú lateral: **`Versión: 1.2.7`** (`public/js/cartas.js`, `package.json`).
+- **Rendimiento de vistas**: carga progresiva en tienda, desafíos y mazos; caché compartido de `cartas.xlsx` (`DCCatalogoCartas`).
+- **Tienda global**: rotación alineada sin mostrar caché obsoleta; compras con monedas restan puntos correctamente (fix `Math.max` en servidor y fusión de sesión).
+- **Perfil y menú**: modal de perfil al clic en avatar; progreso de colección unificado por nombre parent (sin contar apariencias).
+- **Sesión única** (`public/js/sesionUnica.js`, `server.js`): una sesión activa por cuenta.
+- **Sincronización Firebase**: refresco multi-cliente, fusión de tienda/recompensas/cartas y mejora clásica.
+
 ## 1.2.6
 
 - Etiqueta de versión del menú lateral: **`Versión: 1.2.6`** (`public/js/cartas.js`, `package.json`).

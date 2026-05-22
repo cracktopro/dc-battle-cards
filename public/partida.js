@@ -920,9 +920,18 @@ function intentarInicializarSocketPvp() {
     const avatar = String(usuario?.avatar || '').trim();
 
     socketPvp.on('connect', () => {
-        socketPvp.emit('registrarUsuario', { email: emailRaw, nickname: nombreVisible, avatar });
+        const sessionId = String(localStorage.getItem('dc_active_session_id_v1') || '').trim();
+        socketPvp.emit('registrarUsuario', { email: emailRaw, nickname: nombreVisible, avatar, sessionId });
         socketPvp.emit('multiplayer:pvp:join', { sessionId: PVP_SESSION_ID });
         socketPvp.emit('multiplayer:pvp:estado:solicitar', { sessionId: PVP_SESSION_ID });
+    });
+
+    socketPvp.on('sesion:invalida', (payload) => {
+        if (typeof window.DCSesionUnica?.cerrarSesionPorReemplazo === 'function') {
+            window.DCSesionUnica.cerrarSesionPorReemplazo(payload?.mensaje);
+        } else {
+            window.location.replace('/login.html?sesion=cerrada');
+        }
     });
 
     socketPvp.on('multiplayer:pvp:turno', (payload = {}) => {

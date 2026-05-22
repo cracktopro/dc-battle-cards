@@ -538,12 +538,28 @@
             padding: 12px 8px 8px;
         }
 
-        .objeto-tienda-fragmento-imagen,
-        .objeto-tienda-mejora-catalogo-imagen {
+        .objeto-tienda-fragmento-imagen {
             width: auto;
             height: auto;
             max-width: min(300px, 94%);
             max-height: clamp(200px, 36vw, 300px);
+            object-fit: contain;
+            filter:
+                drop-shadow(0 12px 32px rgba(0, 0, 0, 0.5))
+                drop-shadow(0 0 16px rgba(var(--dc-accent-user-rgb, 0, 123, 255), 0.36));
+        }
+
+        /* Mejora, mejora especial, suprema y definitiva (fila superior objetos) */
+        .objeto-tienda-mejora-catalogo .objeto-tienda-mejora-catalogo-imagen-wrap {
+            min-height: clamp(120px, 20vh, 180px);
+            padding: 10px 8px 6px;
+        }
+
+        .objeto-tienda-mejora-catalogo .objeto-tienda-mejora-catalogo-imagen {
+            width: auto;
+            height: auto;
+            max-width: min(200px, 72%);
+            max-height: clamp(130px, 24vw, 200px);
             object-fit: contain;
             filter:
                 drop-shadow(0 12px 32px rgba(0, 0, 0, 0.5))
@@ -750,7 +766,8 @@
 <script src="cliente.js"></script>
 <script src="js/tradeGrupo.js"></script>
 <script src="js/escaladoStatsCarta.js"></script>
-<script src="js/cartas.js"></script>
+<script src="js/sesionUnica.js"></script>
+    <script src="js/cartas.js"></script>
     <script src="js/sobresCartas.js"></script>
     <script src="js/misionesDiarias.js"></script>
     <script src="tienda.js"></script>
