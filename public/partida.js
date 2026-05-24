@@ -70,6 +70,20 @@ const ES_MODO_ASALTO = !HAY_DESAFIO_ACTIVO_STORAGE && !ES_MODO_PVP
     && String(localStorage.getItem('partidaModo') || '').trim().toLowerCase() === 'asalto'
     && asaltoActivoPartida && typeof asaltoActivoPartida === 'object'
     && String(asaltoActivoPartida.tipo || '').trim().toLowerCase() === 'asalto';
+
+/** Modo Episodio: la partida fue lanzada por el motor de episodios (DCEpisodioEngine). */
+const EPISODIO_ACTIVO_STORAGE = (() => {
+    try {
+        const raw = localStorage.getItem('episodioActivo');
+        if (!raw || raw === 'null') return null;
+        const obj = JSON.parse(raw);
+        return (obj && obj.json_path) ? obj : null;
+    } catch (_e) { return null; }
+})();
+const ES_MODO_EPISODIO = !ES_MODO_PVP && !ES_MODO_ASALTO && !HAY_DESAFIO_ACTIVO_STORAGE
+    && EPISODIO_ACTIVO_STORAGE !== null
+    && String(EPISODIO_ACTIVO_STORAGE.estado || '') === 'combate';
+
 const EMAIL_SESION_ACTUAL = String(localStorage.getItem('email') || '').trim().toLowerCase();
 const ROL_PVP = String(localStorage.getItem('partidaPvpRol') || 'A').trim().toUpperCase() === 'B' ? 'B' : 'A';
 const PVP_DEBUG_UI = String(localStorage.getItem('pvpDebugUI') || 'false').trim().toLowerCase() === 'true';
@@ -1523,6 +1537,57 @@ async function enriquecerCartasConDatosCatalogo(cartas) {
 }
 
 /**
+ * Construye un mazo de episodio a partir de una lista de { Nombre, Nivel }.
+ * Usa el mismo patrón que asaltos: busca en catálogo, fusiona stats base y
+ * aplica escalarCartaSegunDificultad para que Poder/Salud sean correctos al nivel indicado.
+ */
+async function construirMazoEpisodioDesdeNombres(nombresConNivel, cartasCatalogo) {
+    const mapa = new Map();
+    (Array.isArray(cartasCatalogo) ? cartasCatalogo : []).forEach((c) => {
+        const cl = obtenerClaveCarta(c?.Nombre);
+        if (cl && !mapa.has(cl)) mapa.set(cl, c);
+    });
+
+    const salida = [];
+    for (const entrada of nombresConNivel) {
+        const nombreRef = String(entrada?.Nombre || '').trim();
+        const nivelObjetivo = Math.max(1, Math.min(DC_NIVEL_COMBATE_MAX, Number(entrada?.Nivel || 1)));
+        if (!nombreRef) continue;
+
+        let fila = null;
+        if (typeof window.DCSkinsCartas?.resolverFilaCatalogoConSkin === 'function') {
+            fila = await window.DCSkinsCartas.resolverFilaCatalogoConSkin(nombreRef, mapa);
+        } else {
+            fila = mapa.get(obtenerClaveCarta(nombreRef));
+        }
+
+        if (!fila) {
+            console.warn(`[Episodio] Carta "${nombreRef}" no encontrada en catálogo — omitida.`);
+            continue;
+        }
+
+        const stub = {
+            Nombre: String(fila.Nombre || nombreRef).trim(),
+            Nivel: 1,
+            Poder: 0,
+            Salud: 0,
+            SaludMax: 0,
+            faccion: fila.faccion || fila.Faccion || '',
+            Faccion: fila.Faccion || fila.faccion || '',
+            Afiliacion: fila.Afiliacion || fila.afiliacion || '',
+        };
+
+        let base = typeof window.fusionarCartaCompletaDesdeCatalogo === 'function'
+            ? window.fusionarCartaCompletaDesdeCatalogo(stub, fila)
+            : { ...fila, ...stub };
+
+        base = escalarCartaSegunDificultad(base, nivelObjetivo);
+        salida.push(base);
+    }
+    return salida;
+}
+
+/**
  * Mazo del rival en asalto: nombres del Excel (carta1…12) + nivel 6/7/8 según dificultad elegida en la vista Asaltos.
  */
 async function construirMazoOponenteDesdeAsaltoActivo(asalto) {
@@ -2309,6 +2374,28 @@ function calcularPuntosVictoria(dificultad) {
     return 100 + ((dificultad - 1) * 50);
 }
 
+/** Partida rápida clásica (vistaJuego → VS CPU): sin PvP, asalto, episodio ni desafío/evento activo. */
+function esPartidaRapidaVsBot() {
+    return !ES_MODO_PVP && !ES_MODO_ASALTO && !ES_MODO_EPISODIO && !estadoDesafio.activo;
+}
+
+/** Probabilidades de drop en partida rápida (VS BOT); más bajas que en asaltos. */
+const PARTIDA_RAPIDA_DROP_PROB = {
+    mejoraCarta: 0.10,
+    mejoraEspecial: 0.05,
+    mejoraSuprema: 0.02,
+    mejoraDefinitiva: 0.01,
+};
+
+function tirarMejorasAleatoriasPartidaRapida() {
+    return {
+        mejoraCarta: Math.random() < PARTIDA_RAPIDA_DROP_PROB.mejoraCarta ? 1 : 0,
+        mejoraEspecial: Math.random() < PARTIDA_RAPIDA_DROP_PROB.mejoraEspecial ? 1 : 0,
+        mejoraSuprema: Math.random() < PARTIDA_RAPIDA_DROP_PROB.mejoraSuprema ? 1 : 0,
+        mejoraDefinitiva: Math.random() < PARTIDA_RAPIDA_DROP_PROB.mejoraDefinitiva ? 1 : 0,
+    };
+}
+
 function escalarCartaSegunDificultad(carta, dificultad) {
     if (window.DCEscaladoStatsCarta?.escalarCartaDeltaDificultad) {
         return window.DCEscaladoStatsCarta.escalarCartaDeltaDificultad(carta, dificultad, {
@@ -2470,6 +2557,10 @@ async function otorgarRecompensasVictoria() {
         });
     }
 
+    const mejorasAleatorias = esPartidaRapidaVsBot()
+        ? tirarMejorasAleatoriasPartidaRapida()
+        : { mejoraCarta: 0, mejoraEspecial: 0, mejoraSuprema: 0, mejoraDefinitiva: 0 };
+
     usuario.cartas = Array.isArray(usuario.cartas) ? usuario.cartas : [];
     usuario.puntos = Number(usuario.puntos || 0) + puntosGanados;
     const snapshotPrevias = usuario.cartas.slice();
@@ -2479,6 +2570,17 @@ async function otorgarRecompensasVictoria() {
     let nuevasH = conteoMision.nuevasH;
     let nuevasV = conteoMision.nuevasV;
     usuario.cartas.push(...cartasPremio);
+
+    usuario.objetos = (usuario.objetos && typeof usuario.objetos === 'object')
+        ? usuario.objetos
+        : {};
+    if (mejorasAleatorias.mejoraCarta || mejorasAleatorias.mejoraEspecial
+        || mejorasAleatorias.mejoraSuprema || mejorasAleatorias.mejoraDefinitiva) {
+        usuario.objetos.mejoraCarta = Number(usuario.objetos.mejoraCarta || 0) + mejorasAleatorias.mejoraCarta;
+        usuario.objetos.mejoraEspecial = Number(usuario.objetos.mejoraEspecial || 0) + mejorasAleatorias.mejoraEspecial;
+        usuario.objetos.mejoraSuprema = Number(usuario.objetos.mejoraSuprema || 0) + mejorasAleatorias.mejoraSuprema;
+        usuario.objetos.mejoraDefinitiva = Number(usuario.objetos.mejoraDefinitiva || 0) + mejorasAleatorias.mejoraDefinitiva;
+    }
 
     if (typeof window.prepararUsuarioTrasRecompensaPartida === 'function') {
         window.prepararUsuarioTrasRecompensaPartida(usuario);
@@ -2498,7 +2600,8 @@ async function otorgarRecompensasVictoria() {
     return {
         dificultad,
         puntosGanados,
-        cartasGanadas: cartasPremio
+        cartasGanadas: cartasPremio,
+        mejorasAleatorias,
     };
 }
 
@@ -4583,6 +4686,16 @@ async function cargarCartasIniciales() {
             // No usar esMazoBotValido/generarMazoBot: un mazo de jugador no cumple reglas de bot
             // y se sustituía por cartas aleatorias del catálogo, rompiendo índices y tablero.
             mazoOponente = await enriquecerCartasConDatosCatalogo(mazoOponente);
+        } else if (ES_MODO_EPISODIO) {
+            // Episodio: construir ambos mazos desde catálogo + escalar al nivel definido en el JSON.
+            // Mismo patrón que asaltos (fusionar + escalarCartaSegunDificultad) para que Poder/Salud
+            // sean correctos. Sobrescribimos también mazoJugador que ya pasó por enriquecer arriba
+            // pero sin Poder base correcto (la carta stub solo tenía { Nombre, Nivel }).
+            const cartasCat = await obtenerCartasDisponibles();
+            const nombresJ = JSON.parse(localStorage.getItem('mazoJugadorBase') || '{"Cartas":[]}').Cartas || [];
+            const nombresB = JSON.parse(localStorage.getItem('mazoOponenteBase') || '{"Cartas":[]}').Cartas || [];
+            mazoJugador  = await construirMazoEpisodioDesdeNombres(nombresJ, cartasCat);
+            mazoOponente = await construirMazoEpisodioDesdeNombres(nombresB, cartasCat);
         } else {
             const dificultad = obtenerDificultadActual();
             const mazoBotGuardado = JSON.parse(localStorage.getItem('mazoOponente') || '{"Cartas":[]}').Cartas || [];
@@ -4717,6 +4830,7 @@ async function mostrarVentanaFinPartida(ganador) {
     const esEventoActivo = Boolean(estadoDesafio.activo && desafioActivo?.tipo === 'evento');
     const esPvp = ES_MODO_PVP;
     const esAsalto = ES_MODO_ASALTO;
+    const esEpisodio = ES_MODO_EPISODIO;
 
     tituloFinPartida.textContent = ganador === 'jugador' ? 'Has ganado' : 'Has perdido';
     mensajeFinPartida.textContent = ganador === 'jugador'
@@ -4731,7 +4845,9 @@ async function mostrarVentanaFinPartida(ganador) {
         ? 'Volver al multijugador'
         : (esAsalto
             ? 'Volver a Asaltos'
-            : (esEventoActivo ? 'Terminar Evento' : (estadoDesafio.activo ? 'Terminar Desafío' : 'Volver al menú')));
+            : (esEpisodio
+                ? (ganador === 'jugador' ? 'Continuar episodio' : 'Volver al episodio')
+                : (esEventoActivo ? 'Terminar Evento' : (estadoDesafio.activo ? 'Terminar Desafío' : 'Volver al menú'))));
 
     if (esPvp) {
         if (!pvpMisionOnlinePartidaRegistrada) {
@@ -4748,6 +4864,31 @@ async function mostrarVentanaFinPartida(ganador) {
         recompensasContainer.appendChild(notaPvp);
         return;
     }
+
+    // ── Modo Episodio ──────────────────────────────────────────────────────
+    if (esEpisodio) {
+        // Guardar resultado del combate en el estado del episodio
+        try {
+            const estadoEp = JSON.parse(localStorage.getItem('episodioActivo') || '{}');
+            estadoEp.combate_resultado = ganador === 'jugador' ? 'victoria' : 'derrota';
+            localStorage.setItem('episodioActivo', JSON.stringify(estadoEp));
+        } catch (_e) { /* noop */ }
+
+        const msgEp = document.createElement('p');
+        msgEp.classList.add('texto-recompensa-estado');
+        msgEp.textContent = ganador === 'jugador'
+            ? '¡Victoria! El episodio continúa. Pulsa "Continuar episodio" para seguir la historia.'
+            : 'Has sido derrotado. Vuelve al episodio para reintentar el combate.';
+        recompensasContainer.appendChild(msgEp);
+
+        if (ganador === 'jugador') {
+            botonReiniciar.style.display = 'none';
+        }
+        botonReiniciar.disabled = false;
+        botonVolverMenu.disabled = false;
+        return;
+    }
+    // ──────────────────────────────────────────────────────────────────────
 
     if (ganador !== 'jugador') {
         if (!esPvp && !estadoDesafio.activo && !esAsalto && window.DCMisiones?.track) {
@@ -4852,12 +4993,35 @@ async function mostrarVentanaFinPartida(ganador) {
                 });
                 recompensasContainer.appendChild(rejillaAsalto);
             }
-        } else {
+        } else if (esPartidaRapidaVsBot()) {
             const recompensa = await otorgarRecompensasVictoria();
             const resumen = document.createElement('p');
             resumen.classList.add('texto-recompensa-resumen');
             resumen.innerHTML = `Recompensas: ${formatoPuntosConMoneda(recompensa.puntosGanados)} y ${recompensa.cartasGanadas.length} cartas nuevas.`;
             recompensasContainer.appendChild(resumen);
+
+            const alea = recompensa.mejorasAleatorias || {};
+            const filaObjetos = document.createElement('div');
+            filaObjetos.style.display = 'flex';
+            filaObjetos.style.justifyContent = 'center';
+            filaObjetos.style.gap = '10px';
+            filaObjetos.style.flexWrap = 'wrap';
+            filaObjetos.style.marginBottom = '10px';
+            if (Number(alea.mejoraCarta || 0) > 0) {
+                filaObjetos.appendChild(crearEtiquetaObjetoRecompensa('mejoraCarta', alea.mejoraCarta));
+            }
+            if (Number(alea.mejoraEspecial || 0) > 0) {
+                filaObjetos.appendChild(crearEtiquetaObjetoRecompensa('mejoraEspecial', alea.mejoraEspecial));
+            }
+            if (Number(alea.mejoraSuprema || 0) > 0) {
+                filaObjetos.appendChild(crearEtiquetaObjetoRecompensa('mejoraSuprema', alea.mejoraSuprema));
+            }
+            if (Number(alea.mejoraDefinitiva || 0) > 0) {
+                filaObjetos.appendChild(crearEtiquetaObjetoRecompensa('mejoraDefinitiva', alea.mejoraDefinitiva));
+            }
+            if (filaObjetos.childElementCount > 0) {
+                recompensasContainer.appendChild(filaObjetos);
+            }
 
             const rejillaRecompensas = document.createElement('div');
             rejillaRecompensas.classList.add('recompensas-grid');
@@ -5620,6 +5784,7 @@ function limpiarEstadoPartidaEnCurso() {
     localStorage.removeItem('nombreOponente');
     localStorage.removeItem('avatarOponente');
     localStorage.removeItem('emailOponente');
+    // Nota: NO se elimina 'episodioActivo' aquí — el engine de episodios lo gestiona.
 }
 
 function abandonarVistaConLimpieza(destino = 'vistaJuego.html') {
@@ -5691,6 +5856,17 @@ function reiniciarPartida() {
     }
 
     localStorage.removeItem('partidaRecompensada');
+
+    // En modo episodio, restaurar el estado 'combate' para que se detecte al recargar
+    if (ES_MODO_EPISODIO) {
+        try {
+            const estadoEp = JSON.parse(localStorage.getItem('episodioActivo') || '{}');
+            estadoEp.combate_resultado = null;
+            estadoEp.estado = 'combate';
+            localStorage.setItem('episodioActivo', JSON.stringify(estadoEp));
+        } catch (_e) { /* noop */ }
+    }
+
     location.reload();
 }
 
@@ -5700,6 +5876,13 @@ function volverAlMenu() {
             window.limpiarEstadoPvpResiduoPartidaLocal();
         }
         window.location.href = 'multijugador.html';
+        return;
+    }
+    if (ES_MODO_EPISODIO) {
+        try { sessionStorage.removeItem('dc_tablero_fondo_url'); } catch (_e) { /* noop */ }
+        // episodioActivo.combate_resultado ya fue guardado en mostrarVentanaFinPartida
+        proteccionSalidaActiva = false;
+        window.location.href = 'episodios.html';
         return;
     }
     try {
@@ -5728,7 +5911,7 @@ function volverAlMenu() {
 document.addEventListener('DOMContentLoaded', () => {
     if (sessionStorage.getItem('dc_tablero_abandonado') === '1') {
         sessionStorage.removeItem('dc_tablero_abandonado');
-        window.location.replace('vistaJuego.html');
+        window.location.replace(ES_MODO_EPISODIO ? 'episodios.html' : 'vistaJuego.html');
         return;
     }
 

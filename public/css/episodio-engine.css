@@ -1,0 +1,603 @@
+/* ============================================================
+   Episodio Engine — UI estilo RPG Maker
+   ============================================================ */
+
+/* ── Overlay raíz ─────────────────────────────────────────── */
+.episodio-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 4000;
+    display: none;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: stretch;
+    background: #000;
+}
+
+/* ============================================================
+   CUTSCENE
+   ============================================================ */
+.episodio-cutscene {
+    position: relative;
+    flex: 1;
+    display: none;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+}
+
+/* Fondo de escena */
+.cutscene-bg {
+    position: absolute;
+    inset: 0;
+    background-color: #050814;
+    background-size: cover;
+    background-position: center center;
+    background-repeat: no-repeat;
+    z-index: 0;
+    transition: background-image 0.4s ease;
+}
+
+/* Vignette suave sobre el fondo */
+.cutscene-bg::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+        to bottom,
+        rgba(0,0,0,0.18) 0%,
+        rgba(0,0,0,0.05) 35%,
+        rgba(0,0,0,0.35) 68%,
+        rgba(0,0,0,0.72) 100%
+    );
+}
+
+/* ── Bustos ───────────────────────────────────────────────── */
+.cutscene-bustos-container {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+}
+
+.cutscene-busto {
+    position: absolute;
+    bottom: 160px;   /* sienta sobre la caja de diálogo */
+    width: clamp(160px, 24vw, 340px);
+    height: auto;
+    transform-origin: bottom center;
+    transition:
+        filter 0.3s ease,
+        transform 0.3s ease;
+    user-select: none;
+    pointer-events: none;
+}
+
+.cutscene-busto img {
+    display: block;
+    width: 100%;
+    height: auto;
+    object-fit: contain;
+    object-position: bottom center;
+}
+
+/* Personaje que habla: resplandor suave + escala levemente mayor */
+.cutscene-busto--hablando {
+    filter:
+        brightness(1.08)
+        saturate(1.1)
+        drop-shadow(0 0 18px rgba(var(--dc-accent-user-rgb), 0.7))
+        drop-shadow(0 0 36px rgba(var(--dc-accent-user-rgb), 0.35))
+        drop-shadow(0 10px 28px rgba(0, 0, 0, 0.6));
+    transform: scale(1.04) translateY(-6px);
+    z-index: 3;
+}
+
+/* Personajes en silencio: ligeramente oscurecidos, sin transparencia */
+.cutscene-busto--silencio {
+    filter:
+        brightness(0.72)
+        saturate(0.75)
+        drop-shadow(0 8px 20px rgba(0, 0, 0, 0.55));
+    transform: scale(0.97) translateY(0px);
+    z-index: 2;
+}
+
+/* ── Caja de diálogo ──────────────────────────────────────── */
+.cutscene-dialog-wrap {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 10;
+    padding: clamp(12px, 2vw, 20px) clamp(16px, 3vw, 36px);
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+.cutscene-name-box {
+    display: inline-flex;
+    align-self: flex-start;
+    padding: 5px 18px 5px 14px;
+    border-radius: 6px 6px 0 0;
+    background: linear-gradient(90deg, rgba(var(--dc-accent-user-rgb), 0.85), rgba(var(--dc-accent-user-rgb), 0.45));
+    border: 1px solid rgba(var(--dc-accent-user-rgb), 0.7);
+    border-bottom: none;
+    min-width: 110px;
+    margin-bottom: 0;
+}
+
+.cutscene-char-name {
+    font-family: 'Orbitron', sans-serif;
+    font-size: clamp(0.78rem, 1.5vw, 0.95rem);
+    font-weight: 700;
+    color: #fff;
+    text-shadow: 0 0 8px rgba(var(--dc-accent-user-rgb), 0.9);
+    letter-spacing: 0.06em;
+    white-space: nowrap;
+}
+
+.cutscene-dialog-box {
+    position: relative;
+    background: linear-gradient(
+        160deg,
+        rgba(4, 10, 28, 0.94) 0%,
+        rgba(6, 15, 38, 0.96) 100%
+    );
+    border: 1px solid rgba(var(--dc-accent-user-rgb), 0.45);
+    border-radius: 0 10px 10px 10px;
+    padding: clamp(12px, 2vw, 18px) clamp(14px, 2.5vw, 24px);
+    backdrop-filter: blur(10px);
+    box-shadow:
+        0 -2px 0 rgba(var(--dc-accent-user-rgb), 0.25),
+        0 8px 32px rgba(0, 0, 0, 0.65);
+    min-height: 100px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+/* Línea decorativa superior interna */
+.cutscene-dialog-box::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(
+        90deg,
+        rgba(var(--dc-accent-user-rgb), 0.6),
+        rgba(var(--dc-accent-user-rgb), 0.25),
+        transparent
+    );
+    border-radius: 0 10px 0 0;
+}
+
+.cutscene-dialog-text {
+    margin: 0;
+    font-size: clamp(0.88rem, 1.8vw, 1.05rem);
+    line-height: 1.65;
+    color: #ddeeff;
+    letter-spacing: 0.015em;
+    flex: 1 1 auto;
+    min-height: 3em;
+}
+
+/* Botón siguiente */
+.cutscene-btn-next {
+    align-self: flex-end;
+    padding: 7px 20px;
+    border: 2px solid rgba(var(--dc-accent-user-rgb), 0.7);
+    border-radius: 6px;
+    background: rgba(var(--dc-accent-user-rgb), 0.18);
+    color: #cce8ff;
+    font-family: 'Orbitron', sans-serif;
+    font-size: clamp(0.72rem, 1.3vw, 0.82rem);
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    cursor: pointer;
+    transition: background 0.2s ease, box-shadow 0.2s ease, color 0.2s ease;
+    text-transform: uppercase;
+    flex: 0 0 auto;
+}
+
+.cutscene-btn-next:hover,
+.cutscene-btn-next:focus {
+    background: rgba(var(--dc-accent-user-rgb), 0.45);
+    box-shadow: 0 0 14px rgba(var(--dc-accent-user-rgb), 0.55);
+    color: #fff;
+    outline: none;
+}
+
+/* Indicador "toca para continuar" (parpadeante) */
+.cutscene-btn-next::after {
+    content: ' ▼';
+    animation: cutscene-blink 1.1s step-start infinite;
+    display: inline-block;
+    margin-left: 4px;
+    font-size: 0.65em;
+}
+
+@keyframes cutscene-blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+}
+
+/* ============================================================
+   PREVIA COMBATE
+   ============================================================ */
+.episodio-previa-combate {
+    flex: 1;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+    background: radial-gradient(ellipse 100% 90% at 50% 50%, rgba(var(--dc-accent-user-rgb), 0.12), transparent 70%),
+        linear-gradient(160deg, #050a1c 0%, #020614 100%);
+    padding: clamp(20px, 4vw, 48px);
+}
+
+.episodio-combate-titulo {
+    font-family: 'Orbitron', sans-serif;
+    font-size: clamp(1.1rem, 3vw, 1.65rem);
+    font-weight: 700;
+    color: #e8fbff;
+    text-align: center;
+    text-shadow: 0 0 24px rgba(var(--dc-accent-user-rgb), 0.55);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin: 0;
+}
+
+.episodio-combate-subtitulo {
+    font-size: clamp(0.8rem, 1.5vw, 0.9rem);
+    color: rgba(var(--dc-accent-user-rgb), 0.7);
+    text-align: center;
+    margin: 0;
+    letter-spacing: 0.04em;
+}
+
+.episodio-combate-panel {
+    width: 100%;
+    max-width: 680px;
+    background: rgba(6, 14, 36, 0.88);
+    border: 1px solid rgba(var(--dc-accent-user-rgb), 0.32);
+    border-radius: 14px;
+    padding: clamp(18px, 3vw, 28px) clamp(20px, 3.5vw, 36px);
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.55);
+}
+
+.combate-previa-fila {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    background: rgba(var(--dc-accent-user-rgb), 0.06);
+    border: 1px solid rgba(var(--dc-accent-user-rgb), 0.15);
+}
+
+.combate-previa-etiqueta {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: rgba(var(--dc-accent-user-rgb), 0.85);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+}
+
+.combate-previa-valor {
+    font-size: clamp(0.78rem, 1.4vw, 0.88rem);
+    color: #c8e4ff;
+    line-height: 1.5;
+    word-break: break-word;
+}
+
+.combate-previa-nivel {
+    display: inline-block;
+    font-weight: 700;
+    color: rgba(var(--dc-accent-user-rgb), 0.95);
+    font-size: 0.78rem;
+    margin-left: 6px;
+    padding: 1px 8px;
+    border-radius: 4px;
+    background: rgba(var(--dc-accent-user-rgb), 0.15);
+    border: 1px solid rgba(var(--dc-accent-user-rgb), 0.3);
+}
+
+.episodio-previa-combate .episodio-btn-accion {
+    min-width: 200px;
+    font-size: clamp(0.85rem, 1.8vw, 1rem);
+    padding: 12px 28px;
+}
+
+/* ============================================================
+   PAUSA / DERROTA
+   ============================================================ */
+.episodio-pausa-panel {
+    width: 100%;
+    max-width: 520px;
+    background: rgba(6, 14, 36, 0.96);
+    border: 1px solid rgba(255, 80, 80, 0.35);
+    border-radius: 16px;
+    padding: clamp(24px, 4vw, 36px) clamp(22px, 3.5vw, 40px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 18px;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.7), 0 0 30px rgba(255, 60, 60, 0.12);
+}
+
+.episodio-pausa-titulo {
+    font-family: 'Orbitron', sans-serif;
+    font-size: clamp(1rem, 2.5vw, 1.35rem);
+    font-weight: 700;
+    color: #ff8888;
+    text-align: center;
+    margin: 0;
+    text-shadow: 0 0 16px rgba(255, 80, 80, 0.5);
+}
+
+.episodio-pausa-desc {
+    font-size: clamp(0.82rem, 1.5vw, 0.92rem);
+    color: rgba(200, 220, 255, 0.85);
+    text-align: center;
+    margin: 0;
+    line-height: 1.55;
+}
+
+.episodio-pausa-botones {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+/* ============================================================
+   RECOMPENSAS
+   ============================================================ */
+.episodio-recompensas {
+    flex: 1;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+    background: radial-gradient(ellipse 90% 80% at 50% 40%, rgba(255, 200, 60, 0.08), transparent 65%),
+        linear-gradient(160deg, #060c1e 0%, #020510 100%);
+    padding: clamp(20px, 4vw, 48px);
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+}
+
+.episodio-recomp-titulo {
+    font-family: 'Orbitron', sans-serif;
+    font-size: clamp(1.2rem, 3.5vw, 1.9rem);
+    font-weight: 700;
+    color: #fff;
+    text-align: center;
+    text-shadow:
+        0 0 24px rgba(255, 200, 60, 0.7),
+        0 0 48px rgba(255, 200, 60, 0.3);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin: 0;
+    animation: recomp-appear 0.6s ease both;
+}
+
+@keyframes recomp-appear {
+    from { opacity: 0; transform: translateY(-12px) scale(0.95); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.episodio-recompensas-panel {
+    width: 100%;
+    max-width: 580px;
+    background: rgba(6, 14, 32, 0.9);
+    border: 1px solid rgba(255, 200, 60, 0.28);
+    border-radius: 16px;
+    padding: clamp(20px, 3vw, 32px);
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    box-shadow:
+        0 12px 40px rgba(0, 0, 0, 0.65),
+        0 0 28px rgba(255, 200, 60, 0.1);
+    animation: recomp-appear 0.6s 0.15s ease both;
+}
+
+.episodio-recompensas-contenido {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.episodio-recomp-subtitulo {
+    margin: 0 0 6px;
+    font-family: 'Orbitron', sans-serif;
+    font-size: clamp(0.72rem, 1.4vw, 0.82rem);
+    font-weight: 700;
+    color: rgba(255, 200, 60, 0.85);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+}
+
+.episodio-recomp-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    background: rgba(255, 200, 60, 0.08);
+    border: 1px solid rgba(255, 200, 60, 0.2);
+    font-size: clamp(0.9rem, 1.6vw, 1rem);
+    font-weight: 600;
+    color: #ffd878;
+}
+
+.episodio-recomp-icon {
+    width: 28px;
+    height: 28px;
+    object-fit: contain;
+    flex: 0 0 auto;
+}
+
+.episodio-recomp-grupo {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px 14px;
+    border-radius: 8px;
+    background: rgba(var(--dc-accent-user-rgb), 0.06);
+    border: 1px solid rgba(var(--dc-accent-user-rgb), 0.18);
+}
+
+.episodio-recomp-badges-fila {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.episodio-recomp-badge {
+    padding: 4px 12px;
+    border-radius: 6px;
+    background: rgba(var(--dc-accent-user-rgb), 0.18);
+    border: 1px solid rgba(var(--dc-accent-user-rgb), 0.35);
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #ddeeff;
+}
+
+.episodio-recomp-badge--skin {
+    background: rgba(180, 100, 255, 0.18);
+    border-color: rgba(180, 100, 255, 0.4);
+    color: #e2c0ff;
+}
+
+.episodio-recomp-guardando {
+    text-align: center;
+    color: rgba(200, 220, 255, 0.7);
+    font-size: 0.85rem;
+    margin: 0;
+    padding: 12px 0;
+}
+
+.episodio-recomp-error {
+    text-align: center;
+    color: #ff8888;
+    font-size: 0.85rem;
+    margin: 0;
+    padding: 8px 12px;
+    border-radius: 6px;
+    background: rgba(255, 80, 80, 0.1);
+    border: 1px solid rgba(255, 80, 80, 0.25);
+}
+
+/* ============================================================
+   BOTÓN DE ACCIÓN GENÉRICO DEL ENGINE
+   ============================================================ */
+.episodio-btn-accion {
+    padding: 11px 24px;
+    border-radius: 8px;
+    font-family: 'Orbitron', sans-serif;
+    font-size: clamp(0.78rem, 1.5vw, 0.88rem);
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: 2px solid transparent;
+}
+
+.episodio-btn-accion--primario {
+    background: rgba(var(--dc-accent-user-rgb), 0.5);
+    border-color: rgba(var(--dc-accent-user-rgb), 0.8);
+    color: #fff;
+    box-shadow: 0 0 14px rgba(var(--dc-accent-user-rgb), 0.3);
+}
+
+.episodio-btn-accion--primario:hover,
+.episodio-btn-accion--primario:focus {
+    background: rgba(var(--dc-accent-user-rgb), 0.72);
+    box-shadow: 0 0 20px rgba(var(--dc-accent-user-rgb), 0.55);
+    outline: none;
+}
+
+.episodio-btn-accion--secundario {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.25);
+    color: #aac8e8;
+}
+
+.episodio-btn-accion--secundario:hover,
+.episodio-btn-accion--secundario:focus {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.45);
+    color: #fff;
+    outline: none;
+}
+
+.episodio-btn-accion--peligro {
+    background: rgba(255, 60, 60, 0.12);
+    border-color: rgba(255, 60, 60, 0.45);
+    color: #ff9999;
+}
+
+.episodio-btn-accion--peligro:hover,
+.episodio-btn-accion--peligro:focus {
+    background: rgba(255, 60, 60, 0.25);
+    box-shadow: 0 0 14px rgba(255, 60, 60, 0.3);
+    outline: none;
+}
+
+/* ============================================================
+   PANTALLA PAUSA (derrota o abandono)
+   ============================================================ */
+.episodio-pausa {
+    flex: 1;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+    background: rgba(0, 0, 0, 0.88);
+    padding: clamp(20px, 4vw, 48px);
+}
+
+/* ============================================================
+   RESPONSIVE
+   ============================================================ */
+@media (max-width: 640px) {
+    .cutscene-busto {
+        bottom: 140px;
+        width: clamp(100px, 32vw, 200px);
+    }
+
+    .cutscene-dialog-wrap {
+        padding: 10px 12px;
+    }
+
+    .cutscene-dialog-text {
+        font-size: 0.84rem;
+    }
+
+    .episodio-combate-panel,
+    .episodio-recompensas-panel,
+    .episodio-pausa-panel {
+        border-radius: 10px;
+    }
+}
+
+@media (max-width: 420px) {
+    .cutscene-busto {
+        width: clamp(80px, 38vw, 160px);
+        bottom: 130px;
+    }
+}

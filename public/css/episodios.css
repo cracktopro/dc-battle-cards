@@ -1,0 +1,351 @@
+/**
+ * Vista Episodios: fondo multiverso + carrusel 3D.
+ */
+
+.episodios-vista {
+    --episodios-panel-w: clamp(260px, 36vw, 380px);
+    --episodios-panel-h: clamp(400px, 56vh, 540px);
+    --episodios-radio: min(340px, 50vw);
+    --episodios-step: 60deg;
+    --episodios-spin: 0;
+    position: relative;
+    width: 100%;
+    margin: calc(-1 * var(--dc-content-pad-y, 16px)) calc(-1 * var(--dc-content-pad-x, 18px));
+    padding: var(--dc-content-pad-y, 16px) var(--dc-content-pad-x, 18px)
+        clamp(28px, 4vh, 48px);
+    min-height: calc(100vh - 2 * var(--dc-content-pad-y, 20px));
+    min-height: calc(100dvh - 2 * var(--dc-content-pad-y, 20px));
+    background-color: #050814;
+    background-image: url('../resources/hud/universo.png');
+    background-size: cover;
+    background-position: center top;
+    background-repeat: no-repeat;
+    box-sizing: border-box;
+}
+
+.episodios-vista::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(
+        ellipse 85% 70% at 50% 38%,
+        rgba(4, 10, 28, 0.25) 0%,
+        rgba(4, 8, 20, 0.78) 72%,
+        rgba(2, 4, 14, 0.92) 100%
+    );
+}
+
+body > .content-container:has(.episodios-vista) {
+    overflow-x: visible;
+    overflow-y: scroll;
+    scrollbar-gutter: stable;
+    min-height: 100vh;
+    min-height: 100dvh;
+    background-color: #050814;
+}
+
+.episodios-vista-inner {
+    position: relative;
+    z-index: 1;
+    max-width: 1100px;
+    margin: 0 auto;
+    overflow: visible;
+}
+
+.episodios-titulo {
+    font-family: 'Orbitron', sans-serif;
+    font-weight: 700;
+    font-size: clamp(1.6rem, 4vw, 2.35rem);
+    color: #e8f6ff;
+    text-align: center;
+    margin: 0 0 clamp(12px, 2vw, 20px);
+    text-shadow:
+        0 0 18px rgba(var(--dc-accent-user-rgb), 0.45),
+        0 0 42px rgba(var(--dc-accent-user-rgb), 0.28);
+    letter-spacing: 0.06em;
+}
+
+.episodios-descripcion {
+    font-size: clamp(0.88rem, 1.55vw, 1.02rem);
+    line-height: 1.65;
+    color: #d4ecff;
+    text-align: center;
+    max-width: 920px;
+    margin: 0 auto clamp(24px, 3.5vh, 36px);
+    padding: clamp(14px, 2vw, 22px) clamp(16px, 2.4vw, 28px);
+    background: rgba(6, 14, 32, 0.78);
+    border: 1px solid rgba(var(--dc-accent-user-rgb), 0.32);
+    border-radius: 16px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(8px);
+}
+
+.episodios-mensaje {
+    max-width: 640px;
+    margin: 0 auto 16px;
+    text-align: center;
+}
+
+.episodios-carrusel-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    margin-top: clamp(8px, 2vh, 20px);
+}
+
+.episodios-carrusel-controles {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: clamp(8px, 2.8vw, 28px);
+    width: 100%;
+    max-width: 1120px;
+    margin: 0 auto;
+}
+
+.episodios-carrusel-flecha {
+    flex: 0 0 auto;
+    width: clamp(46px, 11vw, 58px);
+    height: clamp(46px, 11vw, 58px);
+    padding: 0;
+    border-radius: 12px;
+    border: 2px solid rgba(var(--dc-accent-user-rgb), 0.55);
+    background: rgba(6, 18, 40, 0.85);
+    color: rgba(var(--dc-accent-user-rgb), 0.95);
+    font-size: clamp(1.6rem, 5vw, 2.2rem);
+    line-height: 1;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 0 18px rgba(var(--dc-accent-user-rgb), 0.22);
+    transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.episodios-carrusel-flecha:hover:not(:disabled) {
+    background: rgba(var(--dc-accent-user-rgb), 0.22);
+    color: #fff;
+    border-color: var(--dc-accent-user);
+}
+
+.episodios-carrusel-flecha:disabled {
+    opacity: 0.42;
+    cursor: not-allowed;
+}
+
+.episodios-carrusel-leyenda {
+    font-size: 0.78rem;
+    color: rgba(var(--dc-accent-user-rgb), 0.75);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.episodios-carrusel-escena {
+    --episodios-spin: 0;
+    flex: 1 1 auto;
+    min-width: 0;
+    width: 100%;
+    max-width: min(1040px, 100%);
+    height: clamp(400px, 56vh, 540px);
+    perspective: 1200px;
+    perspective-origin: 50% 42%;
+    position: relative;
+    overflow: visible;
+}
+
+.episodios-carrusel-rueda {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: var(--episodios-panel-w);
+    height: var(--episodios-panel-h);
+    margin-left: calc(-0.5 * var(--episodios-panel-w));
+    margin-top: calc(-0.5 * var(--episodios-panel-h));
+    transform: rotateY(calc(var(--episodios-spin) * var(--episodios-step-num) * -1deg));
+    transform-style: preserve-3d;
+    transition: transform 0.45s cubic-bezier(0.25, 0.85, 0.3, 1);
+}
+
+.episodios-carrusel-escena--unico .episodios-carrusel-rueda {
+    transform: none;
+}
+
+.episodios-carrusel-cara {
+    position: absolute;
+    inset: 0;
+    transform-origin: center center;
+    transform: rotateY(calc(var(--episodios-i) * var(--episodios-step-num) * 1deg)) translateZ(var(--episodios-radio));
+    transform-style: preserve-3d;
+    backface-visibility: visible;
+    pointer-events: none;
+}
+
+.episodios-carrusel-escena--unico .episodios-carrusel-cara {
+    transform: none;
+}
+
+.episodios-carrusel-cara-billboard {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: stretch;
+    justify-content: center;
+    transform-style: preserve-3d;
+    transform: rotateY(calc((var(--episodios-spin) - var(--episodios-i)) * var(--episodios-step-num) * 1deg));
+    transition: transform 0.45s cubic-bezier(0.25, 0.85, 0.3, 1);
+}
+
+.episodios-carrusel-escena--unico .episodios-carrusel-cara-billboard {
+    transform: none;
+}
+
+.episodios-item-panel {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    padding: 12px;
+    box-sizing: border-box;
+    border-radius: 14px;
+    border: 1px solid rgba(var(--dc-accent-user-rgb), 0.35);
+    background:
+        radial-gradient(ellipse 100% 60% at 50% 0%, rgba(var(--dc-accent-user-rgb), 0.18), transparent 55%),
+        linear-gradient(165deg, rgba(6, 14, 36, 0.96) 0%, rgba(3, 8, 22, 0.98) 100%);
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.55);
+    overflow: hidden;
+    filter: brightness(0.62);
+    transition: filter 0.45s ease, box-shadow 0.45s ease, border-color 0.45s ease;
+}
+
+.episodios-carrusel-cara--frente .episodios-item-panel {
+    filter: brightness(1);
+    border-color: rgba(var(--dc-accent-user-rgb), 0.55);
+    box-shadow:
+        0 16px 40px rgba(0, 0, 0, 0.5),
+        0 0 24px rgba(var(--dc-accent-user-rgb), 0.22);
+}
+
+.episodios-item-panel-img {
+    flex: 0 0 auto;
+    width: 100%;
+    aspect-ratio: 3 / 4;
+    max-height: 54%;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid rgba(var(--dc-accent-user-rgb), 0.25);
+    background: #020814;
+}
+
+.episodios-item-panel-img img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center center;
+    display: block;
+    pointer-events: none;
+    user-select: none;
+}
+
+.episodios-item-panel-titulo {
+    margin: 10px 0 6px;
+    font-family: 'Orbitron', sans-serif;
+    font-size: clamp(0.82rem, 1.8vw, 1rem);
+    font-weight: 700;
+    line-height: 1.25;
+    color: #e8fbff;
+    text-align: center;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.episodios-item-panel-descripcion {
+    margin: 0;
+    flex: 1 1 auto;
+    font-size: clamp(0.72rem, 1.45vw, 0.84rem);
+    line-height: 1.45;
+    color: rgba(200, 230, 255, 0.9);
+    text-align: center;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 5;
+    -webkit-box-orient: vertical;
+}
+
+.episodios-carrusel-cara--frente .episodios-item-panel-descripcion {
+    -webkit-line-clamp: 5;
+}
+
+/* ── Botón Comenzar en panel de carrusel 3D ── */
+.episodios-item-panel-btn {
+    display: none;
+    visibility: hidden;
+    opacity: 0;
+    pointer-events: none;
+    margin: 8px 0 0;
+    width: 100%;
+    padding: 9px 14px;
+    border-radius: 7px;
+    border: 2px solid rgba(var(--dc-accent-user-rgb), 0.7);
+    background: rgba(var(--dc-accent-user-rgb), 0.22);
+    color: #fff;
+    font-family: 'Orbitron', sans-serif;
+    font-size: clamp(0.72rem, 1.4vw, 0.82rem);
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background 0.2s ease, box-shadow 0.2s ease;
+    flex: 0 0 auto;
+}
+
+.episodios-carrusel-cara--frente .episodios-item-panel-btn {
+    display: block;
+    visibility: visible;
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.episodios-carrusel-cara--frente .episodios-item-panel-btn:hover,
+.episodios-carrusel-cara--frente .episodios-item-panel-btn:focus {
+    background: rgba(var(--dc-accent-user-rgb), 0.5);
+    box-shadow: 0 0 14px rgba(var(--dc-accent-user-rgb), 0.5);
+    outline: none;
+}
+
+/* Permitir pointer-events en el panel frontal */
+.episodios-carrusel-cara--frente {
+    pointer-events: auto;
+}
+
+.episodios-nombre-frente {
+    font-family: 'Orbitron', sans-serif;
+    font-weight: 700;
+    font-size: clamp(1rem, 2.5vw, 1.35rem);
+    color: #e8fbff;
+    text-align: center;
+    margin: clamp(10px, 2vh, 16px) 0 0;
+    text-shadow: 0 0 16px rgba(var(--dc-accent-user-rgb), 0.4);
+    letter-spacing: 0.04em;
+    max-width: min(720px, 92vw);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .episodios-carrusel-rueda,
+    .episodios-carrusel-cara-billboard,
+    .episodios-item-panel {
+        transition: none;
+    }
+}
+
+@media (max-width: 599px) {
+    .episodios-vista {
+        --episodios-panel-w: min(260px, 82vw);
+        --episodios-panel-h: clamp(340px, 52vh, 420px);
+    }
+
+    .episodios-carrusel-escena {
+        height: clamp(340px, 52vh, 420px);
+        perspective: 920px;
+    }
+}

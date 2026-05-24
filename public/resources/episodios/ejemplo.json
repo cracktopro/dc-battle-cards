@@ -1,0 +1,92 @@
+{
+  "episodio_id": "0",
+  "nombre": "Supergirl: Fuga de las Sombras",
+  "timeline": [
+    {
+      "type": "cutscene",
+      "cutscene_id": "cs_intro",
+      "background_image": "bg_test.png",
+      "dialogos": [
+        {
+          "dialogo_id": "d001",
+          "bust_image": "supergirl_base.png",
+          "side": "8%",
+          "id_character": "supergirl",
+          "nombre": "Supergirl",
+          "visible": true,
+          "texto": "Se acabó el tiempo. Tenemos que salir de este laboratorio ya."
+        },
+        {
+          "dialogo_id": "d002",
+          "bust_image": "guardia.png",
+          "side": "62%",
+          "id_character": "guardia_01",
+          "nombre": "Guardia Cadmus",
+          "visible": true,
+          "texto": "¡Alto ahí! ¡El espécimen está intentando escapar! ¡Llamen al Comandante!"
+        },
+        {
+          "dialogo_id": "d003",
+          "bust_image": "supergirl_base.png",
+          "side": "8%",
+          "id_character": "supergirl",
+          "nombre": "Supergirl",
+          "visible": true,
+          "texto": "Lo siento. No tengo tiempo para esto.",
+          "escena": [
+            { "id_character": "guardia_01", "visible": false }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "combate",
+      "combate_id": "comb_01",
+      "cartas_jugador": ["Superman", "Supergirl", "Superboy"],
+      "nivel_jugador": 2,
+      "cartas_BOT": ["Joker", "Lex Luthor", "Harley Quinn"],
+      "nivel_BOT": 2
+    },
+    {
+      "type": "cutscene",
+      "cutscene_id": "cs_post_combate",
+      "background_image": "bg_test.jpg",
+      "dialogos": [
+        {
+          "dialogo_id": "d004",
+          "bust_image": "supergirl_base.png",
+          "side": "12%",
+          "id_character": "supergirl",
+          "nombre": "Supergirl",
+          "visible": true,
+          "texto": "Uf... Eso estuvo cerca. Pero la salida principal sigue bloqueada. Necesito encontrar otro camino."
+        },
+        {
+          "dialogo_id": "d005",
+          "bust_image": "supergirl_base.png",
+          "side": "60%",
+          "id_character": "alex",
+          "nombre": "Alex Danvers",
+          "visible": true,
+          "texto": "Kara, estoy rastreando tu señal. Hay un conducto de ventilación en el ala norte. Yo te guío."
+        },
+        {
+          "dialogo_id": "d006",
+          "bust_image": "supergirl_base.png",
+          "side": "12%",
+          "id_character": "supergirl",
+          "nombre": "Supergirl",
+          "visible": true,
+          "texto": "Recibido. Voy en camino."
+        }
+      ]
+    },
+    {
+      "type": "recompensa",
+      "monedas": 250,
+      "objetos": [],
+      "cartas": [],
+      "skins": []
+    }
+  ]
+}

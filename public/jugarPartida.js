@@ -56,11 +56,24 @@ const ICONO_STAR6 = '/resources/icons/star6.png';
 const ICONO_CARDBACK_RANDOM = '/resources/icons/cardback_random.png';
 const EVENTO_DIFICULTAD_MAX = 6;
 const EVENTO_DIFICULTAD_MIN_MEJORA_ESPECIAL = 6;
+const PARTIDA_RAPIDA_DIFICULTAD_MAX = 6;
+const PARTIDA_RAPIDA_DROP_UI = [
+    { icon: 'resources/icons/mejora.png', label: 'Mejora', pct: '10%' },
+    { icon: 'resources/icons/mejora_especial.png', label: 'Mejora especial', pct: '5%' },
+    { icon: 'resources/icons/mejora_suprema.png', label: 'Mejora suprema', pct: '2%' },
+    { icon: 'resources/icons/mejora_definitiva.png', label: 'Mejora definitiva', pct: '1%' },
+];
 const ROTACION_CONSEJOS_MS = 9500;
+const ROTACION_EPISODIOS_PANEL_MS = 9500;
+const EPISODIOS_PLACEHOLDER_IMG = 'resources/hud/universo.png';
 let consejosCarrusel = [];
 let consejoIndexActual = 0;
 let timerConsejos = null;
 let direccionAnimacionConsejos = 1;
+let episodiosPanelCarrusel = [];
+let episodioPanelIndexActual = 0;
+let timerEpisodiosPanel = null;
+let direccionAnimacionEpisodiosPanel = 1;
 
 function obtenerNombreVisibleUsuario() {
     const usuario = JSON.parse(localStorage.getItem('usuario') || '{}');
@@ -144,14 +157,94 @@ function insertarSeparadorFechaSiCorresponde(contenedor, payload = {}) {
     contenedor.appendChild(separador);
 }
 
+function mostrarModalCentrado(modal) {
+    if (!modal) {
+        return;
+    }
+    modal.style.display = 'flex';
+    modal.classList.add('is-visible');
+}
+
+function ocultarModalCentrado(modal) {
+    if (!modal) {
+        return;
+    }
+    modal.style.display = 'none';
+    modal.classList.remove('is-visible');
+}
+
 function verificarSeleccion() {
     const iniciarBtn = document.getElementById('iniciar-partida-btn');
-    console.log('Verificación de selección - Dificultad:', dificultadSeleccionada, 'Mazo:', mazoSeleccionado);
-    
-    iniciarBtn.disabled = !(dificultadSeleccionada && mazoSeleccionado);
+    if (!iniciarBtn) {
+        return;
+    }
+    const listo = Boolean(dificultadSeleccionada && mazoSeleccionado);
+    iniciarBtn.disabled = false;
+    iniciarBtn.classList.toggle('config-partida-btn--incompleto', !listo);
+    iniciarBtn.setAttribute('aria-disabled', listo ? 'false' : 'true');
+}
+
+function calcularPuntosPartidaRapidaUi(dificultad) {
+    const dif = Math.min(PARTIDA_RAPIDA_DIFICULTAD_MAX, Math.max(1, Number(dificultad) || 1));
+    return 100 + ((dif - 1) * 50);
+}
+
+function pintarPanelRecompensasPartidaRapida(dificultadResaltada) {
+    const rootFijas = document.getElementById('partida-rapida-recompensas-fijas');
+    const rootAleatorias = document.getElementById('partida-rapida-recompensas-aleatorias');
+    if (!rootFijas || !rootAleatorias) {
+        return;
+    }
+
+    const nivelesMonedas = [];
+    for (let d = 1; d <= PARTIDA_RAPIDA_DIFICULTAD_MAX; d++) {
+        const pts = calcularPuntosPartidaRapidaUi(d);
+        const activo = Number(dificultadResaltada) === d;
+        nivelesMonedas.push(`
+            <span class="partida-rapida-moneda-nivel${activo ? ' partida-rapida-moneda-nivel--activo' : ''}" data-nivel="${d}" title="Nivel ${d}">
+                <span class="partida-rapida-moneda-nivel-estrellas">★${d}</span>
+                <strong>${pts.toLocaleString('es-ES')}</strong>
+            </span>
+        `);
+    }
+
+    const filaDrops = PARTIDA_RAPIDA_DROP_UI.map((d) => `
+        <div class="asaltos-recomp-drop-item" title="${d.label}">
+            <img class="asaltos-recomp-obj-icon" src="${d.icon}" alt="">
+            <span class="asaltos-recomp-drop-pct">${d.pct}</span>
+        </div>
+    `).join('');
+
+    rootFijas.innerHTML = `
+        <div class="asaltos-recomp-bloque">
+            <div class="asaltos-recomp-bloque-titulo">Recompensas</div>
+            <div class="asaltos-recomp-garant-inner">
+                <div class="asaltos-recomp-garant-datos">
+                    <div class="asaltos-recomp-fila-obj" title="Dos cartas aleatorias al ganar">
+                        <img class="asaltos-recomp-obj-icon partida-rapida-recomp-icon--sm" src="resources/icons/cardback_random.png" alt="">
+                        <span class="asaltos-recomp-obj-txt">2 cartas aleatorias + carta bonus (50%)</span>
+                    </div>
+                    <div class="asaltos-recomp-meta">
+                        <img class="asaltos-recomp-moneda-icon partida-rapida-recomp-icon--sm" src="resources/icons/moneda.png" alt="">
+                        <span>Puntos por victoria según dificultad</span>
+                    </div>
+                    <div class="partida-rapida-monedas-grid">${nivelesMonedas.join('')}</div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    rootAleatorias.innerHTML = `
+        <div class="asaltos-recomp-bloque">
+            <div class="asaltos-recomp-bloque-titulo">Recompensas aleatorias</div>
+            <p class="asaltos-recomp-alea-desc">Objetos que pueden obtenerse al completar una partida rápida (probabilidad por victoria).</p>
+            <div class="asaltos-recomp-drops-row">${filaDrops}</div>
+        </div>
+    `;
 }
 
 document.addEventListener('DOMContentLoaded', function () {
+    pintarPanelRecompensasPartidaRapida(null);
     verificarMazosUsuario();
     configurarChat();
     configurarJugadoresConectados();
@@ -159,6 +252,7 @@ document.addEventListener('DOMContentLoaded', function () {
     cargarEventosActivos();
     configurarNotificacionesGrupo();
     void inicializarPanelConsejos();
+    void inicializarCarruselEpisodiosPanel();
     /* Recompensa diaria: solo cartas.js (DOMContentLoaded → procesarRecompensaDiariaGlobal).
        Evita doble modal al combinar con este mismo handler. */
 
@@ -177,6 +271,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             // Almacenar la dificultad seleccionada
             dificultadSeleccionada = parseInt(this.getAttribute('data-dificultad'));
+            pintarPanelRecompensasPartidaRapida(dificultadSeleccionada);
 
             // Verificar si ambos (mazo y dificultad) están seleccionados para habilitar el botón de "Iniciar partida"
             verificarSeleccion();
@@ -212,10 +307,13 @@ document.addEventListener('DOMContentLoaded', function () {
             if (usuarioTieneMazos && selectMazo) {
                 selectMazo.value = '';
                 mazoSeleccionado = null;
+                dificultadSeleccionada = null;
+                document.querySelectorAll('.dificultad-btn').forEach((btn) => btn.classList.remove('selected'));
+                pintarPanelRecompensasPartidaRapida(null);
                 verificarSeleccion();
             }
             console.log('Modal encontrado, intentando mostrar...');
-            modal.style.display = 'block';
+            mostrarModalCentrado(modal);
             console.log('Modal debería estar visible ahora.');
         } else {
             console.log('Modal no encontrado.');
@@ -225,10 +323,10 @@ document.addEventListener('DOMContentLoaded', function () {
     const cancelarPartidaBtn = document.getElementById('cancelar-partida-btn');
     if (cancelarPartidaBtn) {
         cancelarPartidaBtn.addEventListener('click', function () {
-            const modal = document.getElementById('configuracion-partida');
-            if (modal) {
-                modal.style.display = 'none';
-            }
+            ocultarModalCentrado(document.getElementById('configuracion-partida'));
+            dificultadSeleccionada = null;
+            document.querySelectorAll('.dificultad-btn').forEach((btn) => btn.classList.remove('selected'));
+            pintarPanelRecompensasPartidaRapida(null);
         });
     }
 
@@ -242,10 +340,14 @@ document.addEventListener('DOMContentLoaded', function () {
     const cancelarSinMazoBtn = document.getElementById('cancelar-sin-mazo-btn');
     if (cancelarSinMazoBtn) {
         cancelarSinMazoBtn.addEventListener('click', function () {
-            const modal = document.getElementById('aviso-sin-mazo-modal');
-            if (modal) {
-                modal.style.display = 'none';
-            }
+            ocultarModalCentrado(document.getElementById('aviso-sin-mazo-modal'));
+        });
+    }
+
+    const cerrarAvisoSeleccionBtn = document.getElementById('cerrar-aviso-seleccion-incompleta-btn');
+    if (cerrarAvisoSeleccionBtn) {
+        cerrarAvisoSeleccionBtn.addEventListener('click', function () {
+            ocultarModalCentrado(document.getElementById('aviso-seleccion-incompleta-modal'));
         });
     }
 
@@ -256,7 +358,8 @@ document.addEventListener('DOMContentLoaded', function () {
     
         if (!dificultadSeleccionada || !mazoSeleccionado) {
             console.log('Faltan selecciones, no se puede iniciar la partida');
-            return;  // Verificar si se seleccionaron ambos
+            mostrarModalCentrado(document.getElementById('aviso-seleccion-incompleta-modal'));
+            return;
         }
 
         // 🔥 LIMPIAR MODO DESAFÍO / ASALTO (no mezclar con VS BOT)
@@ -482,6 +585,173 @@ async function inicializarPanelConsejos() {
         reiniciarTimerConsejos();
     };
     reiniciarTimerConsejos();
+}
+
+function urlImagenEpisodioPanel(ep) {
+    const raw = String(ep?.imagen || '').trim();
+    if (!raw) {
+        return EPISODIOS_PLACEHOLDER_IMG;
+    }
+    if (/^https?:\/\//i.test(raw)) {
+        return raw;
+    }
+    return raw.startsWith('resources/') ? raw : `resources/${raw.replace(/^\/+/, '')}`;
+}
+
+async function cargarEpisodiosPanelDesdeExcel() {
+    if (typeof XLSX === 'undefined') {
+        return [];
+    }
+    const response = await fetch('resources/episodios.xlsx');
+    if (!response.ok) {
+        return [];
+    }
+    const data = await response.arrayBuffer();
+    const workbook = XLSX.read(data, { type: 'array' });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const filas = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+    return filas
+        .map((fila, idx) => {
+            const eventoId = fila.evento_id ?? fila.eventoId ?? idx;
+            return {
+                evento_id: Number.isFinite(Number(eventoId)) ? Number(eventoId) : idx,
+                nombre: String(fila.nombre || '').trim(),
+                imagen: String(fila.imagen || '').trim(),
+            };
+        })
+        .filter((ep) => ep.nombre)
+        .sort((a, b) => a.evento_id - b.evento_id);
+}
+
+function aplicarContenidoEpisodioPanel(item) {
+    const imgEl = document.getElementById('episodios-panel-imagen');
+    const nombreEl = document.getElementById('episodios-panel-nombre');
+    if (!imgEl || !nombreEl) {
+        return;
+    }
+    const nombre = item?.nombre || '—';
+    nombreEl.textContent = nombre;
+    imgEl.alt = nombre;
+    imgEl.src = urlImagenEpisodioPanel(item);
+    imgEl.onerror = () => {
+        imgEl.onerror = null;
+        imgEl.src = EPISODIOS_PLACEHOLDER_IMG;
+    };
+}
+
+function animarTransicionEpisodioPanel(item, direccion = 1) {
+    const slideEl = document.getElementById('episodios-panel-slide');
+    if (!slideEl) {
+        aplicarContenidoEpisodioPanel(item);
+        return;
+    }
+    const claseSalida = direccion >= 0 ? 'anim-out-left' : 'anim-out-right';
+    const claseEntrada = direccion >= 0 ? 'anim-in-right' : 'anim-in-left';
+    slideEl.classList.remove('anim-out-left', 'anim-out-right', 'anim-in-left', 'anim-in-right');
+    slideEl.classList.add(claseSalida);
+    setTimeout(() => {
+        aplicarContenidoEpisodioPanel(item);
+        slideEl.classList.remove(claseSalida);
+        slideEl.classList.add(claseEntrada);
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                slideEl.classList.remove('anim-in-left', 'anim-in-right');
+            });
+        });
+    }, 160);
+}
+
+function renderEpisodioPanelActual({ animar = false } = {}) {
+    const slideEl = document.getElementById('episodios-panel-slide');
+    const dotsEl = document.getElementById('episodios-panel-dots');
+    const prevBtn = document.getElementById('episodios-panel-prev');
+    const nextBtn = document.getElementById('episodios-panel-next');
+    if (!slideEl || !dotsEl) {
+        return;
+    }
+
+    if (!Array.isArray(episodiosPanelCarrusel) || episodiosPanelCarrusel.length === 0) {
+        aplicarContenidoEpisodioPanel({ nombre: 'Sin episodios', imagen: '' });
+        dotsEl.innerHTML = '';
+        if (prevBtn) prevBtn.disabled = true;
+        if (nextBtn) nextBtn.disabled = true;
+        return;
+    }
+
+    const multiples = episodiosPanelCarrusel.length > 1;
+    if (prevBtn) prevBtn.disabled = !multiples;
+    if (nextBtn) nextBtn.disabled = !multiples;
+
+    const item = episodiosPanelCarrusel[episodioPanelIndexActual] || episodiosPanelCarrusel[0];
+    if (animar) {
+        animarTransicionEpisodioPanel(item, direccionAnimacionEpisodiosPanel);
+    } else {
+        aplicarContenidoEpisodioPanel(item);
+    }
+
+    dotsEl.innerHTML = '';
+    episodiosPanelCarrusel.forEach((_, idx) => {
+        const dot = document.createElement('button');
+        dot.type = 'button';
+        dot.className = `episodios-panel-dot ${idx === episodioPanelIndexActual ? 'active' : ''}`;
+        dot.setAttribute('aria-label', `Vista previa episodio ${idx + 1}`);
+        dot.addEventListener('click', () => {
+            direccionAnimacionEpisodiosPanel = idx >= episodioPanelIndexActual ? 1 : -1;
+            episodioPanelIndexActual = idx;
+            renderEpisodioPanelActual({ animar: true });
+            reiniciarTimerEpisodiosPanel();
+        });
+        dotsEl.appendChild(dot);
+    });
+}
+
+function avanzarEpisodioPanel(delta) {
+    if (!Array.isArray(episodiosPanelCarrusel) || episodiosPanelCarrusel.length === 0) {
+        return;
+    }
+    direccionAnimacionEpisodiosPanel = delta >= 0 ? 1 : -1;
+    const total = episodiosPanelCarrusel.length;
+    episodioPanelIndexActual = (episodioPanelIndexActual + delta + total) % total;
+    renderEpisodioPanelActual({ animar: true });
+}
+
+function reiniciarTimerEpisodiosPanel() {
+    if (timerEpisodiosPanel) {
+        clearInterval(timerEpisodiosPanel);
+        timerEpisodiosPanel = null;
+    }
+    if (!Array.isArray(episodiosPanelCarrusel) || episodiosPanelCarrusel.length <= 1) {
+        return;
+    }
+    timerEpisodiosPanel = setInterval(() => {
+        avanzarEpisodioPanel(1);
+    }, ROTACION_EPISODIOS_PANEL_MS);
+}
+
+async function inicializarCarruselEpisodiosPanel() {
+    const prevBtn = document.getElementById('episodios-panel-prev');
+    const nextBtn = document.getElementById('episodios-panel-next');
+    if (!prevBtn || !nextBtn) {
+        return;
+    }
+    try {
+        episodiosPanelCarrusel = await cargarEpisodiosPanelDesdeExcel();
+    } catch (error) {
+        console.error('Error cargando episodios para el panel:', error);
+        episodiosPanelCarrusel = [];
+    }
+    episodioPanelIndexActual = 0;
+    direccionAnimacionEpisodiosPanel = 1;
+    renderEpisodioPanelActual({ animar: false });
+    prevBtn.onclick = () => {
+        avanzarEpisodioPanel(-1);
+        reiniciarTimerEpisodiosPanel();
+    };
+    nextBtn.onclick = () => {
+        avanzarEpisodioPanel(1);
+        reiniciarTimerEpisodiosPanel();
+    };
+    reiniciarTimerEpisodiosPanel();
 }
 
 function configurarNotificacionesGrupo() {

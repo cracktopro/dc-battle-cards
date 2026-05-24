@@ -2824,25 +2824,12 @@ function restaurarPerfilMenuDesdeSnapshot(menu) {
 
 function ordenarEnlacesMenuLateral(menu) {
     const linkCentro = menu.querySelector('a[href="vistaJuego.html"]');
-    const linkDesafios = menu.querySelector('a[href="desafios.html"]');
-    const linkAsaltos = menu.querySelector('a[href="asaltos.html"]');
-    if (linkCentro) {
-        if (linkCentro.textContent !== 'Centro de Operaciones') {
-            linkCentro.textContent = 'Centro de Operaciones';
-        }
+    if (linkCentro && linkCentro.textContent !== 'Centro de Operaciones') {
+        linkCentro.textContent = 'Centro de Operaciones';
     }
-    if (!linkCentro || !linkDesafios) {
-        return;
-    }
-    if (linkAsaltos && linkAsaltos.previousElementSibling !== linkCentro) {
-        menu.insertBefore(linkAsaltos, linkCentro.nextElementSibling);
-    }
-    if (linkAsaltos) {
-        if (linkDesafios.previousElementSibling !== linkAsaltos) {
-            menu.insertBefore(linkDesafios, linkAsaltos.nextElementSibling);
-        }
-    } else if (linkDesafios.previousElementSibling !== linkCentro) {
-        menu.insertBefore(linkDesafios, linkCentro.nextElementSibling);
+    const linkMultijugador = menu.querySelector('#menu-link-multijugador');
+    if (linkCentro && linkMultijugador && linkMultijugador.previousElementSibling !== linkCentro) {
+        menu.insertBefore(linkMultijugador, linkCentro.nextElementSibling);
     }
 }
 
@@ -2860,7 +2847,7 @@ function asegurarFilasStatsMenu(perfil) {
 }
 
 function asegurarEnlaceMultijugadorMenu(menu) {
-    const linkDesafios = menu.querySelector('a[href="desafios.html"]');
+    const linkCentro = menu.querySelector('a[href="vistaJuego.html"]');
     let linkMultijugador = menu.querySelector('#menu-link-multijugador');
     if (!linkMultijugador) {
         linkMultijugador = document.createElement('a');
@@ -2868,11 +2855,18 @@ function asegurarEnlaceMultijugadorMenu(menu) {
         linkMultijugador.href = 'multijugador.html';
         linkMultijugador.className = 'btn btn-menu btn-menu-disabled';
         linkMultijugador.textContent = 'Multijugador';
-        if (linkDesafios?.nextElementSibling) {
-            menu.insertBefore(linkMultijugador, linkDesafios.nextElementSibling);
-        } else {
-            menu.appendChild(linkMultijugador);
+    }
+    if (linkCentro) {
+        const destino = linkCentro.nextElementSibling;
+        if (destino !== linkMultijugador) {
+            if (destino) {
+                menu.insertBefore(linkMultijugador, destino);
+            } else {
+                menu.appendChild(linkMultijugador);
+            }
         }
+    } else if (!linkMultijugador.parentElement) {
+        menu.appendChild(linkMultijugador);
     }
     return linkMultijugador;
 }

@@ -13,6 +13,7 @@
     <link href="css/mazos.css" rel="stylesheet">
     <link href="css/salud.css" rel="stylesheet">
     <link href="css/jugarPartida.css" rel="stylesheet">
+    <link href="css/asaltos.css" rel="stylesheet">
     <link href="css/scrollbar.css" rel="stylesheet">
     <link href="css/app-layout.css" rel="stylesheet">
 
@@ -29,8 +30,6 @@
     <a href="mazos.html" class="btn btn-menu">Mazos</a>
     <a href="coleccion.html" class="btn btn-menu">Colección</a>
     <a href="tienda.html" class="btn btn-menu">Tienda</a>
-    <a href="asaltos.html" class="btn btn-menu">Asaltos</a>
-    <a href="desafios.html" class="btn btn-menu">Desafíos</a>
     <a href="opciones.html" class="btn btn-menu">Opciones</a>
     <button onclick="abrirModalLogout()" class="btn btn-logout">Cerrar Sesión</button>
 </div>
@@ -42,14 +41,64 @@
             <h2 class="arena-title">Centro de Operaciones</h2>
             <p class="arena-subtitle">Configura combates, participa en eventos y domina el multiverso.</p>
         </div>
-        <div id="selector-mazo-container" class="arena-actions">
-            <button id="jugar-btn" class="btn btn-primary mt-2" disabled>Jugador VS CPU</button>
-        </div>
+    </section>
 
-        <!-- Ventana emergente para seleccionar mazo y dificultad -->
-        <div id="configuracion-partida" class="modal" style="display: none;">
+    <section class="centro-modos-row" aria-label="Modos de juego">
+        <article class="partida-rapida-panel" aria-labelledby="partida-rapida-titulo">
+            <div class="partida-rapida-panel-inner partida-rapida-panel-inner--vertical">
+                <h3 id="partida-rapida-titulo" class="partida-rapida-titulo">Partida rápida</h3>
+                <p class="partida-rapida-descripcion">Selecciona mazo y dificultad y juega una partida rápida contra enemigos aleatorios de las diferentes facciones y afiliaciones existentes.</p>
+                <div id="partida-rapida-recompensas-fijas" class="partida-rapida-recomp-slot"></div>
+                <div id="partida-rapida-recompensas-aleatorias" class="partida-rapida-recomp-slot"></div>
+                <button id="jugar-btn" type="button" class="btn btn-primary partida-rapida-btn-comenzar">Comenzar</button>
+            </div>
+        </article>
+
+        <aside class="centro-modos-lateral" aria-label="Desafíos y asaltos">
+            <div class="modo-subpanel-marco">
+                <article class="modo-subpanel" aria-labelledby="subpanel-desafios-titulo">
+                    <h3 id="subpanel-desafios-titulo" class="modo-subpanel-titulo">Desafíos</h3>
+                    <p class="modo-subpanel-descripcion">Elige tu camino y combate contra Héroes y Villanos en una sucesión desenfrenada de retos cada vez más difíciles.</p>
+                    <a href="desafios.html" class="btn btn-primary modo-subpanel-btn">Desafíos</a>
+                </article>
+            </div>
+            <div class="modo-subpanel-marco">
+                <article class="modo-subpanel" aria-labelledby="subpanel-asaltos-titulo">
+                    <h3 id="subpanel-asaltos-titulo" class="modo-subpanel-titulo">Asaltos</h3>
+                    <p class="modo-subpanel-descripcion">Enfréntate a eventos únicos inspirados en grandes crisis del multiverso y otros eventos extremos. Enfréntate a los seres más poderosos del universo en batallas épicas que decidirán el destino del omniverso.</p>
+                    <a href="asaltos.html" class="btn btn-primary modo-subpanel-btn">Asaltos</a>
+                </article>
+            </div>
+        </aside>
+
+        <aside class="centro-modos-episodios" aria-label="Episodios">
+            <div class="modo-subpanel-marco">
+                <article class="modo-subpanel modo-subpanel--episodios" aria-labelledby="subpanel-episodios-titulo">
+                    <h3 id="subpanel-episodios-titulo" class="modo-subpanel-titulo">Episodios</h3>
+                    <p class="modo-subpanel-descripcion modo-subpanel-descripcion--compacta">Historias en distintas épocas y líneas temporales.</p>
+                    <div class="episodios-panel-carrusel">
+                        <div class="episodios-panel-carrusel-nav">
+                            <button id="episodios-panel-prev" type="button" class="btn btn-sm btn-secondary episodios-panel-btn-nav" aria-label="Episodio anterior">◀</button>
+                            <button id="episodios-panel-next" type="button" class="btn btn-sm btn-secondary episodios-panel-btn-nav" aria-label="Siguiente episodio">▶</button>
+                        </div>
+                        <div id="episodios-panel-slide" class="episodios-panel-slide">
+                            <div class="episodios-panel-img-wrap">
+                                <img id="episodios-panel-imagen" class="episodios-panel-imagen" src="resources/hud/universo.png" alt="">
+                            </div>
+                            <p id="episodios-panel-nombre" class="episodios-panel-nombre">—</p>
+                        </div>
+                        <div id="episodios-panel-dots" class="episodios-panel-dots" role="tablist" aria-label="Vista previa de episodios"></div>
+                    </div>
+                    <a href="episodios.html" class="btn btn-primary modo-subpanel-btn">Episodios</a>
+                </article>
+            </div>
+        </aside>
+    </section>
+
+    <!-- Modales VS BOT: fuera del flujo del layout (position: fixed + flex centrado) -->
+    <div id="configuracion-partida" class="modal modal-centrado" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="configuracion-partida-titulo">
             <div class="modal-content">
-                <h4>Selecciona tu mazo y la dificultad</h4>
+                <h4 id="configuracion-partida-titulo">Selecciona tu mazo y la dificultad</h4>
                 
                 <!-- Selector de mazo -->
                 <label for="select-mazo">Selecciona tu mazo:</label>
@@ -94,22 +143,30 @@
                 </div>
                 
                 <div class="d-flex justify-content-center mt-3" style="gap:10px;">
-                    <button id="iniciar-partida-btn" class="btn btn-primary" disabled>Iniciar partida</button>
-                    <button id="cancelar-partida-btn" class="btn btn-secondary">Cancelar</button>
+                    <button id="iniciar-partida-btn" class="btn btn-primary" type="button">Iniciar partida</button>
+                    <button id="cancelar-partida-btn" class="btn btn-secondary" type="button">Cancelar</button>
                 </div>
             </div>
-        </div>
+    </div>
 
-        <div id="aviso-sin-mazo-modal" class="modal" style="display: none; position: fixed; inset: 0; justify-content: center; align-items: center;">
+    <div id="aviso-seleccion-incompleta-modal" class="modal modal-centrado modal-centrado--sobre-config" style="display: none;" role="alertdialog" aria-modal="true" aria-labelledby="aviso-seleccion-incompleta-texto">
+        <div class="modal-content modal-content--aviso">
+            <p id="aviso-seleccion-incompleta-texto" class="modal-aviso-texto">Antes debes seleccionar tú mazo y una dificultad para poder iniciar una partida.</p>
+            <div class="d-flex justify-content-center mt-3">
+                <button id="cerrar-aviso-seleccion-incompleta-btn" class="btn btn-primary" type="button">Entendido</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="aviso-sin-mazo-modal" class="modal modal-centrado" style="display: none;" role="dialog" aria-modal="true">
             <div class="modal-content">
                 <h4>Antes de poder jugar necesitas crear un mazo.</h4>
                 <div class="d-flex justify-content-center mt-3" style="gap:10px;">
-                    <button id="ir-crear-mazos-btn" class="btn btn-primary">Ir a crear Mazos</button>
-                    <button id="cancelar-sin-mazo-btn" class="btn btn-secondary">Cancelar</button>
+                    <button id="ir-crear-mazos-btn" class="btn btn-primary" type="button">Ir a crear Mazos</button>
+                    <button id="cancelar-sin-mazo-btn" class="btn btn-secondary" type="button">Cancelar</button>
                 </div>
             </div>
-        </div>
-    </section>
+    </div>
 
     <!-- Contenedor de comunicación para chat y lista de jugadores -->
     <section class="comunicacion-container">

@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <title>Episodios — DC Battle Cards</title>
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+    <link href="css/mazos.css" rel="stylesheet">
+    <link href="css/salud.css" rel="stylesheet">
+    <link href="css/scrollbar.css" rel="stylesheet">
+    <link href="css/app-layout.css" rel="stylesheet">
+    <link href="css/episodios.css" rel="stylesheet">
+    <link href="css/episodio-engine.css" rel="stylesheet">
+</head>
+<body>
+
+<div class="menu-container">
+    <a href="vistaJuego.html" class="btn btn-menu">Jugar Partida</a>
+    <a href="mazos.html" class="btn btn-menu">Mazos</a>
+    <a href="coleccion.html" class="btn btn-menu">Colección</a>
+    <a href="tienda.html" class="btn btn-menu">Tienda</a>
+    <a href="opciones.html" class="btn btn-menu">Opciones</a>
+    <button type="button" onclick="abrirModalLogout()" class="btn btn-logout">Cerrar Sesión</button>
+</div>
+
+<div class="content-container">
+    <div class="episodios-vista">
+        <div class="episodios-vista-inner">
+            <h1 class="episodios-titulo">Episodios</h1>
+            <p class="episodios-descripcion">
+                Acompaña a personajes icónicos a través de trepidantes historias ambientadas en diferentes épocas y líneas temporales.
+                Explora cada episodio en el carrusel y descubre nuevas aventuras en el multiverso.
+            </p>
+
+            <div id="episodios-mensaje" class="episodios-mensaje alert alert-warning" style="display: none;" role="alert"></div>
+
+            <div class="episodios-carrusel-wrap">
+                <span class="episodios-carrusel-leyenda">Selecciona un episodio</span>
+                <div id="episodios-carrusel-controles" class="episodios-carrusel-controles" role="group" aria-label="Seleccionar episodio">
+                    <button type="button" id="episodios-flecha-izq" class="episodios-carrusel-flecha episodios-carrusel-flecha--izq" aria-label="Episodio anterior">‹</button>
+                    <div id="episodios-carrusel-escena" class="episodios-carrusel-escena">
+                        <div id="episodios-carrusel-rueda" class="episodios-carrusel-rueda"></div>
+                    </div>
+                    <button type="button" id="episodios-flecha-der" class="episodios-carrusel-flecha episodios-carrusel-flecha--der" aria-label="Siguiente episodio">›</button>
+                </div>
+                <h2 class="episodios-nombre-frente" id="episodios-nombre-frente">—</h2>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     OVERLAY DEL ENGINE DE EPISODIOS
+     (fixed, cubre toda la pantalla)
+══════════════════════════════════════════ -->
+<div id="episodio-overlay" class="episodio-overlay" style="display:none;" role="dialog" aria-modal="true" aria-label="Episodio en curso">
+
+    <!-- ── Panel CUTSCENE ────────────────── -->
+    <div id="episodio-cutscene" class="episodio-cutscene" style="display:none;">
+        <div id="cutscene-bg" class="cutscene-bg"></div>
+        <div id="cutscene-bustos-container" class="cutscene-bustos-container"></div>
+        <div class="cutscene-dialog-wrap">
+            <div class="cutscene-name-box">
+                <span id="cutscene-char-name" class="cutscene-char-name">—</span>
+            </div>
+            <div class="cutscene-dialog-box">
+                <p id="cutscene-dialog-text" class="cutscene-dialog-text"></p>
+                <button id="cutscene-btn-next" type="button" class="cutscene-btn-next" aria-label="Siguiente diálogo">▶ Siguiente</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Panel PREVIA COMBATE ──────────── -->
+    <div id="episodio-previa-combate" class="episodio-previa-combate" style="display:none;">
+        <h2 id="episodio-combate-titulo" class="episodio-combate-titulo">⚔ Combate</h2>
+        <p class="episodio-combate-subtitulo">Prepárate para el combate del episodio</p>
+        <div class="episodio-combate-panel">
+            <div id="episodio-combate-info"></div>
+        </div>
+        <div style="display:flex; gap:12px; flex-wrap:wrap; justify-content:center;">
+            <button id="episodio-btn-iniciar-combate" type="button"
+                    class="episodio-btn-accion episodio-btn-accion--primario">
+                ⚔ Iniciar combate
+            </button>
+            <button id="episodio-btn-cancelar-combate" type="button"
+                    class="episodio-btn-accion episodio-btn-accion--secundario">
+                Volver
+            </button>
+        </div>
+    </div>
+
+    <!-- ── Panel PAUSA / DERROTA ─────────── -->
+    <div id="episodio-pausa" class="episodio-pausa" style="display:none;">
+        <div class="episodio-pausa-panel">
+            <h2 id="episodio-pausa-titulo" class="episodio-pausa-titulo">¡Has sido derrotado!</h2>
+            <p id="episodio-pausa-desc" class="episodio-pausa-desc"></p>
+            <div class="episodio-pausa-botones">
+                <button id="episodio-pausa-btn-reintentar" type="button"
+                        class="episodio-btn-accion episodio-btn-accion--primario">
+                    🔄 Reintentar
+                </button>
+                <button id="episodio-pausa-btn-abandonar" type="button"
+                        class="episodio-btn-accion episodio-btn-accion--peligro">
+                    Abandonar episodio
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Panel RECOMPENSAS ─────────────── -->
+    <div id="episodio-recompensas" class="episodio-recompensas" style="display:none;">
+        <h2 class="episodio-recomp-titulo">✦ Episodio completado</h2>
+        <div class="episodio-recompensas-panel">
+            <div id="episodio-recompensas-contenido" class="episodio-recompensas-contenido"></div>
+            <button id="episodio-recompensas-btn-fin" type="button"
+                    class="episodio-btn-accion episodio-btn-accion--primario"
+                    style="align-self:center; margin-top:8px;">
+                Finalizar episodio
+            </button>
+        </div>
+    </div>
+
+</div>
+<!-- FIN OVERLAY -->
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.0/xlsx.full.min.js"></script>
+<script src="/socket.io/socket.io.js"></script>
+<script src="cliente.js"></script>
+<script src="js/tradeGrupo.js"></script>
+<script src="js/sesionUnica.js"></script>
+<script src="js/cartas.js"></script>
+<script src="js/episodios.js"></script>
+<script src="js/episodio-engine.js"></script>
+<script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+<script src="js/menu-mobile.js" defer></script>
+</body>
+</html>
