@@ -1,0 +1,512 @@
+/* Editor visual de episodios (crearEpisodios.html) — sin enlace en menú de navegación */
+.crear-ep-body {
+    margin: 0;
+    min-height: 100vh;
+    min-height: 100dvh;
+    font-family: system-ui, -apple-system, Segoe UI, sans-serif;
+    color: #e8fbff;
+    background:
+        radial-gradient(ellipse 100% 60% at 50% 0%, rgba(0, 100, 180, 0.15), transparent 55%),
+        linear-gradient(165deg, #030812 0%, #010408 100%);
+}
+
+.crear-ep-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px;
+    padding: clamp(16px, 3vw, 24px) clamp(20px, 4vw, 32px);
+    border-bottom: 1px solid rgba(0, 200, 255, 0.2);
+    background: rgba(4, 10, 28, 0.92);
+}
+
+.crear-ep-header-kicker {
+    display: block;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.62rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: rgba(0, 220, 255, 0.7);
+    margin-bottom: 4px;
+}
+
+.crear-ep-header-titulo {
+    margin: 0;
+    font-family: 'Orbitron', sans-serif;
+    font-size: clamp(1rem, 3vw, 1.35rem);
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-shadow: 0 0 18px rgba(0, 200, 255, 0.35);
+}
+
+.crear-ep-header-acciones {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+
+.crear-ep-btn {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 10px 16px;
+    border-radius: 8px;
+    border: 2px solid rgba(0, 200, 255, 0.45);
+    background: linear-gradient(180deg, rgba(0, 70, 100, 0.9), rgba(0, 35, 60, 0.95));
+    color: #e8ffff;
+    cursor: pointer;
+    transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.crear-ep-btn:hover:not(:disabled) {
+    border-color: rgba(0, 255, 240, 0.75);
+    box-shadow: 0 0 16px rgba(0, 200, 255, 0.3);
+}
+
+.crear-ep-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.crear-ep-btn--primario {
+    border-color: rgba(0, 255, 220, 0.6);
+    background: linear-gradient(180deg, rgba(0, 100, 130, 0.95), rgba(0, 50, 80, 0.98));
+}
+
+.crear-ep-btn--secundario {
+    border-color: rgba(140, 160, 190, 0.45);
+    background: linear-gradient(180deg, rgba(45, 55, 75, 0.95), rgba(25, 32, 48, 0.98));
+}
+
+.crear-ep-btn--peligro {
+    border-color: rgba(255, 90, 70, 0.5);
+    background: linear-gradient(180deg, rgba(120, 30, 25, 0.9), rgba(60, 15, 12, 0.95));
+}
+
+.crear-ep-btn--icono {
+    min-width: 36px;
+    padding: 6px 10px;
+}
+
+.crear-ep-archivo-activo {
+    font-size: 0.75rem;
+    color: rgba(200, 228, 255, 0.85);
+    margin-right: 8px;
+}
+
+.crear-ep-archivo-activo strong {
+    color: #7ee8ff;
+}
+
+.crear-ep-aviso {
+    margin: 16px 24px;
+    padding: 14px 18px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 120, 80, 0.45);
+    background: rgba(80, 25, 15, 0.35);
+    color: #ffd4c8;
+}
+
+.crear-ep-layout {
+    display: grid;
+    grid-template-columns: minmax(200px, 260px) minmax(0, 1fr);
+    gap: 0;
+    min-height: calc(100vh - 100px);
+    min-height: calc(100dvh - 100px);
+}
+
+.crear-ep-sidebar {
+    border-right: 1px solid rgba(0, 200, 255, 0.15);
+    padding: 16px 12px;
+    background: rgba(4, 10, 24, 0.6);
+    overflow-y: auto;
+}
+
+.crear-ep-sidebar-titulo {
+    margin: 0 0 12px;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: rgba(0, 220, 255, 0.8);
+}
+
+.crear-ep-lista-archivos {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.crear-ep-archivo-item {
+    margin-bottom: 4px;
+}
+
+.crear-ep-archivo-btn {
+    width: 100%;
+    text-align: left;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: #c8e8ff;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.crear-ep-archivo-btn:hover {
+    background: rgba(0, 120, 200, 0.12);
+    border-color: rgba(0, 200, 255, 0.2);
+}
+
+.crear-ep-archivo-btn--activo {
+    background: rgba(0, 120, 200, 0.22);
+    border-color: rgba(0, 220, 255, 0.45);
+    color: #fff;
+}
+
+.crear-ep-main {
+    display: grid;
+    grid-template-columns: minmax(280px, 1fr) minmax(320px, 420px);
+    min-width: 0;
+}
+
+.crear-ep-arbol {
+    padding: 16px;
+    overflow-y: auto;
+    border-right: 1px solid rgba(0, 200, 255, 0.12);
+    max-height: calc(100vh - 100px);
+    max-height: calc(100dvh - 100px);
+}
+
+.crear-ep-inspector-wrap {
+    padding: 16px;
+    overflow-y: auto;
+    background: rgba(2, 8, 22, 0.5);
+    max-height: calc(100vh - 100px);
+    max-height: calc(100dvh - 100px);
+}
+
+.crear-ep-inspector-titulo {
+    margin: 0 0 14px;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: rgba(0, 220, 255, 0.75);
+}
+
+.crear-ep-bloque {
+    margin-bottom: 18px;
+    padding: 14px;
+    border-radius: 12px;
+    border: 1px solid rgba(0, 200, 255, 0.2);
+    background: rgba(6, 14, 36, 0.65);
+}
+
+.crear-ep-bloque-titulo {
+    margin: 0 0 12px;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    color: #e8fbff;
+}
+
+.crear-ep-capitulo-cabecera {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.crear-ep-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 6px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid rgba(0, 160, 255, 0.15);
+    background: rgba(0, 30, 60, 0.35);
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.crear-ep-item:hover {
+    border-color: rgba(0, 220, 255, 0.35);
+}
+
+.crear-ep-item--sel {
+    border-color: rgba(0, 255, 240, 0.55);
+    background: rgba(0, 80, 120, 0.35);
+    box-shadow: 0 0 12px rgba(0, 160, 255, 0.2);
+}
+
+.crear-ep-item-tipo {
+    flex-shrink: 0;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.58rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 3px 6px;
+    border-radius: 4px;
+    background: rgba(0, 100, 160, 0.4);
+    color: #a8e8ff;
+}
+
+.crear-ep-item-tipo--cutscene { background: rgba(0, 120, 200, 0.45); color: #b8e8ff; }
+.crear-ep-item-tipo--combate { background: rgba(180, 60, 40, 0.45); color: #ffd4c4; }
+.crear-ep-item-tipo--recompensa { background: rgba(80, 180, 60, 0.4); color: #d4ffd8; }
+.crear-ep-item-tipo--escena { background: rgba(140, 80, 200, 0.4); color: #e8d4ff; }
+.crear-ep-item-tipo--cmd { background: rgba(255, 160, 50, 0.4); color: #ffe8c8; }
+.crear-ep-item-tipo--dlg { background: rgba(60, 100, 160, 0.45); color: #c8e0ff; }
+.crear-ep-item-tipo--voz { background: rgba(120, 90, 200, 0.45); color: #e4d4ff; }
+
+/* Selects del editor (mismo aspecto que .crear-ep-field select) */
+.crear-ep-select,
+.crear-ep-header-acciones .crear-ep-select {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 8px 28px 8px 10px;
+    border-radius: 8px;
+    border: 1px solid rgba(0, 160, 255, 0.45);
+    background-color: rgba(2, 10, 28, 0.95);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%237ee8ff' d='M1 1l5 5 5-5'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    color: #e8fbff;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    box-sizing: border-box;
+}
+
+.crear-ep-select:hover,
+.crear-ep-select:focus {
+    outline: none;
+    border-color: rgba(0, 255, 240, 0.65);
+    box-shadow: 0 0 12px rgba(0, 160, 255, 0.2);
+}
+
+.crear-ep-select--toolbar {
+    min-width: 148px;
+    max-width: 100%;
+    flex-shrink: 0;
+}
+
+.crear-ep-select--inline {
+    width: 100%;
+    margin-top: 8px;
+    font-size: 0.62rem;
+}
+
+.crear-ep-select option {
+    background-color: #061428;
+    color: #e8fbff;
+}
+
+.crear-ep-item-label {
+    flex: 1;
+    min-width: 0;
+    font-size: 0.8rem;
+    line-height: 1.3;
+    color: #d0e8ff;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.crear-ep-item-acciones {
+    display: flex;
+    gap: 2px;
+    flex-shrink: 0;
+}
+
+.crear-ep-field {
+    margin-bottom: 12px;
+}
+
+.crear-ep-field label {
+    display: block;
+    margin-bottom: 4px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: rgba(0, 220, 255, 0.85);
+    text-transform: uppercase;
+}
+
+.crear-ep-field input[type="text"],
+.crear-ep-field input[type="number"],
+.crear-ep-field select,
+.crear-ep-field textarea {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid rgba(0, 160, 255, 0.35);
+    background: rgba(2, 10, 28, 0.9);
+    color: #e8fbff;
+    font-size: 0.88rem;
+}
+
+.crear-ep-field textarea {
+    min-height: 72px;
+    resize: vertical;
+    font-family: inherit;
+    line-height: 1.45;
+}
+
+.crear-ep-field input:focus,
+.crear-ep-field select:focus,
+.crear-ep-field textarea:focus {
+    outline: none;
+    border-color: rgba(0, 255, 240, 0.65);
+    box-shadow: 0 0 0 2px rgba(0, 200, 255, 0.15);
+}
+
+.crear-ep-field--row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.crear-ep-field--row input[type="checkbox"] {
+    width: auto;
+}
+
+.crear-ep-field-ayuda {
+    margin: 4px 0 0;
+    font-size: 0.7rem;
+    color: rgba(180, 210, 240, 0.65);
+    line-height: 1.35;
+}
+
+.crear-ep-sublista {
+    margin-top: 10px;
+    padding-left: 8px;
+    border-left: 2px solid rgba(0, 160, 255, 0.25);
+}
+
+.crear-ep-fila-acciones {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.crear-ep-dialog-json {
+    border: none;
+    padding: 0;
+    max-width: min(920px, 96vw);
+    width: 96vw;
+    background: transparent;
+}
+
+.crear-ep-dialog-json::backdrop {
+    background: rgba(2, 6, 18, 0.85);
+    backdrop-filter: blur(6px);
+}
+
+.crear-ep-dialog-json-inner {
+    padding: 2px;
+    border-radius: 16px;
+    background: linear-gradient(135deg, rgba(0, 255, 240, 0.4), rgba(80, 0, 200, 0.35));
+}
+
+.crear-ep-dialog-json-inner > *:not(.crear-ep-dialog-acciones) {
+    margin-left: clamp(18px, 3vw, 26px);
+    margin-right: clamp(18px, 3vw, 26px);
+}
+
+.crear-ep-dialog-titulo {
+    margin: clamp(18px, 3vw, 26px) clamp(18px, 3vw, 26px) 8px;
+    font-family: 'Orbitron', sans-serif;
+    color: #e8fbff;
+}
+
+.crear-ep-dialog-ayuda {
+    margin: 0 clamp(18px, 3vw, 26px) 12px;
+    font-size: 0.82rem;
+    color: #b8d8f0;
+}
+
+.crear-ep-json-textarea {
+    display: block;
+    width: calc(100% - clamp(36px, 6vw, 52px));
+    margin: 0 auto 12px;
+    min-height: min(60vh, 520px);
+    padding: 14px;
+    border-radius: 10px;
+    border: 1px solid rgba(0, 160, 255, 0.35);
+    background: #020814;
+    color: #c8e8ff;
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 0.8rem;
+    line-height: 1.45;
+    resize: vertical;
+    box-sizing: border-box;
+}
+
+.crear-ep-json-error {
+    margin: 0 clamp(18px, 3vw, 26px) 12px;
+    color: #ffb8a8;
+    font-size: 0.85rem;
+}
+
+.crear-ep-dialog-acciones {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    padding: 0 clamp(18px, 3vw, 26px) clamp(18px, 3vw, 26px);
+    background: linear-gradient(165deg, rgba(6, 14, 36, 0.98), rgba(3, 8, 22, 0.99));
+    border-radius: 0 0 14px 14px;
+}
+
+.crear-ep-toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 8000;
+    padding: 12px 24px;
+    border-radius: 10px;
+    border: 1px solid rgba(72, 220, 140, 0.5);
+    background: rgba(8, 40, 28, 0.95);
+    color: #d4ffe8;
+    font-size: 0.9rem;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+}
+
+.crear-ep-toast--error {
+    border-color: rgba(255, 100, 80, 0.5);
+    background: rgba(60, 18, 12, 0.95);
+    color: #ffd4c8;
+}
+
+@media (max-width: 960px) {
+    .crear-ep-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .crear-ep-main {
+        grid-template-columns: 1fr;
+    }
+
+    .crear-ep-sidebar {
+        border-right: none;
+        border-bottom: 1px solid rgba(0, 200, 255, 0.15);
+        max-height: 200px;
+    }
+}

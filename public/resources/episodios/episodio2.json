@@ -1,0 +1,307 @@
+{
+  "episodio_id": "0",
+  "nombre": "Aves de Presa: El Veredicto de las Sombras",
+  "capitulos": [
+    {
+      "capitulo_id": "cap_01",
+      "nombre": "Capítulo 1: El veredicto de las sombras",
+      "descripcion": "La Liga de Asesinos ha aparecido en Gotham. Descubre lo que está pasando.",
+      "timeline": [
+        {
+          "type": "cutscene",
+          "cutscene_id": "cs_intro",
+          "background_image": "gotham_roof.png",
+          "fondo_inicial": "negro",
+          "dialogos": [
+            {
+              "dialogo_id": "d_voz_anon",
+              "voz_en_off": true,
+              "voz_en_off_sin_personaje": true,
+              "texto": "Azotea de Gotham. Medianoche."
+            },
+            {
+              "comando": "fundido_fondo",
+              "auto": true,
+              "background_image": "gotham_roof.png",
+              "duracion": 1200
+            },
+            {
+              "escena": [
+                {
+                  "id_character": "batgirl",
+                  "bust_image": "batgirl_focus.png",
+                  "side": "35%",
+                  "visible": true
+                },
+                {
+                  "id_character": "huntress",
+                  "bust_image": "huntress_focus.png",
+                  "side": "50%",
+                  "visible": true
+                },
+                {
+                  "id_character": "BlackCanary",
+                  "bust_image": "BlackCanary_focus.png",
+                  "side": "65%",
+                  "visible": true
+                }
+              ],
+              "dialogo_id": "d001",
+              "bust_image": "batgirl_focus.png",
+              "side": "",
+              "id_character": "batgirl",
+              "nombre": "Batgirl",
+              "visible": true,
+              "texto": "Los escáneres de la red térmica muestran movimiento inusual en los muelles.\nTres de nuestros informantes desaparecieron anoche y todos los rastros llevan a la $Liga de Asesinos$."
+            },
+            {
+              "dialogo_id": "d002",
+              "bust_image": "batgirl_focus.png",
+              "side": "",
+              "id_character": "batgirl",
+              "nombre": "Batgirl",
+              "visible": true,
+              "texto": "He avisado a #Nightwing# en %Blüdhaven% por si esto se extiende, pero de momento estamos solas."
+            },
+            {
+              "dialogo_id": "d003",
+              "bust_image": "huntress_focus.png",
+              "side": "",
+              "id_character": "huntress",
+              "nombre": "La Cazadora",
+              "visible": true,
+              "texto": "¿La Liga? Genial. Odio a esos ninjas.\nSiempre se creen más sigilosos de lo que son."
+            },
+            {
+              "dialogo_id": "d004",
+              "bust_image": "BlackCanary_focus.png",
+              "side": "",
+              "id_character": "BlackCanary",
+              "nombre": "Canario Negro",
+              "visible": true,
+              "texto": "No te confíes, #Helena#.\nSi la Liga está aquí y están secuestrando a gente de perfil tan bajo, significa que $alguien$ los está utilizando como cebo.\nAlguien que probablemente busque nuestra atención."
+            },
+            {
+              "dialogo_id": "d005",
+              "bust_image": "batgirl_focus.png",
+              "side": "",
+              "id_character": "batgirl",
+              "nombre": "Batgirl",
+              "visible": true,
+              "texto": "Pues la acaban de conseguir.\nPreparaos, tenemos compañía en el perímetro."
+            },
+            {
+              "comando": "escena",
+              "auto": true,
+              "escena": [
+                {
+                  "id_character": "batgirl",
+                  "bust_image": "batgirl_focus.png",
+                  "side": "35%",
+                  "visible": false
+                },
+                {
+                  "id_character": "huntress",
+                  "bust_image": "huntress_focus.png",
+                  "side": "50%",
+                  "visible": false
+                },
+                {
+                  "id_character": "BlackCanary",
+                  "bust_image": "BlackCanary_focus.png",
+                  "side": "65%",
+                  "visible": false
+                }
+              ]
+            },
+            {
+              "comando": "fundido_negro",
+              "auto": true,
+              "duracion": 1200
+            }
+          ]
+        },
+        {
+          "type": "combate",
+          "combate_id": "comb_01",
+          "tablero": "tablero_background_gotham",
+          "cartas_jugador": [
+            "Batgirl",
+            "Black Canary",
+            "Huntress"
+          ],
+          "nivel_jugador": 0,
+          "cartas_BOT": [
+            "Assassin",
+            "Assassin",
+            "Assassin"
+          ],
+          "nivel_BOT": 6
+        },
+        {
+          "type": "cutscene",
+          "cutscene_id": "cs2",
+          "background_image": "gotham_roof.png",
+          "dialogos": [
+            {
+              "escena": [
+                {
+                  "id_character": "batgirl",
+                  "bust_image": "batgirl_focus.png",
+                  "side": "25%",
+                  "visible": true
+                },
+                {
+                  "id_character": "huntress",
+                  "bust_image": "huntress_focus.png",
+                  "side": "40%",
+                  "visible": true
+                },
+                {
+                  "id_character": "BlackCanary",
+                  "bust_image": "BlackCanary_focus.png",
+                  "side": "55%",
+                  "visible": true
+                },
+                {
+                  "id_character": "assassin",
+                  "bust_image": "assassin_defeated.png",
+                  "side": "75%",
+                  "visible": true
+                }
+              ],
+              "dialogo_id": "dia1",
+              "bust_image": "huntress_focus.png",
+              "side": "",
+              "id_character": "huntress",
+              "nombre": "La Cazadora",
+              "visible": true,
+              "texto": "Se acabó el tiempo, ninja de pacotilla. Habla. ¿Quién os envía?"
+            },
+            {
+              "dialogo_id": "dia2",
+              "bust_image": "assassin_defeated.png",
+              "side": "",
+              "id_character": "assassin",
+              "nombre": "Asesino derrotado",
+              "visible": true,
+              "texto": "$Ella$... os espera. Solo los fuertes sobrevivirán.\n La $Purga de Gotham$ está cerca."
+            },
+            {
+              "dialogo_id": "d004",
+              "bust_image": "huntress_focus.png",
+              "side": "",
+              "id_character": "huntress",
+              "nombre": "La Cazadora",
+              "visible": true,
+              "texto": "Este tío solo dice tonterías. Creo que le hemos dado demasiado fuerte."
+            },
+            {
+              "dialogo_id": "d004",
+              "bust_image": "BlackCanary_focus.png",
+              "side": "",
+              "id_character": "BlackCanary",
+              "nombre": "Canario Negro",
+              "visible": true,
+              "texto": "¿Ella?\n No se referirá a Taila Al Ghul, ¿verdad? Ninjas imbéciles, caos en la ciudad, personas desaparecidas...\nSin duda parece su estilo."
+            },
+            {
+              "dialogo_id": "dia2",
+              "bust_image": "assassin_defeated.png",
+              "side": "",
+              "id_character": "assassin",
+              "nombre": "Asesino derrotado",
+              "visible": true,
+              "texto": "No estáis preparadas para lo que está por venir. Ni siquiera el murciélago podría pararnos.\nUnas justicieras jugando a ser heroinas no..."
+            },
+            {
+              "escena": [
+                {
+                  "id_character": "BlackCanary",
+                  "bust_image": "BlackCanary_focus.png",
+                  "side": "65%",
+                  "visible": true
+                }
+              ],
+              "dialogo_id": "d_voz_anon",
+              "voz_en_off": true,
+              "voz_en_off_sin_personaje": true,
+              "texto": "#Canario Negro# noquea al Asesino dándole una fuerte $puñetazo$ en la cara."
+            },
+            {
+              "comando": "escena",
+              "escena": [
+                {
+                  "id_character": "assassin",
+                  "visible": false
+                }
+              ]
+            },
+            {
+              "dialogo_id": "d_voz_anon",
+              "voz_en_off": true,
+              "voz_en_off_sin_personaje": true,
+              "texto": "#Batgirl# y #Huntress# observan a #Canario Negro# en silencio."
+            },
+            {
+              "dialogo_id": "d004",
+              "bust_image": "BlackCanary_focus.png",
+              "side": "",
+              "id_character": "BlackCanary",
+              "nombre": "Canario Negro",
+              "visible": true,
+              "texto": "¡No me miréis así! Nos ha llamado justicieras...\nNo me gusta que me llamen justiciera."
+            },
+            {
+              "dialogo_id": "d005",
+              "bust_image": "batgirl_focus.png",
+              "side": "",
+              "id_character": "batgirl",
+              "nombre": "Batgirl",
+              "visible": true,
+              "texto": "Volvamos a lo importante...\nNo creo que se trate de $Talia Al Ghul$ ¿Os habéis fijado en esta daga? El %tallado% sobre la hoja..."
+            },
+            {
+              "dialogo_id": "d_voz_anon",
+              "voz_en_off": true,
+              "voz_en_off_sin_personaje": true,
+              "texto": "Todas observan la %daga% con atención."
+            },
+            {
+              "dialogo_id": "d004",
+              "bust_image": "BlackCanary_focus.png",
+              "side": "",
+              "id_character": "BlackCanary",
+              "nombre": "Canario Negro",
+              "visible": true,
+              "texto": "El emblema del $Dragón Sin$..."
+            },
+            {
+              "dialogo_id": "d005",
+              "bust_image": "batgirl_focus.png",
+              "side": "",
+              "id_character": "batgirl",
+              "nombre": "Batgirl",
+              "visible": true,
+              "texto": "Me parece que las cosas se van a poner mucho peor de lo que esperábamos..."
+            }
+          ]
+        },
+        {
+          "type": "recompensa",
+          "monedas": 250,
+          "objetos": [],
+          "cartas": [],
+          "skins": []
+        }
+      ]
+    },
+    {
+      "capitulo_id": "cap_02",
+      "nombre": "Capítulo 2: Tras la pista.",
+      "descripcion": "Averigua quien está detrás de las desapariciones en Gotham.",
+      "timeline": [
+      ]
+    }
+  ]
+}

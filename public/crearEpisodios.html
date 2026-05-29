@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <title>Editor de episodios — DC Battle Cards</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+    <link href="css/scrollbar.css" rel="stylesheet">
+    <link href="css/crearEpisodios.css" rel="stylesheet">
+</head>
+<body class="crear-ep-body">
+    <header class="crear-ep-header">
+        <div class="crear-ep-header-marca">
+            <span class="crear-ep-header-kicker">Herramienta interna</span>
+            <h1 class="crear-ep-header-titulo">Editor de episodios</h1>
+        </div>
+        <div class="crear-ep-header-acciones" id="crear-ep-toolbar"></div>
+    </header>
+
+    <p id="crear-ep-aviso" class="crear-ep-aviso" hidden></p>
+
+    <div class="crear-ep-layout" id="crear-ep-layout" hidden>
+        <aside class="crear-ep-sidebar">
+            <h2 class="crear-ep-sidebar-titulo">Archivos JSON</h2>
+            <ul id="crear-ep-lista-archivos" class="crear-ep-lista-archivos"></ul>
+        </aside>
+        <div class="crear-ep-main">
+            <div class="crear-ep-arbol" id="crear-ep-arbol"></div>
+            <div class="crear-ep-inspector-wrap">
+                <h2 class="crear-ep-inspector-titulo">Propiedades</h2>
+                <div id="crear-ep-inspector" class="crear-ep-inspector"></div>
+            </div>
+        </div>
+    </div>
+
+    <dialog id="crear-ep-dialog-json" class="crear-ep-dialog-json">
+        <form method="dialog" class="crear-ep-dialog-json-inner">
+            <h3 class="crear-ep-dialog-titulo">Vista JSON</h3>
+            <p class="crear-ep-dialog-ayuda">Edición avanzada. Al aceptar se valida y se aplica al episodio en memoria.</p>
+            <textarea id="crear-ep-json-textarea" class="crear-ep-json-textarea" spellcheck="false"></textarea>
+            <p id="crear-ep-json-error" class="crear-ep-json-error" hidden></p>
+            <div class="crear-ep-dialog-acciones">
+                <button type="submit" class="crear-ep-btn crear-ep-btn--primario">Aplicar</button>
+                <button type="button" id="crear-ep-json-cancelar" class="crear-ep-btn crear-ep-btn--secundario">Cancelar</button>
+            </div>
+        </form>
+    </dialog>
+
+    <div id="crear-ep-toast" class="crear-ep-toast" hidden role="status"></div>
+
+    <script src="js/episodiosCapitulos.js"></script>
+    <script src="js/crearEpisodiosModel.js"></script>
+    <script src="js/crearEpisodios.js"></script>
+</body>
+</html>

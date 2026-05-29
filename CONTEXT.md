@@ -1,0 +1,578 @@
+# CONTEXT
+
+Documento vivo de referencia técnica para trabajar sobre DC Battle Cards sin romper flujos existentes.
+
+> **Última validación contra código:** 2026-05-28. Revisado frente a `server.js`, `partida.js`, `partidaCoop.js`, `jugarPartida.js`, `cartas.js`, `tienda.js`, `episodio-engine.js` y vistas principales.
+
+## Visión General
+
+- Arquitectura: `Node/Express` + `Socket.IO` en `server.js`, frontend vanilla en `public/` (HTML/CSS/JS), persistencia en Firestore.
+- Runtime principal:
+  - Login/registro: `public/main.js` -> API backend.
+  - Hub: `public/vistaJuego.html` + `public/jugarPartida.js`.
+  - Motor de combate principal: `public/tablero.html` + `public/partida.js`.
+  - Coop online dedicado: `public/tablero_coop.html` + `public/partidaCoop.js`.
+- Fuente de datos de catálogo/configuración: Excel en `public/resources/*.xlsx` (`cartas.xlsx`, `eventos.xlsx`, `desafios.xlsx`, `asaltos.xlsx`, etc.).
+- Patrón crítico: la app usa mucho `localStorage` como bus de estado entre vistas/modos. Cualquier cambio en keys o limpieza afecta múltiples flujos.
+
+## Glosario de Términos
+
+- **VS BOT (padre)**: flujo base PvE, desde `vistaJuego` a `tablero`, sobre el que derivan varios modos.
+- **PvP online**: versión sincronizada por sockets del combate base.
+- **Desafío (camino)**: progresión por niveles/facción desde `desafios.html`, Excel `desafios.xlsx`.
+- **Evento rotativo (hub)**: PvE desde Centro de Operaciones (`vistaJuego`), Excel `eventos.xlsx`, rotación horaria. **Importante:** también persiste en `desafioActivo` con `tipo: 'evento'` (misma key que desafíos, distinto origen).
+- **Asalto**: PvE tipo VS BOT con mazos predefinidos y dificultad 6/7/8.
+- **Coop online**: dos jugadores aliados contra BOT/BOSS, sincronizado por snapshots.
+- **Episodios**: timeline lineal `cutscene -> combate -> recompensa` con estado persistido.
+- **Sync token**: control de concurrencia multi-dispositivo para Firestore.
+- **Parent card**: nomenclatura para carta base sin skin; se usa para deduplicar progresos/colección.
+
+### Nomenclaturas y keys críticas
+
+- Sesión:
+  - `usuario`, `email`, `dc_active_session_id_v1`
+- Modo/partida:
+  - `partidaModo`, `mazoJugador`, `mazoJugadorBase`, `mazoOponente`, `mazoOponenteBase`, `dificultad`
+  - `desafioActivo`, `asaltoActivo`, `episodioActivo`
+  - `partidaPvpSessionId`, `partidaPvpRol`, `partidaPvpPrimerTurno`
+  - `partidaPvpInicialesJugadorIdx`, `partidaPvpInicialesOponenteIdx`
+- Oponente:
+  - `nombreOponente`, `avatarOponente`, `emailOponente`
+- UI/estado temporal:
+  - `dc_tablero_fondo_url` (sessionStorage), `dc_tablero_abandonado` (sessionStorage)
+- Recompensa diaria:
+  - `dc_daily_reward_claim_lock_v1` (`RECOMPENSA_DIARIA_LOCK_KEY`)
+  - `dc_diaria_last_claim_at_v1` (`DC_DIARIA_LAST_CLAIM_LS_KEY`)
+  - `dc_daily_reward_modal_ack_claim_ts` (sessionStorage, `RECOMPENSA_DIARIA_MODAL_ACK_KEY`)
+  - En `usuario`: `recompensas.diariaSobres.lastClaimAt`
+- Otros:
+  - `partidaRecompensada` (evita doble otorgamiento en misma partida)
+  - `grupoActual`, `grupoInvitacionEnCurso`
+  - `pvpDebugUI`
+
+## Árbol del Proyecto Comentado
+
+- `server.js`: backend único (API auth/user/admin, sockets, sesiones, concurrencia sync, lógica lobby/coop/pvp).
+- `public/cliente.js`: cliente socket central (chat, grupos, lobby, invitaciones, puentes a `window`).
+- `public/js/cartas.js`: núcleo transversal (sync usuario, recompensa diaria, color RGB, helpers de cartas/skills/estrellas).
+- `public/js/sesionUnica.js`: inyección de `sessionId` y control de sesión única.
+- `public/tablero.html` + `public/partida.js`: motor combate principal (VS BOT, desafíos, asaltos, PvP, episodios).
+- `public/tablero_coop.html` + `public/partidaCoop.js`: motor combate coop online.
+- `public/vistaJuego.html` + `public/jugarPartida.js`: hub principal, paneles, chat, eventos activos, partida rápida.
+- `public/multijugador.html` + `public/multijugador.js` + `public/multijugadorEventosCoop.js`: PvP/Coop lobby y preparación.
+- `public/desafios.html` + `public/desafios.js`: flujo eventos/desafíos offline.
+- `public/asaltos.html` + `public/js/asaltos.js`: asaltos rotativos con dificultades altas.
+- `public/episodios.html` + `public/js/episodios.js` + `public/js/episodio-engine.js`: carrusel, cutscenes y timeline episódica.
+- `public/tienda.html` + `public/tienda.js`: tienda, rotaciones, pagos y persistencia.
+- `public/coleccion.html` + `public/coleccion.js`: colección/sobres/filtros.
+- `public/crearMazos.html` + `public/crearMazos.js`: construcción de mazos.
+- `public/mazos.html` + `public/mazos.js`: edición de mazos.
+- `public/mejorarCartas.html` + `public/mejorarCartas.js`: mejora clásica/especial/fragmentos/destrucción.
+- `public/resources/*.xlsx`: catálogos y definición de contenido.
+
+### Catálogos Excel (rutas reales)
+
+| Archivo | Uso principal |
+|---------|----------------|
+| `cartas.xlsx` | Catálogo maestro de cartas, stats base, skills, imágenes |
+| `desafios.xlsx` | Camino de desafíos (`desafios.html`) |
+| `eventos.xlsx` | Eventos rotativos del hub (`jugarPartida.js`) |
+| `eventos_online.xlsx` | Eventos coop online (`multijugadorEventosCoop.js`) |
+| `asaltos.xlsx` | Asaltos semanales |
+| `episodios.xlsx` | Catálogo de episodios (carrusel + `JSON_file`) |
+| `misiones_diarias.xlsx` | Misiones diarias/semanales |
+| `skins.xlsx` | Apariencias / skins |
+| `consejos.xlsx` | Carrusel de consejos en `vistaJuego` |
+
+### Módulos globales en `window` (usar siempre estos nombres)
+
+| API global | Archivo | Rol |
+|----------|---------|-----|
+| `DCEscaladoStatsCarta` | `js/escaladoStatsCarta.js` | Fórmulas de poder/salud por nivel |
+| `DCCatalogoCartas` | `js/cartas.js` | Caché compartida de `cartas.xlsx` |
+| `actualizarUsuarioConSyncFirebase` | `js/cartas.js` | Persistencia con control de concurrencia |
+| `DCFiltrosCartas` | `js/filtrosCartas.js` | Filtro `skill_class`, etiquetas ES |
+| `DCSkinsCartas` | `js/skinsCartas.js` | Parent card, skins, resolver catálogo |
+| `DCMisiones` | `js/misionesDiarias.js` | Track misiones (cola FIFO interna) |
+| `DCRedDot` | `js/menu-mobile.js` | Badges “nuevo” en cartas/sobres/menú |
+| `DCEpisodioEngine` | `js/episodio-engine.js` | Timeline episodios |
+| `DCEpisodiosRequisitos` | `js/episodiosRequisitos.js` | Cartas requeridas, niveles catálogo (`nivel_jugador: 0`) |
+| `aplicarColorPrincipalUsuario` | `js/cartas.js` | Tema RGB del jugador |
+
+## Flujos Funcionales
+
+## Carga de vistas (patrón)
+
+- Carga frecuente de scripts:
+  - `/socket.io/socket.io.js`
+  - `cliente.js` (si la vista usa realtime)
+  - `js/sesionUnica.js`
+  - `js/cartas.js`
+  - script específico de la vista
+- Inicialización en `DOMContentLoaded` por módulo.
+
+## Flujo de combate por modo
+
+### 1) Jugador VS BOT (modo padre) — incluye “Partida rápida”
+
+- Origen: `vistaJuego` (`jugarPartida.js`), botón **Comenzar** del panel Partida rápida.
+- Configura mazo del jugador + dificultad (1–6).
+- Genera mazo bot con `generarMazoBotConSinergia()` (12 cartas, una facción, sinergia por afiliación según `OBJETIVO_SINERGIA_POR_DIFICULTAD`).
+- Escala cartas del bot al nivel elegido (`DCEscaladoStatsCarta` / `escalarCartaSegunDificultad` en `partida.js`).
+- Limpia: `desafioActivo`, `asaltoActivo`, residuos PvP (`limpiarEstadoPvpAntesDePartidaVsBot`).
+- **No** setea `partidaModo` (queda vacío o se elimina).
+- Entra a `tablero.html`; detección en combate:
+  - `ES_MODO_PVP === false`
+  - `ES_MODO_ASALTO === false`
+  - `ES_MODO_EPISODIO === false`
+  - `estadoDesafio.activo === false`
+  - Entonces `esPartidaRapidaVsBot() === true` → recompensas de partida rápida.
+- Victoria: `otorgarRecompensasVictoria()` + `/update-user` + misiones `bot`, `bot_defeat`, colección H/V.
+- Fondo opcional: `js/tableroFondo.js` + `GET /api/tableros`.
+
+### 2) PvP Online Multijugador
+
+- Lobby en `multijugador.html` con `multiplayer:lobby:*`.
+- Servidor emite `multiplayer:session:start`.
+- Cliente guarda contexto PvP en LS (`partidaModo=pvp`, `partidaPvpSessionId`, rol...).
+- `partida.js` sincroniza acciones/estado por sockets (`multiplayer:pvp:*`) con revisiones y resync.
+- No usa recompensas PvE del modo BOT.
+
+### 3a) Desafíos (camino `desafios.html`)
+
+- Excel: `resources/desafios.xlsx` (`desafios.js`).
+- Progresión por nivel/facción (camino Héroes o Villanos), desbloqueo secuencial.
+- Jugador elige **6 cartas** (no 12) + dificultad del desafío.
+- Persiste `desafioActivo` (sin `tipo: 'evento'` o con tipo desafío según payload).
+- `partida.js` → `construirEstadoDesafio()`, oleadas de enemigos, posible **BOSS** (`escalarBossSegunDificultad`).
+- Recompensas: `otorgarRecompensasDesafio()`; primera victoria otorga cartas/objetos; repeticiones suelen dar solo puntos.
+
+### 3b) Eventos rotativos (hub `vistaJuego`)
+
+- Excel: `resources/eventos.xlsx` (`jugarPartida.js` → `cargarEventosActivos`, `renderizarEventosActivos`).
+- Rotación: `ROTACION_EVENTOS_MS = 3_600_000` (1 h), clave `event-rotation-v1-{idVentana}`.
+- Muestra 4 eventos por ventana (carrusel 3D, `js/carrusel3d.js`).
+- Al confirmar: construye objeto con `tipo: 'evento'` y lo guarda en **`desafioActivo`** (misma key LS que desafíos).
+- Limpia `asaltoActivo`, `partidaModo`, `mazoOponente`; 6 cartas jugador; dificultad en `dificultad`.
+- `partida.js` trata `desafioActivo.tipo === 'evento'` para recompensas/progreso (`eventosJugadosPorRotacion`, clave distinta a coop).
+- Puntos de recompensa: total Excel pensado para dificultad 6; escala `(dificultad/6) * puntosExcel`.
+
+### 4) Asaltos
+
+- Flujo en `js/asaltos.js`, rotación semanal.
+- Mazo enemigo predefinido (no aleatorio), dificultad 6/7/8.
+- `partidaModo=asalto`, `asaltoActivo` en LS.
+- `partida.js` aplica rama asalto con reglas/recompensas particulares.
+
+### 5) Evento Coop Online
+
+- Deriva de Eventos + PvP (2 jugadores aliados).
+- Preparación por fases en `multijugadorEventosCoop.js`.
+- Servidor crea sesión coop y arranca `tablero_coop.html`.
+- `partidaCoop.js` usa snapshots y revisiones por socket.
+- Habilidades aliadas (shield/heal/heal_all etc.) aplicables entre P1/P2.
+
+### 6) Episodios
+
+- Catálogo: `resources/episodios.xlsx` + JSON en `public/resources/episodios/` (campo `JSON_file` del Excel).
+- **JSON episodio:** metadatos en raíz (`episodio_id`, `nombre`) y array **`capitulos[]`**. Cada capítulo: `capitulo_id`, `nombre`, `descripcion` (opcional), `timeline[]` (misma sintaxis que antes). **Compatibilidad:** si solo existe `timeline` en raíz, el motor lo trata como un único capítulo (`DCEpisodiosCapitulos.normalizarCapitulos`).
+- UI: `episodios.html` + carrusel 3D (`episodios.js`) + botón **Comenzar** → modal **capítulos** (`#episodios-modal-capitulos`, estilo panel asaltos: marco neón ~920px, lista con número, estado y botón Jugar/Repetir/Bloqueado). Capítulo 0 siempre desbloqueado; el N+1 requiere completar el N (`js/episodiosProgreso.js`, LS `dc_episodios_progreso_v1`). → `DCEpisodioEngine.iniciarEpisodio(ep, capituloIndex)`.
+- **Editor JSON (solo URL):** `crearEpisodios.html` — sin enlace en menús. API `GET/PUT/POST /api/episodios-editor/*` (habilitado en desarrollo o `EPISODIOS_EDITOR=1`). Módulos `crearEpisodiosModel.js` + `crearEpisodios.js`: capítulos, timeline (cutscene / escena / combate / recompensa), diálogos (**dlg**), comandos (**cmd**: escena, fondo_negro, fundido_negro, fundido_fondo), voz en off (**voz**); cutscene desplegable independiente de la selección de línea; escena inicial vía array `escena`; validación y vista JSON cruda.
+- Engine: `js/episodio-engine.js`, timeline lineal **por capítulo**:
+  - `cutscene`: `background_image`, `dialogos[]`, comandos de escena (ver abajo). **Layout bustos:** `bottom: 0` en CSS; `side` = posición horizontal %.
+  - **Comandos de escena** (`episodio-engine.js` → `aplicarComandosEscena`):
+    - **Al inicio del cutscene:** array `escena`, `escena_inicial` o `personajes_iniciales` en el objeto cutscene (todos los bustos visibles antes del primer diálogo).
+    - **Entre diálogos:** línea con `"comando": "escena"` y array `escena` (sin `texto`) — solo actualiza personajes. Por defecto **avanza solo** tras el fade de bustos; `"auto": false` obliga a pulsar «Siguiente».
+    - **Junto a un diálogo:** mismo array `escena` en la línea de diálogo (se aplica antes del texto; el hablante sigue siendo `id_character` de esa línea).
+    - **En la timeline:** `{ "type": "escena", "escena": [...], "background_image"?, "limpiar_escena"?, "ocultar_ausentes"?, "auto"? }` — paso suelto sin diálogo; por defecto avanza solo (`auto: false` para pausa manual).
+    - Cada entrada de escena: `id_character` (obligatorio), `bust_image`, `side`, `nombre`, `visible` (true/false). **`side`:** porcentaje o px; el **centro** del busto se ancla en esa coordenada horizontal (`translateX(-50%)`), misma regla en `escena` inicial, `escena[]` en diálogo y campos `side` del hablante (`resolverSidePersonaje` / `normalizarSideBusto`). Valores numéricos sin unidad (`5`) → `5%`.
+    - Opciones: `ocultar_ausentes: true` oculta personajes no listados en ese comando; `limpiar_escena: true` (solo en `type: escena`) vacía la escena antes de aplicar.
+  - **Comandos de fondo** (`#cutscene-fade` + `#cutscene-bg` en `episodio-engine.js`):
+    - **Inicio cutscene en negro:** `fondo_inicial: "negro"`, `fondo_negro: true` o `background_image: "negro"`.
+    - **Líneas en `dialogos[]` (sin `texto`):** `"comando": "fondo_negro"` (negro instantáneo, **manual** salvo `"auto": true`); `"comando": "fundido_negro"` / `"fundido_fondo"` (fundidos, opcional `duracion` ms; por defecto **avanza solo** al terminar el fade; `"auto": false` para confirmar con «Siguiente»). `fundido_fondo` requiere `background_image` en la línea o fondo ya definido en el cutscene. Alias: `fade_negro`, `fade_from_black`, etc. Parámetro **`auto`**: booleano `true` | `false` (también `"true"` / `"false"`).
+  - **Bustos cutscene:** tamaño fijo CSS (`--cutscene-busto-w/h` 520×720; móvil 400×556 / 336×464); al hablar no escalan ni brillan en naranja; los no hablantes usan `brightness(0.76)` + `saturate(0.9)` (clase `--silencio`). Al cambiar `visible` en comandos `escena` / diálogo: **fade-in** y **fade-out** (~380 ms, `renderizarBustosDOM` incremental); `limpiar_escena` o nuevo cutscene vacía al instante.
+  - **Voz en off** (línea de diálogo): `voz_en_off: true` (alias `vozEnOff`, `voiceover`). El texto se muestra como `*texto en negrita*` (`<strong class="cutscene-dialog-voz-en-off">`). Con personaje: `id_character` + `nombre` → caja de nombre visible (bustos sin resaltar hablante). Sin personaje: `voz_en_off_sin_personaje: true` (alias `sin_personaje`, `sin_nombre`, `anonima`) u omitir `id_character`/`nombre` → se oculta la caja de nombre. Referencia: `resources/episodios/ejemplo.json`.
+  - `combate`: `cartas_jugador[]`, `nivel_jugador`, `cartas_BOT[]`, `nivel_BOT`, **`tablero`** (opcional, nombre de archivo en `resources/tableros/`, p. ej. `"tablero_background_gotham"` — misma convención que eventos/asaltos en Excel). **`nivel_jugador: 0`** → cada carta del jugador usa el **nivel de su copia en colección** (`DCEpisodiosRequisitos.construirEntradasMazoJugadorEpisodio`). Cualquier otro valor fija ese nivel para todas (como antes). Previa de combate: miniaturas `carta-mini` completas (poder, salud, estrellas, badges) vía `DCEpisodiosRequisitos.construirCartasEnriquecidasDesdeEntradas`.
+  - **Saltos de línea en diálogo:** `\n` en `texto` (JSON o literal `\\n`) → nueva línea en el cuadro (`white-space: pre-line`; typewriter y voz en off incluidos).
+  - **Color en `texto`:** `#texto#` azul, `$texto$` rojo, `%texto%` amarillo (`parsearSegmentosTextoDialogo`; clases `cutscene-dialog-color--*`; compatible con `\n` y voz en off).
+  - **Cartas requeridas (jugador):** todas las entradas únicas de `cartas_jugador` en los bloques `combate` del timeline deben estar en la colección del usuario (copia base parent, misma regla que colección — `esCopiaBaseParentEnColeccion` en `cartas.js`). Módulo `js/episodiosRequisitos.js`; UI en panel del carrusel (`episodios.js`: sub-panel «Cartas requeridas», miniaturas `evento-enemigo-card`); validación al pulsar **Comenzar** y en `DCEpisodioEngine.iniciarEpisodio` / `lanzarCombate`.
+  - `recompensa`: `monedas`, `objetos[]`, `cartas[]`, `skins[]`
+- Estado LS `episodioActivo` (sesión en curso):
+  ```json
+  { "episodio_id", "json_path", "nombre", "capitulo_index", "capitulo_id", "capitulo_nombre", "timeline_index", "estado": "activo"|"combate", "combate_resultado": null|"victoria"|"derrota", "tablero": string (opcional) }
+  ```
+- Progreso persistente capítulos: `dc_episodios_progreso_v1` → `{ "id|json_path": { "capitulosCompletados": [0,1,...] } }`. Al terminar un capítulo (`recompensa` o fin de `timeline`): se marca índice completado y se desbloquea el siguiente; capítulo intermedio muestra panel «Capítulo completado»; el último muestra «Episodio completado».
+- Al lanzar combate: `estado: 'combate'`, `tablero` copiado del bloque JSON, mazos en LS, limpia `desafioActivo`/`asaltoActivo`/`partidaModo` y `dc_tablero_fondo_url` (sessionStorage), navega a `tablero.html`. Fondo en partida: `js/tableroFondo.js` → `fondoDesdeEpisodioActivoLs()` si `episodioActivo.estado === 'combate'` y hay `tablero`; si no, fondo aleatorio VS BOT como partida rápida.
+- En `partida.js`:
+  - `ES_MODO_EPISODIO` solo si `episodioActivo.estado === 'combate'` (no basta con existir la key).
+  - Mazos: `construirMazoEpisodioDesdeNombres()` (catálogo + `fusionarCartaCompletaDesdeCatalogo` + `escalarCartaSegunDificultad`).
+  - Sin recompensas de partida rápida; al terminar escribe `combate_resultado` y vuelve a `episodios.html`.
+  - `limpiarEstadoPartidaEnCurso()` **no** borra `episodioActivo` (lo gestiona el engine).
+
+## Sincronización con Firebase (SyncToken)
+
+- Campos en Firestore (`users/{email}`):
+  - `syncToken` (string UUID)
+  - `syncUpdatedAt` (timestamp ms)
+- Cliente (`public/js/cartas.js`):
+  - `actualizarUsuarioConSyncFirebase(usuario, email, { maxIntentos })`
+  - `refrescarUsuarioSesionDesdeServidor()`, `fusionarUsuarioSesionTrasUpdate(...)`
+  - `js/sesionUnica.js` inyecta `sessionId` en `POST /get-user`, `/update-user`, `/validate-session`
+- Servidor (`server.js`):
+  - `guardarUsuarioConControlConcurrencia(email, usuarioPayload)`
+  - `asegurarMetadataSyncUsuario(email, userData)`
+  - Si cliente desactualizado: HTTP **409**, body `{ codigo: 'SYNC_CONFLICT', usuario: <snapshot servidor> }`
+  - Regenera `syncToken` + `syncUpdatedAt` en cada guardado exitoso
+- **Regla crítica (tienda):** no confiar solo en `syncUpdatedAt` local; el token manda (comentario explícito en servidor).
+- Módulos que persisten usuario (usar siempre el helper): `partida.js`, `partidaCoop.js`, `tienda.js`, `mazos.js`, `crearMazos.js`, `mejorarCartas.js`, `opciones.js`, `misionesDiarias.js`, `episodio-engine.js` (recompensas finales).
+
+## Tienda
+
+- Archivo: `public/tienda.js`.
+- Rotación global de cartas en tienda:
+  - `ROTACION_TIENDA_MS = 2 * 60 * 60 * 1000` (2 h)
+  - `VERSION_TIENDA_GLOBAL = 'global-rotation-v2-shop-tabs'`
+  - Estado en `usuario.tienda`: `ventanaId`, `version`, listas `cartasHeroes`, `cartasVillanos`, flags `agotada`
+- Ofertas del día:
+  - `usuario.tienda.ofertasDia`, `ofertasDiaFecha`, `fecha` (día local)
+  - UI con barra de progreso hasta siguiente rotación
+- Compra:
+  - Puede pagar con `usuario.puntos` o con objetos (`mejoraCarta`, `mejoraEspecial`, etc.) según ítem
+  - Sobres: claves `sobreH1`…`sobreV3` en `usuario.objetos`
+  - Marca oferta `agotada: true`, merge LS antes de guardar, luego `/update-user`
+- Al abrir tienda: sincroniza stats de cartas del catálogo sin resetear rotación/agotados.
+
+## Sistema de niveles y habilidades
+
+### Escalado de stats (`js/escaladoStatsCarta.js`)
+
+- Niveles 2–6: **+500 poder** y **+500 salud** por nivel subido (acumulativo desde `nivelBase` del catálogo).
+- Nivel 7: +1000 poder, +1500 salud (incremento de ese escalón).
+- Nivel 8: +1500 poder, +2000 salud.
+- API: `calcularPoderEscaladoDesdeBase`, `calcularSaludEscaladaDesdeBase`, `escalarCartaStatsANivel`, `escalarCartaDeltaDificultad` (usada en `partida.js` como `escalarCartaSegunDificultad`).
+- Boss: `escalarBossSegunDificultad` — multiplicadores extra de vida (×8 base, ×1.75 en `SaludMax`).
+
+### Habilidades en combate (`partida.js` / `partidaCoop.js`)
+
+- Campos en carta: `skill_name`, `skill_info`, `skill_class`, `skill_trigger`, `skill_power` (recalculado con `recalcularSkillPowerPorNivel`).
+- Clases reconocidas en motor (lista de referencia, ver también `DCFiltrosCartas`):
+  - `aoe`, `extra_attack`, `buff`, `bonus_buff`, `debuff`, `bonus_debuff`, `heal_debuff`, `revive`, `heal`, `heal_all`, `life_steal`, `shield`, `shield_aoe`, `tank`, `stun`, `dot`
+- Alias corregido en parseo: `heall_all` → `heal_all`.
+- Módulo auxiliar: `js/healDebuffCombat.js` (factor de curación/debuff en combate).
+- PvP: habilidades sincronizadas por socket; coop usa snapshots + metadata de acción.
+
+### Visual nivel 8 y estrellas
+
+- Holo: `DC_NIVEL_MIN_CARTA_HOLO = 8`, clase CSS `carta-holo`, estilos `css/carta-holo.css`, animación sincronizada globalmente.
+- Estrellas: `dcRellenarEstrellasCartaCompleta` — niveles 1–5 estrellas clásicas; 6/7/8 usan iconografía especial (`star6`, etc.).
+
+## Recompensa diaria
+
+- Implementación: `procesarRecompensaDiariaGlobal()` en `public/js/cartas.js` (DOMContentLoaded de vistas con `cartas.js`).
+- **No** duplicar en `jugarPartida.js` (comentario explícito: evita doble modal).
+- Constantes: `RECOMPENSA_DIARIA_CHECK_INTERVAL_MS = 60_000`, lock `dc_daily_reward_claim_lock_v1`.
+- Persistencia: `usuario.recompensas.diariaSobres.lastClaimAt` + respaldo LS `dc_diaria_last_claim_at_v1`.
+- Modal ack por sesión: `dc_daily_reward_modal_ack_claim_ts` (sessionStorage).
+- Recompensa típica: sobres H1/V1 (ver lógica en `persistirUsuarioConRecompensaDiaria`).
+- UI: temporizador en perfil del menú lateral (`menu-mobile.js` / panel perfil).
+
+## RGB color custom por jugador
+
+- Gestión principal en `public/opciones.js` (selector/guardado).
+- Aplicación global desde `public/js/cartas.js` via CSS vars:
+  - `--dc-accent-user-rgb`
+  - `--dc-accent-user`
+- Impacta estilo visual en múltiples vistas y componentes.
+
+## Filtros de búsqueda (vistas)
+
+- Núcleo de skill-class/filtros: `public/js/filtrosCartas.js`.
+- Implementaciones en:
+  - `coleccion.js`
+  - `crearMazos.js`
+  - `mejorarCartas.js`
+  - modales de selección en eventos/desafíos/coop.
+- Criterios comunes:
+  - nombre
+  - afiliación
+  - ordenar por poder
+  - tipo de habilidad (`skill_class`)
+  - pestañas Héroes/Villanos.
+
+## Crear mazos (crearMazos)
+
+- Selección de cartas con límites y reglas de facción.
+- Selector de apariencias integrado (`public/js/seleccionCartaApariencia.js`).
+- Conteo de poder total y feedback visual por rango.
+
+## Red Dot (nuevas cartas)
+
+- API en `js/menu-mobile.js`: `DCRedDot.attachCardBadge`, `markSeen`, `refresh`, `hasUnseenPacks`, `markPacksSeen`.
+- Eventos que refrescan: `dc:usuario-actualizado`, `storage`, `focus`, `visibilitychange`.
+- Colección: pestaña sobres con indicador “Nuevo” (`coleccion.js`).
+- Tras compras/mejoras/sobres: llamar `DCRedDot.refresh()` cuando corresponda.
+
+## Colección y sobres
+
+- `coleccion.js` + `js/sobresCartas.js`: apertura de sobres, cartas nuevas con facción H/V explícita.
+- Deduplicación por nombre parent para progreso de colección (no contar skins como cartas distintas).
+- Filtros: tabs H/V, nombre, afiliación, orden poder, `skill_class` (`DCFiltrosCartas`).
+
+## Misiones diarias/semanales
+
+- `js/misionesDiarias.js` → `window.DCMisiones`.
+- Track con cola FIFO (evita carreras al encadenar eventos).
+- Tipos usados en combate: `bot`, `bot_defeat`, `boss`, `desafios`, `coleccion_h`, `coleccion_v`, `online`, `mejorar_cartas_*`, etc.
+- Coop/PvP: `registrarPartidaOnlineCompletada` al finalizar partida.
+
+## Edición de mazos (mazos)
+
+- Renombrado, reemplazo de cartas/apariencias y borrado.
+- Persistencia con sync para evitar conflictos de estado.
+
+## Mejorar Cartas (mejorarCartas)
+
+### Mejora clásica
+
+- Combina duplicados para subir nivel según reglas actuales.
+
+### Destruir repetidas
+
+- Convierte duplicados en monedas/puntos con tabla por nivel.
+
+### Mejoras especiales
+
+- Objetos:
+  - `mejoraCarta`
+  - `mejoraEspecial`
+  - `mejoraSuprema`
+  - `mejoraDefinitiva`
+- Reglas por nivel implementadas en `mejorarCartas.js`.
+
+### Fragmentos (niveles 7 y 8)
+
+- `mejoraElite` para nivel 7.
+- `mejoraLegendaria` para nivel 8.
+
+## Reglas de Oro
+
+- No tocar `partida.js` sin validar todos los modos (BOT, desafío, asalto, PvP, episodios).
+- Mantener invariantes de `localStorage` (flags de modo mutuamente consistentes).
+- Toda escritura de `usuario` debe pasar por flujo con sync/concurrencia.
+- No romper contratos de sockets (`multiplayer:pvp:*`, `multiplayer:coop:*`, `grupo:*`, `trade:*`).
+- Si se cambia estructura de `usuario` o Excel, actualizar parseos/migraciones cliente+servidor.
+- Evitar introducir lógica nueva que dependa de campos ambiguos sin normalización (`boss/Boss/BOSS`, `faccion/Faccion`, etc.).
+
+## Riesgos y Acoplamientos Críticos
+
+- Alto acoplamiento entre módulos por uso compartido de LS.
+- Coexistencia de flujos legacy y modernos en sockets.
+- Múltiples puntos de escritura de `usuario` (tienda, combate, misiones, diario, mejora, admin).
+- Dependencia de formato/columnas de Excel para reglas de juego.
+
+## Checklist Rápido Post-Cambio
+
+- Sesión única: reemplazo sesión entre pestañas.
+- Sync 409: conflicto y merge correcto.
+- VS BOT: arranque, combate, recompensa, retorno.
+- PvP: lobby -> sesión -> tablero -> cierre.
+- Desafío camino: selección 6 cartas + boss + recompensa.
+- Evento hub: rotación 4 eventos + modal selección + `tipo:'evento'`.
+- Asalto 6/7/8: entrada, dificultad, recompensa.
+- Coop online: invitación, preparación, sincronía de combate, recompensa para ambos.
+- Episodios: cutscene -> combate -> reanudar -> recompensa.
+- Tienda: compra cartas/objetos/ofertas, puntos e inventario.
+- Mejorar cartas: clásica, especiales y fragmentos.
+- Filtros: nombre/afiliación/poder/habilidad/H-V en todas las vistas relevantes.
+- Color RGB: persistencia y aplicación global.
+- Recompensa diaria: timer, bloqueo y no doble claim.
+
+## Referencias técnicas clave (rutas)
+
+- Backend: `server.js`
+- Socket client core: `public/cliente.js`
+- Sync y utilidades globales: `public/js/cartas.js`
+- Sesión única: `public/js/sesionUnica.js`
+- Hub: `public/vistaJuego.html`, `public/jugarPartida.js`
+- Combate principal: `public/tablero.html`, `public/partida.js`
+- Coop: `public/tablero_coop.html`, `public/partidaCoop.js`, `public/multijugadorEventosCoop.js`
+- PvP/lobby: `public/multijugador.js`
+- Desafíos camino: `public/desafios.js`
+- Eventos hub: `public/jugarPartida.js` (`eventos.xlsx`)
+- Asaltos: `public/js/asaltos.js`
+- Episodios: `public/episodios.html`, `public/js/episodios.js`, `public/js/episodio-engine.js`
+- Editor episodios (oculto): `public/crearEpisodios.html`, `public/js/crearEpisodios.js`, `public/js/crearEpisodiosModel.js`
+- Tienda: `public/tienda.js`
+- Crear/editar mazos: `public/crearMazos.js`, `public/mazos.js`
+- Mejoras: `public/mejorarCartas.js`
+- Colección: `public/coleccion.js`
+- Escalado stats: `public/js/escaladoStatsCarta.js`
+
+## Nota de mantenimiento
+
+- Este archivo debe actualizarse cada vez que:
+  - se añada un modo de juego nuevo,
+  - cambie la estructura de `usuario`,
+  - cambien keys de `localStorage`,
+  - se modifique el contrato de sockets/API,
+  - se alteren reglas de escalado/recompensas/progreso.
+
+## Apéndice A: Matriz de Modos (rápida)
+
+| Modo | Entrada | Flags LS / detección | Motor | Recompensa |
+|------|---------|----------------------|-------|------------|
+| Partida rápida / VS BOT | `jugarPartida.js` | Sin `partidaModo`, sin `desafioActivo`, sin `asaltoActivo`, sin PvP, sin episodio en combate | `partida.js` | `otorgarRecompensasVictoria` |
+| Desafío camino | `desafios.js` | `desafioActivo` (≠ evento hub) | `partida.js` | `otorgarRecompensasDesafio` |
+| Evento hub | `jugarPartida.js` | `desafioActivo` con `tipo: 'evento'` | `partida.js` | recompensa evento + `eventosJugadosPorRotacion` |
+| Asalto | `js/asaltos.js` | `partidaModo=asalto`, `asaltoActivo.tipo=asalto` | `partida.js` | `otorgarRecompensasAsalto` |
+| PvP | `multijugador.js` | `partidaModo=pvp` o `partidaPvpSessionId` | `partida.js` | ninguna PvE; misión `online` |
+| Coop online | `multijugadorEventosCoop.js` | `partidaModo=coop_evento_online` | `partidaCoop.js` | por jugador al ganar |
+| Episodio | `episodio-engine.js` | `episodioActivo.estado==='combate'` → `ES_MODO_EPISODIO` | engine + `partida.js` | bloque `recompensa` del JSON al final |
+| Escena (timeline) | JSON `type: escena` | — | `episodio-engine.js` (overlay cutscene) | — |
+
+### Constantes de detección en `partida.js` (orden de precedencia)
+
+1. `HAY_DESAFIO_ACTIVO_STORAGE` → si hay `desafioActivo` en LS, **no** es PvP por flags base.
+2. `ES_MODO_PVP` = `partidaModo==='pvp'` o `partidaPvpSessionId`.
+3. `ES_MODO_ASALTO` = `partidaModo==='asalto'` + `asaltoActivo.tipo==='asalto'`.
+4. `ES_MODO_EPISODIO` = `episodioActivo` válido + `estado==='combate'`.
+5. `esPartidaRapidaVsBot()` = ninguno de los anteriores + `!estadoDesafio.activo`.
+
+## Apéndice B: Contratos API clave
+
+- `POST /login`
+  - Input: credenciales
+  - Output: `usuario`, `email`, `sessionId` (si OK)
+- `POST /register`
+  - Input: datos alta
+  - Output: alta + sesión inicial
+- `POST /get-user`
+  - Input: `email`, `sessionId`
+  - Output: snapshot usuario
+- `POST /validate-session`
+  - Input: `email`, `sessionId`
+  - Output: validez de sesión
+- `POST /update-user`
+  - Input: `email`, `usuario`, `sessionId`, opcional metadata sync
+  - Output: usuario guardado o `409 SYNC_CONFLICT`
+- `GET /api/tableros`
+  - Output: lista de fondos disponibles
+- Editor episodios (`crearEpisodios.html`; requiere `NODE_ENV !== 'production'` o `EPISODIOS_EDITOR=1`):
+  - `GET /api/episodios-editor/habilitado`
+  - `GET /api/episodios-editor/archivos` · `GET /api/episodios-editor/archivo/:nombre`
+  - `PUT /api/episodios-editor/archivo/:nombre` body `{ data: object }`
+  - `POST /api/episodios-editor/archivo` body `{ nombre, data }`
+  - `GET /api/episodios-editor/recursos` → `{ bustos, fondos, tableros }`
+- `POST /admin/users/list`, `/admin/user/get`, `/admin/user/update`
+  - Solo cuenta admin (`opciones.js`); mismo control de sync que `/update-user`
+
+## Apéndice C: Eventos Socket (mapa mínimo)
+
+- Sesión/registro:
+  - `registrarUsuario`, `socket:registrado`, `sesion:invalida`
+- Grupo/chat:
+  - `grupo:estado`, `grupo:invitacion`, `mensajeChat`, `chatHistorial`, `grupo:redirigirMultijugador`
+- Lobby PvP:
+  - `multiplayer:lobby:*`, `multiplayer:session:start`
+- PvP combate:
+  - `multiplayer:pvp:join`, `multiplayer:pvp:estado:*`, `multiplayer:pvp:accion:*`, `multiplayer:pvp:resultado:*`
+- Coop online:
+  - `coop:evento:*`, `multiplayer:coop:session:start`, `multiplayer:coop:estado:*`, `multiplayer:coop:accion:*`
+- Trade:
+  - `trade:*`
+
+## Apéndice D: Orden de Carga por Vista (resumen operativo)
+
+- `login.html` → `sesionUnica.js` → `main.js` (POST `/login`, guarda `usuario`/`email`/`sessionId`).
+- `vistaJuego.html` (script al inicio: `removeItem mazoOponente`, `nombreOponente`):
+  - `escaladoStatsCarta`, `carrusel3d`, `sesionUnica`, `cartas`, `filtrosCartas`, `skinsCartas`, `seleccionCartaApariencia`, `sobresCartas`, `misionesDiarias`, `limpiarPvpPartidaLocal`, `tableroFondo`, `tradeGrupo`, `cliente`, `jugarPartida`.
+- `tablero.html`:
+  - XLSX, `socket.io`, `cliente`, `tradeGrupo`, `escaladoStatsCarta`, `sesionUnica`, `cartas`, `skinsCartas`, `misionesDiarias`, `limpiarPvpPartidaLocal`, `tableroFondo`, **`healDebuffCombat`**, `partida.js`.
+- `tablero_coop.html` → `partidaCoop.js` (+ render coop, fondos, limpieza coop).
+- `multijugador.html` → `cliente`, `multijugador.js`, `multijugadorEventosCoop.js`.
+- `episodios.html` → `cartas`, `episodiosCapitulos`, `episodiosProgreso`, `episodiosRequisitos`, `episodios.js`, `episodio-engine.js`.
+
+## Apéndice E: Modelo `usuario` (campos críticos)
+
+- Identidad/sesión:
+  - `email`, `nickname`, `avatar`, metadata de sync
+- Progreso:
+  - `puntos`, `cartas`, `mazos`, `misiones`, `eventosJugadosPorRotacion`
+- Inventario:
+  - `objetos` (mejoras, fragmentos, sobres)
+- Personalización:
+  - `skinsObtenidos`, `preferencias.colorPrincipal`
+- Tienda:
+  - estado de rotaciones/ofertas y agotados
+
+## Apéndice F: Playbook de Diagnóstico Rápido
+
+- Si se rompen recompensas:
+  - revisar `partida.js` (rama de modo) + `cartas.js` (sync) + respuesta `/update-user`.
+- Si se rompen modos al entrar a `tablero`:
+  - revisar colisión de flags (`partidaModo`, `desafioActivo`, `asaltoActivo`, `episodioActivo`, `partidaPvpSessionId`).
+- Si hay desync multi-dispositivo:
+  - confirmar manejo de `409 SYNC_CONFLICT` y merge cliente.
+- Si falla coop/pvp:
+  - validar revisiones de estado, room/session id y orden de eventos socket.
+- Si hay stats incorrectos por nivel:
+  - revisar `escaladoStatsCarta.js`, `partida.js`, y el origen de nivel en el modo concreto.
+
+## Apéndice G: Deuda Técnica / Zonas delicadas
+
+- `LEGACY_SOCKET_COMBATE_ACTIVO = false` en `server.js` — handlers viejos (`unirseSala`, `realizarAtaque`…) desactivados; flujo moderno es `multiplayer:*` / coop.
+- **`desafioActivo` compartido** por desafíos camino y eventos hub (diferenciar por `tipo` y origen).
+- Claves de rotación de eventos **no mezclar**: `event-rotation-v1` (offline), `event-rotation-coop-online-v1` (coop), `asaltos-rotation-v2-monday` (asaltos).
+- Convivencia código legacy en `cliente.js` (`invitacionJuego`, `redirigirTablero`) vs lobby moderno.
+- Escritura paralela de `usuario` desde muchos módulos.
+- `cartas.js` con muchas responsabilidades globales (riesgo de efectos colaterales).
+- Dependencia total de Excel para reglas; variantes de columnas (`boss`/`Boss`, `faccion`/`Faccion`) requieren normalización.
+
+---
+
+## Apéndice H: Rotaciones y timers
+
+| Sistema | Intervalo | Constante / clave |
+|---------|-----------|-------------------|
+| Eventos hub | 1 h | `ROTACION_EVENTOS_MS`, `event-rotation-v1` |
+| Eventos coop | 1 h (misma ventana que hub en admin) | `event-rotation-coop-online-v1` |
+| Tienda global | 2 h | `ROTACION_TIENDA_MS`, `global-rotation-v2-shop-tabs` |
+| Asaltos | Semanal (lunes 00:00 local) | `asaltos-rotation-v2-monday` |
+| Recompensa diaria | Cooldown propio + check cada 60 s | `RECOMPENSA_DIARIA_*` |
+| Consejos hub | 9,5 s auto | `ROTACION_CONSEJOS_MS` en `jugarPartida.js` |
+
+---
+
+## Apéndice I: Mejoras — reglas por objeto (`mejorarCartas.js`)
+
+| Key `usuario.objetos` | Uso |
+|----------------------|-----|
+| `mejoraCarta` | Solo cartas 1★–3★ → +1 nivel (tope 4★) |
+| `mejoraSuprema` | Niveles 1–4 → salta a 5★ |
+| `mejoraEspecial` | Solo 5★ → 6★ |
+| `mejoraDefinitiva` | Niveles 1–5 → salta a 6★ |
+| `mejoraElite` | Fragmento: sube a 7★ |
+| `mejoraLegendaria` | Fragmento: sube a 8★ |
+
+- Normalización legacy: claves antiguas del inventario se mapean a estas en carga.
+- Destrucción duplicados: tabla de puntos por nivel (`obtenerValorDestruccion`).
+- Pestañas H/V + orden por poder en paneles de mejora.
+
+---
+
+## Apéndice J: Grupos, trade y chat
+
+- `cliente.js`: socket único, `registrarUsuario`, chat global (`mensajeChat`, `chatHistorial`).
+- Grupo: `grupo:estado`, invitaciones, redirección a multijugador.
+- Trade: eventos `trade:*` vía `js/tradeGrupo.js`.
+- Perfil en menú: `js/perfilModal.js`, snapshot `dc_menu_profile_snapshot_v1`.
+
+---
+
+## Apéndice K: Correcciones respecto a borrador anterior
+
+- **Eventos del hub** no vienen de `desafios.xlsx` sino de `eventos.xlsx`.
+- **Partida rápida** es un subconjunto de VS BOT detectado por `esPartidaRapidaVsBot()`, no un `partidaModo` aparte.
+- **Episodio en tablero** requiere `episodioActivo.estado === 'combate'`, no solo existir `episodioActivo`.
+- **Login** entra por `login.html` + `main.js`, no solo “main genérico”.
+- **Recompensa diaria** persiste en `usuario.recompensas.diariaSobres`, no solo en LS.

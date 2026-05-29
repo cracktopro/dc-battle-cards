@@ -12,6 +12,7 @@
     <link href="css/scrollbar.css" rel="stylesheet">
     <link href="css/app-layout.css" rel="stylesheet">
     <link href="css/episodios.css" rel="stylesheet">
+    <link href="css/jugarPartida.css" rel="stylesheet">
     <link href="css/episodio-engine.css" rel="stylesheet">
 </head>
 <body>
@@ -60,6 +61,7 @@
     <!-- ── Panel CUTSCENE ────────────────── -->
     <div id="episodio-cutscene" class="episodio-cutscene" style="display:none;">
         <div id="cutscene-bg" class="cutscene-bg"></div>
+        <div id="cutscene-fade" class="cutscene-fade" aria-hidden="true"></div>
         <div id="cutscene-bustos-container" class="cutscene-bustos-container"></div>
         <div class="cutscene-dialog-wrap">
             <div class="cutscene-name-box">
@@ -125,12 +127,37 @@
 </div>
 <!-- FIN OVERLAY -->
 
+<div id="episodios-modal-capitulos" class="episodios-modal-capitulos-overlay" hidden
+     role="dialog" aria-modal="true" aria-labelledby="episodios-modal-capitulos-titulo">
+    <div class="episodios-modal-capitulos-marco">
+        <div class="episodios-modal-capitulos-inner">
+            <header class="episodios-modal-capitulos-cabecera">
+                <p class="episodios-modal-capitulos-kicker">Selección de capítulo</p>
+                <h2 id="episodios-modal-capitulos-titulo" class="episodios-modal-capitulos-titulo">Capítulos</h2>
+                <p id="episodios-modal-capitulos-subtitulo" class="episodios-modal-capitulos-subtitulo"></p>
+            </header>
+            <div class="episodios-modal-capitulos-lista-wrap">
+                <ul id="episodios-modal-capitulos-lista" class="episodios-modal-capitulos-lista" role="list"></ul>
+            </div>
+            <footer class="episodios-modal-capitulos-pie">
+                <button type="button" id="episodios-modal-capitulos-cerrar"
+                        class="episodios-modal-capitulos-btn-cerrar">Cerrar</button>
+            </footer>
+        </div>
+    </div>
+</div>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.0/xlsx.full.min.js"></script>
 <script src="/socket.io/socket.io.js"></script>
 <script src="cliente.js"></script>
 <script src="js/tradeGrupo.js"></script>
 <script src="js/sesionUnica.js"></script>
 <script src="js/cartas.js"></script>
+<script src="js/escaladoStatsCarta.js"></script>
+<script src="js/skinsCartas.js"></script>
+<script src="js/episodiosCapitulos.js"></script>
+<script src="js/episodiosProgreso.js"></script>
+<script src="js/episodiosRequisitos.js"></script>
 <script src="js/episodios.js"></script>
 <script src="js/episodio-engine.js"></script>
 <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>

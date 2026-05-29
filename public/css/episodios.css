@@ -3,8 +3,8 @@
  */
 
 .episodios-vista {
-    --episodios-panel-w: clamp(260px, 36vw, 380px);
-    --episodios-panel-h: clamp(400px, 56vh, 540px);
+    --episodios-panel-w: clamp(260px, 34vw, 360px);
+    --episodios-panel-h: clamp(430px, 58vh, 560px);
     --episodios-radio: min(340px, 50vw);
     --episodios-step: 60deg;
     --episodios-spin: 0;
@@ -147,9 +147,9 @@ body > .content-container:has(.episodios-vista) {
     min-width: 0;
     width: 100%;
     max-width: min(1040px, 100%);
-    height: clamp(400px, 56vh, 540px);
-    perspective: 1200px;
-    perspective-origin: 50% 42%;
+    height: var(--episodios-panel-h);
+    perspective: 1400px;
+    perspective-origin: 50% 46%;
     position: relative;
     overflow: visible;
 }
@@ -165,10 +165,12 @@ body > .content-container:has(.episodios-vista) {
     transform: rotateY(calc(var(--episodios-spin) * var(--episodios-step-num) * -1deg));
     transform-style: preserve-3d;
     transition: transform 0.45s cubic-bezier(0.25, 0.85, 0.3, 1);
+    will-change: transform;
 }
 
 .episodios-carrusel-escena--unico .episodios-carrusel-rueda {
     transform: none;
+    will-change: auto;
 }
 
 .episodios-carrusel-cara {
@@ -177,7 +179,7 @@ body > .content-container:has(.episodios-vista) {
     transform-origin: center center;
     transform: rotateY(calc(var(--episodios-i) * var(--episodios-step-num) * 1deg)) translateZ(var(--episodios-radio));
     transform-style: preserve-3d;
-    backface-visibility: visible;
+    backface-visibility: hidden;
     pointer-events: none;
 }
 
@@ -192,12 +194,19 @@ body > .content-container:has(.episodios-vista) {
     align-items: stretch;
     justify-content: center;
     transform-style: preserve-3d;
-    transform: rotateY(calc((var(--episodios-spin) - var(--episodios-i)) * var(--episodios-step-num) * 1deg));
+    transform: rotateY(calc((var(--episodios-spin) - var(--episodios-i)) * var(--episodios-step-num) * 1deg))
+        translateZ(0.01px);
     transition: transform 0.45s cubic-bezier(0.25, 0.85, 0.3, 1);
+    backface-visibility: hidden;
 }
 
 .episodios-carrusel-escena--unico .episodios-carrusel-cara-billboard {
     transform: none;
+}
+
+.episodios-carrusel-cara--frente {
+    pointer-events: auto;
+    z-index: 2;
 }
 
 .episodios-item-panel {
@@ -205,7 +214,9 @@ body > .content-container:has(.episodios-vista) {
     flex-direction: column;
     width: 100%;
     height: 100%;
-    padding: 12px;
+    min-height: 0;
+    padding: 10px;
+    gap: 6px;
     box-sizing: border-box;
     border-radius: 14px;
     border: 1px solid rgba(var(--dc-accent-user-rgb), 0.35);
@@ -214,12 +225,12 @@ body > .content-container:has(.episodios-vista) {
         linear-gradient(165deg, rgba(6, 14, 36, 0.96) 0%, rgba(3, 8, 22, 0.98) 100%);
     box-shadow: 0 12px 36px rgba(0, 0, 0, 0.55);
     overflow: hidden;
-    filter: brightness(0.62);
-    transition: filter 0.45s ease, box-shadow 0.45s ease, border-color 0.45s ease;
+    opacity: 0.52;
+    transition: opacity 0.35s ease, box-shadow 0.35s ease, border-color 0.35s ease;
 }
 
 .episodios-carrusel-cara--frente .episodios-item-panel {
-    filter: brightness(1);
+    opacity: 1;
     border-color: rgba(var(--dc-accent-user-rgb), 0.55);
     box-shadow:
         0 16px 40px rgba(0, 0, 0, 0.5),
@@ -228,10 +239,11 @@ body > .content-container:has(.episodios-vista) {
 
 .episodios-item-panel-img {
     flex: 0 0 auto;
-    width: 100%;
+    width: min(84%, 228px);
+    margin: 0 auto;
     aspect-ratio: 3 / 4;
-    max-height: 54%;
-    border-radius: 10px;
+    max-height: 168px;
+    border-radius: 8px;
     overflow: hidden;
     border: 1px solid rgba(var(--dc-accent-user-rgb), 0.25);
     background: #020814;
@@ -245,35 +257,133 @@ body > .content-container:has(.episodios-vista) {
     display: block;
     pointer-events: none;
     user-select: none;
+    -webkit-user-drag: none;
+}
+
+.episodios-carrusel-cara--frente .episodios-item-panel-img img {
+    image-rendering: auto;
+}
+
+.episodios-item-panel-medio {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 100%;
+}
+
+.episodios-item-panel-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    padding: 0 1px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(var(--dc-accent-user-rgb), 0.45) transparent;
+}
+
+.episodios-item-panel-scroll::-webkit-scrollbar {
+    width: 4px;
+}
+
+.episodios-item-panel-scroll::-webkit-scrollbar-thumb {
+    border-radius: 4px;
+    background: rgba(var(--dc-accent-user-rgb), 0.4);
 }
 
 .episodios-item-panel-titulo {
-    margin: 10px 0 6px;
+    flex: 0 0 auto;
+    margin: 0;
     font-family: 'Orbitron', sans-serif;
-    font-size: clamp(0.82rem, 1.8vw, 1rem);
+    font-size: clamp(0.64rem, 1.15vw, 0.78rem);
     font-weight: 700;
-    line-height: 1.25;
+    line-height: 1.2;
     color: #e8fbff;
     text-align: center;
     text-transform: uppercase;
-    letter-spacing: 0.03em;
-}
-
-.episodios-item-panel-descripcion {
-    margin: 0;
-    flex: 1 1 auto;
-    font-size: clamp(0.72rem, 1.45vw, 0.84rem);
-    line-height: 1.45;
-    color: rgba(200, 230, 255, 0.9);
-    text-align: center;
+    letter-spacing: 0.02em;
     overflow: hidden;
     display: -webkit-box;
-    -webkit-line-clamp: 5;
+    -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
 }
 
-.episodios-carrusel-cara--frente .episodios-item-panel-descripcion {
-    -webkit-line-clamp: 5;
+.episodios-item-panel-descripcion {
+    flex: 0 0 auto;
+    margin: 0;
+    font-size: clamp(0.62rem, 1.1vw, 0.72rem);
+    line-height: 1.35;
+    color: rgba(200, 230, 255, 0.9);
+    text-align: center;
+}
+
+/* Sub-panel: cartas requeridas — anclado al fondo del área media del panel */
+.episodios-cartas-requeridas-bloque {
+    flex: 0 0 auto;
+    margin-top: auto;
+    width: 100%;
+}
+
+.episodios-cartas-requeridas-label {
+    margin: 0 0 4px;
+    text-align: center;
+    color: rgba(var(--dc-accent-user-rgb), 0.92);
+    font-size: 0.58rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.episodios-cartas-requeridas-caja {
+    border: 1px solid rgba(var(--dc-accent-user-rgb), 0.32);
+    border-radius: 8px;
+    padding: 5px 6px;
+    background: rgba(4, 10, 24, 0.72);
+}
+
+.episodios-cartas-requeridas-grid {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 5px;
+    min-height: 0;
+}
+
+.episodios-cartas-requeridas-grid .evento-enemigo-card {
+    width: clamp(44px, 12vw, 58px);
+    max-width: 58px;
+}
+
+.episodios-carta-requerida--falta {
+    filter: grayscale(0.85) brightness(0.55);
+    border-color: rgba(255, 80, 80, 0.75) !important;
+    box-shadow: 0 0 8px rgba(255, 60, 60, 0.35);
+}
+
+.episodios-cartas-requeridas-aviso {
+    margin: 4px 0 0;
+    font-size: 0.58rem;
+    line-height: 1.3;
+    color: #ff9a9a;
+    text-align: center;
+}
+
+.episodios-cartas-requeridas-vacio {
+    margin: 0;
+    font-size: 0.56rem;
+    color: rgba(200, 230, 255, 0.65);
+    text-align: center;
+}
+
+.episodios-item-panel-btn--bloqueado {
+    opacity: 0.72;
+    cursor: not-allowed;
+    border-color: rgba(255, 100, 100, 0.55) !important;
 }
 
 /* ── Botón Comenzar en panel de carrusel 3D ── */
@@ -282,17 +392,17 @@ body > .content-container:has(.episodios-vista) {
     visibility: hidden;
     opacity: 0;
     pointer-events: none;
-    margin: 8px 0 0;
+    margin: 0;
     width: 100%;
-    padding: 9px 14px;
+    padding: 8px 12px;
     border-radius: 7px;
     border: 2px solid rgba(var(--dc-accent-user-rgb), 0.7);
     background: rgba(var(--dc-accent-user-rgb), 0.22);
     color: #fff;
     font-family: 'Orbitron', sans-serif;
-    font-size: clamp(0.72rem, 1.4vw, 0.82rem);
+    font-size: clamp(0.68rem, 1.25vw, 0.78rem);
     font-weight: 700;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
     cursor: pointer;
     transition: background 0.2s ease, box-shadow 0.2s ease;
@@ -313,21 +423,19 @@ body > .content-container:has(.episodios-vista) {
     outline: none;
 }
 
-/* Permitir pointer-events en el panel frontal */
-.episodios-carrusel-cara--frente {
-    pointer-events: auto;
-}
-
 .episodios-nombre-frente {
     font-family: 'Orbitron', sans-serif;
     font-weight: 700;
-    font-size: clamp(1rem, 2.5vw, 1.35rem);
+    font-size: clamp(0.92rem, 2.2vw, 1.15rem);
     color: #e8fbff;
     text-align: center;
     margin: clamp(10px, 2vh, 16px) 0 0;
     text-shadow: 0 0 16px rgba(var(--dc-accent-user-rgb), 0.4);
     letter-spacing: 0.04em;
     max-width: min(720px, 92vw);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -336,16 +444,381 @@ body > .content-container:has(.episodios-vista) {
     .episodios-item-panel {
         transition: none;
     }
+
+    .episodios-carrusel-rueda {
+        will-change: auto;
+    }
 }
 
 @media (max-width: 599px) {
     .episodios-vista {
-        --episodios-panel-w: min(260px, 82vw);
-        --episodios-panel-h: clamp(340px, 52vh, 420px);
+        --episodios-panel-w: min(252px, 88vw);
+        --episodios-panel-h: clamp(400px, 54vh, 480px);
     }
 
-    .episodios-carrusel-escena {
-        height: clamp(340px, 52vh, 420px);
-        perspective: 920px;
+    .episodios-item-panel-img {
+        max-height: 148px;
+        width: min(80%, 200px);
+    }
+}
+
+/* Modal selección de capítulos (estilo panel asaltos: marco neón + interior oscuro) */
+.episodios-modal-capitulos-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 5000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: clamp(16px, 3vw, 28px);
+    box-sizing: border-box;
+    background: rgba(2, 6, 18, 0.82);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+
+.episodios-modal-capitulos-overlay[hidden] {
+    display: none !important;
+}
+
+.episodios-modal-capitulos-marco {
+    position: relative;
+    width: min(920px, 96vw);
+    max-height: min(88vh, 900px);
+    max-height: min(88dvh, 900px);
+    padding: 2px;
+    border-radius: 18px;
+    box-sizing: border-box;
+    background: linear-gradient(
+        135deg,
+        rgba(0, 255, 240, 0.5),
+        rgba(80, 0, 200, 0.38),
+        rgba(0, 180, 255, 0.45)
+    );
+    box-shadow:
+        0 0 48px rgba(0, 160, 255, 0.28),
+        0 20px 56px rgba(0, 0, 0, 0.6);
+}
+
+.episodios-modal-capitulos-marco::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 16px;
+    pointer-events: none;
+    background: repeating-linear-gradient(
+        -45deg,
+        transparent,
+        transparent 6px,
+        rgba(255, 255, 255, 0.025) 6px,
+        rgba(255, 255, 255, 0.025) 12px
+    );
+    opacity: 0.55;
+}
+
+.episodios-modal-capitulos-inner {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: clamp(14px, 2.5vh, 22px);
+    max-height: min(88vh, 896px);
+    max-height: min(88dvh, 896px);
+    padding: clamp(22px, 4vw, 32px);
+    border-radius: 16px;
+    box-sizing: border-box;
+    border: 1px solid rgba(0, 200, 255, 0.22);
+    background:
+        radial-gradient(ellipse 120% 70% at 50% 0%, rgba(0, 120, 200, 0.2), transparent 55%),
+        linear-gradient(165deg, rgba(6, 14, 36, 0.98) 0%, rgba(3, 8, 22, 0.99) 100%);
+    overflow: hidden;
+}
+
+.episodios-modal-capitulos-cabecera {
+    text-align: center;
+    flex-shrink: 0;
+    padding-bottom: 4px;
+    border-bottom: 1px solid rgba(0, 200, 255, 0.15);
+}
+
+.episodios-modal-capitulos-kicker {
+    margin: 0 0 6px;
+    font-family: 'Orbitron', sans-serif;
+    font-size: clamp(0.62rem, 1.6vw, 0.72rem);
+    font-weight: 700;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: rgba(0, 220, 255, 0.75);
+}
+
+.episodios-modal-capitulos-titulo {
+    margin: 0 0 10px;
+    font-family: 'Orbitron', sans-serif;
+    font-size: clamp(1.05rem, 3.2vw, 1.45rem);
+    font-weight: 700;
+    color: #e8fbff;
+    letter-spacing: 0.06em;
+    line-height: 1.25;
+    text-shadow: 0 0 20px rgba(0, 200, 255, 0.4);
+}
+
+.episodios-modal-capitulos-subtitulo {
+    margin: 0;
+    font-size: clamp(0.82rem, 2vw, 0.95rem);
+    line-height: 1.5;
+    color: #c8e8ff;
+    max-width: 52ch;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.episodios-modal-capitulos-lista-wrap {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+    margin: 0 -4px;
+    padding: 2px 4px;
+}
+
+.episodios-modal-capitulos-lista {
+    list-style: none;
+    margin: 0;
+    padding: 4px 6px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: clamp(12px, 2vh, 16px);
+    overflow-y: auto;
+    max-height: min(52vh, 520px);
+    max-height: min(52dvh, 520px);
+    scrollbar-gutter: stable;
+}
+
+.episodios-modal-capitulo-item {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: clamp(14px, 2.5vw, 20px);
+    padding: clamp(16px, 2.5vw, 20px) clamp(18px, 3vw, 24px);
+    border-radius: 14px;
+    border: 1px solid rgba(0, 200, 255, 0.28);
+    background:
+        linear-gradient(105deg, rgba(0, 80, 140, 0.12) 0%, transparent 42%),
+        rgba(4, 12, 32, 0.75);
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
+    transition:
+        border-color 0.2s ease,
+        box-shadow 0.2s ease,
+        transform 0.2s ease;
+}
+
+.episodios-modal-capitulo-item:not(.episodios-modal-capitulo-item--bloqueado):hover {
+    border-color: rgba(0, 255, 240, 0.45);
+    box-shadow:
+        0 0 22px rgba(0, 160, 255, 0.18),
+        0 6px 22px rgba(0, 0, 0, 0.4);
+    transform: translateY(-1px);
+}
+
+.episodios-modal-capitulo-item--bloqueado {
+    opacity: 0.62;
+    border-color: rgba(90, 100, 120, 0.35);
+    background: rgba(12, 16, 28, 0.65);
+    filter: saturate(0.75);
+}
+
+.episodios-modal-capitulo-item--bloqueado:hover {
+    transform: none;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
+}
+
+.episodios-modal-capitulo-item--completado {
+    border-color: rgba(72, 220, 140, 0.45);
+    background:
+        linear-gradient(105deg, rgba(40, 140, 80, 0.14) 0%, transparent 45%),
+        rgba(4, 18, 28, 0.8);
+}
+
+.episodios-modal-capitulo-num {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: clamp(44px, 8vw, 52px);
+    height: clamp(44px, 8vw, 52px);
+    border-radius: 12px;
+    font-family: 'Orbitron', sans-serif;
+    font-size: clamp(1rem, 2.5vw, 1.15rem);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: #e8fbff;
+    border: 2px solid rgba(0, 220, 255, 0.4);
+    background: linear-gradient(180deg, rgba(0, 70, 110, 0.55), rgba(0, 25, 50, 0.85));
+    box-shadow:
+        0 0 12px rgba(0, 160, 255, 0.2),
+        inset 0 0 12px rgba(0, 200, 255, 0.08);
+}
+
+.episodios-modal-capitulo-item--bloqueado .episodios-modal-capitulo-num {
+    border-color: rgba(100, 110, 130, 0.45);
+    color: rgba(180, 190, 205, 0.85);
+    background: rgba(30, 36, 48, 0.8);
+    box-shadow: none;
+}
+
+.episodios-modal-capitulo-item--completado .episodios-modal-capitulo-num {
+    border-color: rgba(72, 220, 140, 0.55);
+    color: #d4ffe8;
+    background: linear-gradient(180deg, rgba(20, 90, 55, 0.65), rgba(8, 40, 28, 0.9));
+}
+
+.episodios-modal-capitulo-cuerpo {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.episodios-modal-capitulo-fila-titulo {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+}
+
+.episodios-modal-capitulo-nombre {
+    font-family: 'Orbitron', sans-serif;
+    font-size: clamp(0.82rem, 2.2vw, 0.98rem);
+    font-weight: 700;
+    color: #e8fbff;
+    letter-spacing: 0.05em;
+    line-height: 1.3;
+}
+
+.episodios-modal-capitulo-estado {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 3px 10px;
+    border-radius: 6px;
+    border: 1px solid transparent;
+}
+
+.episodios-modal-capitulo-estado--bloqueado {
+    color: rgba(200, 210, 225, 0.85);
+    border-color: rgba(120, 130, 150, 0.45);
+    background: rgba(40, 48, 62, 0.65);
+}
+
+.episodios-modal-capitulo-estado--hecho {
+    color: #b8ffd8;
+    border-color: rgba(72, 220, 140, 0.5);
+    background: rgba(20, 80, 50, 0.45);
+    box-shadow: 0 0 10px rgba(72, 220, 140, 0.2);
+}
+
+.episodios-modal-capitulo-desc {
+    margin: 0;
+    font-size: clamp(0.8rem, 1.9vw, 0.9rem);
+    line-height: 1.45;
+    color: rgba(200, 228, 255, 0.82);
+}
+
+.episodios-modal-capitulo-btn {
+    flex-shrink: 0;
+    min-width: clamp(108px, 18vw, 132px);
+    padding: 12px 22px;
+    font-family: 'Orbitron', sans-serif;
+    font-size: clamp(0.68rem, 1.8vw, 0.78rem);
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    border-radius: 10px;
+    border: 2px solid rgba(0, 255, 220, 0.55);
+    color: #e8ffff;
+    background: linear-gradient(180deg, rgba(0, 90, 120, 0.95), rgba(0, 40, 70, 0.98));
+    box-shadow:
+        0 0 16px rgba(0, 200, 255, 0.22),
+        inset 0 1px 0 rgba(255, 255, 255, 0.12);
+    cursor: pointer;
+    transition:
+        border-color 0.2s ease,
+        box-shadow 0.2s ease,
+        transform 0.15s ease;
+}
+
+.episodios-modal-capitulo-btn:hover:not(:disabled) {
+    border-color: rgba(0, 255, 255, 0.9);
+    box-shadow:
+        0 0 24px rgba(0, 200, 255, 0.38),
+        inset 0 1px 0 rgba(255, 255, 255, 0.15);
+    transform: translateY(-1px);
+}
+
+.episodios-modal-capitulo-btn:active:not(:disabled) {
+    transform: translateY(0);
+}
+
+.episodios-modal-capitulo-btn:disabled {
+    cursor: not-allowed;
+    border-color: rgba(90, 100, 120, 0.45);
+    background: linear-gradient(180deg, rgba(35, 42, 55, 0.95), rgba(22, 28, 38, 0.98));
+    color: rgba(170, 180, 195, 0.75);
+    box-shadow: none;
+}
+
+.episodios-modal-capitulo-item--completado .episodios-modal-capitulo-btn:not(:disabled) {
+    border-color: rgba(72, 220, 140, 0.55);
+    background: linear-gradient(180deg, rgba(25, 100, 65, 0.95), rgba(12, 50, 35, 0.98));
+}
+
+.episodios-modal-capitulo-item--completado .episodios-modal-capitulo-btn:hover:not(:disabled) {
+    border-color: rgba(100, 255, 170, 0.85);
+    box-shadow: 0 0 20px rgba(72, 220, 140, 0.3);
+}
+
+.episodios-modal-capitulos-pie {
+    flex-shrink: 0;
+    display: flex;
+    justify-content: center;
+    padding-top: 6px;
+    border-top: 1px solid rgba(0, 200, 255, 0.12);
+}
+
+.episodios-modal-capitulos-btn-cerrar {
+    font-family: 'Orbitron', sans-serif;
+    font-size: clamp(0.72rem, 1.8vw, 0.82rem);
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 10px 28px;
+    border-radius: 10px;
+    border: 2px solid rgba(140, 160, 190, 0.45);
+    color: #d0e4ff;
+    background: linear-gradient(180deg, rgba(40, 52, 72, 0.95), rgba(22, 30, 45, 0.98));
+    cursor: pointer;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.episodios-modal-capitulos-btn-cerrar:hover {
+    border-color: rgba(180, 200, 230, 0.65);
+    box-shadow: 0 0 14px rgba(120, 160, 200, 0.2);
+}
+
+@media (max-width: 640px) {
+    .episodios-modal-capitulo-item {
+        grid-template-columns: auto 1fr;
+        grid-template-rows: auto auto;
+    }
+
+    .episodios-modal-capitulo-btn {
+        grid-column: 1 / -1;
+        justify-self: stretch;
+        width: 100%;
+    }
+
+    .episodios-modal-capitulos-lista {
+        max-height: min(48vh, 440px);
+        max-height: min(48dvh, 440px);
     }
 }

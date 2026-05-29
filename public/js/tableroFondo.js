@@ -1,7 +1,8 @@
 /**
  * Fondos de tablero: /resources/tableros/ (por defecto tablero_background.png).
  * - VS BOT: aleatorio vía GET /api/tableros (sessionStorage dc_tablero_fondo_url antes de tablero.html).
- * - Desafío / evento VS BOT / coop online: campo `tablero` del Excel (nombre archivo, con o sin extensión).
+ * - Desafío / evento VS BOT / coop online / episodio en combate: campo `tablero` (nombre archivo, con o sin extensión).
+ *   Episodio: `episodioActivo.tablero` con `estado === 'combate'` (JSON del bloque `type: "combate"`).
  */
 (function () {
     const SESSION_KEY_VS_BOT = 'dc_tablero_fondo_url';
@@ -47,6 +48,21 @@
             if (!raw || raw === 'null' || raw === 'undefined') return null;
             const d = JSON.parse(raw);
             if (!d || typeof d !== 'object') return null;
+            const t = String(d.tablero || '').trim();
+            if (!t) return null;
+            return urlDesdeCampoExcel(t) || DEFAULT_TABLERO_URL;
+        } catch (_e) {
+            return null;
+        }
+    }
+
+    function fondoDesdeEpisodioActivoLs() {
+        try {
+            const raw = localStorage.getItem('episodioActivo');
+            if (!raw || raw === 'null' || raw === 'undefined') return null;
+            const d = JSON.parse(raw);
+            if (!d || typeof d !== 'object') return null;
+            if (String(d.estado || '').trim().toLowerCase() !== 'combate') return null;
             const t = String(d.tablero || '').trim();
             if (!t) return null;
             return urlDesdeCampoExcel(t) || DEFAULT_TABLERO_URL;
@@ -104,6 +120,11 @@
         const fa = fondoDesdeAsaltoActivoLs();
         if (fa) {
             aplicarFondo(fa);
+            return;
+        }
+        const fe = fondoDesdeEpisodioActivoLs();
+        if (fe) {
+            aplicarFondo(fe);
             return;
         }
         const fd = fondoDesdeDesafioActivoLs();

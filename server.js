@@ -39,8 +39,6 @@ const io = new Server(server, {
   }
 });
 
-// Servir archivos estáticos desde la carpeta 'public'
-app.use(express.static(path.join(__dirname, 'public')));
 app.use(cors());
 
 // Middleware para procesar datos JSON
@@ -87,6 +85,166 @@ app.get('/api/tableros', (_req, res) => {
         return res.json({ archivos: ['tablero_background.png'] });
     }
 });
+
+/** Editor de JSON de episodios (solo desarrollo o EPISODIOS_EDITOR=1). Vista: crearEpisodios.html */
+const EPISODIOS_JSON_DIR = path.resolve(path.join(__dirname, 'public', 'resources', 'episodios'));
+
+function episodiosEditorPermitido() {
+    return process.env.EPISODIOS_EDITOR === '1' || process.env.NODE_ENV !== 'production';
+}
+
+function resolverRutaEpisodioJson(nombre) {
+    const base = path.basename(String(nombre || '').trim());
+    if (!base || !/^[\w.-]+\.json$/i.test(base)) {
+        return null;
+    }
+    const full = path.resolve(EPISODIOS_JSON_DIR, base);
+    const dirConSep = EPISODIOS_JSON_DIR.endsWith(path.sep)
+        ? EPISODIOS_JSON_DIR
+        : EPISODIOS_JSON_DIR + path.sep;
+    if (full !== EPISODIOS_JSON_DIR && !full.startsWith(dirConSep)) {
+        return null;
+    }
+    return { base, full };
+}
+
+function listarJsonEpisodios() {
+    return fs.readdirSync(EPISODIOS_JSON_DIR, { withFileTypes: true })
+        .filter((d) => d.isFile() && /\.json$/i.test(d.name))
+        .map((d) => d.name)
+        .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+}
+
+function listarImagenesEnSubcarpeta(sub) {
+    const permitidos = { bust: 'bust', background: 'background' };
+    const carpeta = permitidos[String(sub || '').trim()];
+    if (!carpeta) {
+        return [];
+    }
+    const dir = path.resolve(EPISODIOS_JSON_DIR, carpeta);
+    const dirConSep = EPISODIOS_JSON_DIR.endsWith(path.sep)
+        ? EPISODIOS_JSON_DIR
+        : EPISODIOS_JSON_DIR + path.sep;
+    if (dir !== EPISODIOS_JSON_DIR && !dir.startsWith(dirConSep)) {
+        return [];
+    }
+    try {
+        return fs.readdirSync(dir, { withFileTypes: true })
+            .filter((d) => d.isFile() && /\.(png|jpe?g|webp)$/i.test(d.name))
+            .map((d) => d.name)
+            .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+    } catch (_e) {
+        return [];
+    }
+}
+
+app.get('/api/episodios-editor/habilitado', (_req, res) => {
+    return res.json({ habilitado: episodiosEditorPermitido() });
+});
+
+app.get('/api/episodios-editor/archivos', (_req, res) => {
+    if (!episodiosEditorPermitido()) {
+        return res.status(403).json({ error: 'Editor de episodios no disponible en este entorno.' });
+    }
+    try {
+        return res.json({ archivos: listarJsonEpisodios() });
+    } catch (error) {
+        console.warn('[api/episodios-editor/archivos]', error.message);
+        return res.status(500).json({ error: 'No se pudo listar archivos.' });
+    }
+});
+
+app.get('/api/episodios-editor/archivo/:nombre', (req, res) => {
+    if (!episodiosEditorPermitido()) {
+        return res.status(403).json({ error: 'Editor no disponible.' });
+    }
+    const resolved = resolverRutaEpisodioJson(req.params.nombre);
+    if (!resolved) {
+        return res.status(400).json({ error: 'Nombre de archivo no válido.' });
+    }
+    try {
+        if (!fs.existsSync(resolved.full)) {
+            return res.status(404).json({ error: 'Archivo no encontrado.' });
+        }
+        const raw = fs.readFileSync(resolved.full, 'utf8');
+        const data = JSON.parse(raw);
+        return res.json({ nombre: resolved.base, data });
+    } catch (error) {
+        console.warn('[api/episodios-editor/archivo GET]', error.message);
+        return res.status(500).json({ error: 'No se pudo leer el archivo.', detalle: error.message });
+    }
+});
+
+app.put('/api/episodios-editor/archivo/:nombre', (req, res) => {
+    if (!episodiosEditorPermitido()) {
+        return res.status(403).json({ error: 'Editor no disponible.' });
+    }
+    const resolved = resolverRutaEpisodioJson(req.params.nombre);
+    if (!resolved) {
+        return res.status(400).json({ error: 'Nombre de archivo no válido.' });
+    }
+    const data = req.body?.data;
+    if (!data || typeof data !== 'object' || Array.isArray(data)) {
+        return res.status(400).json({ error: 'Cuerpo inválido: se espera { data: object }.' });
+    }
+    try {
+        const json = `${JSON.stringify(data, null, 2)}\n`;
+        JSON.parse(json);
+        fs.writeFileSync(resolved.full, json, 'utf8');
+        return res.json({ ok: true, nombre: resolved.base });
+    } catch (error) {
+        console.warn('[api/episodios-editor/archivo PUT]', error.message);
+        return res.status(500).json({ error: 'No se pudo guardar.', detalle: error.message });
+    }
+});
+
+app.post('/api/episodios-editor/archivo', (req, res) => {
+    if (!episodiosEditorPermitido()) {
+        return res.status(403).json({ error: 'Editor no disponible.' });
+    }
+    const resolved = resolverRutaEpisodioJson(req.body?.nombre);
+    if (!resolved) {
+        return res.status(400).json({ error: 'Nombre de archivo no válido (use solo letras, números, _ - y .json).' });
+    }
+    if (fs.existsSync(resolved.full)) {
+        return res.status(409).json({ error: 'El archivo ya existe.' });
+    }
+    const data = req.body?.data;
+    if (!data || typeof data !== 'object' || Array.isArray(data)) {
+        return res.status(400).json({ error: 'Cuerpo inválido: se espera { nombre, data }.' });
+    }
+    try {
+        const json = `${JSON.stringify(data, null, 2)}\n`;
+        fs.writeFileSync(resolved.full, json, 'utf8');
+        return res.json({ ok: true, nombre: resolved.base });
+    } catch (error) {
+        console.warn('[api/episodios-editor/archivo POST]', error.message);
+        return res.status(500).json({ error: 'No se pudo crear.', detalle: error.message });
+    }
+});
+
+app.get('/api/episodios-editor/recursos', (_req, res) => {
+    if (!episodiosEditorPermitido()) {
+        return res.status(403).json({ error: 'Editor no disponible.' });
+    }
+    const tablerosDir = path.join(__dirname, 'public/resources/tableros');
+    let tableros = [];
+    try {
+        tableros = fs.readdirSync(tablerosDir, { withFileTypes: true })
+            .filter((d) => d.isFile() && /\.(png|jpe?g|webp)$/i.test(d.name))
+            .map((d) => d.name.replace(/\.(png|jpe?g|webp)$/i, ''));
+    } catch (_e) {
+        tableros = [];
+    }
+    return res.json({
+        bustos: listarImagenesEnSubcarpeta('bust'),
+        fondos: listarImagenesEnSubcarpeta('background'),
+        tableros,
+    });
+});
+
+// Archivos estáticos (después de /api/* del editor y tableros para evitar 404 en rutas API)
+app.use(express.static(path.join(__dirname, 'public')));
 
 // Lista para usuarios conectados
 let usuariosConectados = [];

@@ -1,12 +1,46 @@
 {
   "episodio_id": "0",
   "nombre": "Supergirl: Fuga de las Sombras",
-  "timeline": [
+  "_comentario": "Referencia de sintaxis (episodio-engine.js). Ver CONTEXT.md. Puede usar capitulos[] (recomendado) o timeline en raíz (legacy).",
+  "capitulos": [
+    {
+      "capitulo_id": "cap_01",
+      "nombre": "Capítulo 1",
+      "descripcion": "Ejemplo de sintaxis",
+      "timeline": [
     {
       "type": "cutscene",
       "cutscene_id": "cs_intro",
       "background_image": "bg_test.png",
+      "fondo_inicial": "negro",
+      "escena": [
+        {
+          "id_character": "supergirl",
+          "bust_image": "supergirl_base.png",
+          "side": "8%",
+          "nombre": "Supergirl",
+          "visible": true
+        },
+        {
+          "id_character": "guardia_01",
+          "bust_image": "guardia.png",
+          "side": "62%",
+          "nombre": "Guardia Cadmus",
+          "visible": true
+        }
+      ],
       "dialogos": [
+        {
+          "comando": "fundido_fondo",
+          "background_image": "bg_test.png",
+          "duracion": 900
+        },
+        {
+          "dialogo_id": "d_voz_anon",
+          "voz_en_off": true,
+          "voz_en_off_sin_personaje": true,
+          "texto": "En las profundidades de Cadmus, una joven Kryptoniana despierta entre cadenas y luces frías."
+        },
         {
           "dialogo_id": "d001",
           "bust_image": "supergirl_base.png",
@@ -15,6 +49,13 @@
           "nombre": "Supergirl",
           "visible": true,
           "texto": "Se acabó el tiempo. Tenemos que salir de este laboratorio ya."
+        },
+        {
+          "dialogo_id": "d_voz_supergirl",
+          "voz_en_off": true,
+          "id_character": "supergirl",
+          "nombre": "Supergirl",
+          "texto": "No puedo permitir que nadie más sufra lo que yo he sufrido aquí."
         },
         {
           "dialogo_id": "d002",
@@ -32,16 +73,39 @@
           "id_character": "supergirl",
           "nombre": "Supergirl",
           "visible": true,
-          "texto": "Lo siento. No tengo tiempo para esto.",
+          "texto": "Lo siento. No tengo tiempo para esto."
+        },
+        {
+          "comando": "escena",
           "escena": [
             { "id_character": "guardia_01", "visible": false }
           ]
+        },
+        {
+          "comando": "fundido_negro",
+          "duracion": 700
+        }
+      ]
+    },
+    {
+      "type": "escena",
+      "titulo": "Transición",
+      "texto": "La alarma resuena por todo el complejo…",
+      "background_image": "bg_test.png",
+      "escena": [
+        {
+          "id_character": "supergirl",
+          "bust_image": "supergirl_base.png",
+          "side": "20%",
+          "nombre": "Supergirl",
+          "visible": true
         }
       ]
     },
     {
       "type": "combate",
       "combate_id": "comb_01",
+      "tablero": "tablero_background",
       "cartas_jugador": ["Superman", "Supergirl", "Superboy"],
       "nivel_jugador": 2,
       "cartas_BOT": ["Joker", "Lex Luthor", "Harley Quinn"],
@@ -52,6 +116,11 @@
       "cutscene_id": "cs_post_combate",
       "background_image": "bg_test.jpg",
       "dialogos": [
+        {
+          "comando": "fundido_fondo",
+          "background_image": "bg_test.jpg",
+          "duracion": 800
+        },
         {
           "dialogo_id": "d004",
           "bust_image": "supergirl_base.png",
@@ -87,6 +156,8 @@
       "objetos": [],
       "cartas": [],
       "skins": []
+    }
+      ]
     }
   ]
 }
