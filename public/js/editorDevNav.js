@@ -10,6 +10,8 @@
         { id: 'episodios', href: 'crearEpisodios.html', label: 'Episodios' },
     ];
 
+    const VISTA_JUEGO_HREF = 'vistaJuego.html';
+
     let config = null;
     let gitPendiente = false;
 
@@ -97,6 +99,18 @@
             });
             nav.appendChild(link);
         });
+
+        const volver = document.createElement('a');
+        volver.href = VISTA_JUEGO_HREF;
+        volver.className = 'editor-dev-nav-btn editor-dev-nav-btn--volver';
+        volver.textContent = 'Volver al juego';
+        volver.addEventListener('click', async (event) => {
+            event.preventDefault();
+            if (await confirmarAntesDeNavegar()) {
+                window.location.href = VISTA_JUEGO_HREF;
+            }
+        });
+        nav.appendChild(volver);
     }
 
     function onBeforeUnload(event) {

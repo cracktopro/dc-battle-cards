@@ -226,7 +226,7 @@ Documento vivo de referencia técnica para trabajar sobre DC Battle Cards sin ro
 
 Nunca se muestra en producción (`main` en Render).
 
-**Navegación entre editores:** barra `editor-dev-nav` (`editorDevNav.js`) en `crearEpisodios` / `editarCartas` con botones **Cartas** y **Episodios**. Extensible añadiendo entradas en `DCEditorDevNav.VISTAS`.
+**Navegación entre editores:** barra `editor-dev-nav` (`editorDevNav.js`) en `crearEpisodios` / `editarCartas` con botones **Cartas**, **Episodios** y **Volver al juego** (rojo, → `vistaJuego.html`; misma guardia de cambios sin guardar / sin push). Extensible añadiendo entradas en `DCEditorDevNav.VISTAS`.
 
 **Flujo guardar → GitHub:**
 1. **Guardar** / **Guardar Excel** → escribe en disco del servidor (API PUT).
