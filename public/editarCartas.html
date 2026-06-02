@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <title>Editor de cartas — DC Battle Cards</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+    <link href="css/scrollbar.css" rel="stylesheet">
+    <link href="css/crearEpisodios.css" rel="stylesheet">
+    <link href="css/editarCartas.css" rel="stylesheet">
+    <link href="css/mazos.css" rel="stylesheet">
+    <link href="css/salud.css" rel="stylesheet">
+    <link href="css/filtros-cartas.css" rel="stylesheet">
+    <link href="css/carta-holo.css" rel="stylesheet">
+</head>
+<body class="crear-ep-body editar-cartas-body">
+    <header class="crear-ep-header">
+        <div class="crear-ep-header-marca">
+            <span class="crear-ep-header-kicker">Herramienta interna</span>
+            <h1 class="crear-ep-header-titulo">Editor de cartas (cartas.xlsx)</h1>
+        </div>
+        <div class="crear-ep-header-acciones" id="editar-cartas-toolbar"></div>
+    </header>
+
+    <p id="editar-cartas-aviso" class="crear-ep-aviso" hidden></p>
+
+    <div class="editar-cartas-layout" id="editar-cartas-layout" hidden>
+        <aside class="editar-cartas-panel editar-cartas-panel--catalogo">
+            <div class="editar-cartas-catalogo-cabecera">
+                <h2 class="editar-cartas-panel-titulo">Catálogo</h2>
+                <div class="editar-cartas-vista-toggle" role="group" aria-label="Modo de visualización del catálogo">
+                    <button type="button" id="editar-cartas-vista-imagenes" class="editar-cartas-vista-btn editar-cartas-vista-btn--activo" title="Vista en imágenes" aria-pressed="true" aria-label="Vista en imágenes">▦</button>
+                    <button type="button" id="editar-cartas-vista-lista" class="editar-cartas-vista-btn" title="Vista en lista" aria-pressed="false" aria-label="Vista en lista">☰</button>
+                </div>
+            </div>
+            <div class="editar-cartas-acciones-lista">
+                <button type="button" id="editar-cartas-nueva" class="crear-ep-btn crear-ep-btn--secundario">+ Nueva</button>
+            </div>
+            <div class="editar-cartas-filtros">
+                <input type="search" id="filtro-nombre-carta" placeholder="Nombre de carta…" autocomplete="off">
+                <select id="filtro-afiliacion-carta" class="crear-ep-select" aria-label="Afiliación">
+                    <option value="todas">Todas las afiliaciones</option>
+                </select>
+                <select id="filtro-faccion-carta" class="crear-ep-select" aria-label="Facción">
+                    <option value="todas">Todas las facciones</option>
+                    <option value="H">Héroes (H)</option>
+                    <option value="V">Villanos (V)</option>
+                </select>
+                <select id="filtro-skill-class-carta" class="crear-ep-select filtro-skill-class" aria-label="Tipo de habilidad"></select>
+            </div>
+            <p id="editar-cartas-contador" class="crear-ep-field-ayuda"></p>
+            <ul id="editar-cartas-lista" class="editar-cartas-lista" role="listbox" hidden></ul>
+            <div id="editar-cartas-grid" class="editar-cartas-grid" role="listbox"></div>
+        </aside>
+
+        <main class="editar-cartas-panel editar-cartas-panel--ficha">
+            <h2 class="editar-cartas-panel-titulo">Ficha de carta</h2>
+            <ul id="editar-cartas-errores" class="editar-cartas-errores" hidden></ul>
+            <div id="editar-cartas-form" class="editar-cartas-form">
+                <p class="crear-ep-field-ayuda">Selecciona una carta de la lista o crea una nueva.</p>
+            </div>
+        </main>
+
+        <aside class="editar-cartas-panel editar-cartas-panel--preview">
+            <h2 class="editar-cartas-panel-titulo">Vista previa en juego</h2>
+            <div class="editar-cartas-preview-wrap">
+                <div id="editar-cartas-preview" aria-label="Previsualización de carta"></div>
+            </div>
+            <p class="crear-ep-field-ayuda">La miniatura usa los mismos estilos que colección / mazos (nivel, badges, barra de salud).</p>
+        </aside>
+    </div>
+
+    <div id="crear-ep-toast" class="crear-ep-toast" hidden role="status"></div>
+
+    <script src="js/editorGitPush.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="js/filtrosCartas.js"></script>
+    <script src="js/cartas.js"></script>
+    <script src="js/editarCartasModel.js"></script>
+    <script src="js/editarCartas.js"></script>
+</body>
+</html>

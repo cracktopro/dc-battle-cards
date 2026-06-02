@@ -137,10 +137,120 @@
         marcarDirty();
     }
 
+    /** Mueve un elemento de `fromIdx` a `toIdx` (misma lista). */
+    function moverItemEnArray(arr, fromIdx, toIdx) {
+        if (!arr || fromIdx < 0 || fromIdx >= arr.length || toIdx < 0 || toIdx >= arr.length) return false;
+        if (fromIdx === toIdx) return false;
+        const [item] = arr.splice(fromIdx, 1);
+        arr.splice(toIdx, 0, item);
+        marcarDirty();
+        return true;
+    }
+
+    function remapIndexAfterMove(index, fromIdx, toIdx) {
+        if (index === fromIdx) return toIdx;
+        if (fromIdx < toIdx) {
+            if (index > fromIdx && index <= toIdx) return index - 1;
+        } else if (index > toIdx && index < fromIdx) {
+            return index + 1;
+        }
+        return index;
+    }
+
+    function remapExpandedCutscenesOnTimelineMove(capIdx, fromIdx, toIdx) {
+        if (fromIdx === toIdx) return;
+        const next = new Set();
+        state.expandedCutscenes.forEach((key) => {
+            const [cStr, tStr] = key.split('-');
+            const c = Number(cStr);
+            let t = Number(tStr);
+            if (c !== capIdx) {
+                next.add(key);
+                return;
+            }
+            t = remapIndexAfterMove(t, fromIdx, toIdx);
+            next.add(`${c}-${t}`);
+        });
+        state.expandedCutscenes = next;
+    }
+
+    let activeListDrag = null;
+
+    function clearDragDropUi() {
+        document.querySelectorAll('.crear-ep-item--drag-over').forEach((el) => {
+            el.classList.remove('crear-ep-item--drag-over');
+        });
+    }
+
+    function wireDragReorder(row, { listId, idx, arr, onAfterReorder }) {
+        const handle = document.createElement('span');
+        handle.className = 'crear-ep-drag-handle';
+        handle.setAttribute('draggable', 'true');
+        handle.title = 'Arrastrar para reordenar';
+        handle.setAttribute('role', 'button');
+        handle.setAttribute('aria-label', 'Arrastrar para reordenar');
+        handle.textContent = '⠿';
+        handle.addEventListener('mousedown', (e) => e.stopPropagation());
+        handle.addEventListener('click', (e) => e.stopPropagation());
+
+        handle.addEventListener('dragstart', (e) => {
+            e.stopPropagation();
+            activeListDrag = { listId, fromIdx: idx };
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', listId);
+            row.classList.add('crear-ep-item--dragging');
+        });
+
+        handle.addEventListener('dragend', () => {
+            activeListDrag = null;
+            row.classList.remove('crear-ep-item--dragging');
+            clearDragDropUi();
+        });
+
+        row.addEventListener('dragover', (e) => {
+            if (!activeListDrag || activeListDrag.listId !== listId) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            clearDragDropUi();
+            row.classList.add('crear-ep-item--drag-over');
+        });
+
+        row.addEventListener('dragleave', (e) => {
+            if (!e.relatedTarget || !row.contains(e.relatedTarget)) {
+                row.classList.remove('crear-ep-item--drag-over');
+            }
+        });
+
+        row.addEventListener('drop', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            clearDragDropUi();
+            if (!activeListDrag || activeListDrag.listId !== listId) return;
+            const fromIdx = activeListDrag.fromIdx;
+            const toIdx = idx;
+            activeListDrag = null;
+            if (fromIdx === toIdx) return;
+            if (!moverItemEnArray(arr, fromIdx, toIdx)) return;
+            if (typeof onAfterReorder === 'function') onAfterReorder(fromIdx, toIdx);
+            renderAll();
+        });
+
+        row.insertBefore(handle, row.firstChild);
+    }
+
     function eliminarEnArray(arr, idx) {
         if (!arr || idx < 0 || idx >= arr.length) return;
         arr.splice(idx, 1);
         marcarDirty();
+    }
+
+    /** Inserta una copia profunda justo debajo; devuelve el índice del clon o -1. */
+    function duplicarEnArray(arr, idx) {
+        if (!arr || idx < 0 || idx >= arr.length) return -1;
+        const copia = M.clone(arr[idx]);
+        arr.splice(idx + 1, 0, copia);
+        marcarDirty();
+        return idx + 1;
     }
 
     function fieldText(label, value, onChange, opts = {}) {
@@ -225,6 +335,288 @@
         return wrap;
     }
 
+    const TITULOS_RECURSO = {
+        busto: 'Seleccionar bust',
+        fondo: 'Seleccionar fondo de escena',
+        tablero: 'Seleccionar tablero de combate',
+    };
+
+    function urlRecurso(tipo, nombre) {
+        const n = String(nombre || '').trim();
+        if (!n) return '';
+        if (tipo === 'busto') return `/resources/episodios/bust/${encodeURIComponent(n)}`;
+        if (tipo === 'fondo') return `/resources/episodios/background/${encodeURIComponent(n)}`;
+        if (tipo === 'tablero') {
+            if (/\.(png|jpe?g|webp)$/i.test(n)) return `/resources/tableros/${encodeURIComponent(n)}`;
+            return `/resources/tableros/${encodeURIComponent(n)}.png`;
+        }
+        return '';
+    }
+
+    function listaRecurso(tipo) {
+        if (tipo === 'busto') return recursos.bustos || [];
+        if (tipo === 'fondo') return recursos.fondos || [];
+        if (tipo === 'tablero') return recursos.tableros || [];
+        return [];
+    }
+
+    function escapeHtmlRecurso(s) {
+        return String(s)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    let recursoPickerSession = null;
+    let openRecursoPickerImpl = null;
+
+    function initRecursoPickerDialog() {
+        const dialog = $('crear-ep-dialog-recurso');
+        const grid = $('crear-ep-recurso-grid');
+        const filtro = $('crear-ep-recurso-filtro');
+        const selLabel = $('crear-ep-recurso-seleccion');
+        const titulo = $('crear-ep-recurso-titulo');
+        const btnAceptar = $('crear-ep-recurso-aceptar');
+        const btnCancelar = $('crear-ep-recurso-cancelar');
+        if (!dialog || !grid || !filtro) return;
+
+        function updateSeleccionLabel() {
+            if (!recursoPickerSession || !selLabel) return;
+            const p = recursoPickerSession.pending;
+            selLabel.innerHTML = p
+                ? `Selección: <strong>${escapeHtmlRecurso(p)}</strong>`
+                : 'Selección: <strong>— sin imagen —</strong>';
+        }
+
+        function seleccionarEnGrid(nombre) {
+            if (!recursoPickerSession) return;
+            recursoPickerSession.pending = nombre;
+            grid.querySelectorAll('.crear-ep-recurso-card--sel').forEach((el) => {
+                el.classList.remove('crear-ep-recurso-card--sel');
+            });
+            const cards = grid.querySelectorAll('.crear-ep-recurso-card');
+            cards.forEach((card) => {
+                if (card.dataset.nombre === nombre) card.classList.add('crear-ep-recurso-card--sel');
+            });
+            updateSeleccionLabel();
+        }
+
+        function crearCardRecurso(nombre, esVacio) {
+            const card = document.createElement('button');
+            card.type = 'button';
+            card.className = 'crear-ep-recurso-card';
+            card.dataset.nombre = nombre;
+            card.setAttribute('role', 'option');
+            if (nombre === recursoPickerSession.pending) {
+                card.classList.add('crear-ep-recurso-card--sel');
+            }
+
+            const media = document.createElement('div');
+            media.className = 'crear-ep-recurso-card-media';
+
+            if (esVacio) {
+                const ph = document.createElement('span');
+                ph.textContent = '—';
+                ph.style.fontSize = '2rem';
+                ph.style.color = 'rgba(140, 180, 220, 0.6)';
+                media.appendChild(ph);
+            } else {
+                const img = document.createElement('img');
+                img.alt = nombre;
+                img.loading = 'lazy';
+                img.src = urlRecurso(recursoPickerSession.tipo, nombre);
+                img.addEventListener('error', () => {
+                    img.hidden = true;
+                    if (media.querySelector('.crear-ep-recurso-card-fallback')) return;
+                    const fb = document.createElement('span');
+                    fb.className = 'crear-ep-recurso-card-fallback';
+                    fb.textContent = 'Sin vista previa';
+                    fb.style.color = 'rgba(160, 190, 220, 0.75)';
+                    fb.style.fontSize = '0.75rem';
+                    media.appendChild(fb);
+                });
+                media.appendChild(img);
+            }
+
+            const cap = document.createElement('span');
+            cap.className = 'crear-ep-recurso-card-nombre';
+            cap.textContent = esVacio ? '(sin imagen)' : nombre;
+
+            card.appendChild(media);
+            card.appendChild(cap);
+            card.addEventListener('click', () => seleccionarEnGrid(nombre));
+            card.addEventListener('dblclick', () => {
+                seleccionarEnGrid(nombre);
+                confirmarRecursoPicker();
+            });
+            return card;
+        }
+
+        function pintarGridRecurso() {
+            if (!recursoPickerSession) return;
+            const q = filtro.value.trim().toLowerCase();
+            grid.innerHTML = '';
+
+            const items = listaRecurso(recursoPickerSession.tipo).filter((n) => (
+                !q || String(n).toLowerCase().includes(q)
+            ));
+
+            const valActual = recursoPickerSession.value;
+            if (valActual && !items.includes(valActual) && (!q || String(valActual).toLowerCase().includes(q))) {
+                items.unshift(valActual);
+            }
+
+            if (recursoPickerSession.allowEmpty && !q) {
+                grid.appendChild(crearCardRecurso('', true));
+            }
+
+            if (!items.length && !(recursoPickerSession.allowEmpty && !q)) {
+                const empty = document.createElement('p');
+                empty.className = 'crear-ep-recurso-vacio';
+                empty.textContent = q ? 'Ninguna imagen coincide con el filtro.' : 'No hay imágenes en esta carpeta.';
+                grid.appendChild(empty);
+                return;
+            }
+
+            items.forEach((nombre) => grid.appendChild(crearCardRecurso(nombre, false)));
+        }
+
+        function confirmarRecursoPicker() {
+            if (!recursoPickerSession) return;
+            recursoPickerSession.onAccept(recursoPickerSession.pending);
+            dialog.close();
+            recursoPickerSession = null;
+        }
+
+        filtro.addEventListener('input', pintarGridRecurso);
+        btnAceptar?.addEventListener('click', confirmarRecursoPicker);
+        btnCancelar?.addEventListener('click', () => {
+            dialog.close();
+            recursoPickerSession = null;
+        });
+        dialog.addEventListener('cancel', () => { recursoPickerSession = null; });
+        dialog.addEventListener('close', () => { recursoPickerSession = null; });
+
+        openRecursoPickerImpl = function (opts) {
+            recursoPickerSession = {
+                tipo: opts.tipo,
+                value: opts.value || '',
+                pending: opts.value || '',
+                allowEmpty: opts.allowEmpty !== false,
+                onAccept: opts.onAccept,
+            };
+            if (titulo) titulo.textContent = TITULOS_RECURSO[opts.tipo] || 'Seleccionar imagen';
+            filtro.value = '';
+            pintarGridRecurso();
+            updateSeleccionLabel();
+            dialog.showModal();
+            requestAnimationFrame(() => filtro.focus());
+        };
+    }
+
+    function openRecursoPicker(opts) {
+        if (openRecursoPickerImpl) openRecursoPickerImpl(opts);
+    }
+
+    function fieldRecursoImagen(label, value, tipo, onChange, opts = {}) {
+        const allowEmpty = opts.allowEmpty !== false;
+        let current = value ?? '';
+        const wrap = document.createElement('div');
+        wrap.className = 'crear-ep-field';
+        const lab = document.createElement('label');
+        lab.textContent = label;
+
+        const trigger = document.createElement('button');
+        trigger.type = 'button';
+        trigger.className = 'crear-ep-recurso-trigger';
+
+        const thumb = document.createElement('img');
+        thumb.className = 'crear-ep-recurso-trigger-thumb';
+        thumb.alt = '';
+
+        const meta = document.createElement('span');
+        meta.className = 'crear-ep-recurso-trigger-meta';
+        const nombreEl = document.createElement('span');
+        nombreEl.className = 'crear-ep-recurso-trigger-nombre';
+        const hint = document.createElement('span');
+        hint.className = 'crear-ep-recurso-trigger-hint';
+        hint.textContent = 'Clic para elegir imagen';
+        meta.appendChild(nombreEl);
+        meta.appendChild(hint);
+
+        let clearRow = null;
+
+        function refreshDisplay(v) {
+            current = v ?? '';
+            nombreEl.textContent = current || '— sin imagen —';
+            if (current) {
+                thumb.src = urlRecurso(tipo, current);
+                thumb.hidden = false;
+            } else {
+                thumb.hidden = true;
+                thumb.removeAttribute('src');
+            }
+            if (clearRow) clearRow.hidden = !current;
+        }
+        refreshDisplay(current);
+
+        trigger.appendChild(thumb);
+        trigger.appendChild(meta);
+        trigger.addEventListener('click', () => {
+            openRecursoPicker({
+                tipo,
+                value: current,
+                allowEmpty,
+                onAccept: (v) => {
+                    refreshDisplay(v);
+                    onChange(v);
+                },
+            });
+        });
+
+        wrap.appendChild(lab);
+        wrap.appendChild(trigger);
+
+        if (typeof opts.beforeClear === 'function') {
+            const slot = document.createElement('div');
+            slot.className = 'crear-ep-recurso-before-clear';
+            opts.beforeClear(slot);
+            wrap.appendChild(slot);
+        }
+
+        if (allowEmpty) {
+            clearRow = document.createElement('div');
+            clearRow.className = 'crear-ep-recurso-clear-row';
+            clearRow.hidden = !current;
+            clearRow.appendChild(btn('Quitar imagen', 'crear-ep-btn--secundario', () => {
+                refreshDisplay('');
+                onChange('');
+            }));
+            wrap.appendChild(clearRow);
+        }
+
+        return wrap;
+    }
+
+    function fieldCheckInvertirImagen(obj, onUpdate) {
+        return fieldCheck('Invertir imagen', obj.invertir_imagen === true, (v) => {
+            if (v) obj.invertir_imagen = true;
+            else delete obj.invertir_imagen;
+            onUpdate();
+        });
+    }
+
+    function fieldBustImage(target, onUpdate) {
+        return fieldRecursoImagen('bust_image', target.bust_image, 'busto', (v) => {
+            target.bust_image = v;
+            onUpdate();
+        }, {
+            beforeClear: (slot) => {
+                slot.appendChild(fieldCheckInvertirImagen(target, onUpdate));
+            },
+        });
+    }
+
     function btn(texto, clase, onClick) {
         const b = document.createElement('button');
         b.type = 'button';
@@ -253,7 +645,7 @@
             box.className = 'crear-ep-bloque';
             box.style.marginBottom = '8px';
             box.appendChild(fieldText('id_character', p.id_character, (v) => { p.id_character = v; onUpdate(); }));
-            box.appendChild(fieldSelect('bust_image', p.bust_image, recursos.bustos, (v) => { p.bust_image = v; onUpdate(); }));
+            box.appendChild(fieldBustImage(p, onUpdate));
             box.appendChild(fieldText('side', p.side, (v) => { p.side = v; onUpdate(); }, { ayuda: 'Ej: 35% o 120px' }));
             box.appendChild(fieldText('nombre', p.nombre, (v) => { p.nombre = v; onUpdate(); }));
             box.appendChild(fieldCheck('visible', p.visible !== false, (v) => { p.visible = v; onUpdate(); }));
@@ -293,7 +685,7 @@
         return sel;
     }
 
-    function renderItemRow(label, badgeText, badgeClass, selKey, onSelect, idx, arr) {
+    function renderItemRow(label, badgeText, badgeClass, selKey, onSelect, idx, arr, onDuplicate, dragOpts) {
         const row = document.createElement('div');
         row.className = 'crear-ep-item' + (selKey ? ' crear-ep-item--sel' : '');
         row.addEventListener('click', (e) => {
@@ -310,16 +702,55 @@
         acc.className = 'crear-ep-item-acciones';
         acc.appendChild(btnIcono('↑', 'Subir', (e) => { e.stopPropagation(); moverEnArray(arr, idx, -1); renderAll(); }));
         acc.appendChild(btnIcono('↓', 'Bajar', (e) => { e.stopPropagation(); moverEnArray(arr, idx, 1); renderAll(); }));
+        if (typeof onDuplicate === 'function') {
+            acc.appendChild(btnIcono('⧉', 'Duplicar', (e) => {
+                e.stopPropagation();
+                onDuplicate(idx);
+            }));
+        }
         acc.appendChild(btnIcono('×', 'Eliminar', (e) => {
             e.stopPropagation();
             if (!window.confirm('¿Eliminar este elemento?')) return;
             eliminarEnArray(arr, idx);
-            setSel({ kind: 'capitulo', capIdx: state.sel.capIdx });
+            if (typeof onDuplicate === 'function' && state.sel.kind === 'dialogo') {
+                const { capIdx, eventIdx, dialogoIdx } = state.sel;
+                if (dialogoIdx === idx) {
+                    const ev = state.data?.capitulos?.[capIdx]?.timeline?.[eventIdx];
+                    const n = ev?.dialogos?.length ?? 0;
+                    if (n === 0) {
+                        setSel({ kind: 'evento', capIdx, eventIdx }, { skipExpand: true });
+                    } else {
+                        setSel({
+                            kind: 'dialogo',
+                            capIdx,
+                            eventIdx,
+                            dialogoIdx: Math.min(idx, n - 1),
+                        }, { skipExpand: true });
+                    }
+                } else if (dialogoIdx > idx) {
+                    setSel({
+                        kind: 'dialogo',
+                        capIdx,
+                        eventIdx,
+                        dialogoIdx: dialogoIdx - 1,
+                    }, { skipExpand: true });
+                }
+            } else {
+                setSel({ kind: 'capitulo', capIdx: state.sel.capIdx });
+            }
             renderAll();
         }));
         row.appendChild(badge);
         row.appendChild(lab);
         row.appendChild(acc);
+        if (dragOpts && dragOpts.listId && arr) {
+            wireDragReorder(row, {
+                listId: dragOpts.listId,
+                idx,
+                arr,
+                onAfterReorder: dragOpts.onAfterReorder,
+            });
+        }
         return row;
     }
 
@@ -404,7 +835,21 @@
                         }
                     },
                     ti,
-                    cap.timeline
+                    cap.timeline,
+                    undefined,
+                    {
+                        listId: `timeline-${ci}`,
+                        onAfterReorder: (fromIdx, toIdx) => {
+                            remapExpandedCutscenesOnTimelineMove(ci, fromIdx, toIdx);
+                            const s = state.sel;
+                            if (s.capIdx !== ci) return;
+                            if (s.kind === 'evento' && s.eventIdx !== undefined) {
+                                s.eventIdx = remapIndexAfterMove(s.eventIdx, fromIdx, toIdx);
+                            } else if (s.kind === 'dialogo' && s.eventIdx !== undefined) {
+                                s.eventIdx = remapIndexAfterMove(s.eventIdx, fromIdx, toIdx);
+                            }
+                        },
+                    }
                 ));
 
                 if (t === 'cutscene' && expandido) {
@@ -428,7 +873,28 @@
                                 }, { skipExpand: true });
                             },
                             di,
-                            ev.dialogos
+                            ev.dialogos,
+                            (lineaIdx) => {
+                                const nuevoIdx = duplicarEnArray(ev.dialogos, lineaIdx);
+                                if (nuevoIdx < 0) return;
+                                expandCutscene(ci, ti);
+                                setSel({
+                                    kind: 'dialogo',
+                                    capIdx: ci,
+                                    eventIdx: ti,
+                                    dialogoIdx: nuevoIdx,
+                                }, { skipExpand: true });
+                                renderAll();
+                            },
+                            {
+                                listId: `dialogos-${ci}-${ti}`,
+                                onAfterReorder: (fromIdx, toIdx) => {
+                                    const s = state.sel;
+                                    if (s.kind === 'dialogo' && s.capIdx === ci && s.eventIdx === ti && s.dialogoIdx !== undefined) {
+                                        s.dialogoIdx = remapIndexAfterMove(s.dialogoIdx, fromIdx, toIdx);
+                                    }
+                                },
+                            }
                         ));
                     });
                     sub.appendChild(crearSelectAccion(
@@ -510,7 +976,7 @@
         M.normalizarEscenaEnCutscene(ev);
 
         inspector.appendChild(fieldText('cutscene_id', ev.cutscene_id, (v) => { ev.cutscene_id = v; marcarDirty(); renderArbol(); }));
-        inspector.appendChild(fieldSelect('background_image', ev.background_image, recursos.fondos, (v) => { ev.background_image = v; marcarDirty(); }));
+        inspector.appendChild(fieldRecursoImagen('background_image', ev.background_image, 'fondo', (v) => { ev.background_image = v; marcarDirty(); }));
         inspector.appendChild(fieldText('fondo_inicial', ev.fondo_inicial || '', (v) => { ev.fondo_inicial = v; marcarDirty(); }, { ayuda: 'Escribe negro para empezar en negro (también fondo_negro: true).' }));
         inspector.appendChild(fieldCheck('fondo_negro', ev.fondo_negro === true, (v) => { ev.fondo_negro = v || undefined; marcarDirty(); }));
         inspector.appendChild(fieldCheck('ocultar_ausentes (cutscene)', ev.ocultar_ausentes === true, (v) => { ev.ocultar_ausentes = v || undefined; marcarDirty(); }));
@@ -548,7 +1014,7 @@
 
     function renderInspectorCombate(ev) {
         inspector.appendChild(fieldText('combate_id', ev.combate_id, (v) => { ev.combate_id = v; marcarDirty(); renderArbol(); }));
-        inspector.appendChild(fieldSelect('tablero', ev.tablero, recursos.tableros, (v) => { ev.tablero = v; marcarDirty(); }));
+        inspector.appendChild(fieldRecursoImagen('tablero', ev.tablero, 'tablero', (v) => { ev.tablero = v; marcarDirty(); }));
         inspector.appendChild(fieldText('cartas_jugador (coma)', M.listaATexto(ev.cartas_jugador), (v) => {
             ev.cartas_jugador = M.parsearListaTexto(v);
             marcarDirty();
@@ -586,7 +1052,7 @@
             return;
         }
         if (tipo === 'fundido_fondo') {
-            inspector.appendChild(fieldSelect('background_image', linea.background_image, recursos.fondos, (v) => { linea.background_image = v; marcarDirty(); }));
+            inspector.appendChild(fieldRecursoImagen('background_image', linea.background_image, 'fondo', (v) => { linea.background_image = v; marcarDirty(); }));
             inspector.appendChild(fieldNum('duracion (ms)', linea.duracion ?? 700, (v) => { linea.duracion = v; marcarDirty(); }));
             inspector.appendChild(fieldCheck('auto', linea.auto !== false, (v) => { linea.auto = v; marcarDirty(); }));
             return;
@@ -600,7 +1066,7 @@
         }));
         inspector.appendChild(fieldText('id_character', linea.id_character || '', (v) => { linea.id_character = v; marcarDirty(); }));
         inspector.appendChild(fieldText('nombre', linea.nombre || '', (v) => { linea.nombre = v; marcarDirty(); renderArbol(); }));
-        inspector.appendChild(fieldSelect('bust_image', linea.bust_image, recursos.bustos, (v) => { linea.bust_image = v; marcarDirty(); }));
+        inspector.appendChild(fieldBustImage(linea, () => marcarDirty()));
         inspector.appendChild(fieldText('side', linea.side || '', (v) => { linea.side = v; marcarDirty(); }));
         inspector.appendChild(fieldCheck('visible', linea.visible !== false, (v) => { linea.visible = v; marcarDirty(); }));
         inspector.appendChild(fieldText('texto', linea.texto || '', (v) => { linea.texto = v; marcarDirty(); renderArbol(); }, {
@@ -668,6 +1134,7 @@
         toolbar.appendChild(btn('Guardar', 'crear-ep-btn--primario', guardarArchivo));
         toolbar.appendChild(btn('Validar', 'crear-ep-btn--secundario', validarActual));
         toolbar.appendChild(btn('Vista JSON', 'crear-ep-btn--secundario', abrirVistaJson));
+        window.DCEditorGitPush?.refrescarBotonEnToolbar(toolbar);
     }
 
     function renderListaArchivos() {
@@ -774,7 +1241,7 @@
             const hab = await api('/api/episodios-editor/habilitado');
             if (!hab.habilitado) {
                 aviso.hidden = false;
-                aviso.textContent = 'El editor de episodios no está habilitado en producción. En local funciona por defecto; en servidor define EPISODIOS_EDITOR=1.';
+                aviso.textContent = 'El editor de episodios no está habilitado en producción. En local funciona por defecto; en servidor define EPISODIOS_EDITOR=1 o despliega la rama dev.';
                 return;
             }
         } catch (e) {
@@ -794,6 +1261,16 @@
         await cargarRecursos();
         await cargarListaArchivos();
         renderAll();
+
+        window.DCEditorGitPush?.montarEnToolbar({
+            toolbar,
+            alcance: 'episodios',
+            endpoint: '/api/episodios-editor/git-push',
+            getDirty: () => state.dirty,
+            onSuccess: () => toastMsg('Cambios subidos a GitHub.'),
+        });
+
+        initRecursoPickerDialog();
 
         $('crear-ep-json-cancelar')?.addEventListener('click', () => dialogJson.close());
         dialogJson?.addEventListener('close', () => {

@@ -12,6 +12,7 @@ const cors = require('cors');
 const DCHealDebuff = require(path.join(__dirname, 'public', 'js', 'healDebuffCombat.js'));
 const DCSkinsCartas = require(path.join(__dirname, 'public', 'js', 'skinsCartas.js'));
 const DCEscaladoStatsCarta = require(path.join(__dirname, 'public', 'js', 'escaladoStatsCarta.js'));
+const DCEditorGitPush = require(path.join(__dirname, 'lib', 'editorGitPush.js'));
 
 // Configuración de Firebase
 const firebaseConfig = {
@@ -89,9 +90,7 @@ app.get('/api/tableros', (_req, res) => {
 /** Editor de JSON de episodios (solo desarrollo o EPISODIOS_EDITOR=1). Vista: crearEpisodios.html */
 const EPISODIOS_JSON_DIR = path.resolve(path.join(__dirname, 'public', 'resources', 'episodios'));
 
-function episodiosEditorPermitido() {
-    return process.env.EPISODIOS_EDITOR === '1' || process.env.NODE_ENV !== 'production';
-}
+const episodiosEditorPermitido = DCEditorGitPush.episodiosEditorPermitido;
 
 function resolverRutaEpisodioJson(nombre) {
     const base = path.basename(String(nombre || '').trim());
@@ -139,7 +138,10 @@ function listarImagenesEnSubcarpeta(sub) {
 }
 
 app.get('/api/episodios-editor/habilitado', (_req, res) => {
-    return res.json({ habilitado: episodiosEditorPermitido() });
+    return res.json({
+        habilitado: episodiosEditorPermitido(),
+        gitPush: DCEditorGitPush.gitPushEstado(),
+    });
 });
 
 app.get('/api/episodios-editor/archivos', (_req, res) => {
@@ -241,6 +243,218 @@ app.get('/api/episodios-editor/recursos', (_req, res) => {
         fondos: listarImagenesEnSubcarpeta('background'),
         tableros,
     });
+});
+
+/** Editor cartas.xlsx (editarCartas.html) — CARTAS_EDITOR=1, EPISODIOS_EDITOR=1 o no producción */
+const CARTAS_XLSX_PATH = path.resolve(path.join(__dirname, 'public', 'resources', 'cartas.xlsx'));
+const CARTAS_COLUMNAS_ORDEN = [
+    'Nombre', 'Nivel', 'Salud', 'Poder', 'Tipo', 'Imagen', 'faccion', 'Afiliacion',
+    'imagen_final', 'skill_name', 'skill_info', 'skill_class', 'skill_power', 'skill_trigger',
+];
+const CARTAS_TIPOS_VALIDOS = new Set(['Meta', 'Tecnología', 'Magia']);
+const CARTAS_FACCIONES_VALIDAS = new Set(['H', 'V']);
+const CARTAS_SKILL_CLASSES_VALIDAS = new Set([
+    'aoe', 'extra_attack', 'buff', 'bonus_buff', 'debuff', 'bonus_debuff',
+    'heal_debuff', 'revive', 'heal', 'heal_all', 'life_steal', 'shield',
+    'shield_aoe', 'tank', 'stun', 'dot',
+]);
+
+const cartasEditorPermitido = DCEditorGitPush.cartasEditorPermitido;
+
+function normalizarClaseSkillEditorServidor(valor) {
+    const raw = String(valor || '').trim().toLowerCase();
+    if (raw === 'heall_all') return 'heal_all';
+    if (raw === 'life-steal' || raw === 'lifesteal') return 'life_steal';
+    return raw;
+}
+
+function asegurarFilaCartasServidor(fila, columnas) {
+    const out = {};
+    columnas.forEach((col) => {
+        let v = fila && Object.prototype.hasOwnProperty.call(fila, col) ? fila[col] : '';
+        if (col === 'Nivel' || col === 'Salud' || col === 'Poder') {
+            const n = Number(v);
+            v = Number.isFinite(n) ? n : (col === 'Nivel' ? 1 : 0);
+        } else if (v === null || v === undefined) {
+            v = '';
+        } else if (typeof v !== 'string') {
+            v = String(v);
+        }
+        out[col] = v;
+    });
+    return out;
+}
+
+function leerCartasXlsxServidor() {
+    if (!fs.existsSync(CARTAS_XLSX_PATH)) {
+        throw new Error('No existe public/resources/cartas.xlsx');
+    }
+    const workbook = XLSX.readFile(CARTAS_XLSX_PATH);
+    const sheetName = workbook.SheetNames[0];
+    const sheet = workbook.Sheets[sheetName];
+    const filasRaw = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+    const columnas = CARTAS_COLUMNAS_ORDEN.slice();
+    const filas = filasRaw.map((f) => asegurarFilaCartasServidor(f, columnas));
+    return { columnas, filas, sheetName };
+}
+
+function cartaTieneHabilidadServidor(fila) {
+    return Boolean(
+        String(fila?.skill_name || '').trim()
+        || String(fila?.skill_class || '').trim()
+        || String(fila?.skill_trigger || '').trim()
+    );
+}
+
+function validarFilasCartasServidor(filas) {
+    const errores = [];
+    const nombres = new Map();
+    (filas || []).forEach((fila, indice) => {
+        const idx = indice + 1;
+        const nombre = String(fila.Nombre || '').trim();
+        if (!nombre) {
+            errores.push(`Fila ${idx}: falta Nombre.`);
+            return;
+        }
+        const key = nombre.toLowerCase();
+        if (nombres.has(key)) {
+            errores.push(`Fila ${idx}: nombre duplicado «${nombre}».`);
+        } else {
+            nombres.set(key, true);
+        }
+        const nivel = Number(fila.Nivel);
+        if (!Number.isFinite(nivel) || nivel < 1 || nivel > 8) {
+            errores.push(`Fila ${idx} (${nombre}): Nivel debe ser 1–8.`);
+        }
+        const salud = Number(fila.Salud);
+        if (!Number.isFinite(salud) || salud < 0) {
+            errores.push(`Fila ${idx} (${nombre}): Salud inválida.`);
+        }
+        const poder = Number(fila.Poder);
+        if (!Number.isFinite(poder) || poder < 0) {
+            errores.push(`Fila ${idx} (${nombre}): Poder inválido.`);
+        }
+        const tipo = String(fila.Tipo || '').trim();
+        if (tipo && !CARTAS_TIPOS_VALIDOS.has(tipo)) {
+            errores.push(`Fila ${idx} (${nombre}): Tipo inválido.`);
+        }
+        const fac = String(fila.faccion || '').trim().toUpperCase();
+        if (fac && !CARTAS_FACCIONES_VALIDAS.has(fac)) {
+            errores.push(`Fila ${idx} (${nombre}): faccion debe ser H o V.`);
+        }
+        if (cartaTieneHabilidadServidor(fila)) {
+            if (!String(fila.skill_name || '').trim()) {
+                errores.push(`Fila ${idx} (${nombre}): skill_name obligatorio con habilidad.`);
+            }
+            const clase = normalizarClaseSkillEditorServidor(fila.skill_class);
+            if (!CARTAS_SKILL_CLASSES_VALIDAS.has(clase)) {
+                errores.push(`Fila ${idx} (${nombre}): skill_class inválida.`);
+            }
+            const trig = String(fila.skill_trigger || '').trim().toLowerCase();
+            if (trig !== 'usar' && trig !== 'auto') {
+                errores.push(`Fila ${idx} (${nombre}): skill_trigger debe ser usar o auto.`);
+            }
+        }
+    });
+    return { ok: errores.length === 0, errores };
+}
+
+function escribirCartasXlsxServidor(filas, columnas) {
+    const cols = columnas && columnas.length ? columnas : CARTAS_COLUMNAS_ORDEN;
+    const normalizadas = filas.map((f) => asegurarFilaCartasServidor(f, cols));
+    const sheet = XLSX.utils.json_to_sheet(normalizadas, { header: cols });
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, sheet, 'Cartas');
+    XLSX.writeFile(workbook, CARTAS_XLSX_PATH);
+}
+
+app.get('/api/cartas-editor/habilitado', (_req, res) => {
+    return res.json({
+        habilitado: cartasEditorPermitido(),
+        gitPush: DCEditorGitPush.gitPushEstado(),
+    });
+});
+
+app.get('/api/cartas-editor/catalogo', (_req, res) => {
+    if (!cartasEditorPermitido()) {
+        return res.status(403).json({ error: 'Editor de cartas no disponible en este entorno.' });
+    }
+    try {
+        const { columnas, filas } = leerCartasXlsxServidor();
+        return res.json({
+            columnas,
+            filas,
+            skillClasses: [...CARTAS_SKILL_CLASSES_VALIDAS],
+        });
+    } catch (error) {
+        console.warn('[api/cartas-editor/catalogo GET]', error.message);
+        return res.status(500).json({ error: 'No se pudo leer cartas.xlsx', detalle: error.message });
+    }
+});
+
+app.put('/api/cartas-editor/catalogo', (req, res) => {
+    if (!cartasEditorPermitido()) {
+        return res.status(403).json({ error: 'Editor no disponible.' });
+    }
+    const filas = req.body?.filas;
+    const columnas = Array.isArray(req.body?.columnas) ? req.body.columnas : CARTAS_COLUMNAS_ORDEN;
+    if (!Array.isArray(filas)) {
+        return res.status(400).json({ error: 'Cuerpo inválido: se espera { filas: [] }.' });
+    }
+    const normalizadas = filas.map((f) => asegurarFilaCartasServidor(f, columnas));
+    const val = validarFilasCartasServidor(normalizadas);
+    if (!val.ok) {
+        return res.status(400).json({ error: 'Validación fallida', errores: val.errores });
+    }
+    try {
+        escribirCartasXlsxServidor(normalizadas, columnas);
+        return res.json({ ok: true, total: normalizadas.length });
+    } catch (error) {
+        console.warn('[api/cartas-editor/catalogo PUT]', error.message);
+        return res.status(500).json({ error: 'No se pudo guardar cartas.xlsx', detalle: error.message });
+    }
+});
+
+app.get('/api/editors/git-push/estado', (_req, res) => {
+    return res.json(DCEditorGitPush.gitPushEstado());
+});
+
+app.post('/api/episodios-editor/git-push', async (req, res) => {
+    if (!episodiosEditorPermitido()) {
+        return res.status(403).json({ error: 'Editor de episodios no disponible en este entorno.' });
+    }
+    if (!DCEditorGitPush.gitPushPermitido()) {
+        return res.status(403).json({ error: 'Git push no configurado (define GIT_PUSH_TOKEN en el servidor).' });
+    }
+    if (!DCEditorGitPush.verificarGitPushAuth(req)) {
+        return res.status(401).json({ error: 'Token de git push incorrecto.' });
+    }
+    try {
+        const resultado = await DCEditorGitPush.gitPushEpisodios(req.body?.mensaje);
+        return res.json(resultado);
+    } catch (error) {
+        console.warn('[api/episodios-editor/git-push]', error.message);
+        return res.status(500).json({ error: 'No se pudo subir a GitHub.', detalle: error.message });
+    }
+});
+
+app.post('/api/cartas-editor/git-push', async (req, res) => {
+    if (!cartasEditorPermitido()) {
+        return res.status(403).json({ error: 'Editor de cartas no disponible en este entorno.' });
+    }
+    if (!DCEditorGitPush.gitPushPermitido()) {
+        return res.status(403).json({ error: 'Git push no configurado (define GIT_PUSH_TOKEN en el servidor).' });
+    }
+    if (!DCEditorGitPush.verificarGitPushAuth(req)) {
+        return res.status(401).json({ error: 'Token de git push incorrecto.' });
+    }
+    try {
+        const resultado = await DCEditorGitPush.gitPushCartas(req.body?.mensaje);
+        return res.json(resultado);
+    } catch (error) {
+        console.warn('[api/cartas-editor/git-push]', error.message);
+        return res.status(500).json({ error: 'No se pudo subir a GitHub.', detalle: error.message });
+    }
 });
 
 // Archivos estáticos (después de /api/* del editor y tableros para evitar 404 en rutas API)

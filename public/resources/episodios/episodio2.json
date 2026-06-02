@@ -17,7 +17,8 @@
               "dialogo_id": "d_voz_anon",
               "voz_en_off": true,
               "voz_en_off_sin_personaje": true,
-              "texto": "Azotea de Gotham. Medianoche."
+              "texto": "Azotea de Gotham. Medianoche.",
+              "escena": []
             },
             {
               "comando": "fundido_fondo",
@@ -61,7 +62,8 @@
               "id_character": "batgirl",
               "nombre": "Batgirl",
               "visible": true,
-              "texto": "He avisado a #Nightwing# en %Blüdhaven% por si esto se extiende, pero de momento estamos solas."
+              "texto": "He avisado a #Nightwing# en %Blüdhaven% por si esto se extiende, pero de momento estamos solas.",
+              "escena": []
             },
             {
               "dialogo_id": "d003",
@@ -70,7 +72,8 @@
               "id_character": "huntress",
               "nombre": "La Cazadora",
               "visible": true,
-              "texto": "¿La Liga? Genial. Odio a esos ninjas.\nSiempre se creen más sigilosos de lo que son."
+              "texto": "¿La Liga? Genial. Odio a esos ninjas.\nSiempre se creen más sigilosos de lo que son.",
+              "escena": []
             },
             {
               "dialogo_id": "d004",
@@ -79,7 +82,8 @@
               "id_character": "BlackCanary",
               "nombre": "Canario Negro",
               "visible": true,
-              "texto": "No te confíes, #Helena#.\nSi la Liga está aquí y están secuestrando a gente de perfil tan bajo, significa que $alguien$ los está utilizando como cebo.\nAlguien que probablemente busque nuestra atención."
+              "texto": "No te confíes, #Helena#.\nSi la Liga está aquí y están secuestrando a gente de perfil tan bajo, significa que $alguien$ los está utilizando como cebo.\nAlguien que probablemente busque nuestra atención.",
+              "escena": []
             },
             {
               "dialogo_id": "d005",
@@ -88,7 +92,8 @@
               "id_character": "batgirl",
               "nombre": "Batgirl",
               "visible": true,
-              "texto": "Pues la acaban de conseguir.\nPreparaos, tenemos compañía en el perímetro."
+              "texto": "Pues la acaban de conseguir.\nPreparaos, tenemos compañía en el perímetro.",
+              "escena": []
             },
             {
               "comando": "escena",
@@ -119,7 +124,8 @@
               "auto": true,
               "duracion": 1200
             }
-          ]
+          ],
+          "escena": []
         },
         {
           "type": "combate",
@@ -301,6 +307,551 @@
       "nombre": "Capítulo 2: Tras la pista.",
       "descripcion": "Averigua quien está detrás de las desapariciones en Gotham.",
       "timeline": [
+        {
+          "type": "cutscene",
+          "cutscene_id": "cs_01",
+          "background_image": "",
+          "fondo_inicial": "",
+          "dialogos": [
+            {
+              "dialogo_id": "d_tl46mu",
+              "id_character": "",
+              "nombre": "",
+              "bust_image": "",
+              "side": "50%",
+              "visible": true,
+              "texto": "Muelles de Gotham.",
+              "voz_en_off": true,
+              "escena": [],
+              "voz_en_off_sin_personaje": true
+            },
+            {
+              "comando": "fundido_fondo",
+              "background_image": "gotham_docks.png",
+              "duracion": 1200,
+              "auto": true
+            },
+            {
+              "comando": "escena",
+              "escena": [
+                {
+                  "id_character": "batgirl",
+                  "bust_image": "batgirl_focus.png",
+                  "side": "35%",
+                  "nombre": "Batgirl",
+                  "visible": true
+                },
+                {
+                  "id_character": "huntress",
+                  "bust_image": "huntress_focus.png",
+                  "side": "50%",
+                  "nombre": "La Cazadora",
+                  "visible": true
+                },
+                {
+                  "id_character": "BlackCanary",
+                  "bust_image": "BlackCanary_focus.png",
+                  "side": "65%",
+                  "nombre": "Canario Negro",
+                  "visible": true
+                }
+              ],
+              "auto": true
+            },
+            {
+              "dialogo_id": "d_tl5saq",
+              "id_character": "batgirl",
+              "nombre": "Batgirl",
+              "bust_image": "batgirl_focus.png",
+              "side": "",
+              "visible": true,
+              "texto": "Parece que colocarle un %localizador% a ese asesino ha sido una buena idea.",
+              "escena": []
+            },
+            {
+              "dialogo_id": "d_tlmzfd",
+              "id_character": "BlackCanary",
+              "nombre": "Canario Negro",
+              "bust_image": "BlackCanary_focus.png",
+              "side": "",
+              "visible": true,
+              "texto": "Las ratas siempre vuelven a su agujero.\\nTendremos que estar muy atentas y no llamar la atención. Si retienen en alguno de estos almacenes a los civiles desaparecidos su seguridad es la prioridad.",
+              "escena": []
+            },
+            {
+              "dialogo_id": "d_tlrpwm",
+              "id_character": "huntress",
+              "nombre": "La Cazadora",
+              "bust_image": "huntress_focus.png",
+              "side": "",
+              "visible": true,
+              "texto": "¿Detectas algo, #Babs#?",
+              "escena": []
+            },
+            {
+              "dialogo_id": "d_tlst8b",
+              "id_character": "batgirl",
+              "nombre": "Batgirl",
+              "bust_image": "batgirl_focus.png",
+              "side": "",
+              "visible": true,
+              "texto": "Varias marcas de calor en el %almacén oeste%. No puede ser una coincidencia. Vamos a echar un vistazo.",
+              "escena": []
+            },
+            {
+              "comando": "escena",
+              "escena": [
+                {
+                  "id_character": "batgirl",
+                  "bust_image": "",
+                  "side": "",
+                  "nombre": "",
+                  "visible": false
+                },
+                {
+                  "id_character": "BlackCanary",
+                  "bust_image": "",
+                  "side": "",
+                  "nombre": "",
+                  "visible": false
+                },
+                {
+                  "id_character": "huntress",
+                  "bust_image": "",
+                  "side": "",
+                  "nombre": "",
+                  "visible": false
+                }
+              ],
+              "auto": true
+            },
+            {
+              "comando": "fundido_negro",
+              "duracion": 1200,
+              "auto": true
+            },
+            {
+              "dialogo_id": "d_tuov60",
+              "id_character": "",
+              "nombre": "",
+              "bust_image": "",
+              "side": "",
+              "visible": true,
+              "texto": "#Batgirl#, #Canario Negro# y #La Cazadora# trepan hasta el tejado del %Almacén oeste% y observan el interior desde un ventanal.",
+              "voz_en_off": true,
+              "escena": [],
+              "voz_en_off_sin_personaje": true
+            },
+            {
+              "comando": "fundido_fondo",
+              "background_image": "gotham_warehouse_hostages_top.png",
+              "duracion": 1200,
+              "auto": true
+            },
+            {
+              "dialogo_id": "d_tv912u",
+              "id_character": "",
+              "nombre": "",
+              "bust_image": "",
+              "side": "",
+              "visible": true,
+              "texto": "#Batgirl# hace un gesto a los rehenes para que no se muevan y no llamen la atención.",
+              "voz_en_off": true,
+              "escena": [],
+              "voz_en_off_sin_personaje": true
+            },
+            {
+              "comando": "fundido_negro",
+              "duracion": 1200,
+              "auto": true
+            },
+            {
+              "comando": "fundido_fondo",
+              "background_image": "gotham_docks.png",
+              "duracion": 1200,
+              "auto": true
+            },
+            {
+              "comando": "escena",
+              "escena": [
+                {
+                  "id_character": "batgirl",
+                  "bust_image": "",
+                  "side": "",
+                  "nombre": "",
+                  "visible": true
+                },
+                {
+                  "id_character": "BlackCanary",
+                  "bust_image": "",
+                  "side": "",
+                  "nombre": "",
+                  "visible": true
+                },
+                {
+                  "id_character": "huntress",
+                  "bust_image": "",
+                  "side": "",
+                  "nombre": "",
+                  "visible": true
+                }
+              ],
+              "auto": true
+            },
+            {
+              "dialogo_id": "d_tv82er",
+              "id_character": "batgirl",
+              "nombre": "Batgirl",
+              "bust_image": "batgirl_focus.png",
+              "side": "",
+              "visible": true,
+              "texto": "Bien. Este es el plan: Yo llamo la atención de todos los $asesinos$ que custodian a los rehenes y mientras tanto vosotras los liberáis.\\n Acabo de enviarle una señal de aviso a la #Detective Montoya#. La policía de Gotham ya está en camino.",
+              "escena": []
+            },
+            {
+              "dialogo_id": "d_tlrpwm",
+              "id_character": "huntress",
+              "nombre": "La Cazadora",
+              "bust_image": "huntress_focus.png",
+              "side": "",
+              "visible": true,
+              "texto": "Siempre te quedas con toda la diversión...",
+              "escena": []
+            },
+            {
+              "dialogo_id": "d_tlmzfd",
+              "id_character": "BlackCanary",
+              "nombre": "Canario Negro",
+              "bust_image": "BlackCanary_focus.png",
+              "side": "",
+              "visible": true,
+              "texto": "No te extralimites, #Babs#. Avísanos si necesitas ayuda.",
+              "escena": []
+            },
+            {
+              "comando": "escena",
+              "escena": [
+                {
+                  "id_character": "batgirl",
+                  "bust_image": "batgirl_base.png",
+                  "side": "",
+                  "nombre": "",
+                  "visible": true
+                },
+                {
+                  "id_character": "BlackCanary",
+                  "bust_image": "BlackCanary_base.png",
+                  "side": "",
+                  "nombre": "",
+                  "visible": true
+                },
+                {
+                  "id_character": "huntress",
+                  "bust_image": "huntress_base.png",
+                  "side": "",
+                  "nombre": "",
+                  "visible": true
+                }
+              ],
+              "auto": true
+            },
+            {
+              "dialogo_id": "d_tv82er",
+              "id_character": "batgirl",
+              "nombre": "Batgirl",
+              "bust_image": "",
+              "side": "",
+              "visible": true,
+              "texto": "Descuida.\\n\nNo perdamos más tiempo. Vamos a darles una lección que jamás olvidarán.",
+              "escena": []
+            },
+            {
+              "comando": "escena",
+              "escena": [
+                {
+                  "id_character": "batgirl",
+                  "bust_image": "",
+                  "side": "",
+                  "nombre": "",
+                  "visible": false
+                },
+                {
+                  "id_character": "BlackCanary",
+                  "bust_image": "",
+                  "side": "",
+                  "nombre": "",
+                  "visible": false
+                },
+                {
+                  "id_character": "huntress",
+                  "bust_image": "",
+                  "side": "",
+                  "nombre": "",
+                  "visible": false
+                }
+              ],
+              "auto": true
+            },
+            {
+              "comando": "fundido_negro",
+              "duracion": 1200,
+              "auto": true
+            },
+            {
+              "dialogo_id": "d_u2yd6a",
+              "id_character": "",
+              "nombre": "",
+              "bust_image": "",
+              "side": "50%",
+              "visible": true,
+              "texto": "Ruido de cristales rotos.",
+              "voz_en_off": true,
+              "escena": []
+            },
+            {
+              "comando": "fundido_fondo",
+              "background_image": "gotham_warehouse_hostages_top.png",
+              "duracion": 1200,
+              "auto": true
+            },
+            {
+              "dialogo_id": "d_tv82er",
+              "id_character": "batgirl",
+              "nombre": "Batgirl",
+              "bust_image": "batgirl_battle.png",
+              "side": "50%",
+              "visible": true,
+              "texto": "¡Eh! ¡Vosotros! ¿Qué tal si intentáis atrapar a este murciélago? Si es que podéis...",
+              "escena": []
+            },
+            {
+              "comando": "escena",
+              "escena": [
+                {
+                  "id_character": "batgirl",
+                  "bust_image": "",
+                  "side": "",
+                  "nombre": "",
+                  "visible": false
+                },
+                {
+                  "id_character": "as1",
+                  "bust_image": "assassin_base.png",
+                  "side": "20%",
+                  "nombre": "Asesino",
+                  "visible": true
+                },
+                {
+                  "id_character": "as2",
+                  "bust_image": "assassin_base.png",
+                  "side": "30%",
+                  "nombre": "Asesino",
+                  "visible": true,
+                  "invertir_imagen": true
+                },
+                {
+                  "id_character": "as3",
+                  "bust_image": "assassin_base.png",
+                  "side": "40%",
+                  "nombre": "Asesino",
+                  "visible": true
+                },
+                {
+                  "id_character": "as4",
+                  "bust_image": "assassin_base.png",
+                  "side": "50%",
+                  "nombre": "Asesino",
+                  "visible": true,
+                  "invertir_imagen": true
+                },
+                {
+                  "id_character": "as5",
+                  "bust_image": "assassin_base.png",
+                  "side": "60%",
+                  "nombre": "Asesino",
+                  "visible": true
+                },
+                {
+                  "id_character": "as6",
+                  "bust_image": "assassin_base.png",
+                  "side": "70%",
+                  "nombre": "Asesino",
+                  "visible": true,
+                  "invertir_imagen": true
+                }
+              ],
+              "auto": true
+            },
+            {
+              "dialogo_id": "d_u3as8d",
+              "id_character": "",
+              "nombre": "Asesinos",
+              "bust_image": "",
+              "side": "50%",
+              "visible": true,
+              "texto": "¡Es #Batgirl#! ¡Qué no escape!",
+              "voz_en_off": true,
+              "escena": []
+            },
+            {
+              "comando": "escena",
+              "escena": [
+                {
+                  "id_character": "batgirl",
+                  "bust_image": "batgirl_battle.png",
+                  "side": "50%",
+                  "nombre": "Batgirl",
+                  "visible": false
+                },
+                {
+                  "id_character": "as1",
+                  "bust_image": "assassin_base.png",
+                  "side": "20%",
+                  "nombre": "Asesino",
+                  "visible": true
+                },
+                {
+                  "id_character": "as2",
+                  "bust_image": "assassin_base.png",
+                  "side": "30%",
+                  "nombre": "Asesino",
+                  "visible": true,
+                  "invertir_imagen": true
+                },
+                {
+                  "id_character": "as3",
+                  "bust_image": "assassin_base.png",
+                  "side": "40%",
+                  "nombre": "Asesino",
+                  "visible": true
+                },
+                {
+                  "id_character": "as4",
+                  "bust_image": "assassin_base.png",
+                  "side": "50%",
+                  "nombre": "Asesino",
+                  "visible": true,
+                  "invertir_imagen": true
+                },
+                {
+                  "id_character": "as5",
+                  "bust_image": "assassin_base.png",
+                  "side": "60%",
+                  "nombre": "Asesino",
+                  "visible": true
+                },
+                {
+                  "id_character": "as6",
+                  "bust_image": "assassin_base.png",
+                  "side": "70%",
+                  "nombre": "Asesino",
+                  "visible": true,
+                  "invertir_imagen": true
+                }
+              ],
+              "auto": true
+            },
+            {
+              "dialogo_id": "d_tv82er",
+              "id_character": "batgirl",
+              "nombre": "Batgirl",
+              "bust_image": "",
+              "side": "",
+              "visible": true,
+              "texto": "¡Vamos! ¿A qué esperáis?",
+              "escena": []
+            },
+            {
+              "comando": "fundido_negro",
+              "duracion": 700,
+              "auto": true
+            },
+            {
+              "comando": "fundido_fondo",
+              "background_image": "gotham_warehouse_hostages.png",
+              "duracion": 700,
+              "auto": true
+            },
+            {
+              "comando": "escena",
+              "escena": [
+                {
+                  "id_character": "huntress",
+                  "bust_image": "huntress_base.png",
+                  "side": "50%",
+                  "nombre": "La Cazadora",
+                  "visible": true
+                },
+                {
+                  "id_character": "BlackCanary",
+                  "bust_image": "BlackCanary_base.png",
+                  "side": "50%",
+                  "nombre": "Canario Negro",
+                  "visible": true
+                }
+              ],
+              "auto": true
+            },
+            {
+              "dialogo_id": "diag0234",
+              "id_character": "BlackCanary",
+              "nombre": "Canario Negro",
+              "bust_image": "BlackCanary_base.png",
+              "side": "45%",
+              "visible": true,
+              "texto": "¡Tranquilos! ¡Vamos a sacaros a todos de aquí!\\nLa policía ya está de camino.",
+              "escena": []
+            },
+            {
+              "dialogo_id": "d_tlrpwm",
+              "id_character": "huntress",
+              "nombre": "La Cazadora",
+              "bust_image": "huntress_focus.png",
+              "side": "",
+              "visible": true,
+              "texto": "¡Seguidnos! ¡Ya no tenéis que preocuparos de esos ninjas ridículos. #Batgirl# se está encargando de ellos.",
+              "escena": []
+            },
+            {
+              "dialogo_id": "d_u3ofs9",
+              "id_character": "",
+              "nombre": "",
+              "bust_image": "",
+              "side": "50%",
+              "visible": true,
+              "texto": "#La Cazadora# y #Canario Negro# sacan a todos los rehenes del #Almacén oeste#.",
+              "voz_en_off": true,
+              "escena": []
+            },
+            {
+              "comando": "escena",
+              "escena": [
+                {
+                  "id_character": "huntress",
+                  "bust_image": "huntress_base.png",
+                  "side": "50%",
+                  "nombre": "La Cazadora",
+                  "visible": false
+                },
+                {
+                  "id_character": "BlackCanary",
+                  "bust_image": "BlackCanary_base.png",
+                  "side": "50%",
+                  "nombre": "Canario Negro",
+                  "visible": false
+                }
+              ],
+              "auto": true
+            },
+            {
+              "comando": "fundido_fondo",
+              "background_image": "gotham_warehouse.png",
+              "duracion": 700,
+              "auto": true
+            }
+          ],
+          "escena": []
+        }
       ]
     }
   ]

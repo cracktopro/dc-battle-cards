@@ -38,7 +38,7 @@
     let capitulosEpisodio = [];
     let currentCapituloIndex = 0;
     let currentTimelineIndex = 0;
-    let sceneCharacters = {};   // { id: { bust_image, side, visible, speaking } }
+    let sceneCharacters = {};   // { id: { bust_image, side, visible, speaking, invertir_imagen? } }
     let currentDialogos = [];
     let currentDialogoIndex = 0;
     let typewriterTimer = null;
@@ -100,6 +100,13 @@
         wrap.dataset.side = valor;
     }
 
+    function resolverInvertirImagen(upd, prev) {
+        if (upd && upd.invertir_imagen !== undefined) return upd.invertir_imagen === true;
+        if (upd && upd.invertir_busto !== undefined) return upd.invertir_busto === true;
+        if (prev && prev.invertir_imagen !== undefined) return prev.invertir_imagen === true;
+        return false;
+    }
+
     function actualizarPersonajeEnEscena(id, upd, opciones = {}) {
         const { hablando = false } = opciones;
         const prev = sceneCharacters[id] || {};
@@ -119,6 +126,7 @@
             visible,
             speaking: Boolean(hablando),
             nombre: String(upd.nombre || prev.nombre || id).trim(),
+            invertir_imagen: resolverInvertirImagen(upd, prev),
         };
     }
 
@@ -1108,6 +1116,11 @@
         wrap.classList.add(char.speaking ? 'cutscene-busto--hablando' : 'cutscene-busto--silencio');
     }
 
+    function aplicarEstiloImagenBusto(img, char) {
+        if (!img) return;
+        img.style.transform = char && char.invertir_imagen ? 'scaleX(-1)' : '';
+    }
+
     function crearElementoBusto(id, char) {
         const wrap = document.createElement('div');
         wrap.className = 'cutscene-busto cutscene-busto--entrando ' +
@@ -1120,6 +1133,7 @@
         img.alt = id;
         img.draggable = false;
         img.onerror = () => { wrap.classList.add('cutscene-busto--saliendo'); };
+        aplicarEstiloImagenBusto(img, char);
         wrap.appendChild(img);
         return wrap;
     }
@@ -1207,6 +1221,7 @@
             aplicarClasesEstadoBusto(wrap, char);
             aplicarPosicionBustoDOM(wrap, char.side);
             actualizarImagenBustoSiCambio(wrap, char);
+            aplicarEstiloImagenBusto(wrap.querySelector('img'), char);
 
             if (!wrap.classList.contains('cutscene-busto--visible')
                 && !wrap.classList.contains('cutscene-busto--entrando')

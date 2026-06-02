@@ -2,7 +2,7 @@
 
 Documento vivo de referencia técnica para trabajar sobre DC Battle Cards sin romper flujos existentes.
 
-> **Última validación contra código:** 2026-05-28. Revisado frente a `server.js`, `partida.js`, `partidaCoop.js`, `jugarPartida.js`, `cartas.js`, `tienda.js`, `episodio-engine.js` y vistas principales.
+> **Última validación contra código:** 2026-06-02. Revisado frente a `server.js`, `partida.js`, `partidaCoop.js`, `jugarPartida.js`, `cartas.js`, `tienda.js`, `episodio-engine.js`, `editarCartas.*` y vistas principales.
 
 ## Visión General
 
@@ -74,7 +74,7 @@ Documento vivo de referencia técnica para trabajar sobre DC Battle Cards sin ro
 
 | Archivo | Uso principal |
 |---------|----------------|
-| `cartas.xlsx` | Catálogo maestro de cartas, stats base, skills, imágenes |
+| `cartas.xlsx` | Catálogo maestro de cartas, stats base, skills, imágenes. Columnas: `Nombre`, `Nivel`, `Salud`, `Poder`, `Tipo` (Meta/Tecnología/Magia), `Imagen`, `faccion` (H/V), `Afiliacion`, `imagen_final`, `skill_*`. `skill_trigger`: `usar` (activa) / `auto` (pasiva). `skill_class`: ver `ORDEN_SKILL_CLASS` en `filtrosCartas.js` |
 | `desafios.xlsx` | Camino de desafíos (`desafios.html`) |
 | `eventos.xlsx` | Eventos rotativos del hub (`jugarPartida.js`) |
 | `eventos_online.xlsx` | Eventos coop online (`multijugadorEventosCoop.js`) |
@@ -177,7 +177,8 @@ Documento vivo de referencia técnica para trabajar sobre DC Battle Cards sin ro
 - Catálogo: `resources/episodios.xlsx` + JSON en `public/resources/episodios/` (campo `JSON_file` del Excel).
 - **JSON episodio:** metadatos en raíz (`episodio_id`, `nombre`) y array **`capitulos[]`**. Cada capítulo: `capitulo_id`, `nombre`, `descripcion` (opcional), `timeline[]` (misma sintaxis que antes). **Compatibilidad:** si solo existe `timeline` en raíz, el motor lo trata como un único capítulo (`DCEpisodiosCapitulos.normalizarCapitulos`).
 - UI: `episodios.html` + carrusel 3D (`episodios.js`) + botón **Comenzar** → modal **capítulos** (`#episodios-modal-capitulos`, estilo panel asaltos: marco neón ~920px, lista con número, estado y botón Jugar/Repetir/Bloqueado). Capítulo 0 siempre desbloqueado; el N+1 requiere completar el N (`js/episodiosProgreso.js`, LS `dc_episodios_progreso_v1`). → `DCEpisodioEngine.iniciarEpisodio(ep, capituloIndex)`.
-- **Editor JSON (solo URL):** `crearEpisodios.html` — sin enlace en menús. API `GET/PUT/POST /api/episodios-editor/*` (habilitado en desarrollo o `EPISODIOS_EDITOR=1`). Módulos `crearEpisodiosModel.js` + `crearEpisodios.js`: capítulos, timeline (cutscene / escena / combate / recompensa), diálogos (**dlg**), comandos (**cmd**: escena, fondo_negro, fundido_negro, fundido_fondo), voz en off (**voz**); cutscene desplegable independiente de la selección de línea; escena inicial vía array `escena`; validación y vista JSON cruda.
+- **Editor cartas (solo URL):** `editarCartas.html` — sin enlace en menús. API `GET/PUT /api/cartas-editor/catalogo` (habilitado con `CARTAS_EDITOR=1`, `EPISODIOS_EDITOR=1`, rama Render `dev` o no producción). Catálogo: vista por defecto **imágenes** (`carta-mini` en rejilla) o **lista** (texto); toggle ▦ / ☰. Filtros: nombre, afiliación, facción, `skill_class`. Layout: catálogo y ficha **mismo ancho** (`1fr` + `1fr`); preview ~300–340px con miniatura centrada (~200px ancho, proporción 154:216). En `editarCartas.html`, `cartas.js` no llama a `/get-user` ni monta menú de sesión (evita 401 con email obsoleto en `localStorage`). Mini-cartas: `box-sizing` en franja nombre/poder; nombre alineado a la izquierda en rejilla del catálogo (`text-align` del botón no hereda al nombre). Selects `filtro-skill-class`: color de fondo vía `DCFiltrosCartas.aplicarClaseVisualSelectSkillClass` (clase + estilo inline) para que `crear-ep-select` / filtros del editor no lo pisen al cambiar valor; en `filtros-cartas.css`, reglas `:focus`/`:active` conservan el color de badge y la flecha del select (evitan el `background` de `select:focus` en `mazos.css` al clicar). Toolbar **Subir a GitHub** (`editorGitPush.js`) → `POST /api/cartas-editor/git-push` si `GIT_PUSH_TOKEN` está definido en el servidor. Al cambiar `Imagen` / `imagen_final` repinta al instante (URL desde la fila en edición, `registrarImagenesCatalogoEnMemoria`, bust de caché del navegador). Campos UI: imágenes (URL + drag&drop), `Tipo`, `faccion`, panel habilidad con colores `badge-habilidad--*` (`filtrosCartas.js`), resto en inputs. Validación antes de guardar; no altera lectores existentes de `cartas.xlsx`.
+- **Editor JSON (solo URL):** `crearEpisodios.html` — sin enlace en menús. API `GET/PUT/POST /api/episodios-editor/*` (habilitado en desarrollo, `EPISODIOS_EDITOR=1` o rama Render `dev`). Toolbar **Subir a GitHub** → `POST /api/episodios-editor/git-push` (JSON en `public/resources/episodios/`). Módulos `crearEpisodiosModel.js` + `crearEpisodios.js`: capítulos, timeline (cutscene / escena / combate / recompensa), diálogos (**dlg**), comandos (**cmd**: escena, fondo_negro, fundido_negro, fundido_fondo), voz en off (**voz**); cutscene desplegable independiente de la selección de línea; botón **⧉ Duplicar** en cada línea del cutscene (clon profundo debajo); **reordenar por arrastre** (asa ⠿ en eventos del timeline y líneas de cutscene; misma lista; actualiza selección y cutscenes expandidos); **selector visual de imágenes** (modal grande con rejilla, filtro por nombre y Aceptar) para `bust_image` (diálogo y personajes en escena/comando escena), `background_image` (cutscene y fundido_fondo), `tablero` (combate); checkbox **Invertir imagen** (`invertir_imagen`) en diálogo y en cada personaje de comando escena; escena inicial vía array `escena`; validación y vista JSON cruda.
 - Engine: `js/episodio-engine.js`, timeline lineal **por capítulo**:
   - `cutscene`: `background_image`, `dialogos[]`, comandos de escena (ver abajo). **Layout bustos:** `bottom: 0` en CSS; `side` = posición horizontal %.
   - **Comandos de escena** (`episodio-engine.js` → `aplicarComandosEscena`):
@@ -185,12 +186,12 @@ Documento vivo de referencia técnica para trabajar sobre DC Battle Cards sin ro
     - **Entre diálogos:** línea con `"comando": "escena"` y array `escena` (sin `texto`) — solo actualiza personajes. Por defecto **avanza solo** tras el fade de bustos; `"auto": false` obliga a pulsar «Siguiente».
     - **Junto a un diálogo:** mismo array `escena` en la línea de diálogo (se aplica antes del texto; el hablante sigue siendo `id_character` de esa línea).
     - **En la timeline:** `{ "type": "escena", "escena": [...], "background_image"?, "limpiar_escena"?, "ocultar_ausentes"?, "auto"? }` — paso suelto sin diálogo; por defecto avanza solo (`auto: false` para pausa manual).
-    - Cada entrada de escena: `id_character` (obligatorio), `bust_image`, `side`, `nombre`, `visible` (true/false). **`side`:** porcentaje o px; el **centro** del busto se ancla en esa coordenada horizontal (`translateX(-50%)`), misma regla en `escena` inicial, `escena[]` en diálogo y campos `side` del hablante (`resolverSidePersonaje` / `normalizarSideBusto`). Valores numéricos sin unidad (`5`) → `5%`.
+    - Cada entrada de escena: `id_character` (obligatorio), `bust_image`, `side`, `nombre`, `visible` (true/false), **`invertir_imagen`** (opcional, `true` → `transform: scaleX(-1)` en el busto). **`side`:** porcentaje o px; el **centro** del busto se ancla en esa coordenada horizontal (`translateX(-50%)`), misma regla en `escena` inicial, `escena[]` en diálogo y campos `side` del hablante (`resolverSidePersonaje` / `normalizarSideBusto`). Valores numéricos sin unidad (`5`) → `5%`.
     - Opciones: `ocultar_ausentes: true` oculta personajes no listados en ese comando; `limpiar_escena: true` (solo en `type: escena`) vacía la escena antes de aplicar.
   - **Comandos de fondo** (`#cutscene-fade` + `#cutscene-bg` en `episodio-engine.js`):
     - **Inicio cutscene en negro:** `fondo_inicial: "negro"`, `fondo_negro: true` o `background_image: "negro"`.
     - **Líneas en `dialogos[]` (sin `texto`):** `"comando": "fondo_negro"` (negro instantáneo, **manual** salvo `"auto": true`); `"comando": "fundido_negro"` / `"fundido_fondo"` (fundidos, opcional `duracion` ms; por defecto **avanza solo** al terminar el fade; `"auto": false` para confirmar con «Siguiente»). `fundido_fondo` requiere `background_image` en la línea o fondo ya definido en el cutscene. Alias: `fade_negro`, `fade_from_black`, etc. Parámetro **`auto`**: booleano `true` | `false` (también `"true"` / `"false"`).
-  - **Bustos cutscene:** tamaño fijo CSS (`--cutscene-busto-w/h` 520×720; móvil 400×556 / 336×464); al hablar no escalan ni brillan en naranja; los no hablantes usan `brightness(0.76)` + `saturate(0.9)` (clase `--silencio`). Al cambiar `visible` en comandos `escena` / diálogo: **fade-in** y **fade-out** (~380 ms, `renderizarBustosDOM` incremental); `limpiar_escena` o nuevo cutscene vacía al instante.
+  - **Bustos cutscene:** tamaño fijo CSS (`--cutscene-busto-w/h` 520×720; móvil 400×556 / 336×464); al hablar no escalan ni brillan en naranja; los no hablantes usan `brightness(0.76)` + `saturate(0.9)` (clase `--silencio`). **`invertir_imagen: true`** en la línea de diálogo del hablante o en cada entrada de `escena[]` aplica `scaleX(-1)` al `<img>` del busto. Al cambiar `visible` en comandos `escena` / diálogo: **fade-in** y **fade-out** (~380 ms, `renderizarBustosDOM` incremental); `limpiar_escena` o nuevo cutscene vacía al instante.
   - **Voz en off** (línea de diálogo): `voz_en_off: true` (alias `vozEnOff`, `voiceover`). El texto se muestra como `*texto en negrita*` (`<strong class="cutscene-dialog-voz-en-off">`). Con personaje: `id_character` + `nombre` → caja de nombre visible (bustos sin resaltar hablante). Sin personaje: `voz_en_off_sin_personaje: true` (alias `sin_personaje`, `sin_nombre`, `anonima`) u omitir `id_character`/`nombre` → se oculta la caja de nombre. Referencia: `resources/episodios/ejemplo.json`.
   - `combate`: `cartas_jugador[]`, `nivel_jugador`, `cartas_BOT[]`, `nivel_BOT`, **`tablero`** (opcional, nombre de archivo en `resources/tableros/`, p. ej. `"tablero_background_gotham"` — misma convención que eventos/asaltos en Excel). **`nivel_jugador: 0`** → cada carta del jugador usa el **nivel de su copia en colección** (`DCEpisodiosRequisitos.construirEntradasMazoJugadorEpisodio`). Cualquier otro valor fija ese nivel para todas (como antes). Previa de combate: miniaturas `carta-mini` completas (poder, salud, estrellas, badges) vía `DCEpisodiosRequisitos.construirCartasEnriquecidasDesdeEntradas`.
   - **Saltos de línea en diálogo:** `\n` en `texto` (JSON o literal `\\n`) → nueva línea en el cuadro (`white-space: pre-line`; typewriter y voz en off incluidos).
@@ -401,7 +402,9 @@ Documento vivo de referencia técnica para trabajar sobre DC Battle Cards sin ro
 - Eventos hub: `public/jugarPartida.js` (`eventos.xlsx`)
 - Asaltos: `public/js/asaltos.js`
 - Episodios: `public/episodios.html`, `public/js/episodios.js`, `public/js/episodio-engine.js`
-- Editor episodios (oculto): `public/crearEpisodios.html`, `public/js/crearEpisodios.js`, `public/js/crearEpisodiosModel.js`
+- Editor episodios (oculto): `public/crearEpisodios.html`, `public/js/crearEpisodios.js`, `public/js/crearEpisodiosModel.js`, `public/js/editorGitPush.js`
+- Editor cartas (oculto): `public/editarCartas.html`, `public/js/editarCartas.js`, `public/js/editarCartasModel.js`, `public/js/editorGitPush.js` — edita `public/resources/cartas.xlsx` (mismas columnas que el Excel del juego); previsualización `carta-mini` vía `cartas.js`
+- Git push editores: `lib/editorGitPush.js` (servidor)
 - Tienda: `public/tienda.js`
 - Crear/editar mazos: `public/crearMazos.js`, `public/mazos.js`
 - Mejoras: `public/mejorarCartas.js`
@@ -457,12 +460,21 @@ Documento vivo de referencia técnica para trabajar sobre DC Battle Cards sin ro
   - Output: usuario guardado o `409 SYNC_CONFLICT`
 - `GET /api/tableros`
   - Output: lista de fondos disponibles
-- Editor episodios (`crearEpisodios.html`; requiere `NODE_ENV !== 'production'` o `EPISODIOS_EDITOR=1`):
-  - `GET /api/episodios-editor/habilitado`
+- Editor episodios (`crearEpisodios.html`; requiere `NODE_ENV !== 'production'`, `EPISODIOS_EDITOR=1` o `RENDER_GIT_BRANCH=dev`):
+  - `GET /api/episodios-editor/habilitado` → `{ habilitado, gitPush? }`
   - `GET /api/episodios-editor/archivos` · `GET /api/episodios-editor/archivo/:nombre`
   - `PUT /api/episodios-editor/archivo/:nombre` body `{ data: object }`
   - `POST /api/episodios-editor/archivo` body `{ nombre, data }`
   - `GET /api/episodios-editor/recursos` → `{ bustos, fondos, tableros }`
+  - `POST /api/episodios-editor/git-push` body `{ mensaje?, token? }` — commit+push JSON episodios (requiere `GIT_PUSH_TOKEN` en servidor)
+- Editor cartas (`editarCartas.html`; `CARTAS_EDITOR=1`, `EPISODIOS_EDITOR=1`, rama `dev` o no producción):
+  - `GET /api/cartas-editor/habilitado` → `{ habilitado, gitPush? }`
+  - `GET /api/cartas-editor/catalogo` → `{ columnas, filas, skillClasses }`
+  - `PUT /api/cartas-editor/catalogo` body `{ columnas?, filas }` — valida y escribe `public/resources/cartas.xlsx`
+  - `POST /api/cartas-editor/git-push` body `{ mensaje?, token? }` — commit+push `cartas.xlsx`
+- Git push editores (compartido):
+  - `GET /api/editors/git-push/estado` → `{ habilitado, rama, requiereTokenCliente, ramaDevRender }`
+  - Lógica servidor: `lib/editorGitPush.js`. Env: `GIT_PUSH_TOKEN` (PAT GitHub), opcional `GIT_PUSH_BRANCH`, `GIT_PUSH_SECRET`, `GIT_PUSH_REPO_URL`, `GIT_USER_NAME`, `GIT_USER_EMAIL`
 - `POST /admin/users/list`, `/admin/user/get`, `/admin/user/update`
   - Solo cuenta admin (`opciones.js`); mismo control de sync que `/update-user`
 

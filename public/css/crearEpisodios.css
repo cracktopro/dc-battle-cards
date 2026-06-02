@@ -235,7 +235,35 @@
     border: 1px solid rgba(0, 160, 255, 0.15);
     background: rgba(0, 30, 60, 0.35);
     cursor: pointer;
-    transition: border-color 0.15s ease, background 0.15s ease;
+    transition: border-color 0.15s ease, background 0.15s ease, opacity 0.15s ease;
+}
+
+.crear-ep-drag-handle {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    margin: -2px 0;
+    font-size: 0.95rem;
+    line-height: 1;
+    color: rgba(120, 180, 220, 0.75);
+    cursor: grab;
+    user-select: none;
+    touch-action: none;
+}
+
+.crear-ep-drag-handle:active {
+    cursor: grabbing;
+}
+
+.crear-ep-item--dragging {
+    opacity: 0.45;
+}
+
+.crear-ep-item--drag-over {
+    border-color: rgba(0, 255, 220, 0.75);
+    box-shadow: inset 0 0 0 1px rgba(0, 255, 220, 0.35);
 }
 
 .crear-ep-item:hover {
@@ -331,6 +359,9 @@
     display: flex;
     gap: 2px;
     flex-shrink: 0;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    max-width: 42%;
 }
 
 .crear-ep-field {
@@ -404,6 +435,228 @@
     flex-wrap: wrap;
     gap: 8px;
     margin-top: 10px;
+}
+
+/* Modal selector de imágenes (bust / fondo / tablero) */
+.crear-ep-dialog-recurso {
+    border: none;
+    padding: 0;
+    max-width: min(1280px, 96vw);
+    width: 96vw;
+    max-height: 94vh;
+    background: transparent;
+}
+
+.crear-ep-dialog-recurso::backdrop {
+    background: rgba(2, 6, 18, 0.88);
+    backdrop-filter: blur(8px);
+}
+
+.crear-ep-dialog-recurso-panel {
+    display: flex;
+    flex-direction: column;
+    max-height: 92vh;
+    border-radius: 16px;
+    padding: 2px;
+    background: linear-gradient(135deg, rgba(0, 255, 240, 0.4), rgba(80, 0, 200, 0.35));
+    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.65);
+}
+
+.crear-ep-dialog-recurso-panel > .crear-ep-dialog-titulo {
+    margin: clamp(16px, 2.5vw, 22px) clamp(18px, 3vw, 26px) 10px;
+    flex-shrink: 0;
+}
+
+.crear-ep-recurso-toolbar {
+    padding: 0 clamp(18px, 3vw, 26px) 12px;
+    flex-shrink: 0;
+}
+
+.crear-ep-recurso-filtro {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: 1px solid rgba(0, 160, 255, 0.45);
+    background: rgba(2, 10, 28, 0.95);
+    color: #e8fbff;
+    font-size: 0.95rem;
+}
+
+.crear-ep-recurso-filtro:focus {
+    outline: none;
+    border-color: rgba(0, 255, 240, 0.65);
+    box-shadow: 0 0 12px rgba(0, 160, 255, 0.25);
+}
+
+.crear-ep-recurso-grid {
+    flex: 1;
+    min-height: 120px;
+    max-height: min(68vh, 760px);
+    overflow-y: auto;
+    margin: 0 clamp(14px, 2.5vw, 22px);
+    padding: 8px 4px 12px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+    gap: 14px;
+    align-content: start;
+    background: linear-gradient(165deg, rgba(6, 14, 36, 0.98), rgba(3, 8, 22, 0.99));
+    border-radius: 12px;
+    border: 1px solid rgba(0, 120, 200, 0.2);
+}
+
+.crear-ep-recurso-card {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    margin: 0;
+    padding: 0;
+    border: 2px solid rgba(0, 140, 220, 0.25);
+    border-radius: 10px;
+    background: rgba(0, 25, 50, 0.5);
+    cursor: pointer;
+    text-align: left;
+    color: inherit;
+    font: inherit;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.12s ease;
+}
+
+.crear-ep-recurso-card:hover {
+    border-color: rgba(0, 220, 255, 0.5);
+    transform: translateY(-1px);
+}
+
+.crear-ep-recurso-card--sel {
+    border-color: rgba(0, 255, 220, 0.85);
+    box-shadow: 0 0 18px rgba(0, 200, 255, 0.35);
+}
+
+.crear-ep-recurso-card-media {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 148px;
+    max-height: 180px;
+    padding: 8px;
+    background: rgba(0, 8, 20, 0.85);
+    border-radius: 8px 8px 0 0;
+}
+
+.crear-ep-recurso-card-media img {
+    max-width: 100%;
+    max-height: 164px;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+}
+
+.crear-ep-recurso-card-nombre {
+    padding: 8px 10px 10px;
+    font-size: 0.72rem;
+    line-height: 1.3;
+    color: #b8d8f0;
+    word-break: break-all;
+    font-family: 'Consolas', 'Monaco', monospace;
+}
+
+.crear-ep-recurso-vacio {
+    grid-column: 1 / -1;
+    padding: 24px;
+    text-align: center;
+    color: rgba(180, 210, 240, 0.75);
+    font-size: 0.9rem;
+}
+
+.crear-ep-recurso-seleccion {
+    margin: 10px clamp(18px, 3vw, 26px) 0;
+    font-size: 0.82rem;
+    color: #9ec8e8;
+    flex-shrink: 0;
+}
+
+.crear-ep-recurso-seleccion strong {
+    color: #7ee8ff;
+    font-weight: 600;
+}
+
+.crear-ep-dialog-acciones--recurso {
+    margin-top: 12px;
+    border-radius: 0 0 14px 14px;
+}
+
+.crear-ep-recurso-trigger {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid rgba(0, 160, 255, 0.4);
+    background: rgba(2, 10, 28, 0.9);
+    color: #e8fbff;
+    cursor: pointer;
+    text-align: left;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.crear-ep-recurso-trigger:hover {
+    border-color: rgba(0, 255, 240, 0.6);
+    box-shadow: 0 0 12px rgba(0, 160, 255, 0.2);
+}
+
+.crear-ep-recurso-trigger-thumb {
+    flex-shrink: 0;
+    width: 72px;
+    height: 72px;
+    object-fit: contain;
+    border-radius: 6px;
+    background: rgba(0, 8, 20, 0.9);
+    border: 1px solid rgba(0, 120, 200, 0.25);
+}
+
+.crear-ep-recurso-trigger-thumb[hidden] {
+    display: none;
+}
+
+.crear-ep-recurso-trigger-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    flex: 1;
+}
+
+.crear-ep-recurso-trigger-nombre {
+    font-size: 0.82rem;
+    font-family: 'Consolas', 'Monaco', monospace;
+    color: #d0e8ff;
+    word-break: break-all;
+}
+
+.crear-ep-recurso-trigger-hint {
+    font-size: 0.68rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: rgba(120, 180, 220, 0.85);
+    font-family: 'Orbitron', sans-serif;
+}
+
+.crear-ep-recurso-before-clear {
+    margin-top: 8px;
+}
+
+.crear-ep-recurso-before-clear .crear-ep-field {
+    margin-bottom: 0;
+}
+
+.crear-ep-recurso-clear-row {
+    margin-top: 6px;
+}
+
+.crear-ep-recurso-clear-row .crear-ep-btn {
+    font-size: 0.6rem;
+    padding: 6px 12px;
 }
 
 .crear-ep-dialog-json {
@@ -493,6 +746,93 @@
     border-color: rgba(255, 100, 80, 0.5);
     background: rgba(60, 18, 12, 0.95);
     color: #ffd4c8;
+}
+
+.crear-ep-dialog-git-push {
+    border: none;
+    padding: 0;
+    max-width: min(520px, 94vw);
+    border-radius: 14px;
+    background: transparent;
+    color: #e8fbff;
+}
+
+.crear-ep-dialog-git-push::backdrop {
+    background: rgba(2, 8, 20, 0.72);
+    backdrop-filter: blur(4px);
+}
+
+.crear-ep-dialog-git-push-inner {
+    margin: 0;
+    border-radius: 14px;
+    border: 1px solid rgba(0, 160, 255, 0.45);
+    background: linear-gradient(165deg, rgba(6, 14, 36, 0.98), rgba(3, 8, 22, 0.99));
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+}
+
+.crear-ep-field--git-push {
+    margin: 0 clamp(18px, 3vw, 26px) 12px;
+}
+
+.crear-ep-field--git-push span {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: rgba(0, 220, 255, 0.85);
+    text-transform: uppercase;
+}
+
+.editor-git-push-progreso {
+    margin: 0 clamp(18px, 3vw, 26px) 14px;
+}
+
+.editor-git-push-progreso-bar {
+    height: 8px;
+    border-radius: 999px;
+    background: rgba(0, 40, 70, 0.6);
+    overflow: hidden;
+    border: 1px solid rgba(0, 160, 255, 0.25);
+}
+
+.editor-git-push-progreso-fill {
+    height: 100%;
+    width: 0;
+    border-radius: inherit;
+    background: linear-gradient(90deg, rgba(0, 180, 255, 0.85), rgba(0, 255, 220, 0.9));
+    transition: width 0.35s ease;
+}
+
+.editor-git-push-estado {
+    margin: 8px 0 0;
+    font-size: 0.82rem;
+    color: #b8d8f0;
+}
+
+.editor-git-push-resultado {
+    margin: 0 clamp(18px, 3vw, 26px) 14px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    line-height: 1.45;
+}
+
+.editor-git-push-resultado--ok {
+    border: 1px solid rgba(72, 220, 140, 0.45);
+    background: rgba(8, 40, 28, 0.55);
+    color: #d4ffe8;
+}
+
+.editor-git-push-resultado--error {
+    border: 1px solid rgba(255, 100, 80, 0.45);
+    background: rgba(60, 18, 12, 0.55);
+    color: #ffd4c8;
+}
+
+.editor-git-push-resultado code {
+    font-size: 0.78rem;
+    word-break: break-all;
 }
 
 @media (max-width: 960px) {

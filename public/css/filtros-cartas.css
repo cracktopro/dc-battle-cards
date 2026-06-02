@@ -71,3 +71,90 @@ select.filtro-skill-class option.badge-habilidad--buff {
     background-color: #c89400;
     color: #1a1200;
 }
+
+/* Al enfocar/clicar: conservar color de badge y flecha (select:focus global p. ej. mazos.css) */
+select.crear-ep-select.filtro-skill-class:focus,
+select.crear-ep-select.filtro-skill-class:active,
+select.crear-ep-select.filtro-skill-class:focus-visible {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%237ee8ff' d='M1 1l5 5 5-5'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    background-color: rgba(2, 10, 28, 0.95);
+    color: #e8fbff;
+}
+
+select.filtro-skill-class.badge-habilidad--heal:focus,
+select.filtro-skill-class.badge-habilidad--heal:active,
+select.filtro-skill-class.badge-habilidad--heal:focus-visible,
+select.filtro-skill-class.badge-habilidad--heal-all:focus,
+select.filtro-skill-class.badge-habilidad--heal-all:active,
+select.filtro-skill-class.badge-habilidad--heal-all:focus-visible,
+select.filtro-skill-class.badge-habilidad--life-steal:focus,
+select.filtro-skill-class.badge-habilidad--life-steal:active,
+select.filtro-skill-class.badge-habilidad--life-steal:focus-visible {
+    background-color: #18462a;
+    color: #c8ffd8;
+}
+
+select.filtro-skill-class.badge-habilidad--debuff:focus,
+select.filtro-skill-class.badge-habilidad--debuff:active,
+select.filtro-skill-class.badge-habilidad--debuff:focus-visible {
+    background-color: #281248;
+    color: #f0e4ff;
+}
+
+select.filtro-skill-class.badge-habilidad--aoe:focus,
+select.filtro-skill-class.badge-habilidad--aoe:active,
+select.filtro-skill-class.badge-habilidad--aoe:focus-visible,
+select.filtro-skill-class.badge-habilidad--extra-attack:focus,
+select.filtro-skill-class.badge-habilidad--extra-attack:active,
+select.filtro-skill-class.badge-habilidad--extra-attack:focus-visible {
+    background-color: #3c0e0e;
+    color: #ffd4d4;
+}
+
+select.filtro-skill-class.badge-habilidad--stun:focus,
+select.filtro-skill-class.badge-habilidad--stun:active,
+select.filtro-skill-class.badge-habilidad--stun:focus-visible,
+select.filtro-skill-class.badge-habilidad--dot:focus,
+select.filtro-skill-class.badge-habilidad--dot:active,
+select.filtro-skill-class.badge-habilidad--dot:focus-visible {
+    background-color: #582e0a;
+    color: #ffe7c8;
+}
+
+select.filtro-skill-class.badge-habilidad--revive:focus,
+select.filtro-skill-class.badge-habilidad--revive:active,
+select.filtro-skill-class.badge-habilidad--revive:focus-visible,
+select.filtro-skill-class.badge-habilidad--heal-debuff:focus,
+select.filtro-skill-class.badge-habilidad--heal-debuff:active,
+select.filtro-skill-class.badge-habilidad--heal-debuff:focus-visible,
+select.filtro-skill-class.badge-habilidad--bonus-debuff:focus,
+select.filtro-skill-class.badge-habilidad--bonus-debuff:active,
+select.filtro-skill-class.badge-habilidad--bonus-debuff:focus-visible {
+    background-color: #281248;
+    color: #f0e4ff;
+}
+
+select.filtro-skill-class.badge-habilidad--shield:focus,
+select.filtro-skill-class.badge-habilidad--shield:active,
+select.filtro-skill-class.badge-habilidad--shield:focus-visible,
+select.filtro-skill-class.badge-habilidad--shield-aoe:focus,
+select.filtro-skill-class.badge-habilidad--shield-aoe:active,
+select.filtro-skill-class.badge-habilidad--shield-aoe:focus-visible,
+select.filtro-skill-class.badge-habilidad--tank:focus,
+select.filtro-skill-class.badge-habilidad--tank:active,
+select.filtro-skill-class.badge-habilidad--tank:focus-visible {
+    background-color: #0c284e;
+    color: #d8f6ff;
+}
+
+select.filtro-skill-class.badge-habilidad--bonus-buff:focus,
+select.filtro-skill-class.badge-habilidad--bonus-buff:active,
+select.filtro-skill-class.badge-habilidad--bonus-buff:focus-visible,
+select.filtro-skill-class.badge-habilidad--buff:focus,
+select.filtro-skill-class.badge-habilidad--buff:active,
+select.filtro-skill-class.badge-habilidad--buff:focus-visible {
+    background-color: #c89400;
+    color: #1a1200;
+}

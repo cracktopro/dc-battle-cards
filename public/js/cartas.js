@@ -251,6 +251,7 @@ window.DC_NIVEL_MIN_CARTA_HOLO = DC_NIVEL_MIN_CARTA_HOLO;
 window.cartaDebeMostrarEfectoHolo = cartaDebeMostrarEfectoHolo;
 window.aplicarImagenFondoCarta = aplicarImagenFondoCarta;
 window.quitarCapasHoloDeCarta = quitarCapasHoloDeCarta;
+window.registrarImagenesCatalogoEnMemoria = registrarImagenesCatalogoEnMemoria;
 
 asegurarCssCartaHoloCargado();
 
@@ -2137,7 +2138,14 @@ function fusionarUsuarioSesionTrasUpdate(base, pendiente, servidor) {
 
 let _promesaRefrescoSesionServidor = null;
 
+function esPaginaEditorCartasSinSesionJuego() {
+    return document.body?.classList?.contains('editar-cartas-body') === true;
+}
+
 async function refrescarUsuarioSesionDesdeServidor() {
+    if (esPaginaEditorCartasSinSesionJuego()) {
+        return null;
+    }
     if (_promesaRefrescoSesionServidor) {
         return _promesaRefrescoSesionServidor;
     }
@@ -3251,6 +3259,19 @@ function cargarRecursosPerfilModal() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    if (esPaginaEditorCartasSinSesionJuego()) {
+        void (async () => {
+            try {
+                if (typeof XLSX !== 'undefined' && typeof window.DCCatalogoCartas?.cargarFilas === 'function') {
+                    await window.DCCatalogoCartas.cargarFilas();
+                }
+            } catch (error) {
+                console.warn('[cartas] Catálogo en editor de cartas:', error);
+            }
+        })();
+        return;
+    }
+
     iniciarSincronizacionSesionMultiCliente();
     asegurarEstructuraMenuLateral();
     actualizarDatosMenuLateral();

@@ -7,3 +7,10 @@ services:
     buildCommand: npm install
     startCommand: npm start
     healthCheckPath: /
+    # Rama dev: Render expone RENDER_GIT_BRANCH=dev y los editores internos se habilitan solos.
+    # Para push a GitHub desde crearEpisodios / editarCartas, configura en el panel de Render:
+    #   GIT_PUSH_TOKEN   — PAT de GitHub (repo write) para commit+push
+    #   GIT_PUSH_BRANCH  — opcional; por defecto usa RENDER_GIT_BRANCH (dev)
+    #   GIT_PUSH_SECRET  — opcional; si se define, el modal pide token de autorización
+    #   GIT_USER_NAME / GIT_USER_EMAIL — opcional; identidad del commit
+    # Producción (main): no defines EPISODIOS_EDITOR ni GIT_PUSH_TOKEN → editores deshabilitados.

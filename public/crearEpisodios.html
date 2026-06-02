@@ -34,6 +34,21 @@
         </div>
     </div>
 
+    <dialog id="crear-ep-dialog-recurso" class="crear-ep-dialog-recurso">
+        <div class="crear-ep-dialog-recurso-panel">
+            <h3 id="crear-ep-recurso-titulo" class="crear-ep-dialog-titulo">Seleccionar imagen</h3>
+            <div class="crear-ep-recurso-toolbar">
+                <input type="search" id="crear-ep-recurso-filtro" class="crear-ep-recurso-filtro" placeholder="Buscar por nombre…" autocomplete="off" spellcheck="false">
+            </div>
+            <div id="crear-ep-recurso-grid" class="crear-ep-recurso-grid" role="listbox" aria-label="Imágenes disponibles"></div>
+            <p id="crear-ep-recurso-seleccion" class="crear-ep-recurso-seleccion" aria-live="polite"></p>
+            <div class="crear-ep-dialog-acciones crear-ep-dialog-acciones--recurso">
+                <button type="button" id="crear-ep-recurso-aceptar" class="crear-ep-btn crear-ep-btn--primario">Aceptar</button>
+                <button type="button" id="crear-ep-recurso-cancelar" class="crear-ep-btn crear-ep-btn--secundario">Cancelar</button>
+            </div>
+        </div>
+    </dialog>
+
     <dialog id="crear-ep-dialog-json" class="crear-ep-dialog-json">
         <form method="dialog" class="crear-ep-dialog-json-inner">
             <h3 class="crear-ep-dialog-titulo">Vista JSON</h3>
@@ -49,6 +64,7 @@
 
     <div id="crear-ep-toast" class="crear-ep-toast" hidden role="status"></div>
 
+    <script src="js/editorGitPush.js"></script>
     <script src="js/episodiosCapitulos.js"></script>
     <script src="js/crearEpisodiosModel.js"></script>
     <script src="js/crearEpisodios.js"></script>

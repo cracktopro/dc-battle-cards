@@ -61,6 +61,26 @@
 
     const CLASES_BADGE_TODAS = Object.values(CLASE_BADGE_POR_SKILL);
 
+    /** Colores del select cerrado (mismos que filtros-cartas.css); inline evita que otros `background` del editor los pisen al cambiar valor. */
+    const ESTILOS_SELECT_SKILL_CLASS = {
+        heal: { backgroundColor: '#18462a', color: '#c8ffd8' },
+        heal_all: { backgroundColor: '#18462a', color: '#c8ffd8' },
+        debuff: { backgroundColor: '#281248', color: '#f0e4ff' },
+        aoe: { backgroundColor: '#3c0e0e', color: '#ffd4d4' },
+        extra_attack: { backgroundColor: '#3c0e0e', color: '#ffd4d4' },
+        stun: { backgroundColor: '#582e0a', color: '#ffe7c8' },
+        dot: { backgroundColor: '#582e0a', color: '#ffe7c8' },
+        life_steal: { backgroundColor: '#18462a', color: '#c8ffd8' },
+        revive: { backgroundColor: '#281248', color: '#f0e4ff' },
+        heal_debuff: { backgroundColor: '#281248', color: '#f0e4ff' },
+        bonus_debuff: { backgroundColor: '#281248', color: '#f0e4ff' },
+        shield: { backgroundColor: '#0c284e', color: '#d8f6ff' },
+        shield_aoe: { backgroundColor: '#0c284e', color: '#d8f6ff' },
+        tank: { backgroundColor: '#0c284e', color: '#d8f6ff' },
+        bonus_buff: { backgroundColor: '#c89400', color: '#1a1200' },
+        buff: { backgroundColor: '#c89400', color: '#1a1200' }
+    };
+
     function normalizarSkillClassCarta(carta) {
         if (typeof window.normalizarClaseSkill === 'function') {
             return window.normalizarClaseSkill(carta) || '';
@@ -94,7 +114,15 @@
             if (claseBadge) {
                 selector.classList.add(claseBadge);
             }
+            const estilos = ESTILOS_SELECT_SKILL_CLASS[normalizado];
+            if (estilos) {
+                selector.style.backgroundColor = estilos.backgroundColor;
+                selector.style.color = estilos.color;
+                return;
+            }
         }
+        selector.style.backgroundColor = '';
+        selector.style.color = '';
     }
 
     function crearOpcionSkillClass(value, label) {

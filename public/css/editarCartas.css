@@ -1,0 +1,439 @@
+/* Editor cartas.xlsx (editarCartas.html) — herramienta interna; reutiliza crear-ep-* en HTML */
+
+.editar-cartas-body .crear-ep-header-titulo {
+    max-width: 28rem;
+}
+
+.editar-cartas-layout {
+    display: grid;
+    /* Catálogo y ficha mismo ancho; preview un poco más ancho para la miniatura */
+    grid-template-columns: minmax(280px, 1fr) minmax(280px, 1fr) minmax(300px, 340px);
+    gap: 0;
+    min-height: calc(100vh - 100px);
+    min-height: calc(100dvh - 100px);
+}
+
+.editar-cartas-panel--catalogo,
+.editar-cartas-panel--ficha {
+    min-width: 0;
+}
+
+@media (max-width: 1100px) {
+    .editar-cartas-layout {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto auto auto;
+    }
+}
+
+.editar-cartas-panel {
+    padding: 14px 16px;
+    border-right: 1px solid rgba(0, 160, 255, 0.15);
+    background: rgba(4, 12, 28, 0.6);
+    overflow: auto;
+    max-height: calc(100dvh - 100px);
+}
+
+.editar-cartas-panel:last-child {
+    border-right: none;
+    border-left: 1px solid rgba(0, 160, 255, 0.15);
+}
+
+.editar-cartas-panel-titulo {
+    margin: 0 0 12px;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: rgba(0, 220, 255, 0.85);
+}
+
+.editar-cartas-filtros {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.editar-cartas-filtros input,
+.editar-cartas-filtros select:not(.filtro-skill-class) {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid rgba(0, 160, 255, 0.35);
+    background: rgba(2, 10, 28, 0.95);
+    color: #e8fbff;
+    font-size: 0.82rem;
+}
+
+.editar-cartas-filtros select.filtro-skill-class {
+    width: 100%;
+    box-sizing: border-box;
+    font-size: 0.82rem;
+}
+
+.editar-cartas-catalogo-cabecera {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.editar-cartas-catalogo-cabecera .editar-cartas-panel-titulo {
+    margin-bottom: 0;
+}
+
+.editar-cartas-vista-toggle {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.editar-cartas-vista-btn {
+    min-width: 38px;
+    padding: 6px 10px;
+    font-size: 1rem;
+    line-height: 1;
+    border-radius: 8px;
+    border: 1px solid rgba(0, 160, 255, 0.4);
+    background: rgba(2, 10, 28, 0.9);
+    color: rgba(160, 200, 230, 0.85);
+    cursor: pointer;
+    transition: border-color 0.12s ease, background 0.12s ease, color 0.12s ease;
+}
+
+.editar-cartas-vista-btn:hover {
+    border-color: rgba(0, 220, 255, 0.55);
+    color: #e8fbff;
+}
+
+.editar-cartas-vista-btn--activo {
+    border-color: rgba(0, 255, 220, 0.7);
+    background: rgba(0, 70, 110, 0.55);
+    color: #7ee8ff;
+    box-shadow: 0 0 10px rgba(0, 160, 255, 0.25);
+}
+
+.editar-cartas-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 12px;
+    max-height: min(62vh, 640px);
+    overflow-y: auto;
+    padding: 4px 2px 12px;
+}
+
+.editar-cartas-grid-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin: 0;
+    padding: 8px 6px 10px;
+    border: 2px solid rgba(0, 140, 220, 0.2);
+    border-radius: 10px;
+    background: rgba(0, 18, 40, 0.45);
+    cursor: pointer;
+    text-align: center;
+    font: inherit;
+    color: inherit;
+    transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+.editar-cartas-grid-item:hover {
+    border-color: rgba(0, 220, 255, 0.45);
+}
+
+.editar-cartas-grid-item--sel {
+    border-color: rgba(0, 255, 220, 0.75);
+    box-shadow: 0 0 14px rgba(0, 160, 255, 0.3);
+}
+
+.editar-cartas-grid-item .carta-mini {
+    width: 100%;
+    max-width: 154px;
+    height: 216px;
+    min-height: 216px;
+    position: relative;
+    cursor: pointer;
+    pointer-events: none;
+    box-sizing: border-box;
+    text-align: left;
+}
+
+.editar-cartas-grid-item-label {
+    margin-top: 6px;
+    font-size: 0.68rem;
+    line-height: 1.25;
+    color: rgba(180, 215, 240, 0.9);
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.editar-cartas-lista {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    max-height: min(62vh, 640px);
+    overflow-y: auto;
+}
+
+.editar-cartas-lista-item {
+    margin-bottom: 4px;
+}
+
+.editar-cartas-lista-btn {
+    width: 100%;
+    text-align: left;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid rgba(0, 140, 220, 0.2);
+    background: rgba(0, 30, 60, 0.4);
+    color: #d0e8ff;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: border-color 0.12s ease, background 0.12s ease;
+}
+
+.editar-cartas-lista-btn:hover {
+    border-color: rgba(0, 220, 255, 0.45);
+}
+
+.editar-cartas-lista-btn--sel {
+    border-color: rgba(0, 255, 220, 0.65);
+    background: rgba(0, 80, 120, 0.35);
+}
+
+.editar-cartas-lista-meta {
+    display: block;
+    font-size: 0.65rem;
+    color: rgba(160, 200, 230, 0.75);
+    margin-top: 2px;
+}
+
+.editar-cartas-form {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.editar-cartas-seccion {
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: 1px solid rgba(0, 120, 200, 0.2);
+    background: rgba(0, 20, 45, 0.35);
+}
+
+.editar-cartas-seccion h3 {
+    margin: 0 0 10px;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.65rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #9ec8e8;
+}
+
+.editar-cartas-campo-imagen {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.editar-cartas-imagen-preview-wrap {
+    min-height: 120px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    border: 2px dashed rgba(0, 160, 255, 0.35);
+    background: rgba(0, 8, 20, 0.8);
+    padding: 8px;
+}
+
+.editar-cartas-imagen-preview-wrap--drag {
+    border-color: rgba(0, 255, 220, 0.7);
+    background: rgba(0, 60, 90, 0.4);
+}
+
+.editar-cartas-imagen-preview {
+    max-width: 100%;
+    max-height: 160px;
+    object-fit: contain;
+}
+
+.editar-cartas-imagen-placeholder {
+    font-size: 0.78rem;
+    color: rgba(150, 190, 220, 0.7);
+    text-align: center;
+}
+
+.editar-cartas-habilidad-panel {
+    border-left: 3px solid rgba(0, 160, 255, 0.4);
+    padding-left: 12px;
+}
+
+.editar-cartas-habilidad-panel.badge-habilidad--buff,
+.editar-cartas-habilidad-panel.badge-habilidad--debuff,
+.editar-cartas-habilidad-panel.badge-habilidad--heal,
+.editar-cartas-habilidad-panel.badge-habilidad--revive,
+.editar-cartas-habilidad-panel.badge-habilidad--shield,
+.editar-cartas-habilidad-panel.badge-habilidad--shield-aoe,
+.editar-cartas-habilidad-panel.badge-habilidad--aoe,
+.editar-cartas-habilidad-panel.badge-habilidad--heal-all,
+.editar-cartas-habilidad-panel.badge-habilidad--bonus-buff,
+.editar-cartas-habilidad-panel.badge-habilidad--bonus-debuff,
+.editar-cartas-habilidad-panel.badge-habilidad--tank,
+.editar-cartas-habilidad-panel.badge-habilidad--heal-debuff,
+.editar-cartas-habilidad-panel.badge-habilidad--extra-attack,
+.editar-cartas-habilidad-panel.badge-habilidad--stun,
+.editar-cartas-habilidad-panel.badge-habilidad--life-steal,
+.editar-cartas-habilidad-panel.badge-habilidad--dot {
+    border-left-width: 4px;
+}
+
+.editar-cartas-panel--preview {
+    display: flex;
+    flex-direction: column;
+}
+
+.editar-cartas-preview-wrap {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    min-height: min(52vh, 480px);
+    padding: 16px 12px;
+}
+
+#editar-cartas-preview {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+}
+
+/* Misma proporción que colección/mazos (154×216); solo escala el ancho */
+.editar-cartas-preview-wrap .carta-mini {
+    --editar-cartas-preview-ancho: 200px;
+    width: var(--editar-cartas-preview-ancho);
+    aspect-ratio: 154 / 216;
+    height: auto;
+    min-height: 0;
+    margin: 0 auto;
+    position: relative;
+    cursor: default;
+    box-sizing: border-box;
+    flex-shrink: 0;
+}
+
+.editar-cartas-panel--preview > .crear-ep-field-ayuda {
+    text-align: center;
+    margin-top: auto;
+}
+
+/* Corrige desplazamiento/overflow de nombre y poder (width 100% + padding sin border-box en mazos.css) */
+.editar-cartas-body .carta-mini .detalles-carta {
+    box-sizing: border-box;
+    left: 0;
+    right: 0;
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+    padding: 4px 5px;
+    gap: 4px;
+}
+
+.editar-cartas-body .carta-mini .detalles-carta .nombre-carta {
+    margin: 0;
+    padding: 0;
+    min-width: 0;
+    flex: 1 1 auto;
+    text-align: left;
+}
+
+.editar-cartas-grid-item .carta-mini .detalles-carta .nombre-carta {
+    flex: 1 1 0;
+    text-align: left;
+}
+
+.editar-cartas-grid-item .carta-mini .detalles-carta .poder-carta {
+    margin-left: auto;
+    text-align: right;
+}
+
+.editar-cartas-body .carta-mini .detalles-carta .poder-carta {
+    margin: 0 0 0 4px;
+    padding: 0;
+    flex: 0 0 auto;
+}
+
+.editar-cartas-body .carta-mini .estrellas-carta {
+    left: 4px;
+    max-width: calc(100% - 8px);
+    box-sizing: border-box;
+}
+
+.editar-cartas-body .carta-mini .barra-salud-contenedor {
+    left: 4px;
+    right: 4px;
+    width: auto;
+    box-sizing: border-box;
+}
+
+.editar-cartas-body .carta-mini .badge-habilidad-carta {
+    left: 4px;
+    right: 4px;
+    max-width: calc(100% - 8px);
+    box-sizing: border-box;
+}
+
+.editar-cartas-body .carta-mini .badge-afiliacion-carta {
+    right: 4px;
+    top: 4px;
+}
+
+.editar-cartas-errores {
+    margin: 0;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 120, 80, 0.5);
+    background: rgba(80, 25, 15, 0.35);
+    color: #ffd4c8;
+    font-size: 0.8rem;
+    list-style: disc;
+    padding-left: 28px;
+}
+
+.editar-cartas-errores:empty,
+.editar-cartas-errores[hidden] {
+    display: none;
+}
+
+.editar-cartas-acciones-lista {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+}
+
+.editar-cartas-field textarea {
+    min-height: 72px;
+    resize: vertical;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid rgba(0, 160, 255, 0.35);
+    background: rgba(2, 10, 28, 0.95);
+    color: #e8fbff;
+    font-size: 0.85rem;
+    font-family: inherit;
+}
+
+.editar-cartas-field select.crear-ep-select {
+    width: 100%;
+}
