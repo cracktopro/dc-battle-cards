@@ -419,6 +419,29 @@ app.get('/api/editors/git-push/estado', (_req, res) => {
     return res.json(DCEditorGitPush.gitPushEstado());
 });
 
+app.get('/api/editors/entorno', (_req, res) => {
+    return res.json(DCEditorGitPush.editoresEntornoEstado());
+});
+
+app.get('/api/editors/git-push/pendiente', async (req, res) => {
+    if (!DCEditorGitPush.editoresInternosPermitidos()) {
+        return res.status(403).json({ error: 'Editores no disponibles en este entorno.' });
+    }
+    const alcance = String(req.query.alcance || '').trim().toLowerCase();
+    try {
+        if (alcance === 'episodios') {
+            return res.json(await DCEditorGitPush.hayCambiosGitPendientesEpisodios());
+        }
+        if (alcance === 'cartas') {
+            return res.json(await DCEditorGitPush.hayCambiosGitPendientesCartas());
+        }
+        return res.status(400).json({ error: 'Parámetro alcance inválido (episodios | cartas).' });
+    } catch (error) {
+        console.warn('[api/editors/git-push/pendiente]', error.message);
+        return res.status(500).json({ error: 'No se pudo comprobar el estado git.', detalle: error.message });
+    }
+});
+
 app.post('/api/episodios-editor/git-push', async (req, res) => {
     if (!episodiosEditorPermitido()) {
         return res.status(403).json({ error: 'Editor de episodios no disponible en este entorno.' });

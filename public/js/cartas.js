@@ -2854,6 +2854,81 @@ function asegurarFilasStatsMenu(perfil) {
     }
 }
 
+const DEV_TOOLS_MENU_EMAILS = new Set([
+    'lorenzopablo93@gmail.com',
+    'lailacozar@gmail.com',
+]);
+
+let _promesaActualizarDevToolsMenu = Promise.resolve();
+
+function eliminarEnlacesHerramientasDesarrollo(menu) {
+    if (!menu) {
+        return;
+    }
+    menu.querySelectorAll('.menu-link-dev-tools, #menu-link-dev-tools').forEach((el) => el.remove());
+}
+
+async function actualizarEnlaceHerramientasDesarrolloMenu(menu) {
+    _promesaActualizarDevToolsMenu = _promesaActualizarDevToolsMenu
+        .catch(() => {})
+        .then(() => actualizarEnlaceHerramientasDesarrolloMenuInterno(menu));
+    return _promesaActualizarDevToolsMenu;
+}
+
+async function actualizarEnlaceHerramientasDesarrolloMenuInterno(menu) {
+    if (!menu) {
+        return null;
+    }
+    const linkId = 'menu-link-dev-tools';
+    const email = String(localStorage.getItem('email') || '').trim().toLowerCase();
+
+    if (!DEV_TOOLS_MENU_EMAILS.has(email)) {
+        eliminarEnlacesHerramientasDesarrollo(menu);
+        return null;
+    }
+
+    let entorno = null;
+    try {
+        const res = await fetch('/api/editors/entorno');
+        if (res.ok) {
+            entorno = await res.json();
+        }
+    } catch (_err) {
+        entorno = null;
+    }
+
+    if (!entorno?.mostrarMenuDevTools) {
+        eliminarEnlacesHerramientasDesarrollo(menu);
+        return null;
+    }
+
+    eliminarEnlacesHerramientasDesarrollo(menu);
+
+    const link = document.createElement('a');
+    link.id = linkId;
+    link.href = 'editarCartas.html';
+    link.className = 'btn btn-menu menu-link-dev-tools';
+    link.textContent = 'Herramientas Desarrollo';
+
+    const linkOpciones = menu.querySelector('a[href="opciones.html"]');
+    if (linkOpciones && linkOpciones.parentElement === menu) {
+        menu.insertBefore(link, linkOpciones);
+    } else {
+        const botonLogout = menu.querySelector('.btn-logout');
+        if (botonLogout && botonLogout.parentElement === menu) {
+            menu.insertBefore(link, botonLogout);
+        } else {
+            menu.appendChild(link);
+        }
+    }
+
+    return link;
+}
+
+function asegurarEnlaceHerramientasDesarrolloMenu(menu) {
+    void actualizarEnlaceHerramientasDesarrolloMenu(menu);
+}
+
 function asegurarEnlaceMultijugadorMenu(menu) {
     const linkCentro = menu.querySelector('a[href="vistaJuego.html"]');
     let linkMultijugador = menu.querySelector('#menu-link-multijugador');
@@ -2921,6 +2996,7 @@ function asegurarEstructuraMenuLateral() {
     asegurarFilasStatsMenu(perfil);
     asegurarEstructuraGrupoMenu(perfil);
     asegurarEnlaceMultijugadorMenu(menu);
+    asegurarEnlaceHerramientasDesarrolloMenu(menu);
     asegurarVersionLabelMenu(menu);
     guardarSnapshotPerfilMenu(perfil);
     _menuLateralEstructuraLista = true;
@@ -3054,6 +3130,8 @@ function actualizarDatosMenuLateral() {
             });
         }
     }
+
+    void actualizarEnlaceHerramientasDesarrolloMenu(menu);
 
     renderTimerRecompensaDiariaMenu();
     guardarSnapshotPerfilMenu(perfil);

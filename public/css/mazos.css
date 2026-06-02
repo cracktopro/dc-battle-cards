@@ -572,6 +572,21 @@ select:disabled,
     pointer-events: auto;
     filter: grayscale(0.25);
 }
+
+.btn-menu.menu-link-dev-tools {
+    background-color: rgba(200, 148, 0, 0.22);
+    border-color: rgba(255, 210, 60, 0.78);
+    color: #ffe566;
+    text-shadow: 0 0 8px rgba(255, 200, 40, 0.85);
+}
+
+.btn-menu.menu-link-dev-tools:hover {
+    background-color: rgba(255, 200, 40, 0.3);
+    border-color: #ffd84a;
+    box-shadow: 0 0 15px rgba(255, 200, 40, 0.55), 0 0 25px rgba(255, 180, 30, 0.35);
+    color: #fff8d0;
+}
+
 .btn-logout {
     width: 100%;
     margin: 10px 0;

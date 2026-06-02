@@ -259,6 +259,20 @@
         padding: clamp(8px, 2vw, 11px) 10px !important;
     }
 
+    body > .menu-container .btn-menu.menu-link-dev-tools {
+        background-color: rgba(200, 148, 0, 0.28) !important;
+        border-color: rgba(255, 210, 60, 0.82) !important;
+        color: #ffe566 !important;
+        text-shadow: 0 0 8px rgba(255, 200, 40, 0.85);
+    }
+
+    body > .menu-container .btn-menu.menu-link-dev-tools:hover {
+        background-color: rgba(255, 200, 40, 0.34) !important;
+        border-color: #ffd84a !important;
+        box-shadow: 0 0 14px rgba(255, 200, 40, 0.5);
+        color: #fff8d0 !important;
+    }
+
     /* Contenido principal bajo la barra */
     body > .content-container {
         margin-left: 0 !important;

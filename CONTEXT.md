@@ -2,7 +2,7 @@
 
 Documento vivo de referencia técnica para trabajar sobre DC Battle Cards sin romper flujos existentes.
 
-> **Última validación contra código:** 2026-06-02. Revisado frente a `server.js`, `partida.js`, `partidaCoop.js`, `jugarPartida.js`, `cartas.js`, `tienda.js`, `episodio-engine.js`, `editarCartas.*` y vistas principales.
+> **Última validación contra código:** 2026-06-02. Incluye editores dev, git push, navegación `editorDevNav` y menú Herramientas Desarrollo.
 
 ## Visión General
 
@@ -209,6 +209,38 @@ Documento vivo de referencia técnica para trabajar sobre DC Battle Cards sin ro
   - Mazos: `construirMazoEpisodioDesdeNombres()` (catálogo + `fusionarCartaCompletaDesdeCatalogo` + `escalarCartaSegunDificultad`).
   - Sin recompensas de partida rápida; al terminar escribe `combate_resultado` y vuelve a `episodios.html`.
   - `limpiarEstadoPartidaEnCurso()` **no** borra `episodioActivo` (lo gestiona el engine).
+
+### Herramientas de desarrollo (rama `dev` / Render testing)
+
+**Entorno:** en Render con `RENDER_GIT_BRANCH=dev` (p. ej. `dc-battle-cards-testing.onrender.com`) los editores internos se habilitan automáticamente (`lib/editorGitPush.js` → `esRamaDevRender()`). En **producción (`main`)** no aparecen salvo flags explícitos (`EPISODIOS_EDITOR=1`, etc.).
+
+**Vistas:**
+| Vista | URL | Persistencia local servidor |
+|-------|-----|----------------------------|
+| Editor cartas | `editarCartas.html` | `public/resources/cartas.xlsx` |
+| Editor episodios | `crearEpisodios.html` | `public/resources/episodios/*.json` |
+
+**Menú de juego (solo dev):** en vistas con `.menu-container` + `cartas.js`, un único enlace **Herramientas Desarrollo** → `editarCartas.html` (`actualizarEnlaceHerramientasDesarrolloMenu`; cola async + limpieza de duplicados; clase `menu-link-dev-tools` con estilo amarillo en `mazos.css` / `app-layout.css`) si:
+1. `GET /api/editors/entorno` → `mostrarMenuDevTools: true` (rama Render `dev` o `NODE_ENV !== 'production'`)
+2. Email en LS ∈ `{ lorenzopablo93@gmail.com, lailacozar@gmail.com }`
+
+Nunca se muestra en producción (`main` en Render).
+
+**Navegación entre editores:** barra `editor-dev-nav` (`editorDevNav.js`) en `crearEpisodios` / `editarCartas` con botones **Cartas** y **Episodios**. Extensible añadiendo entradas en `DCEditorDevNav.VISTAS`.
+
+**Flujo guardar → GitHub:**
+1. **Guardar** / **Guardar Excel** → escribe en disco del servidor (API PUT).
+2. **Subir a GitHub** (`editorGitPush.js`) → `git add` + `commit` + `push` a rama `dev` (requiere `GIT_PUSH_TOKEN` en Render).
+
+**Avisos al salir / cambiar vista:** `DCEditorDevNav.confirmarAntesDeNavegar()` avisa si:
+- Hay cambios **sin guardar** en memoria (`state.dirty`), o
+- Hay cambios **en disco sin commit/push** (`GET /api/editors/git-push/pendiente?alcance=episodios|cartas` — `git status` + commits sin push).
+
+También engancha `beforeunload` del navegador.
+
+**Módulos:** `lib/editorGitPush.js` (servidor), `public/js/editorGitPush.js` (modal push), `public/js/editorDevNav.js` (nav + guardias).
+
+**Variables Render (dev):** `GIT_PUSH_TOKEN` (PAT GitHub write); opcional `GIT_PUSH_BRANCH`, `GIT_PUSH_SECRET`, `GIT_USER_NAME`, `GIT_USER_EMAIL`, `GIT_PUSH_REPO_URL`. Documentadas en `render.yaml`.
 
 ## Sincronización con Firebase (SyncToken)
 
@@ -473,8 +505,11 @@ Documento vivo de referencia técnica para trabajar sobre DC Battle Cards sin ro
   - `PUT /api/cartas-editor/catalogo` body `{ columnas?, filas }` — valida y escribe `public/resources/cartas.xlsx`
   - `POST /api/cartas-editor/git-push` body `{ mensaje?, token? }` — commit+push `cartas.xlsx`
 - Git push editores (compartido):
+  - `GET /api/editors/entorno` → `{ esDev, mostrarMenuDevTools, editoresHabilitados, rama, ramaDevRender }`
   - `GET /api/editors/git-push/estado` → `{ habilitado, rama, requiereTokenCliente, ramaDevRender }`
+  - `GET /api/editors/git-push/pendiente?alcance=episodios|cartas` → `{ pendiente, motivo? }` (`sin_commit` | `sin_push`)
   - Lógica servidor: `lib/editorGitPush.js`. Env: `GIT_PUSH_TOKEN` (PAT GitHub), opcional `GIT_PUSH_BRANCH`, `GIT_PUSH_SECRET`, `GIT_PUSH_REPO_URL`, `GIT_USER_NAME`, `GIT_USER_EMAIL`
+  - UI cliente: `editorGitPush.js`, `editorDevNav.js`; menú dev en `cartas.js` (`DEV_TOOLS_MENU_EMAILS`)
 - `POST /admin/users/list`, `/admin/user/get`, `/admin/user/update`
   - Solo cuenta admin (`opciones.js`); mismo control de sync que `/update-user`
 

@@ -151,6 +151,7 @@
                         false
                     );
                 }
+                window.DCEditorDevNav?.marcarGitSincronizado();
                 opciones.onSuccess?.(data);
             } catch (err) {
                 setProgreso(true, 'Error', 100);

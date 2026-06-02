@@ -72,7 +72,10 @@
         renderToolbar();
     }
 
-    function confirmarDescartar() {
+    async function confirmarDescartar() {
+        if (window.DCEditorDevNav?.confirmarAntesDeNavegar) {
+            return window.DCEditorDevNav.confirmarAntesDeNavegar();
+        }
         if (!state.dirty) return true;
         return window.confirm('Hay cambios sin guardar en cartas.xlsx. ¿Descartarlos?');
     }
@@ -669,7 +672,7 @@
     }
 
     async function cargarCatalogo(force) {
-        if (!force && state.dirty && !confirmarDescartar()) return;
+        if (!force && !(await confirmarDescartar())) return;
         try {
             const data = await api('/api/cartas-editor/catalogo');
             const parsed = M.filasDesdeRespuestaApi(data);
@@ -705,6 +708,7 @@
             });
             state.dirty = false;
             renderToolbar();
+            window.DCEditorDevNav?.marcarCambiosEnDisco();
             toastMsg('cartas.xlsx guardado correctamente.');
         } catch (e) {
             toastMsg(e.message || 'Error al guardar', true);
@@ -736,12 +740,19 @@
         configurarFiltros();
         actualizarVistaCatalogoUi();
 
+        let hab = null;
         try {
-            const hab = await api('/api/cartas-editor/habilitado');
+            hab = await api('/api/cartas-editor/habilitado');
             if (!hab.habilitado) {
                 mostrarAvisoInhabilitado(new Error('Editor deshabilitado en este entorno (producción sin CARTAS_EDITOR=1 o rama distinta de dev).'));
                 return;
             }
+            window.DCEditorDevNav?.init({
+                vistaActual: 'cartas',
+                alcance: 'cartas',
+                getDirty: () => state.dirty,
+                gitPushHabilitado: Boolean(hab.gitPush?.habilitado),
+            });
             await window.DCEditorGitPush?.montarEnToolbar({
                 toolbar,
                 alcance: 'cartas',
@@ -753,13 +764,6 @@
         } catch (e) {
             mostrarAvisoInhabilitado(e);
         }
-
-        window.addEventListener('beforeunload', (e) => {
-            if (state.dirty) {
-                e.preventDefault();
-                e.returnValue = '';
-            }
-        });
     }
 
     init();

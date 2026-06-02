@@ -86,7 +86,10 @@
         toastMsg._t = setTimeout(() => { toast.hidden = true; }, 3200);
     }
 
-    function confirmarCambiosSinGuardar() {
+    async function confirmarCambiosSinGuardar() {
+        if (window.DCEditorDevNav?.confirmarAntesDeNavegar) {
+            return window.DCEditorDevNav.confirmarAntesDeNavegar();
+        }
         if (!state.dirty) return true;
         return window.confirm('Hay cambios sin guardar. ¿Descartarlos?');
     }
@@ -1170,7 +1173,7 @@
     }
 
     async function cargarArchivo(nombre) {
-        if (!confirmarCambiosSinGuardar()) return;
+        if (!(await confirmarCambiosSinGuardar())) return;
         const res = await api(`/api/episodios-editor/archivo/${encodeURIComponent(nombre)}`);
         state.fileName = res.nombre;
         state.data = M.normalizarEpisodio(res.data);
@@ -1200,6 +1203,7 @@
         });
         state.dirty = false;
         renderToolbar();
+        window.DCEditorDevNav?.marcarCambiosEnDisco();
         toastMsg('Guardado correctamente.');
     }
 
@@ -1213,8 +1217,8 @@
         }
     }
 
-    function crearArchivoNuevo() {
-        if (!confirmarCambiosSinGuardar()) return;
+    async function crearArchivoNuevo() {
+        if (!(await confirmarCambiosSinGuardar())) return;
         const nombre = window.prompt('Nombre del archivo (ej: episodio3.json):', 'episodio_nuevo.json');
         if (!nombre) return;
         const base = nombre.endsWith('.json') ? nombre : `${nombre}.json`;
@@ -1223,6 +1227,7 @@
             method: 'POST',
             body: JSON.stringify({ nombre: base, data }),
         }).then(async () => {
+            window.DCEditorDevNav?.marcarCambiosEnDisco();
             await cargarListaArchivos();
             await cargarArchivo(base);
             toastMsg('Archivo creado.');
@@ -1237,8 +1242,9 @@
     }
 
     async function init() {
+        let hab = null;
         try {
-            const hab = await api('/api/episodios-editor/habilitado');
+            hab = await api('/api/episodios-editor/habilitado');
             if (!hab.habilitado) {
                 aviso.hidden = false;
                 aviso.textContent = 'El editor de episodios no está habilitado en producción. En local funciona por defecto; en servidor define EPISODIOS_EDITOR=1 o despliega la rama dev.';
@@ -1258,6 +1264,12 @@
         }
 
         layout.hidden = false;
+        window.DCEditorDevNav?.init({
+            vistaActual: 'episodios',
+            alcance: 'episodios',
+            getDirty: () => state.dirty,
+            gitPushHabilitado: Boolean(hab.gitPush?.habilitado),
+        });
         await cargarRecursos();
         await cargarListaArchivos();
         renderAll();
@@ -1292,12 +1304,6 @@
             }
         });
 
-        window.addEventListener('beforeunload', (e) => {
-            if (state.dirty) {
-                e.preventDefault();
-                e.returnValue = '';
-            }
-        });
     }
 
     init();
