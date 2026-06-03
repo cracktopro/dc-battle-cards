@@ -1251,7 +1251,6 @@
         toolbar.appendChild(btn('Guardar', 'crear-ep-btn--primario', guardarArchivo));
         toolbar.appendChild(btn('Validar', 'crear-ep-btn--secundario', validarActual));
         toolbar.appendChild(btn('Vista JSON', 'crear-ep-btn--secundario', abrirVistaJson));
-        window.DCEditorGitPush?.refrescarBotonEnToolbar(toolbar);
     }
 
     function renderListaArchivos() {
@@ -1390,21 +1389,11 @@
         layout.hidden = false;
         window.DCEditorDevNav?.init({
             vistaActual: 'episodios',
-            alcance: 'episodios',
             getDirty: () => state.dirty,
-            gitPushHabilitado: Boolean(hab.gitPush?.habilitado),
         });
         await cargarRecursos();
         await cargarListaArchivos();
         renderAll();
-
-        window.DCEditorGitPush?.montarEnToolbar({
-            toolbar,
-            alcance: 'episodios',
-            endpoint: '/api/episodios-editor/git-push',
-            getDirty: () => state.dirty,
-            onSuccess: () => toastMsg('Cambios subidos a GitHub.'),
-        });
 
         initRecursoPickerDialog();
 

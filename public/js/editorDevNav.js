@@ -1,6 +1,6 @@
 /**
  * Navegación entre herramientas internas de desarrollo + avisos al salir
- * (cambios sin guardar o guardados sin push a GitHub).
+ * (cambios sin guardar o guardados sin push a GitHub) + keepalive Render.
  */
 (function () {
     'use strict';
@@ -17,33 +17,63 @@
     ];
 
     const VISTA_JUEGO_HREF = 'vistaJuego.html';
+    const KEEPALIVE_MS = 60 * 1000;
 
     let config = null;
     let gitPendiente = false;
+    let keepaliveTimer = null;
 
     function mensajeGitPendiente(motivo) {
         if (motivo === 'sin_push') {
             return 'Hay commits locales que aún no se han subido a GitHub.';
         }
-        return 'Hay cambios guardados en el servidor que aún no están en GitHub.';
+        return 'Hay cambios guardados en el servidor que aún no están en GitHub (sube desde Despliegue).';
     }
 
     async function consultarGitPendiente() {
-        if (!config?.alcance) {
-            return gitPendiente;
-        }
         try {
-            const res = await fetch(`/api/editors/git-push/pendiente?alcance=${encodeURIComponent(config.alcance)}`);
+            const res = await fetch('/api/editors/git-push/pendiente?alcance=todos');
             if (!res.ok) {
                 return gitPendiente;
             }
             const data = await res.json();
             gitPendiente = Boolean(data.pendiente);
-            config.motivoGitPendiente = data.motivo || null;
+            if (config) {
+                config.motivoGitPendiente = data.motivo || null;
+            }
             return gitPendiente;
         } catch (_e) {
             return gitPendiente;
         }
+    }
+
+    function debeMantenerKeepalive() {
+        if (Boolean(config?.getDirty?.())) {
+            return true;
+        }
+        if (window.DCEditorSessionLog?.tieneCambiosPendientesPush?.()) {
+            return true;
+        }
+        return gitPendiente;
+    }
+
+    async function enviarKeepalive() {
+        if (!debeMantenerKeepalive()) {
+            return;
+        }
+        try {
+            await fetch('/api/editors/keepalive');
+        } catch (_e) { /* ignorar */ }
+    }
+
+    function iniciarKeepalive() {
+        if (keepaliveTimer) {
+            return;
+        }
+        keepaliveTimer = setInterval(() => {
+            void enviarKeepalive();
+        }, KEEPALIVE_MS);
+        void enviarKeepalive();
     }
 
     async function confirmarAntesDeNavegar() {
@@ -60,7 +90,8 @@
         if (pendiente) {
             const ok = window.confirm(
                 `${mensajeGitPendiente(config?.motivoGitPendiente)}\n\n`
-                + 'Si sales sin pulsar «Subir a GitHub», esos cambios pueden perderse en el próximo despliegue.\n\n'
+                + 'Sube los cambios desde la vista «Despliegue» → «Subir a GitHub» antes de salir, '
+                + 'o Render puede perder los datos no subidos.\n\n'
                 + '¿Continuar de todos modos?'
             );
             if (!ok) {
@@ -121,14 +152,14 @@
 
     function onBeforeUnload(event) {
         const dirty = Boolean(config?.getDirty?.());
-        if (dirty || gitPendiente) {
+        if (dirty || gitPendiente || window.DCEditorSessionLog?.tieneCambiosPendientesPush?.()) {
             event.preventDefault();
             event.returnValue = '';
         }
     }
 
     /**
-     * @param {{ vistaActual: string, alcance: 'cartas'|'episodios', getDirty: () => boolean, gitPushHabilitado?: boolean }} opts
+     * @param {{ vistaActual: string, getDirty?: () => boolean }} opts
      */
     function init(opts) {
         config = {
@@ -138,24 +169,28 @@
         montarNav(opts.vistaActual);
         window.addEventListener('beforeunload', onBeforeUnload);
         void consultarGitPendiente();
+        iniciarKeepalive();
     }
 
     function marcarCambiosEnDisco() {
         gitPendiente = true;
         void consultarGitPendiente().then(() => {
-            document.querySelectorAll('.crear-ep-header-acciones').forEach((tb) => {
-                window.DCEditorGitPush?.actualizarEstadoPendienteGit?.(tb);
-            });
+            window.DCEditorGitPush?.actualizarEstadoPendienteGit?.(
+                document.getElementById('despliegue-toolbar')
+            );
         });
+        void enviarKeepalive();
     }
 
     function marcarGitSincronizado() {
         gitPendiente = false;
-        config.motivoGitPendiente = null;
+        if (config) {
+            config.motivoGitPendiente = null;
+        }
         void consultarGitPendiente().then(() => {
-            document.querySelectorAll('.crear-ep-header-acciones').forEach((tb) => {
-                window.DCEditorGitPush?.actualizarEstadoPendienteGit?.(tb);
-            });
+            window.DCEditorGitPush?.actualizarEstadoPendienteGit?.(
+                document.getElementById('despliegue-toolbar')
+            );
         });
     }
 

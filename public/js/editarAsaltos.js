@@ -455,7 +455,6 @@
         toolbar.appendChild(span);
         toolbar.appendChild(btn('Recargar', 'crear-ep-btn--secundario', () => cargarCatalogo(true)));
         toolbar.appendChild(btn('Guardar Excel', 'crear-ep-btn--primario', () => guardarCatalogo()));
-        window.DCEditorGitPush?.refrescarBotonEnToolbar(toolbar);
     }
 
     function renderAll() { renderToolbar(); renderLista(); renderForm(); }
@@ -552,16 +551,7 @@
             if (!hab.habilitado) { mostrarAvisoInhabilitado(new Error('Editor deshabilitado.')); return; }
             window.DCEditorDevNav?.init({
                 vistaActual: 'asaltos',
-                alcance: 'asaltos',
                 getDirty: () => state.dirty,
-                gitPushHabilitado: Boolean(hab.gitPush?.habilitado),
-            });
-            await window.DCEditorGitPush?.montarEnToolbar({
-                toolbar,
-                alcance: 'asaltos',
-                endpoint: '/api/asaltos-editor/git-push',
-                getDirty: () => state.dirty,
-                onSuccess: () => toastMsg('Cambios subidos a GitHub.'),
             });
             await cargarCatalogoCartasMemoria();
             await cargarCatalogo(false);

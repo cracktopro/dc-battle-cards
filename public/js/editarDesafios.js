@@ -507,7 +507,6 @@
         toolbar.appendChild(span);
         toolbar.appendChild(btn('Recargar', 'crear-ep-btn--secundario', () => cargarCatalogo(true)));
         toolbar.appendChild(btn('Guardar Excel', 'crear-ep-btn--primario', () => guardarCatalogo()));
-        window.DCEditorGitPush?.refrescarBotonEnToolbar(toolbar);
     }
 
     function renderAll() {
@@ -610,7 +609,7 @@
     }
 
     async function init() {
-        $('editar-desafios-nueva')?.addEventListener('click', nuevaFila);
+        $('editar-desafios-nuevo')?.addEventListener('click', nuevaFila);
         ['filtro-nombre-desafio', 'filtro-faccion-desafio', 'filtro-dificultad-desafio'].forEach((id) => {
             $(id)?.addEventListener('input', () => renderLista());
             $(id)?.addEventListener('change', () => renderLista());
@@ -628,16 +627,7 @@
             }
             window.DCEditorDevNav?.init({
                 vistaActual: 'desafios',
-                alcance: 'desafios',
                 getDirty: () => state.dirty,
-                gitPushHabilitado: Boolean(hab.gitPush?.habilitado),
-            });
-            await window.DCEditorGitPush?.montarEnToolbar({
-                toolbar,
-                alcance: 'desafios',
-                endpoint: '/api/desafios-editor/git-push',
-                getDirty: () => state.dirty,
-                onSuccess: () => toastMsg('Cambios subidos a GitHub.'),
             });
             await cargarCatalogoCartasMemoria();
             await cargarCatalogo(false);

@@ -242,10 +242,15 @@ function renderizarPanelAdmin() {
     adminPanel.style.display = esCuentaAdminActual() ? 'flex' : 'none';
 }
 
+const ADMIN_ACCOUNT_EMAILS = new Set([
+    'lorenzopablo93@gmail.com',
+    'lailatesting@gmail.com',
+]);
+
 function esCuentaAdminActual() {
     const emailSesion = String(emailActual || '').trim().toLowerCase();
     const emailUsuario = String(usuarioActual?.email || '').trim().toLowerCase();
-    return emailSesion === 'lorenzopablo93@gmail.com' || emailUsuario === 'lorenzopablo93@gmail.com';
+    return ADMIN_ACCOUNT_EMAILS.has(emailSesion) || ADMIN_ACCOUNT_EMAILS.has(emailUsuario);
 }
 
 async function inicializarAdminGestionUsuarios() {

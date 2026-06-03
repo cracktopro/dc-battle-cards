@@ -39,6 +39,11 @@
     color: rgba(0, 220, 255, 0.85);
 }
 
+.despliegue-panel-titulo--sec {
+    margin-top: 1.25rem;
+    color: rgba(255, 180, 100, 0.85);
+}
+
 .despliegue-ayuda {
     margin: 0 0 14px;
     max-width: 52rem;

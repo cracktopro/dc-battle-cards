@@ -660,7 +660,6 @@
         toolbar.appendChild(span);
         toolbar.appendChild(btn('Recargar', 'crear-ep-btn--secundario', () => cargarCatalogo(true)));
         toolbar.appendChild(btn('Guardar Excel', 'crear-ep-btn--primario', () => guardarCatalogo()));
-        window.DCEditorGitPush?.refrescarBotonEnToolbar(toolbar);
     }
 
     function renderAll() {
@@ -754,16 +753,7 @@
             }
             window.DCEditorDevNav?.init({
                 vistaActual: 'cartas',
-                alcance: 'cartas',
                 getDirty: () => state.dirty,
-                gitPushHabilitado: Boolean(hab.gitPush?.habilitado),
-            });
-            await window.DCEditorGitPush?.montarEnToolbar({
-                toolbar,
-                alcance: 'cartas',
-                endpoint: '/api/cartas-editor/git-push',
-                getDirty: () => state.dirty,
-                onSuccess: () => toastMsg('Cambios subidos a GitHub.'),
             });
             await cargarCatalogo(false);
         } catch (e) {

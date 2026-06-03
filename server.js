@@ -644,8 +644,15 @@ app.get('/api/editors/git-push/pendiente', async (req, res) => {
     if (!DCEditorGitPush.editoresInternosPermitidos()) {
         return res.status(403).json({ error: 'Editores no disponibles en este entorno.' });
     }
-    const alcance = String(req.query.alcance || '').trim().toLowerCase();
+    const alcance = String(req.query.alcance || 'todos').trim().toLowerCase();
     try {
+        if (alcance === 'todos' || alcance === 'sesion' || alcance === 'editores') {
+            const pend = await DCEditorGitPush.hayCambiosGitPendientesEditores();
+            const archivos = await DCEditorGitPush.listarArchivosModificadosEnRutas(
+                DCEditorGitPush.rutasRelativasEditorTodas()
+            );
+            return res.json({ ...pend, archivos });
+        }
         if (alcance === 'episodios') {
             return res.json(await DCEditorGitPush.hayCambiosGitPendientesEpisodios());
         }
@@ -655,11 +662,37 @@ app.get('/api/editors/git-push/pendiente', async (req, res) => {
         if (alcance === 'desafios') {
             return res.json(await DCEditorGitPush.hayCambiosGitPendientesDesafios());
         }
-        return res.status(400).json({ error: 'Parámetro alcance inválido (episodios | cartas | desafios).' });
+        return res.status(400).json({ error: 'Parámetro alcance inválido (todos | episodios | cartas | desafios).' });
     } catch (error) {
         console.warn('[api/editors/git-push/pendiente]', error.message);
         return res.status(500).json({ error: 'No se pudo comprobar el estado git.', detalle: error.message });
     }
+});
+
+app.post('/api/editors/git-push/dev', async (req, res) => {
+    if (!DCEditorGitPush.editoresInternosPermitidos()) {
+        return res.status(403).json({ error: 'Editores no disponibles en este entorno.' });
+    }
+    if (!DCEditorGitPush.gitPushPermitido()) {
+        return res.status(403).json({ error: 'Git push no configurado (define GIT_PUSH_TOKEN en el servidor).' });
+    }
+    if (!DCEditorGitPush.verificarGitPushAuth(req)) {
+        return res.status(401).json({ error: 'Token de git push incorrecto.' });
+    }
+    try {
+        const resultado = await DCEditorGitPush.gitPushEditoresSesion(req.body?.mensaje);
+        return res.json(resultado);
+    } catch (error) {
+        console.warn('[api/editors/git-push/dev]', error.message);
+        return res.status(500).json({ error: 'No se pudo subir a GitHub.', detalle: error.message });
+    }
+});
+
+app.get('/api/editors/keepalive', (_req, res) => {
+    if (!DCEditorGitPush.editoresInternosPermitidos()) {
+        return res.status(403).json({ ok: false });
+    }
+    return res.json({ ok: true, ts: Date.now() });
 });
 
 app.post('/api/episodios-editor/git-push', async (req, res) => {
@@ -4754,8 +4787,13 @@ function sanitizarDocumentoUsuario(usuario) {
     return (limpio && typeof limpio === 'object') ? limpio : {};
 }
 
+const ADMIN_ACCOUNT_EMAILS = new Set([
+    'lorenzopablo93@gmail.com',
+    'lailatesting@gmail.com',
+]);
+
 function esEmailAdmin(email) {
-    return String(email || '').trim().toLowerCase() === 'lorenzopablo93@gmail.com';
+    return ADMIN_ACCOUNT_EMAILS.has(String(email || '').trim().toLowerCase());
 }
 
 async function asegurarMetadataSyncUsuario(email, userData = {}) {

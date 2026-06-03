@@ -2858,6 +2858,7 @@ function asegurarFilasStatsMenu(perfil) {
 const DEV_TOOLS_MENU_EMAILS = new Set([
     'lorenzopablo93@gmail.com',
     'lailacozar@gmail.com',
+    'lailatesting@gmail.com',
 ]);
 
 let _promesaActualizarDevToolsMenu = Promise.resolve();

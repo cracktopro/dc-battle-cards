@@ -9,8 +9,12 @@
 
     const ETIQUETAS_VISTA = {
         cartas: 'Editor cartas',
+        skins: 'Editor skins',
         episodios: 'Editor episodios',
         desafios: 'Editor desafíos',
+        asaltos: 'Editor asaltos',
+        eventos: 'Editor eventos',
+        eventosCoop: 'Editor eventos coop',
         despliegue: 'Despliegue',
     };
 
@@ -105,9 +109,24 @@
         const lista = Array.isArray(entradas) ? entradas : leerEntradas();
         if (!lista.length) {
             return 'Sin cambios registrados en esta sesión de navegador.\n\n'
-                + 'Los registros aparecen al guardar o subir cambios desde Cartas, Episodios o Desafíos.';
+                + 'Los registros aparecen al guardar desde los editores internos. '
+                + 'La subida a GitHub se hace desde Despliegue → «Subir a GitHub».';
         }
         return lista.map(formatearEntrada).join('\n\n');
+    }
+
+    /** true si hay guardados en sesión sin un git_push_dev posterior */
+    function tieneCambiosPendientesPush() {
+        const entradas = leerEntradas();
+        for (let i = entradas.length - 1; i >= 0; i -= 1) {
+            if (entradas[i].accion === 'git_push_dev') {
+                return false;
+            }
+            if (entradas[i].accion === 'guardado') {
+                return true;
+            }
+        }
+        return false;
     }
 
     window.DCEditorSessionLog = {
@@ -119,5 +138,6 @@
         limpiar,
         formatearRegistroTexto,
         formatearEntrada,
+        tieneCambiosPendientesPush,
     };
 })();

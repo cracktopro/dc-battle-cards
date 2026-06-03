@@ -1,14 +1,15 @@
 /**
- * UI compartida: botón y modal para subir cambios del editor a GitHub (rama dev).
+ * UI compartida: modal para subir cambios de editores a GitHub (rama dev).
+ * El botón vive centralizado en despliegue.html; incluye todos los Excel/JSON de editores.
  */
 (function () {
     'use strict';
 
     const LS_TOKEN_KEY = 'dc_editor_git_push_token_v1';
+    const ENDPOINT_SESION = '/api/editors/git-push/dev';
 
     let dialogEl = null;
     let gitPushEstado = null;
-    const toolbarConfigs = new WeakMap();
 
     function $(id) {
         return document.getElementById(id);
@@ -76,7 +77,7 @@
         el.innerHTML = html;
     }
 
-    function resetModal(alcance, rama) {
+    function resetModal(rama) {
         const ayuda = $('editor-git-push-ayuda');
         const mensaje = $('editor-git-push-mensaje');
         const tokenWrap = $('editor-git-push-token-wrap');
@@ -85,11 +86,7 @@
         const ejecutar = $('editor-git-push-ejecutar');
 
         if (ayuda) {
-            ayuda.textContent = alcance === 'cartas'
-                ? `Se hará commit de public/resources/cartas.xlsx y push a la rama «${rama}». Guarda el Excel antes de subir.`
-                : alcance === 'desafios'
-                    ? `Se hará commit de public/resources/desafios.xlsx y push a la rama «${rama}». Guarda el Excel antes de subir.`
-                    : `Se hará commit de los JSON en public/resources/episodios/ y push a la rama «${rama}». Guarda los archivos antes de subir.`;
+            ayuda.textContent = `Se hará un único commit con todos los archivos de editor modificados (cartas, desafíos, asaltos, eventos, skins, episodios…) y push a la rama «${rama}». Guarda en cada vista antes de subir.`;
         }
         if (mensaje) mensaje.value = '';
         if (resultado) {
@@ -108,12 +105,13 @@
 
     async function abrirModal(opciones) {
         const dialog = asegurarDialogo();
-        resetModal(opciones.alcance, gitPushEstado?.rama || 'dev');
+        gitPushEstado = gitPushEstado || await cargarEstado();
+        resetModal(gitPushEstado?.rama || 'dev');
 
         const ejecutar = $('editor-git-push-ejecutar');
         const handler = async () => {
-            if (opciones.getDirty?.()) {
-                window.alert('Hay cambios sin guardar en disco. Pulsa Guardar antes de subir a GitHub.');
+            if (opciones?.getDirty?.()) {
+                window.alert('Hay cambios sin guardar en el editor actual. Pulsa Guardar antes de subir a GitHub.');
                 return;
             }
 
@@ -133,7 +131,7 @@
 
             try {
                 setProgreso(true, 'Creando commit…', 45);
-                const res = await fetch(opciones.endpoint, {
+                const res = await fetch(ENDPOINT_SESION, {
                     method: 'POST',
                     headers,
                     body: JSON.stringify({ mensaje }),
@@ -153,17 +151,14 @@
                         false
                     );
                     window.DCEditorSessionLog?.registrarGitPushDev?.(
-                        opciones.alcance,
+                        'despliegue',
                         data.commit || 'Push a dev completado',
-                        data.archivos || archivosPorAlcance(opciones.alcance)
+                        data.archivos || []
                     );
                 }
                 window.DCEditorDevNav?.marcarGitSincronizado();
-                void actualizarEstadoPendienteGit(document.querySelector('.crear-ep-header-acciones'));
-                document.querySelectorAll('.crear-ep-header-acciones').forEach((tb) => {
-                    void actualizarEstadoPendienteGit(tb);
-                });
-                opciones.onSuccess?.(data);
+                void actualizarEstadoPendienteGit(document.getElementById('despliegue-toolbar'));
+                opciones?.onSuccess?.(data);
             } catch (err) {
                 setProgreso(true, 'Error', 100);
                 mostrarResultado(String(err.message || err), true);
@@ -182,55 +177,30 @@
         b.className = 'crear-ep-btn crear-ep-btn--secundario';
         b.dataset.editorGitPush = '1';
         b.textContent = 'Subir a GitHub';
-        b.title = 'Commit y push a la rama dev en GitHub';
+        b.title = 'Commit y push de todos los editores a la rama dev';
         b.addEventListener('click', onClick);
         return b;
     }
 
     async function actualizarEstadoPendienteGit(toolbar) {
-        const opciones = toolbarConfigs.get(toolbar);
-        if (!opciones?.alcance || !gitPushEstado?.habilitado) {
-            return;
-        }
         const btn = toolbar?.querySelector('[data-editor-git-push]');
-        if (!btn) {
+        if (!btn || !gitPushEstado?.habilitado) {
             return;
         }
         try {
-            const res = await fetch(`/api/editors/git-push/pendiente?alcance=${encodeURIComponent(opciones.alcance)}`);
+            const res = await fetch('/api/editors/git-push/pendiente?alcance=todos');
             if (!res.ok) {
                 return;
             }
             const data = await res.json();
-            btn.classList.toggle('crear-ep-btn--git-pendiente', Boolean(data.pendiente));
-            btn.title = data.pendiente
-                ? 'Hay cambios pendientes de subir a GitHub (rama dev)'
-                : 'Commit y push a la rama dev en GitHub';
+            const sessionPend = window.DCEditorSessionLog?.tieneCambiosPendientesPush?.();
+            const pendiente = Boolean(data.pendiente || sessionPend);
+            btn.classList.toggle('crear-ep-btn--git-pendiente', pendiente);
+            btn.disabled = !pendiente;
+            btn.title = pendiente
+                ? 'Hay cambios guardados pendientes de subir a GitHub (rama dev)'
+                : 'No hay cambios pendientes de subir a GitHub';
         } catch (_e) { /* ignorar */ }
-    }
-
-    function archivosPorAlcance(alcance) {
-        if (alcance === 'cartas') return ['public/resources/cartas.xlsx'];
-        if (alcance === 'desafios') return ['public/resources/desafios.xlsx'];
-        return ['public/resources/episodios/*.json'];
-    }
-
-    function refrescarBotonEnToolbar(toolbar) {
-        const opciones = toolbarConfigs.get(toolbar);
-        if (!opciones || !gitPushEstado?.habilitado) {
-            return;
-        }
-        toolbar.querySelector('[data-editor-git-push]')?.remove();
-        const boton = crearBotonGitPush(() => {
-            abrirModal({
-                alcance: opciones.alcance,
-                endpoint: opciones.endpoint,
-                getDirty: opciones.getDirty || (() => false),
-                onSuccess: opciones.onSuccess,
-            });
-        });
-        toolbar.appendChild(boton);
-        void actualizarEstadoPendienteGit(toolbar);
     }
 
     async function cargarEstado() {
@@ -244,9 +214,10 @@
     }
 
     /**
-     * @param {{ toolbar: HTMLElement|null, alcance: 'episodios'|'cartas', endpoint: string, getDirty: () => boolean, onSuccess?: Function }} opciones
+     * Monta el botón «Subir a GitHub» en la toolbar de despliegue.html.
+     * @param {{ toolbar: HTMLElement|null, getDirty?: () => boolean, onSuccess?: Function }} opciones
      */
-    async function montarEnToolbar(opciones) {
+    async function montarEnDespliegue(opciones) {
         if (!opciones?.toolbar) return;
 
         gitPushEstado = await cargarEstado();
@@ -254,14 +225,27 @@
             return;
         }
 
-        toolbarConfigs.set(opciones.toolbar, opciones);
-        refrescarBotonEnToolbar(opciones.toolbar);
+        opciones.toolbar.querySelector('[data-editor-git-push]')?.remove();
+        const boton = crearBotonGitPush(() => {
+            abrirModal({
+                getDirty: opciones.getDirty || (() => false),
+                onSuccess: opciones.onSuccess,
+            });
+        });
+        opciones.toolbar.insertBefore(boton, opciones.toolbar.firstChild);
+        void actualizarEstadoPendienteGit(opciones.toolbar);
+    }
+
+    /** @deprecated El push a dev está centralizado en despliegue. */
+    async function montarEnToolbar() {
+        /* noop: compatibilidad con editores que aún importan el script */
     }
 
     window.DCEditorGitPush = {
+        montarEnDespliegue,
         montarEnToolbar,
-        refrescarBotonEnToolbar,
         actualizarEstadoPendienteGit,
+        abrirModal,
         recargarEstado: cargarEstado,
     };
 })();

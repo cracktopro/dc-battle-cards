@@ -336,7 +336,6 @@
         toolbar.appendChild(span);
         toolbar.appendChild(btn('Recargar', 'crear-ep-btn--secundario', () => cargarCatalogo(true)));
         toolbar.appendChild(btn('Guardar Excel', 'crear-ep-btn--primario', () => guardarCatalogo()));
-        window.DCEditorGitPush?.refrescarBotonEnToolbar(toolbar);
     }
 
     function renderAll() { renderToolbar(); renderLista(); renderForm(); }
@@ -425,15 +424,8 @@
             hab = await api('/api/eventos-online-editor/habilitado');
             if (!hab.habilitado) { mostrarAvisoInhabilitado(new Error('Editor deshabilitado.')); return; }
             window.DCEditorDevNav?.init({
-                vistaActual: 'eventosCoop', alcance: 'eventosCoop',
+                vistaActual: 'eventosCoop',
                 getDirty: () => state.dirty,
-                gitPushHabilitado: Boolean(hab.gitPush?.habilitado),
-            });
-            await window.DCEditorGitPush?.montarEnToolbar({
-                toolbar, alcance: 'eventosCoop',
-                endpoint: '/api/eventos-online-editor/git-push',
-                getDirty: () => state.dirty,
-                onSuccess: () => toastMsg('Cambios subidos a GitHub.'),
             });
             await cargarCatalogoCartasMemoria();
             await cargarCatalogo(false);

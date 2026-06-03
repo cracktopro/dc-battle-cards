@@ -9,6 +9,7 @@
     const layout = $('despliegue-layout');
     const registroEl = $('despliegue-registro');
     const archivosEl = $('despliegue-archivos');
+    const archivosDevEl = $('despliegue-archivos-dev');
     const btnProd = $('despliegue-btn-produccion');
     const btnRefrescar = $('despliegue-btn-refrescar');
     const toast = $('crear-ep-toast');
@@ -30,18 +31,18 @@
         return 'cambios sin commit/push';
     }
 
-    function pintarArchivosPendientes(archivos) {
-        if (!archivosEl) return;
-        archivosEl.innerHTML = '';
+    function pintarArchivosPendientes(archivos, contenedor, vacioMsg) {
+        if (!contenedor) return;
+        contenedor.innerHTML = '';
         if (!archivos?.length) {
-            archivosEl.innerHTML = '<li class="despliegue-archivos-vacio">No hay diferencias de archivos de editor entre dev y producción.</li>';
+            contenedor.innerHTML = `<li class="despliegue-archivos-vacio">${vacioMsg}</li>`;
             return;
         }
         archivos.forEach((ruta) => {
             const li = document.createElement('li');
             li.className = 'despliegue-archivos-item';
             li.innerHTML = `<code>${ruta}</code><span class="despliegue-archivos-badge">pendiente</span>`;
-            archivosEl.appendChild(li);
+            contenedor.appendChild(li);
         });
     }
 
@@ -75,15 +76,13 @@
         const pend = resumenServidor?.pendienteDevGithub;
         if (pend) {
             lineas.push('Pendiente de subir a GitHub (rama dev):');
-            ['cartas', 'episodios', 'desafios'].forEach((k) => {
-                const p = pend[k];
-                const label = k === 'cartas' ? 'cartas.xlsx' : k === 'desafios' ? 'desafios.xlsx' : 'JSON episodios';
-                if (p?.pendiente) {
-                    lineas.push(`  ⚠ ${label}: ${motivoPendienteDev(p)}`);
-                } else {
-                    lineas.push(`  ✓ ${label}: sincronizado con dev remoto`);
-                }
-            });
+            const todos = pend.todos;
+            if (todos?.pendiente) {
+                lineas.push(`  ⚠ Todos los editores: ${motivoPendienteDev(todos)}`);
+                (pend.archivosModificados || []).forEach((a) => lineas.push(`    • ${a}`));
+            } else {
+                lineas.push('  ✓ Sin cambios pendientes en el servidor');
+            }
             lineas.push('');
         }
 
@@ -100,7 +99,16 @@
         if (registroEl) {
             registroEl.value = construirTextoRegistro();
         }
-        pintarArchivosPendientes(resumenServidor?.produccion?.archivosPendientes || []);
+        pintarArchivosPendientes(
+            resumenServidor?.pendienteDevGithub?.archivosModificados || [],
+            archivosDevEl,
+            'No hay archivos de editor pendientes de commit/push a dev.'
+        );
+        pintarArchivosPendientes(
+            resumenServidor?.produccion?.archivosPendientes || [],
+            archivosEl,
+            'No hay diferencias de archivos de editor entre dev y producción.'
+        );
         const puedeProd = Boolean(
             resumenServidor?.produccion?.habilitado
             && resumenServidor?.produccion?.archivosPendientes?.length
@@ -111,6 +119,7 @@
                 ? `Desplegar ${resumenServidor.produccion.archivosPendientes.length} archivo(s) a ${resumenServidor.produccion.rama}`
                 : 'No hay archivos de editor pendientes de desplegar a producción';
         }
+        void window.DCEditorGitPush?.actualizarEstadoPendienteGit?.($('despliegue-toolbar'));
     }
 
     async function cargarResumen() {
@@ -247,6 +256,13 @@
             window.DCEditorDevNav?.init({
                 vistaActual: 'despliegue',
                 getDirty: () => false,
+            });
+            await window.DCEditorGitPush?.montarEnDespliegue?.({
+                toolbar: $('despliegue-toolbar'),
+                onSuccess: async () => {
+                    toastMsg('Cambios subidos a GitHub (dev).');
+                    await cargarResumen();
+                },
             });
             if (aviso) aviso.hidden = true;
             if (layout) layout.hidden = false;
