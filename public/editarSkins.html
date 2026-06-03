@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <title>Editor de skins — DC Battle Cards</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+    <link href="css/scrollbar.css" rel="stylesheet">
+    <link href="css/crearEpisodios.css" rel="stylesheet">
+    <link href="css/editarCartas.css" rel="stylesheet">
+    <link href="css/editarDesafios.css" rel="stylesheet">
+    <link href="css/mazos.css" rel="stylesheet">
+    <link href="css/salud.css" rel="stylesheet">
+    <link href="css/filtros-cartas.css" rel="stylesheet">
+    <link href="css/carta-holo.css" rel="stylesheet">
+</head>
+<body class="crear-ep-body editar-cartas-body">
+    <header class="crear-ep-header">
+        <div class="crear-ep-header-marca">
+            <span class="crear-ep-header-kicker">Herramienta interna</span>
+            <h1 class="crear-ep-header-titulo">Editor de skins (skins.xlsx)</h1>
+        </div>
+        <div class="crear-ep-header-acciones" id="editar-skins-toolbar"></div>
+    </header>
+
+    <p id="editar-skins-aviso" class="crear-ep-aviso" hidden></p>
+
+    <div class="editar-cartas-layout" id="editar-skins-layout" hidden>
+        <aside class="editar-cartas-panel editar-cartas-panel--catalogo">
+            <div class="editar-cartas-catalogo-cabecera">
+                <h2 class="editar-cartas-panel-titulo">Catálogo de skins</h2>
+                <div class="editar-cartas-vista-toggle" role="group" aria-label="Modo de visualización del catálogo">
+                    <button type="button" id="editar-skins-vista-imagenes" class="editar-cartas-vista-btn editar-cartas-vista-btn--activo" title="Vista en imágenes" aria-pressed="true" aria-label="Vista en imágenes">▦</button>
+                    <button type="button" id="editar-skins-vista-lista" class="editar-cartas-vista-btn" title="Vista en lista" aria-pressed="false" aria-label="Vista en lista">☰</button>
+                </div>
+            </div>
+            <div class="editar-desafios-acciones-lista">
+                <button type="button" id="editar-skins-nuevo" class="crear-ep-btn crear-ep-btn--secundario">+ Nuevo</button>
+            </div>
+            <div class="editar-cartas-filtros">
+                <input type="search" id="filtro-nombre-skin" placeholder="Nombre de skin…" autocomplete="off">
+                <select id="filtro-parent-skin" class="crear-ep-select" aria-label="Carta base (parent)">
+                    <option value="">Todos los parents</option>
+                </select>
+            </div>
+            <p id="editar-skins-contador" class="crear-ep-field-ayuda"></p>
+            <ul id="editar-skins-lista" class="editar-cartas-lista" role="listbox" hidden></ul>
+            <div id="editar-skins-grid" class="editar-cartas-grid" role="listbox"></div>
+        </aside>
+
+        <main class="editar-cartas-panel editar-cartas-panel--ficha">
+            <h2 class="editar-cartas-panel-titulo">Ficha de skin</h2>
+            <ul id="editar-skins-errores" class="editar-cartas-errores" hidden></ul>
+            <div id="editar-skins-form" class="editar-cartas-form">
+                <p class="crear-ep-field-ayuda">Selecciona un skin de la lista o crea uno nuevo.</p>
+            </div>
+        </main>
+
+        <aside class="editar-cartas-panel editar-cartas-panel--preview">
+            <h2 class="editar-cartas-panel-titulo">Vista previa en juego</h2>
+            <div class="editar-cartas-preview-wrap">
+                <div id="editar-skins-preview" aria-label="Previsualización de skin"></div>
+            </div>
+            <p class="crear-ep-field-ayuda">La miniatura usa los estilos del juego. El arte de la carta base se sobreescribe con la imagen del skin.</p>
+        </aside>
+    </div>
+
+    <div id="crear-ep-toast" class="crear-ep-toast" hidden role="status"></div>
+
+    <script src="js/editorDevNav.js"></script>
+    <script src="js/editorSessionLog.js"></script>
+    <script src="js/editorGitPush.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="js/filtrosCartas.js"></script>
+    <script src="js/cartas.js"></script>
+    <script src="js/editorCartaPicker.js"></script>
+    <script src="js/editarSkinsModel.js"></script>
+    <script src="js/editarSkins.js"></script>
+</body>
+</html>

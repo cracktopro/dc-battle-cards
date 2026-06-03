@@ -76,7 +76,7 @@
         return set;
     }
 
-    function validarFilaDesafio(fila, indice, todasLasFilas, nombresCatalogo) {
+    function validarFilaDesafio(fila, indice, todasLasFilas, nombresCatalogo, skinsIndexados) {
         const errores = [];
         const idx = indice + 1;
         const id = Number(fila.ID_desafio);
@@ -107,26 +107,34 @@
         const refs = [...ENEMIGO_KEYS.map((k) => fila[k]), fila.boss];
         refs.forEach((ref, i) => {
             const nom = String(ref || '').trim();
-            if (!nom || !nombresCatalogo) return;
+            if (!nom) return;
             const key = i < ENEMIGO_KEYS.length ? ENEMIGO_KEYS[i] : 'boss';
-            if (!nombresCatalogo.has(nom.toLowerCase())) {
+            if (window.DCSkinsCartas?.validarReferenciaCartaEnCatalogo) {
+                window.DCSkinsCartas.validarReferenciaCartaEnCatalogo(nom, nombresCatalogo, skinsIndexados)
+                    .forEach((msg) => errores.push(`Fila ${idx} (${nombre || '?'}, ${key}): ${msg}`));
+            } else if (nombresCatalogo && !nombresCatalogo.has(nom.toLowerCase())) {
                 errores.push(`Fila ${idx} (${nombre || '?'}): «${nom}» (${key}) no está en cartas.xlsx.`);
             }
         });
 
         const cartaRecomp = leerNombreCartaRecompensa(fila);
-        if (cartaRecomp && nombresCatalogo && !nombresCatalogo.has(cartaRecomp.toLowerCase())) {
-            errores.push(`Fila ${idx} (${nombre || '?'}): carta recompensa «${cartaRecomp}» no está en cartas.xlsx.`);
+        if (cartaRecomp) {
+            if (window.DCSkinsCartas?.validarReferenciaCartaEnCatalogo) {
+                window.DCSkinsCartas.validarReferenciaCartaEnCatalogo(cartaRecomp, nombresCatalogo, skinsIndexados)
+                    .forEach((msg) => errores.push(`Fila ${idx} (${nombre || '?'}, recompensa): ${msg}`));
+            } else if (nombresCatalogo && !nombresCatalogo.has(cartaRecomp.toLowerCase())) {
+                errores.push(`Fila ${idx} (${nombre || '?'}): carta recompensa «${cartaRecomp}» no está en cartas.xlsx.`);
+            }
         }
 
         return errores;
     }
 
-    function validarCatalogo(filas, filasCatalogoCartas) {
+    function validarCatalogo(filas, filasCatalogoCartas, skinsIndexados) {
         const nombresCatalogo = nombresCartasEnCatalogoSet(filasCatalogoCartas);
         const errores = [];
         (filas || []).forEach((fila, i) => {
-            errores.push(...validarFilaDesafio(fila, i, filas, nombresCatalogo));
+            errores.push(...validarFilaDesafio(fila, i, filas, nombresCatalogo, skinsIndexados));
         });
         return { ok: errores.length === 0, errores };
     }

@@ -62,6 +62,52 @@
         return parsearReferenciaCartaConSkin(textoRaw).nombreCatalogo;
     }
 
+    /** Formato Excel PvE: Parent[skin_id] o solo Parent si es la carta base. */
+    function formatearReferenciaCartaConSkin(parentNombre, skinId) {
+        const parent = String(parentNombre || '').trim();
+        if (!parent) {
+            return '';
+        }
+        if (skinId === null || skinId === undefined || skinId === '') {
+            return parent;
+        }
+        const id = Math.round(Number(skinId));
+        if (!Number.isFinite(id)) {
+            return parent;
+        }
+        return `${parent}[${id}]`;
+    }
+
+    /**
+     * Valida una referencia de carta (con o sin skin) contra cartas.xlsx y skins.xlsx.
+     * @returns {string[]} mensajes de error (vacío si ok)
+     */
+    function validarReferenciaCartaEnCatalogo(textoRaw, nombresCatalogoSet, indexadosSkins) {
+        const errores = [];
+        const ref = parsearReferenciaCartaConSkin(textoRaw);
+        const texto = ref.textoOriginal || String(textoRaw || '').trim();
+        if (!texto) {
+            return errores;
+        }
+        const parentKey = normalizarClaveNombre(ref.nombreCatalogo);
+        if (!parentKey) {
+            errores.push(`Referencia de carta inválida: «${texto}».`);
+            return errores;
+        }
+        if (nombresCatalogoSet && nombresCatalogoSet.size && !nombresCatalogoSet.has(parentKey)) {
+            errores.push(`«${texto}»: la carta base «${ref.nombreCatalogo}» no está en cartas.xlsx.`);
+        }
+        if (ref.skinId !== null && ref.skinId !== undefined) {
+            const skin = obtenerSkinPorId(ref.skinId, indexadosSkins);
+            if (!skin) {
+                errores.push(`«${texto}»: skin_id ${ref.skinId} no está en skins.xlsx.`);
+            } else if (normalizarClaveNombre(skin.parent) !== parentKey) {
+                errores.push(`«${texto}»: el skin ${ref.skinId} pertenece a «${skin.parent}», no a «${ref.nombreCatalogo}».`);
+            }
+        }
+        return errores;
+    }
+
     function normalizarFilaSkin(fila) {
         if (!fila || typeof fila !== 'object') {
             return null;
@@ -666,6 +712,8 @@
 
     return {
         parsearReferenciaCartaConSkin,
+        formatearReferenciaCartaConSkin,
+        validarReferenciaCartaEnCatalogo,
         obtenerNombreCatalogoDesdeReferencia,
         obtenerNombreParentCarta,
         obtenerSkinsDelParent,

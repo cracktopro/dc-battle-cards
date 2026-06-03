@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <title>Editor de eventos — DC Battle Cards</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+    <link href="css/scrollbar.css" rel="stylesheet">
+    <link href="css/crearEpisodios.css" rel="stylesheet">
+    <link href="css/editarDesafios.css" rel="stylesheet">
+    <link href="css/mazos.css" rel="stylesheet">
+    <link href="css/salud.css" rel="stylesheet">
+    <link href="css/filtros-cartas.css" rel="stylesheet">
+    <link href="css/carta-holo.css" rel="stylesheet">
+</head>
+<body class="crear-ep-body editar-desafios-body">
+    <header class="crear-ep-header">
+        <div class="crear-ep-header-marca">
+            <span class="crear-ep-header-kicker">Herramienta interna</span>
+            <h1 class="crear-ep-header-titulo">Editor de eventos (eventos.xlsx)</h1>
+        </div>
+        <div class="crear-ep-header-acciones" id="editar-eventos-toolbar"></div>
+    </header>
+
+    <p id="editar-eventos-aviso" class="crear-ep-aviso" hidden></p>
+
+    <div class="editar-desafios-layout" id="editar-eventos-layout" hidden>
+        <aside class="editar-desafios-panel editar-desafios-panel--lista">
+            <h2 class="editar-desafios-panel-titulo">Eventos</h2>
+            <div class="editar-desafios-acciones-lista">
+                <button type="button" id="editar-eventos-nuevo" class="crear-ep-btn crear-ep-btn--secundario">+ Nuevo</button>
+            </div>
+            <div class="editar-desafios-filtros">
+                <input type="search" id="filtro-nombre-evento" placeholder="Nombre o descripción…" autocomplete="off">
+            </div>
+            <p id="editar-eventos-contador" class="crear-ep-field-ayuda"></p>
+            <ul id="editar-eventos-lista" class="editar-desafios-lista" role="listbox"></ul>
+        </aside>
+
+        <main class="editar-desafios-panel editar-desafios-panel--ficha">
+            <h2 class="editar-desafios-panel-titulo">Ficha de evento</h2>
+            <ul id="editar-eventos-errores" class="editar-desafios-errores" hidden></ul>
+            <div id="editar-eventos-form" class="editar-desafios-form">
+                <p class="crear-ep-field-ayuda">Selecciona un evento de la lista o crea uno nuevo.</p>
+            </div>
+        </main>
+    </div>
+
+    <dialog id="editar-eventos-dialog-tablero" class="crear-ep-dialog-recurso">
+        <div class="crear-ep-dialog-recurso-panel">
+            <h3 class="crear-ep-dialog-titulo">Seleccionar tablero de combate</h3>
+            <div class="crear-ep-recurso-toolbar">
+                <input type="search" id="editar-eventos-tablero-filtro" class="crear-ep-recurso-filtro" placeholder="Buscar por nombre…" autocomplete="off" spellcheck="false">
+            </div>
+            <div id="editar-eventos-tablero-grid" class="crear-ep-recurso-grid" role="listbox" aria-label="Tableros disponibles"></div>
+            <p id="editar-eventos-tablero-seleccion" class="crear-ep-recurso-seleccion" aria-live="polite"></p>
+            <div class="crear-ep-dialog-acciones crear-ep-dialog-acciones--recurso">
+                <button type="button" id="editar-eventos-tablero-aceptar" class="crear-ep-btn crear-ep-btn--primario">Aceptar</button>
+                <button type="button" id="editar-eventos-tablero-cancelar" class="crear-ep-btn crear-ep-btn--secundario">Cancelar</button>
+            </div>
+        </div>
+    </dialog>
+
+    <div id="crear-ep-toast" class="crear-ep-toast" hidden role="status"></div>
+
+    <script src="js/editorDevNav.js"></script>
+    <script src="js/editorSessionLog.js"></script>
+    <script src="js/editorGitPush.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="js/filtrosCartas.js"></script>
+    <script src="js/cartas.js"></script>
+    <script src="js/skinsCartas.js"></script>
+    <script src="js/seleccionCartaApariencia.js"></script>
+    <script src="js/editorCartaPicker.js"></script>
+    <script src="js/editarEventosModel.js"></script>
+    <script src="js/editarEventos.js"></script>
+</body>
+</html>

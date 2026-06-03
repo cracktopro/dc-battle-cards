@@ -7,8 +7,12 @@
 
     const VISTAS = [
         { id: 'cartas', href: 'editarCartas.html', label: 'Cartas' },
+        { id: 'skins', href: 'editarSkins.html', label: 'Skins' },
         { id: 'episodios', href: 'crearEpisodios.html', label: 'Episodios' },
         { id: 'desafios', href: 'editarDesafios.html', label: 'Desafíos' },
+        { id: 'asaltos', href: 'editarAsaltos.html', label: 'Asaltos' },
+        { id: 'eventos', href: 'editarEventos.html', label: 'Eventos' },
+        { id: 'eventosCoop', href: 'editarEventosCoop.html', label: 'Eventos Coop' },
         { id: 'despliegue', href: 'despliegue.html', label: 'Despliegue' },
     ];
 

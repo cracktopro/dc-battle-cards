@@ -533,6 +533,7 @@ async function validarFilasDesafiosServidor(filas) {
     const nombresCartas = new Set(
         filasCartas.map((f) => String(f.Nombre || '').trim().toLowerCase()).filter(Boolean)
     );
+    const skinsIndexados = DCSkinsCartas.asegurarSkinsCargadosServidor(path, __dirname);
     const errores = [];
     const ids = new Map();
     (filas || []).forEach((fila, indice) => {
@@ -562,13 +563,14 @@ async function validarFilasDesafiosServidor(filas) {
         ];
         refs.forEach((key) => {
             const nom = String(fila[key] || '').trim();
-            if (nom && nombresCartas.size && !nombresCartas.has(nom.toLowerCase())) {
-                errores.push(`Fila ${idx} (${nombre || '?'}): «${nom}» (${key}) no está en cartas.xlsx.`);
-            }
+            if (!nom) return;
+            validarReferenciasCartasEditorServidor(nom, nombresCartas, skinsIndexados)
+                .forEach((msg) => errores.push(`Fila ${idx} (${nombre || '?'}, ${key}): ${msg}`));
         });
         const cartaRecomp = String(fila.cartas || '').trim().split(/[;,|]/).map((s) => s.trim()).filter(Boolean)[0] || '';
-        if (cartaRecomp && nombresCartas.size && !nombresCartas.has(cartaRecomp.toLowerCase())) {
-            errores.push(`Fila ${idx} (${nombre || '?'}): carta recompensa «${cartaRecomp}» no está en cartas.xlsx.`);
+        if (cartaRecomp) {
+            validarReferenciasCartasEditorServidor(cartaRecomp, nombresCartas, skinsIndexados)
+                .forEach((msg) => errores.push(`Fila ${idx} (${nombre || '?'}, recompensa): ${msg}`));
         }
     });
     return { ok: errores.length === 0, errores };
@@ -715,6 +717,390 @@ app.post('/api/desafios-editor/git-push', async (req, res) => {
         console.warn('[api/desafios-editor/git-push]', error.message);
         return res.status(500).json({ error: 'No se pudo subir a GitHub.', detalle: error.message });
     }
+});
+
+// ─── Editor Asaltos ────────────────────────────────────────────────────────
+const ASALTOS_XLSX_PATH = path.resolve(path.join(__dirname, 'public', 'resources', 'asaltos.xlsx'));
+const ASALTOS_COLUMNAS_ORDEN = [
+    'asalto_ID', 'nombre', 'imagen', 'descripcion', 'dificultad',
+    'carta1', 'carta2', 'carta3', 'carta4', 'carta5', 'carta6',
+    'carta7', 'carta8', 'carta9', 'carta10', 'carta11', 'carta12',
+    'tablero', 'puntos', 'mejora', 'mejora_especial', 'mejora_suprema', 'mejora_definitiva',
+];
+const ASALTOS_CARTA_KEYS = ['carta1','carta2','carta3','carta4','carta5','carta6','carta7','carta8','carta9','carta10','carta11','carta12'];
+const asaltosEditorPermitido = cartasEditorPermitido;
+
+function asegurarFilaAsaltosServidor(fila, columnas) {
+    const out = {};
+    (columnas || ASALTOS_COLUMNAS_ORDEN).forEach((col) => {
+        let v = fila && Object.prototype.hasOwnProperty.call(fila, col) ? fila[col] : '';
+        if (['asalto_ID','dificultad','puntos','mejora','mejora_especial','mejora_suprema','mejora_definitiva'].includes(col)) {
+            const n = Number(v); v = Number.isFinite(n) ? n : 0;
+        } else if (v === null || v === undefined) { v = ''; }
+        else if (typeof v !== 'string') { v = String(v); }
+        out[col] = v;
+    });
+    return out;
+}
+
+function leerAsaltosXlsxServidor() {
+    if (!fs.existsSync(ASALTOS_XLSX_PATH)) throw new Error('No existe public/resources/asaltos.xlsx');
+    const workbook = XLSX.readFile(ASALTOS_XLSX_PATH);
+    const sheetName = workbook.SheetNames[0];
+    const filas = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: '' })
+        .map((f) => asegurarFilaAsaltosServidor(f, ASALTOS_COLUMNAS_ORDEN));
+    return { columnas: ASALTOS_COLUMNAS_ORDEN.slice(), filas, sheetName };
+}
+
+function escribirAsaltosXlsxServidor(filas, columnas, sheetName) {
+    const cols = columnas && columnas.length ? columnas : ASALTOS_COLUMNAS_ORDEN;
+    const norm = filas.map((f) => asegurarFilaAsaltosServidor(f, cols));
+    const sheet = XLSX.utils.json_to_sheet(norm, { header: cols });
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, sheet, sheetName || 'Hoja1');
+    XLSX.writeFile(wb, ASALTOS_XLSX_PATH);
+}
+
+function validarReferenciasCartasEditorServidor(texto, nombresCartas, skinsIndexados) {
+    const nom = String(texto || '').trim();
+    if (!nom) return [];
+    if (typeof DCSkinsCartas.validarReferenciaCartaEnCatalogo === 'function') {
+        return DCSkinsCartas.validarReferenciaCartaEnCatalogo(nom, nombresCartas, skinsIndexados);
+    }
+    const parent = DCSkinsCartas.obtenerNombreCatalogoDesdeReferencia(nom);
+    if (nombresCartas.size && !nombresCartas.has(String(parent || nom).trim().toLowerCase())) {
+        return [`«${nom}» no está en cartas.xlsx.`];
+    }
+    return [];
+}
+
+async function validarFilasAsaltosServidor(filas) {
+    let nombresCartas = new Set();
+    try { nombresCartas = new Set((leerCartasXlsxServidor().filas||[]).map((f)=>String(f.Nombre||'').trim().toLowerCase()).filter(Boolean)); } catch(_e){}
+    const skinsIndexados = DCSkinsCartas.asegurarSkinsCargadosServidor(path, __dirname);
+    const errores = [];
+    const ids = new Map();
+    filas.forEach((fila, i) => {
+        const idx = i + 1;
+        const id = Number(fila.asalto_ID);
+        if (!Number.isFinite(id)) { errores.push(`Fila ${idx}: asalto_ID inválido.`); }
+        else if (ids.has(id)) { errores.push(`Fila ${idx}: asalto_ID duplicado (${id}).`); }
+        else { ids.set(id, true); }
+        if (!String(fila.nombre||'').trim()) errores.push(`Fila ${idx}: falta nombre.`);
+        ASALTOS_CARTA_KEYS.forEach((key) => {
+            const nom = String(fila[key]||'').trim();
+            if (!nom) return;
+            validarReferenciasCartasEditorServidor(nom, nombresCartas, skinsIndexados)
+                .forEach((msg) => errores.push(`Fila ${idx} (${key}): ${msg}`));
+        });
+    });
+    return { ok: errores.length === 0, errores };
+}
+
+app.get('/api/asaltos-editor/habilitado', (_req, res) => res.json({ habilitado: asaltosEditorPermitido(), gitPush: DCEditorGitPush.gitPushEstado() }));
+app.get('/api/asaltos-editor/catalogo', (_req, res) => {
+    if (!asaltosEditorPermitido()) return res.status(403).json({ error: 'Editor no disponible.' });
+    try { return res.json(leerAsaltosXlsxServidor()); }
+    catch (e) { console.warn('[api/asaltos-editor/catalogo GET]', e.message); return res.status(500).json({ error: 'No se pudo leer asaltos.xlsx', detalle: e.message }); }
+});
+app.put('/api/asaltos-editor/catalogo', async (req, res) => {
+    if (!asaltosEditorPermitido()) return res.status(403).json({ error: 'Editor no disponible.' });
+    const filas = req.body?.filas;
+    if (!Array.isArray(filas)) return res.status(400).json({ error: 'Se espera { filas: [] }.' });
+    const columnas = Array.isArray(req.body?.columnas) ? req.body.columnas : ASALTOS_COLUMNAS_ORDEN;
+    const norm = filas.map((f) => asegurarFilaAsaltosServidor(f, columnas));
+    const val = await validarFilasAsaltosServidor(norm);
+    if (!val.ok) return res.status(400).json({ error: 'Validación fallida', errores: val.errores });
+    try {
+        let sheetName = 'Hoja1';
+        try { sheetName = leerAsaltosXlsxServidor().sheetName || sheetName; } catch(_e){}
+        escribirAsaltosXlsxServidor(norm, columnas, sheetName);
+        return res.json({ ok: true, total: norm.length });
+    } catch (e) { console.warn('[api/asaltos-editor/catalogo PUT]', e.message); return res.status(500).json({ error: 'No se pudo guardar asaltos.xlsx', detalle: e.message }); }
+});
+app.post('/api/asaltos-editor/git-push', async (req, res) => {
+    if (!asaltosEditorPermitido()) return res.status(403).json({ error: 'Editor no disponible.' });
+    if (!DCEditorGitPush.gitPushPermitido()) return res.status(403).json({ error: 'Git push no configurado.' });
+    if (!DCEditorGitPush.verificarGitPushAuth(req)) return res.status(401).json({ error: 'Token incorrecto.' });
+    try { return res.json(await DCEditorGitPush.gitPushArchivos({ rutas: ['public/resources/asaltos.xlsx'], mensaje: req.body?.mensaje || 'editor asaltos: actualizar asaltos.xlsx' })); }
+    catch (e) { console.warn('[api/asaltos-editor/git-push]', e.message); return res.status(500).json({ error: 'No se pudo subir a GitHub.', detalle: e.message }); }
+});
+
+// ─── Editor Eventos ─────────────────────────────────────────────────────────
+const EVENTOS_XLSX_PATH = path.resolve(path.join(__dirname, 'public', 'resources', 'eventos.xlsx'));
+const EVENTOS_COLUMNAS_ORDEN = [
+    'ID_evento', 'nombre', 'Descripción',
+    'enemigo1', 'enemigo2', 'enemigo3', 'enemigo4', 'enemigo5', 'enemigo6',
+    'boss', 'mejora', 'mejora_especial', 'puntos', 'cartas', 'tablero',
+];
+const EVENTOS_ENEMIGO_KEYS = ['enemigo1','enemigo2','enemigo3','enemigo4','enemigo5','enemigo6'];
+const eventosEditorPermitido = cartasEditorPermitido;
+
+function asegurarFilaEventosServidor(fila, columnas) {
+    const out = {};
+    (columnas || EVENTOS_COLUMNAS_ORDEN).forEach((col) => {
+        let v = fila && Object.prototype.hasOwnProperty.call(fila, col) ? fila[col] : '';
+        if (['ID_evento','mejora','mejora_especial','puntos'].includes(col)) { const n=Number(v); v=Number.isFinite(n)?n:0; }
+        else if (v===null||v===undefined) { v=''; }
+        else if (typeof v!=='string') { v=String(v); }
+        out[col] = v;
+    });
+    return out;
+}
+
+function leerEventosXlsxServidor() {
+    if (!fs.existsSync(EVENTOS_XLSX_PATH)) throw new Error('No existe public/resources/eventos.xlsx');
+    const workbook = XLSX.readFile(EVENTOS_XLSX_PATH);
+    const sheetName = workbook.SheetNames[0];
+    const filas = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: '' })
+        .map((f) => asegurarFilaEventosServidor(f, EVENTOS_COLUMNAS_ORDEN));
+    return { columnas: EVENTOS_COLUMNAS_ORDEN.slice(), filas, sheetName };
+}
+
+function escribirEventosXlsxServidor(filas, columnas, sheetName) {
+    const cols = columnas && columnas.length ? columnas : EVENTOS_COLUMNAS_ORDEN;
+    const norm = filas.map((f) => asegurarFilaEventosServidor(f, cols));
+    const sheet = XLSX.utils.json_to_sheet(norm, { header: cols });
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, sheet, sheetName || 'Hoja1');
+    XLSX.writeFile(wb, EVENTOS_XLSX_PATH);
+}
+
+async function validarFilasEventosServidor(filas) {
+    let nombresCartas = new Set();
+    try { nombresCartas = new Set((leerCartasXlsxServidor().filas||[]).map((f)=>String(f.Nombre||'').trim().toLowerCase()).filter(Boolean)); } catch(_e){}
+    const skinsIndexados = DCSkinsCartas.asegurarSkinsCargadosServidor(path, __dirname);
+    const errores = [];
+    const ids = new Map();
+    filas.forEach((fila, i) => {
+        const idx = i + 1;
+        const id = Number(fila.ID_evento);
+        if (!Number.isFinite(id)) { errores.push(`Fila ${idx}: ID_evento inválido.`); }
+        else if (ids.has(id)) { errores.push(`Fila ${idx}: ID_evento duplicado (${id}).`); }
+        else { ids.set(id, true); }
+        if (!String(fila.nombre||'').trim()) errores.push(`Fila ${idx}: falta nombre.`);
+        [...EVENTOS_ENEMIGO_KEYS, 'boss'].forEach((key) => {
+            const nom = String(fila[key]||'').trim();
+            if (!nom) return;
+            validarReferenciasCartasEditorServidor(nom, nombresCartas, skinsIndexados)
+                .forEach((msg) => errores.push(`Fila ${idx} (${key}): ${msg}`));
+        });
+        const recomp = String(fila.cartas||'').trim().split(/[;,|]/).map(s=>s.trim()).filter(Boolean)[0]||'';
+        if (recomp) {
+            validarReferenciasCartasEditorServidor(recomp, nombresCartas, skinsIndexados)
+                .forEach((msg) => errores.push(`Fila ${idx} (recompensa): ${msg}`));
+        }
+    });
+    return { ok: errores.length === 0, errores };
+}
+
+app.get('/api/eventos-editor/habilitado', (_req, res) => res.json({ habilitado: eventosEditorPermitido(), gitPush: DCEditorGitPush.gitPushEstado() }));
+app.get('/api/eventos-editor/catalogo', (_req, res) => {
+    if (!eventosEditorPermitido()) return res.status(403).json({ error: 'Editor no disponible.' });
+    try { return res.json(leerEventosXlsxServidor()); }
+    catch (e) { console.warn('[api/eventos-editor/catalogo GET]', e.message); return res.status(500).json({ error: 'No se pudo leer eventos.xlsx', detalle: e.message }); }
+});
+app.put('/api/eventos-editor/catalogo', async (req, res) => {
+    if (!eventosEditorPermitido()) return res.status(403).json({ error: 'Editor no disponible.' });
+    const filas = req.body?.filas;
+    if (!Array.isArray(filas)) return res.status(400).json({ error: 'Se espera { filas: [] }.' });
+    const columnas = Array.isArray(req.body?.columnas) ? req.body.columnas : EVENTOS_COLUMNAS_ORDEN;
+    const norm = filas.map((f) => asegurarFilaEventosServidor(f, columnas));
+    const val = await validarFilasEventosServidor(norm);
+    if (!val.ok) return res.status(400).json({ error: 'Validación fallida', errores: val.errores });
+    try {
+        let sheetName = 'Hoja1';
+        try { sheetName = leerEventosXlsxServidor().sheetName || sheetName; } catch(_e){}
+        escribirEventosXlsxServidor(norm, columnas, sheetName);
+        return res.json({ ok: true, total: norm.length });
+    } catch (e) { console.warn('[api/eventos-editor/catalogo PUT]', e.message); return res.status(500).json({ error: 'No se pudo guardar eventos.xlsx', detalle: e.message }); }
+});
+app.post('/api/eventos-editor/git-push', async (req, res) => {
+    if (!eventosEditorPermitido()) return res.status(403).json({ error: 'Editor no disponible.' });
+    if (!DCEditorGitPush.gitPushPermitido()) return res.status(403).json({ error: 'Git push no configurado.' });
+    if (!DCEditorGitPush.verificarGitPushAuth(req)) return res.status(401).json({ error: 'Token incorrecto.' });
+    try { return res.json(await DCEditorGitPush.gitPushArchivos({ rutas: ['public/resources/eventos.xlsx'], mensaje: req.body?.mensaje || 'editor eventos: actualizar eventos.xlsx' })); }
+    catch (e) { console.warn('[api/eventos-editor/git-push]', e.message); return res.status(500).json({ error: 'No se pudo subir a GitHub.', detalle: e.message }); }
+});
+
+// ─── Editor Eventos Coop ─────────────────────────────────────────────────────
+const EVENTOS_ONLINE_XLSX_PATH = path.resolve(path.join(__dirname, 'public', 'resources', 'eventos_online.xlsx'));
+const EVENTOS_ONLINE_COLUMNAS_ORDEN = [
+    'ID_evento_online', 'nombre', 'Descripción',
+    'enemigo1', 'enemigo2', 'enemigo3', 'enemigo4', 'enemigo5', 'enemigo6', 'enemigo7', 'enemigo8',
+    'boss', 'mejora', 'mejora_especial', 'puntos', 'tablero',
+];
+const EVENTOS_ONLINE_ENEMIGO_KEYS = ['enemigo1','enemigo2','enemigo3','enemigo4','enemigo5','enemigo6','enemigo7','enemigo8'];
+const eventosOnlineEditorPermitido = cartasEditorPermitido;
+
+function asegurarFilaEventosOnlineServidor(fila, columnas) {
+    const out = {};
+    (columnas || EVENTOS_ONLINE_COLUMNAS_ORDEN).forEach((col) => {
+        let v = fila && Object.prototype.hasOwnProperty.call(fila, col) ? fila[col] : '';
+        if (['ID_evento_online','mejora','mejora_especial','puntos'].includes(col)) { const n=Number(v); v=Number.isFinite(n)?n:0; }
+        else if (v===null||v===undefined) { v=''; }
+        else if (typeof v!=='string') { v=String(v); }
+        out[col] = v;
+    });
+    return out;
+}
+
+function leerEventosOnlineXlsxServidor() {
+    if (!fs.existsSync(EVENTOS_ONLINE_XLSX_PATH)) throw new Error('No existe public/resources/eventos_online.xlsx');
+    const workbook = XLSX.readFile(EVENTOS_ONLINE_XLSX_PATH);
+    const sheetName = workbook.SheetNames[0];
+    const filas = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: '' })
+        .map((f) => asegurarFilaEventosOnlineServidor(f, EVENTOS_ONLINE_COLUMNAS_ORDEN));
+    return { columnas: EVENTOS_ONLINE_COLUMNAS_ORDEN.slice(), filas, sheetName };
+}
+
+function escribirEventosOnlineXlsxServidor(filas, columnas, sheetName) {
+    const cols = columnas && columnas.length ? columnas : EVENTOS_ONLINE_COLUMNAS_ORDEN;
+    const norm = filas.map((f) => asegurarFilaEventosOnlineServidor(f, cols));
+    const sheet = XLSX.utils.json_to_sheet(norm, { header: cols });
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, sheet, sheetName || 'Hoja1');
+    XLSX.writeFile(wb, EVENTOS_ONLINE_XLSX_PATH);
+}
+
+async function validarFilasEventosOnlineServidor(filas) {
+    let nombresCartas = new Set();
+    try { nombresCartas = new Set((leerCartasXlsxServidor().filas||[]).map((f)=>String(f.Nombre||'').trim().toLowerCase()).filter(Boolean)); } catch(_e){}
+    const skinsIndexados = DCSkinsCartas.asegurarSkinsCargadosServidor(path, __dirname);
+    const errores = [];
+    const ids = new Map();
+    filas.forEach((fila, i) => {
+        const idx = i + 1;
+        const id = Number(fila.ID_evento_online);
+        if (!Number.isFinite(id)) { errores.push(`Fila ${idx}: ID_evento_online inválido.`); }
+        else if (ids.has(id)) { errores.push(`Fila ${idx}: ID_evento_online duplicado (${id}).`); }
+        else { ids.set(id, true); }
+        if (!String(fila.nombre||'').trim()) errores.push(`Fila ${idx}: falta nombre.`);
+        [...EVENTOS_ONLINE_ENEMIGO_KEYS, 'boss'].forEach((key) => {
+            const nom = String(fila[key]||'').trim();
+            if (!nom) return;
+            validarReferenciasCartasEditorServidor(nom, nombresCartas, skinsIndexados)
+                .forEach((msg) => errores.push(`Fila ${idx} (${key}): ${msg}`));
+        });
+    });
+    return { ok: errores.length === 0, errores };
+}
+
+app.get('/api/eventos-online-editor/habilitado', (_req, res) => res.json({ habilitado: eventosOnlineEditorPermitido(), gitPush: DCEditorGitPush.gitPushEstado() }));
+app.get('/api/eventos-online-editor/catalogo', (_req, res) => {
+    if (!eventosOnlineEditorPermitido()) return res.status(403).json({ error: 'Editor no disponible.' });
+    try { return res.json(leerEventosOnlineXlsxServidor()); }
+    catch (e) { console.warn('[api/eventos-online-editor/catalogo GET]', e.message); return res.status(500).json({ error: 'No se pudo leer eventos_online.xlsx', detalle: e.message }); }
+});
+app.put('/api/eventos-online-editor/catalogo', async (req, res) => {
+    if (!eventosOnlineEditorPermitido()) return res.status(403).json({ error: 'Editor no disponible.' });
+    const filas = req.body?.filas;
+    if (!Array.isArray(filas)) return res.status(400).json({ error: 'Se espera { filas: [] }.' });
+    const columnas = Array.isArray(req.body?.columnas) ? req.body.columnas : EVENTOS_ONLINE_COLUMNAS_ORDEN;
+    const norm = filas.map((f) => asegurarFilaEventosOnlineServidor(f, columnas));
+    const val = await validarFilasEventosOnlineServidor(norm);
+    if (!val.ok) return res.status(400).json({ error: 'Validación fallida', errores: val.errores });
+    try {
+        let sheetName = 'Hoja1';
+        try { sheetName = leerEventosOnlineXlsxServidor().sheetName || sheetName; } catch(_e){}
+        escribirEventosOnlineXlsxServidor(norm, columnas, sheetName);
+        return res.json({ ok: true, total: norm.length });
+    } catch (e) { console.warn('[api/eventos-online-editor/catalogo PUT]', e.message); return res.status(500).json({ error: 'No se pudo guardar eventos_online.xlsx', detalle: e.message }); }
+});
+app.post('/api/eventos-online-editor/git-push', async (req, res) => {
+    if (!eventosOnlineEditorPermitido()) return res.status(403).json({ error: 'Editor no disponible.' });
+    if (!DCEditorGitPush.gitPushPermitido()) return res.status(403).json({ error: 'Git push no configurado.' });
+    if (!DCEditorGitPush.verificarGitPushAuth(req)) return res.status(401).json({ error: 'Token incorrecto.' });
+    try { return res.json(await DCEditorGitPush.gitPushArchivos({ rutas: ['public/resources/eventos_online.xlsx'], mensaje: req.body?.mensaje || 'editor eventos-online: actualizar eventos_online.xlsx' })); }
+    catch (e) { console.warn('[api/eventos-online-editor/git-push]', e.message); return res.status(500).json({ error: 'No se pudo subir a GitHub.', detalle: e.message }); }
+});
+
+// ─── Editor Skins ────────────────────────────────────────────────────────────
+const SKINS_XLSX_PATH = path.resolve(path.join(__dirname, 'public', 'resources', 'skins.xlsx'));
+const SKINS_COLUMNAS_ORDEN = [
+    'skin_id', 'parent', 'Nombre', 'Salud', 'Poder', 'Imagen', 'Afiliacion',
+    'skill_name', 'skill_info', 'skill_class', 'skill_power', 'skill_trigger',
+];
+const skinsEditorPermitido = cartasEditorPermitido;
+
+function asegurarFilaSkinsServidor(fila, columnas) {
+    const out = {};
+    (columnas || SKINS_COLUMNAS_ORDEN).forEach((col) => {
+        let v = fila && Object.prototype.hasOwnProperty.call(fila, col) ? fila[col] : '';
+        if (['skin_id','Salud','Poder','skill_power'].includes(col)) { const n=Number(v); v=Number.isFinite(n)?n:0; }
+        else if (col==='skill_trigger') { v=String(v||'').trim().toLowerCase(); if(v!=='usar'&&v!=='auto') v=''; }
+        else if (v===null||v===undefined) { v=''; }
+        else if (typeof v!=='string') { v=String(v); }
+        out[col] = v;
+    });
+    return out;
+}
+
+function leerSkinsXlsxServidor() {
+    if (!fs.existsSync(SKINS_XLSX_PATH)) throw new Error('No existe public/resources/skins.xlsx');
+    const workbook = XLSX.readFile(SKINS_XLSX_PATH);
+    const sheetName = workbook.SheetNames[0];
+    const filas = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: '' })
+        .map((f) => asegurarFilaSkinsServidor(f, SKINS_COLUMNAS_ORDEN));
+    return { columnas: SKINS_COLUMNAS_ORDEN.slice(), filas, sheetName };
+}
+
+function escribirSkinsXlsxServidor(filas, columnas, sheetName) {
+    const cols = columnas && columnas.length ? columnas : SKINS_COLUMNAS_ORDEN;
+    const norm = filas.map((f) => asegurarFilaSkinsServidor(f, cols));
+    const sheet = XLSX.utils.json_to_sheet(norm, { header: cols });
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, sheet, sheetName || 'Hoja1');
+    XLSX.writeFile(wb, SKINS_XLSX_PATH);
+}
+
+async function validarFilasSkinsServidor(filas) {
+    let nombresCartas = new Set();
+    try { nombresCartas = new Set((leerCartasXlsxServidor().filas||[]).map((f)=>String(f.Nombre||'').trim().toLowerCase()).filter(Boolean)); } catch(_e){}
+    const errores = [];
+    const ids = new Map();
+    filas.forEach((fila, i) => {
+        const idx = i + 1;
+        const id = Number(fila.skin_id);
+        if (!Number.isFinite(id)) { errores.push(`Fila ${idx}: skin_id inválido.`); }
+        else if (ids.has(id)) { errores.push(`Fila ${idx}: skin_id duplicado (${id}).`); }
+        else { ids.set(id, true); }
+        if (!String(fila.Nombre||'').trim()) errores.push(`Fila ${idx}: falta Nombre.`);
+        const parent = String(fila.parent||'').trim();
+        if (!parent) errores.push(`Fila ${idx}: falta parent.`);
+        else if (nombresCartas.size && !nombresCartas.has(parent.toLowerCase()))
+            errores.push(`Fila ${idx}: parent «${parent}» no está en cartas.xlsx.`);
+    });
+    return { ok: errores.length === 0, errores };
+}
+
+app.get('/api/skins-editor/habilitado', (_req, res) => res.json({ habilitado: skinsEditorPermitido(), gitPush: DCEditorGitPush.gitPushEstado() }));
+app.get('/api/skins-editor/catalogo', (_req, res) => {
+    if (!skinsEditorPermitido()) return res.status(403).json({ error: 'Editor no disponible.' });
+    try { return res.json(leerSkinsXlsxServidor()); }
+    catch (e) { console.warn('[api/skins-editor/catalogo GET]', e.message); return res.status(500).json({ error: 'No se pudo leer skins.xlsx', detalle: e.message }); }
+});
+app.put('/api/skins-editor/catalogo', async (req, res) => {
+    if (!skinsEditorPermitido()) return res.status(403).json({ error: 'Editor no disponible.' });
+    const filas = req.body?.filas;
+    if (!Array.isArray(filas)) return res.status(400).json({ error: 'Se espera { filas: [] }.' });
+    const columnas = Array.isArray(req.body?.columnas) ? req.body.columnas : SKINS_COLUMNAS_ORDEN;
+    const norm = filas.map((f) => asegurarFilaSkinsServidor(f, columnas));
+    const val = await validarFilasSkinsServidor(norm);
+    if (!val.ok) return res.status(400).json({ error: 'Validación fallida', errores: val.errores });
+    try {
+        let sheetName = 'Hoja1';
+        try { sheetName = leerSkinsXlsxServidor().sheetName || sheetName; } catch(_e){}
+        escribirSkinsXlsxServidor(norm, columnas, sheetName);
+        return res.json({ ok: true, total: norm.length });
+    } catch (e) { console.warn('[api/skins-editor/catalogo PUT]', e.message); return res.status(500).json({ error: 'No se pudo guardar skins.xlsx', detalle: e.message }); }
+});
+app.post('/api/skins-editor/git-push', async (req, res) => {
+    if (!skinsEditorPermitido()) return res.status(403).json({ error: 'Editor no disponible.' });
+    if (!DCEditorGitPush.gitPushPermitido()) return res.status(403).json({ error: 'Git push no configurado.' });
+    if (!DCEditorGitPush.verificarGitPushAuth(req)) return res.status(401).json({ error: 'Token incorrecto.' });
+    try { return res.json(await DCEditorGitPush.gitPushArchivos({ rutas: ['public/resources/skins.xlsx'], mensaje: req.body?.mensaje || 'editor skins: actualizar skins.xlsx' })); }
+    catch (e) { console.warn('[api/skins-editor/git-push]', e.message); return res.status(500).json({ error: 'No se pudo subir a GitHub.', detalle: e.message }); }
 });
 
 app.get('/api/editors/despliegue/habilitado', (_req, res) => {

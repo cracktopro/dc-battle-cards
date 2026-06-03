@@ -92,7 +92,8 @@ Documento vivo de referencia técnica para trabajar sobre DC Battle Cards sin ro
 | `DCCatalogoCartas` | `js/cartas.js` | Caché compartida de `cartas.xlsx` |
 | `actualizarUsuarioConSyncFirebase` | `js/cartas.js` | Persistencia con control de concurrencia |
 | `DCFiltrosCartas` | `js/filtrosCartas.js` | Filtro `skill_class`, etiquetas ES |
-| `DCSkinsCartas` | `js/skinsCartas.js` | Parent card, skins, resolver catálogo |
+| `DCSkinsCartas` | `js/skinsCartas.js` | Parent card, skins, resolver catálogo; notación Excel `Parent[skin_id]` (p. ej. `Cyborg[0]`) |
+| `DCSeleccionCartaApariencia` | `js/seleccionCartaApariencia.js` | Modal apariencias (colección/mazos); `abrirModalAparienciaEditor` en editores PvE (confirmación vía `skinSeleccionPendiente`, botones `crear-ep-btn`) |
 | `DCMisiones` | `js/misionesDiarias.js` | Track misiones (cola FIFO interna) |
 | `DCRedDot` | `js/menu-mobile.js` | Badges “nuevo” en cartas/sobres/menú |
 | `DCEpisodioEngine` | `js/episodio-engine.js` | Timeline episodios |
@@ -219,8 +220,12 @@ Documento vivo de referencia técnica para trabajar sobre DC Battle Cards sin ro
 | Vista | URL | Persistencia local servidor |
 |-------|-----|----------------------------|
 | Editor cartas | `editarCartas.html` | `public/resources/cartas.xlsx` |
+| Editor skins | `editarSkins.html` | `public/resources/skins.xlsx` |
 | Editor episodios | `crearEpisodios.html` | `public/resources/episodios/*.json` |
 | Editor desafíos | `editarDesafios.html` | `public/resources/desafios.xlsx` |
+| Editor asaltos | `editarAsaltos.html` | `public/resources/asaltos.xlsx` |
+| Editor eventos | `editarEventos.html` | `public/resources/eventos.xlsx` |
+| Editor eventos coop | `editarEventosCoop.html` | `public/resources/eventos_online.xlsx` |
 | Despliegue | `despliegue.html` | — (push selectivo a rama `main`) |
 
 **Menú de juego (solo dev):** en vistas con `.menu-container` + `cartas.js`, un único enlace **Herramientas Desarrollo** → `editarCartas.html` (`actualizarEnlaceHerramientasDesarrolloMenu`; cola async + limpieza de duplicados; clase `menu-link-dev-tools` con estilo amarillo en `mazos.css` / `app-layout.css`) si:
@@ -229,13 +234,13 @@ Documento vivo de referencia técnica para trabajar sobre DC Battle Cards sin ro
 
 Nunca se muestra en producción (`main` en Render).
 
-**Navegación entre editores:** barra `editor-dev-nav` (`editorDevNav.js`) en cada herramienta con botones **Cartas**, **Episodios**, **Desafíos**, **Despliegue** y **Volver al juego** (rojo, → `vistaJuego.html`; guardia de cambios sin guardar / sin push). Extensible añadiendo entradas en `DCEditorDevNav.VISTAS`.
+**Navegación entre editores:** barra `editor-dev-nav` (`editorDevNav.js`) en cada herramienta con botones **Cartas**, **Skins**, **Episodios**, **Desafíos**, **Asaltos**, **Eventos**, **Eventos Coop**, **Despliegue** y **Volver al juego** (rojo, → `vistaJuego.html`; guardia de cambios sin guardar / sin push). Extensible añadiendo entradas en `DCEditorDevNav.VISTAS`.
 
 **Botón «Subir a GitHub»:** clase `crear-ep-btn--git-pendiente` (amarillo) cuando `GET /api/editors/git-push/pendiente` indica cambios sin commit/push en la rama **dev**. Sigue haciendo push solo a **dev**.
 
 **Registro de sesión:** `editorSessionLog.js` → `localStorage` `dc_editor_session_log_v1` (guardados y pushes desde editores).
 
-**Despliegue (`despliegue.html`):** registro visual de cambios de sesión + lista de archivos de editor distintos entre **dev** y **main**. Botón **Subir a Producción** → modal de confirmación → `POST /api/editors/despliegue/produccion` copia solo rutas de editores (`cartas.xlsx`, `desafios.xlsx`, `episodios/*.json`) a rama `main`. Requiere `GIT_PUSH_TOKEN` y entorno Render `dev` (`gitPushProduccionPermitido`). Opcional `GIT_PUSH_BRANCH_PROD` (default `main`), `GIT_PUSH_PROD_ENABLED=0` para desactivar.
+**Despliegue (`despliegue.html`):** registro visual de cambios de sesión + lista de archivos de editor distintos entre **dev** y **main**. Botón **Subir a Producción** → modal de confirmación → `POST /api/editors/despliegue/produccion` copia solo rutas de editores (`cartas.xlsx`, `desafios.xlsx`, `asaltos.xlsx`, `eventos.xlsx`, `eventos_online.xlsx`, `skins.xlsx`, `episodios/*.json`) a rama `main`. Requiere `GIT_PUSH_TOKEN` y entorno Render `dev` (`gitPushProduccionPermitido`). Opcional `GIT_PUSH_BRANCH_PROD` (default `main`), `GIT_PUSH_PROD_ENABLED=0` para desactivar.
 
 **Editor desafíos (`editarDesafios.html`):** columnas Excel en orden fijo (`ID_desafio`, `faccion`, `nombre`, `Descripción`, `dificultad`, `enemigo1`…`enemigo6`, `boss`, `mejora`, `mejora_especial`, `puntos`, `cartas`, `tablero`). UI: selector H/V; rejilla 6 enemigos + boss con slots visuales compactos (~180px; recompensa ~160px; `editorCartaPicker.js`); slot recompensa → `cartas`; selector tablero (modal `/api/tableros`, estilo `crearEpisodios`). Carga SheetJS (`xlsx.full.min.js`, igual que `editarCartas.html`) para el catálogo de cartas. Validación cruzada con `cartas.xlsx` (`editarDesafiosModel.nombresCartasEnCatalogoSet`).
 
@@ -250,7 +255,19 @@ Nunca se muestra en producción (`main` en Render).
 
 También engancha `beforeunload` del navegador.
 
-**Módulos:** `lib/editorGitPush.js` (servidor), `public/js/editorGitPush.js` (modal push dev), `public/js/editorDevNav.js` (nav + guardias), `public/js/editorSessionLog.js` (registro sesión), `public/js/despliegue.js`, `public/js/editorCartaPicker.js`, `public/js/editarDesafiosModel.js`, `public/js/editarDesafios.js`.
+**Módulos:** `lib/editorGitPush.js` (servidor), `public/js/editorGitPush.js` (modal push dev), `public/js/editorDevNav.js` (nav + guardias), `public/js/editorSessionLog.js` (registro sesión), `public/js/despliegue.js`, `public/js/editorCartaPicker.js`, `public/js/editarDesafiosModel.js`, `public/js/editarDesafios.js`, `public/js/editarAsaltosModel.js`, `public/js/editarAsaltos.js`, `public/js/editarEventosModel.js`, `public/js/editarEventos.js`, `public/js/editarEventosCoopModel.js`, `public/js/editarEventosCoop.js`, `public/js/editarSkinsModel.js`, `public/js/editarSkins.js`.
+
+**Referencias carta con skin (Excel y editores PvE):** en celdas de enemigos/recompensas/asaltos puede guardarse `NombreParent[skin_id]` (misma convención que el juego en `skinsCartas.js`). `editorCartaPicker.js` resuelve miniaturas con skin; con `permitirSkin: true` tras elegir carta abre `abrirModalAparienciaEditor` (todas las apariencias del parent). Validación cliente/servidor vía `validarReferenciaCartaEnCatalogo`.
+
+**Editor skins (`editarSkins.html`):** columnas Excel (`skin_id`, `parent`, `Nombre`, `Salud`, `Poder`, `Imagen`, `Afiliacion`, `skill_*`). Layout 3 columnas como `editarCartas`. Catálogo izquierdo con toggle **grid/lista** (▦/☰) y miniaturas `carta-mini` como `editarCartas`. Parent en ficha: mini ~165px; panel derecho vista previa ~200px (`editar-cartas-preview-wrap`). Parent picker vía `editorCartaPicker.js`; imagen drag-drop. Filtros: nombre, parent.
+
+**Editor asaltos (`editarAsaltos.html`):** `carta1`…`carta12` con picker + skins (`skinsCartas.js`, `seleccionCartaApariencia.js`). Imagen drag-drop; tablero modal. Filtros: nombre, dificultad.
+
+**Editor desafíos / eventos / eventos coop:** slots enemigos (y recompensa en desafíos/eventos) con `permitirSkin: true` y mismos scripts de skins que asaltos. Grid de enemigos: cada slot va en `.editar-desafios-carta-slot-wrap` con etiqueta «Enemigo» o «Carta boss»; el slot boss (`.editar-desafios-carta-slot--boss`) muestra destello naranja cuando tiene `.carta-mini` (`editarDesafios.css`).
+
+**Editor eventos (`editarEventos.html`):** columnas Excel (`ID_evento`, `nombre`, `Descripción`, `enemigo1`…`enemigo6`, `boss`, `mejora`, `mejora_especial`, `puntos`, `cartas`, `tablero`). Sin facción/dificultad.
+
+**Editor eventos coop (`editarEventosCoop.html`):** `enemigo1`…`enemigo8`, `boss`; sin recompensa carta.
 
 **Variables Render (dev):** `GIT_PUSH_TOKEN` (PAT GitHub write); opcional `GIT_PUSH_BRANCH`, `GIT_PUSH_SECRET`, `GIT_USER_NAME`, `GIT_USER_EMAIL`, `GIT_PUSH_REPO_URL`. Documentadas en `render.yaml`.
 
@@ -449,7 +466,11 @@ También engancha `beforeunload` del navegador.
 - Editor episodios (oculto): `public/crearEpisodios.html`, `public/js/crearEpisodios.js`, `public/js/crearEpisodiosModel.js`, `public/js/editorGitPush.js`
 - Editor cartas (oculto): `public/editarCartas.html`, `public/js/editarCartas.js`, `public/js/editarCartasModel.js`, `public/js/editorGitPush.js` — edita `public/resources/cartas.xlsx` (mismas columnas que el Excel del juego); previsualización `carta-mini` vía `cartas.js`
 - Editor desafíos (oculto): `public/editarDesafios.html`, `public/js/editarDesafios.js`, `public/js/editarDesafiosModel.js`, `public/js/editorCartaPicker.js` — edita `public/resources/desafios.xlsx`
-- Git push editores: `lib/editorGitPush.js` (servidor)
+- Editor asaltos (oculto): `public/editarAsaltos.html`, `public/js/editarAsaltos.js`, `public/js/editarAsaltosModel.js` — edita `public/resources/asaltos.xlsx`; 12 slots de cartas (todas normales, sin boss), imagen drag-drop, tablero modal
+- Editor eventos (oculto): `public/editarEventos.html`, `public/js/editarEventos.js`, `public/js/editarEventosModel.js` — edita `public/resources/eventos.xlsx`; 6 enemigos + boss, slot recompensa, tablero modal
+- Editor eventos coop (oculto): `public/editarEventosCoop.html`, `public/js/editarEventosCoop.js`, `public/js/editarEventosCoopModel.js` — edita `public/resources/eventos_online.xlsx`; 8 enemigos + boss, sin recompensa de carta, tablero modal
+- Editor skins (oculto): `public/editarSkins.html`, `public/js/editarSkins.js`, `public/js/editarSkinsModel.js` — edita `public/resources/skins.xlsx`; parent card picker (modal catálogo), imagen drag-drop, preview de carta renderizada, campos skill completos
+- Git push editores: `lib/editorGitPush.js` (servidor) — incluye rutas para asaltos.xlsx, eventos.xlsx, eventos_online.xlsx, skins.xlsx en despliegue a producción
 - Tienda: `public/tienda.js`
 - Crear/editar mazos: `public/crearMazos.js`, `public/mazos.js`
 - Mejoras: `public/mejorarCartas.js`
@@ -524,10 +545,22 @@ También engancha `beforeunload` del navegador.
   - `GET /api/desafios-editor/catalogo` → `{ columnas, filas }`
   - `PUT /api/desafios-editor/catalogo` body `{ columnas?, filas }` — valida y escribe `public/resources/desafios.xlsx`
   - `POST /api/desafios-editor/git-push` body `{ mensaje?, token? }`
+- Editor asaltos (`editarAsaltos.html`; misma habilitación):
+  - `GET/PUT /api/asaltos-editor/catalogo` — `public/resources/asaltos.xlsx`
+  - `POST /api/asaltos-editor/git-push`
+- Editor eventos (`editarEventos.html`; misma habilitación):
+  - `GET/PUT /api/eventos-editor/catalogo` — `public/resources/eventos.xlsx`
+  - `POST /api/eventos-editor/git-push`
+- Editor eventos coop (`editarEventosCoop.html`; misma habilitación):
+  - `GET/PUT /api/eventos-online-editor/catalogo` — `public/resources/eventos_online.xlsx`
+  - `POST /api/eventos-online-editor/git-push`
+- Editor skins (`editarSkins.html`; misma habilitación):
+  - `GET/PUT /api/skins-editor/catalogo` — `public/resources/skins.xlsx`
+  - `POST /api/skins-editor/git-push`
 - Git push editores (compartido):
   - `GET /api/editors/entorno` → `{ esDev, mostrarMenuDevTools, editoresHabilitados, rama, ramaDevRender }`
   - `GET /api/editors/git-push/estado` → `{ habilitado, rama, requiereTokenCliente, ramaDevRender }`
-  - `GET /api/editors/git-push/pendiente?alcance=episodios|cartas|desafios` → `{ pendiente, motivo? }` (`sin_commit` | `sin_push`)
+  - `GET /api/editors/git-push/pendiente?alcance=episodios|cartas|desafios|asaltos|eventos|eventosCoop|skins` → `{ pendiente, motivo? }` (`sin_commit` | `sin_push`)
   - `GET /api/editors/despliegue/habilitado` · `GET /api/editors/despliegue/resumen` · `POST /api/editors/despliegue/produccion` body `{ mensaje?, token?, archivos? }` — push archivos de editor a rama `main`
   - Lógica servidor: `lib/editorGitPush.js`. Env: `GIT_PUSH_TOKEN` (PAT GitHub), opcional `GIT_PUSH_BRANCH`, `GIT_PUSH_BRANCH_PROD`, `GIT_PUSH_PROD_ENABLED`, `GIT_PUSH_SECRET`, `GIT_PUSH_REPO_URL`, `GIT_USER_NAME`, `GIT_USER_EMAIL`
   - UI cliente: `editorGitPush.js`, `editorDevNav.js`, `editorSessionLog.js`, `despliegue.js`; menú dev en `cartas.js` (`DEV_TOOLS_MENU_EMAILS`)

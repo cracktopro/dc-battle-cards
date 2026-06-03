@@ -8,6 +8,7 @@
     let session = null;
     let catalogoFilas = [];
     let mapaCatalogo = new Map();
+    let skinsIndexados = null;
 
     function $(id) {
         return document.getElementById(id);
@@ -83,6 +84,44 @@
             if (n) mapaCatalogo.set(normalizarNombre(n), f);
         });
         poblarAfiliaciones();
+        if (window.DCSkinsCartas?.asegurarSkinsCargados) {
+            skinsIndexados = await window.DCSkinsCartas.asegurarSkinsCargados();
+        }
+    }
+
+    function parseValorInicial(value) {
+        const texto = String(value || '').trim();
+        if (!texto) {
+            return { refTexto: '', parent: '', skinId: null };
+        }
+        if (window.DCSkinsCartas?.parsearReferenciaCartaConSkin) {
+            const ref = window.DCSkinsCartas.parsearReferenciaCartaConSkin(texto);
+            return {
+                refTexto: ref.textoOriginal || texto,
+                parent: ref.nombreCatalogo || texto,
+                skinId: ref.skinId,
+            };
+        }
+        return { refTexto: texto, parent: texto, skinId: null };
+    }
+
+    function resolverFilaParaMini(referencia) {
+        const texto = String(referencia || '').trim();
+        if (!texto) {
+            return null;
+        }
+        const S = window.DCSkinsCartas;
+        if (S?.resolverFilaCatalogoConSkinSync && skinsIndexados) {
+            const resuelta = S.resolverFilaCatalogoConSkinSync(texto, mapaCatalogo, skinsIndexados);
+            if (resuelta) {
+                return resuelta;
+            }
+        }
+        const parent = S?.obtenerNombreCatalogoDesdeReferencia
+            ? S.obtenerNombreCatalogoDesdeReferencia(texto)
+            : texto;
+        const fila = mapaCatalogo.get(normalizarNombre(parent));
+        return fila ? { ...fila } : null;
     }
 
     function poblarAfiliaciones() {
@@ -195,9 +234,21 @@
         return cartaDiv;
     }
 
-    function crearVistaMiniCarta(nombreCarta) {
-        const fila = buscarFilaCatalogo(nombreCarta);
-        if (!fila) return null;
+    function crearVistaMiniCarta(nombreReferencia) {
+        const fila = resolverFilaParaMini(nombreReferencia);
+        if (!fila) {
+            const S = window.DCSkinsCartas;
+            const parent = S?.obtenerNombreCatalogoDesdeReferencia
+                ? S.obtenerNombreCatalogoDesdeReferencia(nombreReferencia)
+                : String(nombreReferencia || '').trim();
+            if (!parent) {
+                return null;
+            }
+            const vacio = document.createElement('div');
+            vacio.className = 'editar-desafios-carta-slot-vacio';
+            vacio.innerHTML = `<span>${parent}</span><span style="font-size:0.6rem">(no en catálogo)</span>`;
+            return vacio;
+        }
         return crearCartaMiniDiv(fila);
     }
 
@@ -229,17 +280,21 @@
     function updateSeleccionLabel() {
         const el = $('editor-carta-picker-seleccion');
         if (!el || !session) return;
-        el.innerHTML = session.pending
-            ? `Selección: <strong>${session.pending}</strong>`
+        const ref = session.pendingRef;
+        el.innerHTML = ref
+            ? `Selección: <strong>${ref}</strong>`
             : 'Selección: <strong>— ninguna —</strong>';
     }
 
-    function seleccionarNombre(nombre) {
+    function seleccionarNombre(nombreParent) {
         if (!session) return;
-        session.pending = nombre;
+        const parent = String(nombreParent || '').trim();
+        session.pendingParent = parent;
+        session.pendingRef = parent;
+        session.pendingSkinId = null;
         const grid = $('editor-carta-picker-grid');
         grid?.querySelectorAll('.editor-carta-picker-item').forEach((item) => {
-            item.classList.toggle('editor-carta-picker-item--sel', item.dataset.nombre === nombre);
+            item.classList.toggle('editor-carta-picker-item--sel', item.dataset.nombre === parent);
         });
         updateSeleccionLabel();
     }
@@ -254,7 +309,7 @@
             const vacio = document.createElement('button');
             vacio.type = 'button';
             vacio.className = 'editor-carta-picker-item editor-carta-picker-item--vacio'
-                + (session.pending === '' ? ' editor-carta-picker-item--sel' : '');
+                + (!session.pendingRef ? ' editor-carta-picker-item--sel' : '');
             vacio.dataset.nombre = '';
             vacio.innerHTML = '<span class="editor-carta-picker-vacio-label">+</span><span>Quitar carta</span>';
             vacio.addEventListener('click', () => seleccionarNombre(''));
@@ -268,9 +323,10 @@
             return;
         }
 
+        const selParent = session.pendingParent || '';
         filtradas.forEach((fila) => {
             const item = construirMiniCarta(fila);
-            if (fila.Nombre === session.pending) {
+            if (String(fila.Nombre || '').trim() === selParent) {
                 item.classList.add('editor-carta-picker-item--sel');
             }
             item.addEventListener('click', () => seleccionarNombre(String(fila.Nombre || '').trim()));
@@ -282,22 +338,66 @@
         });
     }
 
-    function confirmar() {
+    async function confirmar() {
         if (!session) return;
-        session.onAccept(session.pending || '');
-        dialogEl.close();
+        const onAccept = session.onAccept;
+        const permitirSkin = Boolean(session.permitirSkin);
+        const refActual = session.pendingRef || '';
+
+        if (!refActual && session.allowEmpty) {
+            dialogEl.close();
+            session = null;
+            onAccept('');
+            return;
+        }
+
+        const parent = session.pendingParent || refActual;
+        if (!parent) {
+            return;
+        }
+
+        let valorFinal = refActual;
+
+        if (permitirSkin && window.DCSkinsCartas && window.DCSeleccionCartaApariencia?.abrirModalAparienciaEditor) {
+            await window.DCSkinsCartas.asegurarSkinsCargados();
+            const skinsParent = window.DCSkinsCartas.obtenerSkinsDelParent(parent, skinsIndexados);
+            if (skinsParent.length > 0) {
+                dialogEl.close();
+                try {
+                    const skinId = await window.DCSeleccionCartaApariencia.abrirModalAparienciaEditor({
+                        parentNombre: parent,
+                        mapaCatalogo,
+                        skinIdInicial: session.pendingSkinId,
+                    });
+                    valorFinal = window.DCSkinsCartas.formatearReferenciaCartaConSkin(parent, skinId);
+                } catch (_e) {
+                    session = null;
+                    return;
+                }
+            } else {
+                valorFinal = parent;
+            }
+        } else if (!refActual.includes('[')) {
+            valorFinal = parent;
+        }
+
         session = null;
+        onAccept(valorFinal);
     }
 
     /**
-     * @param {{ titulo?: string, value?: string, allowEmpty?: boolean, onAccept: (nombre: string) => void }} opts
+     * @param {{ titulo?: string, value?: string, allowEmpty?: boolean, permitirSkin?: boolean, onAccept: (nombre: string) => void }} opts
      */
     async function abrir(opts) {
         await asegurarCatalogo();
         asegurarDialogo();
+        const parsed = parseValorInicial(opts.value);
         session = {
-            pending: String(opts.value || '').trim(),
+            pendingRef: parsed.refTexto,
+            pendingParent: parsed.parent,
+            pendingSkinId: parsed.skinId,
             allowEmpty: opts.allowEmpty !== false,
+            permitirSkin: Boolean(opts.permitirSkin),
             onAccept: opts.onAccept,
         };
         const titulo = $('editor-carta-picker-titulo');
@@ -324,5 +424,7 @@
         asegurarCatalogo,
         buscarFilaCatalogo,
         crearVistaMiniCarta,
+        resolverFilaParaMini,
+        parseValorInicial,
     };
 })();

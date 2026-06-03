@@ -143,13 +143,13 @@
 
         const btnCancelar = document.createElement('button');
         btnCancelar.type = 'button';
-        btnCancelar.className = 'btn btn-secondary';
+        btnCancelar.className = 'btn btn-secondary crear-ep-btn crear-ep-btn--secundario';
         btnCancelar.setAttribute('data-cancelar-apariencia', '');
         btnCancelar.textContent = 'Cancelar';
 
         const btnConfirmar = document.createElement('button');
         btnConfirmar.type = 'button';
-        btnConfirmar.className = 'btn btn-primary';
+        btnConfirmar.className = 'btn btn-primary crear-ep-btn crear-ep-btn--primario';
         btnConfirmar.setAttribute('data-confirmar-apariencia', '');
         btnConfirmar.textContent = 'Aplicar';
 
@@ -298,6 +298,92 @@
         });
     }
 
+    /**
+     * Modal de apariencia para herramientas internas: todas las skins del parent disponibles.
+     * @returns {Promise<number|null>} skin_id o null (carta base)
+     */
+    function abrirModalAparienciaEditor({ parentNombre, mapaCatalogo, skinIdInicial }) {
+        const skins = obtenerApiSkins();
+        if (!skins || !parentNombre) {
+            return Promise.resolve(null);
+        }
+        const cartaStub = {
+            Nombre: parentNombre,
+            skinParentNombre: parentNombre,
+            Nivel: 1,
+            Salud: 1,
+            Poder: 0,
+            SaludMax: 1,
+        };
+        const filaParent = resolverFilaCatalogo(cartaStub, mapaCatalogo);
+        if (filaParent) {
+            cartaStub.Nivel = Math.max(1, Number(filaParent.Nivel) || 1);
+            cartaStub.Salud = Number(filaParent.Salud) || Number(filaParent.Poder) || 1;
+            cartaStub.Poder = Number(filaParent.Poder) || 0;
+            cartaStub.SaludMax = cartaStub.Salud;
+        }
+        return new Promise(async (resolve, reject) => {
+            try {
+                await skins.asegurarSkinsCargados();
+                const skinsParent = skins.obtenerSkinsDelParent(parentNombre);
+                if (!skinsParent.length) {
+                    resolve(null);
+                    return;
+                }
+                asegurarModal();
+                const modal = document.getElementById(MODAL_ID);
+                const lista = modal.querySelector('[data-lista-apariencias]');
+                const subtitulo = modal.querySelector('.modal-apariencia-seleccion-sub');
+                const titulo = modal.querySelector('.modal-apariencia-seleccion-titulo');
+
+                skinSeleccionPendiente = (skinIdInicial === null || skinIdInicial === undefined)
+                    ? null
+                    : Number(skinIdInicial);
+                if (!Number.isFinite(skinSeleccionPendiente)) {
+                    skinSeleccionPendiente = null;
+                }
+
+                if (titulo) {
+                    titulo.textContent = 'Elige apariencia (editor)';
+                }
+                if (subtitulo) {
+                    subtitulo.textContent = `${parentNombre}: todas las apariencias de skins.xlsx están disponibles en el editor.`;
+                }
+                lista.innerHTML = '';
+
+                const opciones = [
+                    { skinId: null, desbloqueada: true, etiqueta: 'Carta base (sin skin)' },
+                    ...skinsParent.map((skin) => ({
+                        skinId: skin.skin_id,
+                        desbloqueada: true,
+                        etiqueta: skin.Nombre || `${parentNombre} [${skin.skin_id}]`,
+                    })),
+                ];
+
+                opciones.forEach((opcion) => {
+                    const cartaVista = skins.construirVistaCartaJugadorConSkin(cartaStub, opcion.skinId, filaParent);
+                    const seleccionada = (opcion.skinId === null || opcion.skinId === undefined)
+                        ? (skinSeleccionPendiente === null || skinSeleccionPendiente === undefined)
+                        : Number(opcion.skinId) === Number(skinSeleccionPendiente);
+                    const item = crearItemApariencia(cartaVista, { seleccionada, bloqueada: false });
+                    item.title = opcion.etiqueta;
+                    item.addEventListener('click', () => {
+                        lista.querySelectorAll('.item-carta-apariencia').forEach((el) => el.classList.remove('seleccionada'));
+                        item.classList.add('seleccionada');
+                        skinSeleccionPendiente = opcion.skinId;
+                    });
+                    lista.appendChild(item);
+                });
+
+                resolverPendiente = (skinId) => resolve(skinId);
+                resolverPendiente._onCancel = () => reject(new Error('cancelado'));
+                modal.style.display = 'flex';
+            } catch (err) {
+                reject(err);
+            }
+        });
+    }
+
     async function seleccionarCartaConAparienciaOpcional({ carta, usuario, mapaCatalogo }) {
         const base = obtenerCartaComoParent(carta, mapaCatalogo);
         const necesitaModal = await requiereSeleccionAparienciaAsync(base);
@@ -320,6 +406,7 @@
         aplicarSkinTemporalACarta,
         seleccionarCartaConAparienciaOpcional,
         abrirModalApariencia,
+        abrirModalAparienciaEditor,
         resolverFilaCatalogo
     };
 })(typeof window !== 'undefined' ? window : globalThis);

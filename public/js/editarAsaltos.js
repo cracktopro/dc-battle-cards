@@ -1,24 +1,24 @@
 /**
- * Editor visual de desafios.xlsx (editarDesafios.html).
+ * Editor visual de asaltos.xlsx (editarAsaltos.html).
  */
 (function () {
     'use strict';
 
-    const M = window.DCEditarDesafiosModel;
+    const M = window.DCEditarAsaltosModel;
     if (!M) {
-        document.body.innerHTML = '<p style="color:#fff;padding:2rem">Falta editarDesafiosModel.js</p>';
+        document.body.innerHTML = '<p style="color:#fff;padding:2rem">Falta editarAsaltosModel.js</p>';
         return;
     }
 
     const $ = (id) => document.getElementById(id);
-    const toolbar = $('editar-desafios-toolbar');
-    const aviso = $('editar-desafios-aviso');
-    const layout = $('editar-desafios-layout');
-    const listaEl = $('editar-desafios-lista');
-    const formEl = $('editar-desafios-form');
-    const erroresEl = $('editar-desafios-errores');
-    const contadorEl = $('editar-desafios-contador');
-    const toast = $('crear-ep-toast');
+    const toolbar     = $('editar-asaltos-toolbar');
+    const aviso       = $('editar-asaltos-aviso');
+    const layout      = $('editar-asaltos-layout');
+    const listaEl     = $('editar-asaltos-lista');
+    const formEl      = $('editar-asaltos-form');
+    const erroresEl   = $('editar-asaltos-errores');
+    const contadorEl  = $('editar-asaltos-contador');
+    const toast       = $('crear-ep-toast');
 
     let tablerosLista = [];
     let tableroPickerSession = null;
@@ -26,7 +26,7 @@
     let skinsIndexadosCache = null;
 
     let state = {
-        columnas: M.COLUMNAS_DESAFIO.slice(),
+        columnas: M.COLUMNAS_ASALTO.slice(),
         filas: [],
         selIndex: -1,
         dirty: false,
@@ -39,9 +39,9 @@
         });
         const body = await res.json().catch(() => ({}));
         if (!res.ok) {
-            if (res.status === 404 && String(path).includes('/api/desafios-editor')) {
-                const err = new Error('DESAFIOS_EDITOR_API_MISSING');
-                err.code = 'DESAFIOS_EDITOR_API_MISSING';
+            if (res.status === 404 && String(path).includes('/api/asaltos-editor')) {
+                const err = new Error('ASALTOS_EDITOR_API_MISSING');
+                err.code = 'ASALTOS_EDITOR_API_MISSING';
                 throw err;
             }
             const msg = body.errores?.length
@@ -61,36 +61,28 @@
         toastMsg._t = setTimeout(() => { toast.hidden = true; }, 3600);
     }
 
-    function marcarDirty() {
-        state.dirty = true;
-        renderToolbar();
-    }
-
-    async function confirmarDescartar() {
-        if (window.DCEditorDevNav?.confirmarAntesDeNavegar) {
-            return window.DCEditorDevNav.confirmarAntesDeNavegar();
-        }
-        if (!state.dirty) return true;
-        return window.confirm('Hay cambios sin guardar en desafios.xlsx. ¿Descartarlos?');
-    }
-
+    function marcarDirty() { state.dirty = true; renderToolbar(); }
     function getFilaActual() {
         if (state.selIndex < 0 || state.selIndex >= state.filas.length) return null;
         return state.filas[state.selIndex];
     }
 
+    async function confirmarDescartar() {
+        if (window.DCEditorDevNav?.confirmarAntesDeNavegar) return window.DCEditorDevNav.confirmarAntesDeNavegar();
+        if (!state.dirty) return true;
+        return window.confirm('Hay cambios sin guardar en asaltos.xlsx. ¿Descartarlos?');
+    }
+
     function filtrosLista() {
         return {
-            nombre: $('filtro-nombre-desafio')?.value || '',
-            faccion: $('filtro-faccion-desafio')?.value || 'todas',
-            dificultad: $('filtro-dificultad-desafio')?.value || 'todas',
+            nombre: $('filtro-nombre-asalto')?.value || '',
+            dificultad: $('filtro-dificultad-asalto')?.value || 'todas',
         };
     }
 
     function indicesFiltrados() {
         const f = filtrosLista();
-        return state.filas
-            .map((fila, i) => ({ fila, i }))
+        return state.filas.map((fila, i) => ({ fila, i }))
             .filter(({ fila }) => M.filaCoincideFiltros(fila, f))
             .map(({ i }) => i);
     }
@@ -123,32 +115,74 @@
         return fieldWrap(label, input);
     }
 
-    function fieldSelect(label, value, options, onChange) {
-        const sel = document.createElement('select');
-        sel.className = 'crear-ep-select';
-        options.forEach((opt) => {
-            const o = document.createElement('option');
-            o.value = opt.value;
-            o.textContent = opt.label;
-            if (opt.value === value) o.selected = true;
-            sel.appendChild(o);
+    function crearCampoImagen(label, fila, columna, onUpdate) {
+        const wrap = document.createElement('div');
+        wrap.className = 'crear-ep-field editar-cartas-campo-imagen';
+        const lab = document.createElement('label');
+        lab.textContent = label;
+        wrap.appendChild(lab);
+
+        const drop = document.createElement('div');
+        drop.className = 'editar-cartas-imagen-preview-wrap';
+        drop.setAttribute('tabindex', '-1');
+        const img = document.createElement('img');
+        img.className = 'editar-cartas-imagen-preview';
+        img.alt = '';
+        img.hidden = true;
+        const ph = document.createElement('span');
+        ph.className = 'editar-cartas-imagen-placeholder';
+        ph.textContent = 'Arrastra una imagen o pega una URL abajo';
+        drop.appendChild(img);
+        drop.appendChild(ph);
+
+        const inputUrl = document.createElement('input');
+        inputUrl.type = 'url';
+        inputUrl.className = 'crear-ep-select';
+        inputUrl.placeholder = 'https://…';
+        inputUrl.style.marginTop = '6px';
+
+        function refresh(val) {
+            const url = String(val || '').trim();
+            if (url) { img.src = url; img.hidden = false; ph.hidden = true; }
+            else { img.hidden = true; img.removeAttribute('src'); ph.hidden = false; }
+            inputUrl.value = url;
+        }
+        refresh(fila[columna]);
+
+        inputUrl.addEventListener('input', () => { fila[columna] = inputUrl.value; refresh(fila[columna]); onUpdate(); });
+        inputUrl.addEventListener('change', () => { fila[columna] = inputUrl.value.trim(); refresh(fila[columna]); onUpdate(); });
+
+        drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('drag-over'); });
+        drop.addEventListener('dragleave', () => drop.classList.remove('drag-over'));
+        drop.addEventListener('drop', (e) => {
+            e.preventDefault();
+            drop.classList.remove('drag-over');
+            const url = e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain') || '';
+            if (url) { fila[columna] = url.trim(); refresh(fila[columna]); onUpdate(); }
         });
-        sel.addEventListener('change', () => onChange(sel.value));
-        return fieldWrap(label, sel);
+        drop.addEventListener('paste', (e) => {
+            const url = e.clipboardData?.getData('text')?.trim();
+            if (url) { fila[columna] = url; refresh(fila[columna]); onUpdate(); }
+        });
+
+        wrap.appendChild(drop);
+        wrap.appendChild(inputUrl);
+        return wrap;
     }
 
     function urlTablero(nombre) {
         const n = String(nombre || '').trim();
         if (!n) return '';
-        if (/\.(png|jpe?g|webp)$/i.test(n)) return `/resources/tableros/${encodeURIComponent(n)}`;
-        return `/resources/tableros/${encodeURIComponent(n)}.png`;
+        return /\.(png|jpe?g|webp)$/i.test(n)
+            ? `/resources/tableros/${encodeURIComponent(n)}`
+            : `/resources/tableros/${encodeURIComponent(n)}.png`;
     }
 
     function initTableroPicker() {
-        const dialog = $('editar-desafios-dialog-tablero');
-        const grid = $('editar-desafios-tablero-grid');
-        const filtro = $('editar-desafios-tablero-filtro');
-        const selLabel = $('editar-desafios-tablero-seleccion');
+        const dialog = $('editar-asaltos-dialog-tablero');
+        const grid   = $('editar-asaltos-tablero-grid');
+        const filtro = $('editar-asaltos-tablero-filtro');
+        const selLabel = $('editar-asaltos-tablero-seleccion');
         if (!dialog || !grid || !filtro) return;
 
         function updateLabel() {
@@ -173,26 +207,21 @@
             card.className = 'crear-ep-recurso-card';
             card.dataset.nombre = nombre;
             if (nombre === tableroPickerSession?.pending) card.classList.add('crear-ep-recurso-card--sel');
-
             const media = document.createElement('div');
             media.className = 'crear-ep-recurso-card-media';
             if (esVacio) {
                 const ph = document.createElement('span');
-                ph.textContent = '—';
-                ph.style.fontSize = '2rem';
+                ph.textContent = '—'; ph.style.fontSize = '2rem';
                 media.appendChild(ph);
             } else {
-                const img = document.createElement('img');
-                img.alt = nombre;
-                img.loading = 'lazy';
-                img.src = urlTablero(nombre);
-                media.appendChild(img);
+                const i = document.createElement('img');
+                i.alt = nombre; i.loading = 'lazy'; i.src = urlTablero(nombre);
+                media.appendChild(i);
             }
             const cap = document.createElement('span');
             cap.className = 'crear-ep-recurso-card-nombre';
             cap.textContent = esVacio ? '(sin tablero)' : nombre;
-            card.appendChild(media);
-            card.appendChild(cap);
+            card.appendChild(media); card.appendChild(cap);
             card.addEventListener('click', () => seleccionar(nombre));
             card.addEventListener('dblclick', () => { seleccionar(nombre); confirmar(); });
             return card;
@@ -204,9 +233,7 @@
             grid.innerHTML = '';
             const items = tablerosLista.filter((n) => !q || String(n).toLowerCase().includes(q));
             const val = tableroPickerSession.value;
-            if (val && !items.includes(val) && (!q || String(val).toLowerCase().includes(q))) {
-                items.unshift(val);
-            }
+            if (val && !items.includes(val) && (!q || String(val).toLowerCase().includes(q))) items.unshift(val);
             grid.appendChild(crearCard('', true));
             items.forEach((n) => grid.appendChild(crearCard(n, false)));
         }
@@ -219,22 +246,16 @@
         }
 
         filtro.addEventListener('input', pintar);
-        $('editar-desafios-tablero-aceptar')?.addEventListener('click', confirmar);
-        $('editar-desafios-tablero-cancelar')?.addEventListener('click', () => {
-            dialog.close();
-            tableroPickerSession = null;
+        $('editar-asaltos-tablero-aceptar')?.addEventListener('click', confirmar);
+        $('editar-asaltos-tablero-cancelar')?.addEventListener('click', () => {
+            dialog.close(); tableroPickerSession = null;
         });
         dialog.addEventListener('cancel', () => { tableroPickerSession = null; });
 
-        window._abrirTableroPickerDesafios = function (opts) {
-            tableroPickerSession = {
-                value: opts.value || '',
-                pending: opts.value || '',
-                onAccept: opts.onAccept,
-            };
+        window._abrirTableroPickerAsaltos = function (opts) {
+            tableroPickerSession = { value: opts.value || '', pending: opts.value || '', onAccept: opts.onAccept };
             filtro.value = '';
-            pintar();
-            updateLabel();
+            pintar(); updateLabel();
             dialog.showModal();
             requestAnimationFrame(() => filtro.focus());
         };
@@ -260,46 +281,29 @@
         const hint = document.createElement('span');
         hint.className = 'crear-ep-recurso-trigger-hint';
         hint.textContent = 'Clic para elegir tablero';
-        meta.appendChild(nombreEl);
-        meta.appendChild(hint);
+        meta.appendChild(nombreEl); meta.appendChild(hint);
 
         function refresh(v) {
             current = v ?? '';
             nombreEl.textContent = current || '— sin tablero —';
-            if (current) {
-                thumb.src = urlTablero(current);
-                thumb.hidden = false;
-            } else {
-                thumb.hidden = true;
-                thumb.removeAttribute('src');
-            }
+            if (current) { thumb.src = urlTablero(current); thumb.hidden = false; }
+            else { thumb.hidden = true; thumb.removeAttribute('src'); }
         }
         refresh(current);
 
-        trigger.appendChild(thumb);
-        trigger.appendChild(meta);
+        trigger.appendChild(thumb); trigger.appendChild(meta);
         trigger.addEventListener('click', () => {
-            window._abrirTableroPickerDesafios?.({
-                value: current,
-                onAccept: (v) => {
-                    refresh(v);
-                    onChange(v);
-                },
-            });
+            window._abrirTableroPickerAsaltos?.({ value: current, onAccept: (v) => { refresh(v); onChange(v); } });
         });
 
         const clearRow = document.createElement('div');
         clearRow.className = 'crear-ep-recurso-clear-row';
         clearRow.hidden = !current;
         clearRow.appendChild(btn('Quitar tablero', 'crear-ep-btn--secundario', () => {
-            refresh('');
-            onChange('');
-            clearRow.hidden = true;
+            refresh(''); onChange(''); clearRow.hidden = true;
         }));
 
-        wrap.appendChild(lab);
-        wrap.appendChild(trigger);
-        wrap.appendChild(clearRow);
+        wrap.appendChild(lab); wrap.appendChild(trigger); wrap.appendChild(clearRow);
         return wrap;
     }
 
@@ -324,24 +328,19 @@
         }
     }
 
-    function crearSlotCarta(campoExcel, etiqueta, esBoss) {
-        const wrap = document.createElement('div');
-        wrap.className = 'editar-desafios-carta-slot-wrap'
-            + (esBoss ? ' editar-desafios-carta-slot-wrap--boss' : '');
+    function crearSlotCarta(campoExcel, etiqueta) {
         const slot = document.createElement('button');
         slot.type = 'button';
-        slot.className = 'editar-desafios-carta-slot' + (esBoss ? ' editar-desafios-carta-slot--boss' : '');
+        slot.className = 'editar-desafios-carta-slot';
         const fila = getFilaActual();
         const valor = fila ? String(fila[campoExcel] || '').trim() : '';
         pintarSlot(slot, valor, etiqueta);
-
         slot.addEventListener('click', () => {
             const f = getFilaActual();
             if (!f) return;
-            const actual = String(f[campoExcel] || '').trim();
             window.DCEditorCartaPicker?.abrir({
-                titulo: esBoss ? 'Seleccionar boss' : 'Seleccionar enemigo',
-                value: actual,
+                titulo: 'Seleccionar carta',
+                value: String(f[campoExcel] || '').trim(),
                 allowEmpty: true,
                 permitirSkin: true,
                 onAccept: (nombre) => {
@@ -352,89 +351,50 @@
                 },
             });
         });
-
-        const cap = document.createElement('span');
-        cap.className = 'editar-desafios-carta-slot-label';
-        cap.textContent = esBoss ? 'Carta boss' : 'Enemigo';
-        wrap.appendChild(slot);
-        wrap.appendChild(cap);
-        return wrap;
+        return slot;
     }
 
     function renderForm() {
         if (!formEl) return;
-        const fila = getFilaActual();
         formEl.innerHTML = '';
+        const fila = getFilaActual();
         if (!fila) {
-            formEl.innerHTML = '<p class="crear-ep-field-ayuda">Selecciona un desafío de la lista o crea uno nuevo.</p>';
+            formEl.innerHTML = '<p class="crear-ep-field-ayuda">Selecciona un asalto de la lista o crea uno nuevo.</p>';
             return;
         }
 
         const basica = document.createElement('div');
         basica.className = 'editar-desafios-seccion';
         basica.innerHTML = '<h3>Datos generales</h3>';
-        basica.appendChild(fieldInput('ID_desafio', fila.ID_desafio, (v) => {
-            fila.ID_desafio = Number(v) || 0;
-            marcarDirty();
-            renderLista();
+        basica.appendChild(fieldInput('asalto_ID', fila.asalto_ID, (v) => {
+            fila.asalto_ID = Number(v) || 0; marcarDirty(); renderLista();
         }, { type: 'number' }));
-        basica.appendChild(fieldSelect('faccion', fila.faccion, [
-            { value: 'H', label: 'Héroe (H)' },
-            { value: 'V', label: 'Villano (V)' },
-        ], (v) => { fila.faccion = v; marcarDirty(); renderLista(); }));
         basica.appendChild(fieldInput('nombre', fila.nombre, (v) => { fila.nombre = v; marcarDirty(); renderLista(); }));
-        basica.appendChild(fieldInput('Descripción', fila.Descripción, (v) => { fila.Descripción = v; marcarDirty(); }, { multiline: true }));
+        basica.appendChild(fieldInput('descripcion', fila.descripcion, (v) => { fila.descripcion = v; marcarDirty(); }, { multiline: true }));
         basica.appendChild(fieldInput('dificultad', fila.dificultad, (v) => {
-            fila.dificultad = Number(v) || 1;
-            marcarDirty();
-            renderLista();
-        }, { type: 'number' }));
-        basica.appendChild(fieldInput('mejora', fila.mejora, (v) => { fila.mejora = Number(v) || 0; marcarDirty(); }, { type: 'number' }));
-        basica.appendChild(fieldInput('mejora_especial', fila.mejora_especial, (v) => {
-            fila.mejora_especial = Number(v) || 0;
-            marcarDirty();
-        }, { type: 'number' }));
+            fila.dificultad = Number(v) || 6; marcarDirty(); renderLista();
+        }, { type: 'number', placeholder: '6, 7 u 8' }));
         basica.appendChild(fieldInput('puntos', fila.puntos, (v) => { fila.puntos = Number(v) || 0; marcarDirty(); }, { type: 'number' }));
+        basica.appendChild(fieldInput('mejora', fila.mejora, (v) => { fila.mejora = Number(v) || 0; marcarDirty(); }, { type: 'number' }));
+        basica.appendChild(fieldInput('mejora_especial', fila.mejora_especial, (v) => { fila.mejora_especial = Number(v) || 0; marcarDirty(); }, { type: 'number' }));
+        basica.appendChild(fieldInput('mejora_suprema', fila.mejora_suprema, (v) => { fila.mejora_suprema = Number(v) || 0; marcarDirty(); }, { type: 'number' }));
+        basica.appendChild(fieldInput('mejora_definitiva', fila.mejora_definitiva, (v) => { fila.mejora_definitiva = Number(v) || 0; marcarDirty(); }, { type: 'number' }));
         formEl.appendChild(basica);
 
-        const enemigos = document.createElement('div');
-        enemigos.className = 'editar-desafios-seccion';
-        enemigos.innerHTML = '<h3>Enemigos del desafío</h3>';
+        const imgSec = document.createElement('div');
+        imgSec.className = 'editar-desafios-seccion';
+        imgSec.innerHTML = '<h3>Imagen del asalto</h3>';
+        imgSec.appendChild(crearCampoImagen('imagen', fila, 'imagen', () => marcarDirty()));
+        formEl.appendChild(imgSec);
+
+        const cartasSec = document.createElement('div');
+        cartasSec.className = 'editar-desafios-seccion';
+        cartasSec.innerHTML = '<h3>Cartas del asalto (12 slots)</h3>';
         const grid = document.createElement('div');
         grid.className = 'editar-desafios-enemigos-grid';
-        M.ENEMIGO_KEYS.forEach((key, i) => {
-            grid.appendChild(crearSlotCarta(key, `Enemigo ${i + 1}`, false));
-        });
-        grid.appendChild(crearSlotCarta('boss', 'Boss', true));
-        enemigos.appendChild(grid);
-        formEl.appendChild(enemigos);
-
-        const recomp = document.createElement('div');
-        recomp.className = 'editar-desafios-seccion';
-        recomp.innerHTML = '<h3>Recompensa</h3>';
-        const recompWrap = document.createElement('div');
-        recompWrap.className = 'editar-desafios-recompensa-wrap';
-        const slotRecomp = document.createElement('button');
-        slotRecomp.type = 'button';
-        slotRecomp.className = 'editar-desafios-carta-slot';
-        const nombreRecomp = M.leerNombreCartaRecompensa(fila);
-        pintarSlot(slotRecomp, nombreRecomp, 'Carta recompensa');
-        slotRecomp.addEventListener('click', () => {
-            window.DCEditorCartaPicker?.abrir({
-                titulo: 'Carta de recompensa',
-                value: nombreRecomp,
-                allowEmpty: true,
-                permitirSkin: true,
-                onAccept: (nombre) => {
-                    fila.cartas = nombre;
-                    pintarSlot(slotRecomp, nombre, 'Carta recompensa');
-                    marcarDirty();
-                },
-            });
-        });
-        recompWrap.appendChild(slotRecomp);
-        recomp.appendChild(recompWrap);
-        formEl.appendChild(recomp);
+        M.CARTA_KEYS.forEach((key, i) => grid.appendChild(crearSlotCarta(key, `Carta ${i + 1}`)));
+        cartasSec.appendChild(grid);
+        formEl.appendChild(cartasSec);
 
         const tab = document.createElement('div');
         tab.className = 'editar-desafios-seccion';
@@ -442,8 +402,8 @@
         tab.appendChild(fieldTablero('tablero', fila.tablero, (v) => { fila.tablero = v; marcarDirty(); }));
         formEl.appendChild(tab);
 
-        const del = btn('Eliminar este desafío', 'crear-ep-btn--peligro', () => {
-            if (!window.confirm(`¿Eliminar desafío #${fila.ID_desafio} «${fila.nombre}»?`)) return;
+        const del = btn('Eliminar este asalto', 'crear-ep-btn--peligro', () => {
+            if (!window.confirm(`¿Eliminar asalto #${fila.asalto_ID} «${fila.nombre}»?`)) return;
             state.filas.splice(state.selIndex, 1);
             state.selIndex = Math.min(state.selIndex, state.filas.length - 1);
             marcarDirty();
@@ -458,23 +418,17 @@
     function renderErroresFila() {
         if (!erroresEl) return;
         const fila = getFilaActual();
-        if (!fila) {
-            erroresEl.hidden = true;
-            return;
-        }
-        const val = M.validarFilaDesafio(fila, state.selIndex, state.filas, M.nombresCartasEnCatalogoSet(filasCatalogoCartas), skinsIndexadosCache);
-        if (!val.length) {
-            erroresEl.hidden = true;
-            return;
-        }
+        if (!fila) { erroresEl.hidden = true; return; }
+        const errs = M.validarFilaAsalto(fila, state.selIndex, state.filas, M.nombresCartasEnCatalogoSet(filasCatalogoCartas), skinsIndexadosCache);
+        if (!errs.length) { erroresEl.hidden = true; erroresEl.innerHTML = ''; return; }
         erroresEl.hidden = false;
-        erroresEl.innerHTML = val.map((x) => `<li>${x}</li>`).join('');
+        erroresEl.innerHTML = errs.map((x) => `<li>${x}</li>`).join('');
     }
 
     function renderLista() {
         if (!listaEl) return;
-        const indices = indicesFiltrados();
         listaEl.innerHTML = '';
+        const indices = indicesFiltrados();
         indices.forEach((i) => {
             const fila = state.filas[i];
             const li = document.createElement('li');
@@ -482,19 +436,13 @@
             const b = document.createElement('button');
             b.type = 'button';
             b.className = 'editar-desafios-lista-btn' + (i === state.selIndex ? ' editar-desafios-lista-btn--sel' : '');
-            const facLabel = fila.faccion === 'V' ? 'V' : 'H';
-            b.innerHTML = `<strong>#${fila.ID_desafio} ${fila.nombre || '(sin nombre)'}</strong>`
-                + `<span class="editar-desafios-lista-meta">${facLabel} · dif. ${fila.dificultad}</span>`;
-            b.addEventListener('click', () => {
-                state.selIndex = i;
-                renderAll();
-            });
+            b.innerHTML = `<strong>#${fila.asalto_ID} ${fila.nombre || '(sin nombre)'}</strong>`
+                + `<span class="editar-desafios-lista-meta">dif. ${fila.dificultad}</span>`;
+            b.addEventListener('click', () => { state.selIndex = i; renderAll(); });
             li.appendChild(b);
             listaEl.appendChild(li);
         });
-        if (contadorEl) {
-            contadorEl.textContent = `${indices.length} de ${state.filas.length} desafío(s)`;
-        }
+        if (contadorEl) contadorEl.textContent = `${indices.length} de ${state.filas.length} asalto(s)`;
     }
 
     function renderToolbar() {
@@ -503,27 +451,18 @@
         const dirtyLabel = state.dirty ? ' · sin guardar' : '';
         const span = document.createElement('span');
         span.className = 'crear-ep-archivo-activo';
-        span.innerHTML = `<strong>desafios.xlsx</strong>${dirtyLabel}`;
+        span.innerHTML = `<strong>asaltos.xlsx</strong>${dirtyLabel}`;
         toolbar.appendChild(span);
         toolbar.appendChild(btn('Recargar', 'crear-ep-btn--secundario', () => cargarCatalogo(true)));
         toolbar.appendChild(btn('Guardar Excel', 'crear-ep-btn--primario', () => guardarCatalogo()));
         window.DCEditorGitPush?.refrescarBotonEnToolbar(toolbar);
     }
 
-    function renderAll() {
-        renderToolbar();
-        renderLista();
-        renderForm();
-    }
+    function renderAll() { renderToolbar(); renderLista(); renderForm(); }
 
     async function cargarTableros() {
-        try {
-            const res = await fetch('/api/tableros');
-            const data = await res.json();
-            tablerosLista = data.archivos || [];
-        } catch (_e) {
-            tablerosLista = [];
-        }
+        try { const res = await fetch('/api/tableros'); const data = await res.json(); tablerosLista = data.archivos || []; }
+        catch (_e) { tablerosLista = []; }
     }
 
     async function cargarCatalogoCartasMemoria() {
@@ -532,8 +471,7 @@
         } else {
             const res = await fetch('/api/cartas-editor/catalogo');
             if (!res.ok) throw new Error('No se pudo cargar el catálogo de cartas.');
-            const data = await res.json();
-            filasCatalogoCartas = data.filas || [];
+            filasCatalogoCartas = (await res.json()).filas || [];
         }
         await window.DCEditorCartaPicker?.asegurarCatalogo?.();
         if (window.DCSkinsCartas?.asegurarSkinsCargados) {
@@ -544,7 +482,7 @@
     async function cargarCatalogo(force) {
         if (!force && !(await confirmarDescartar())) return;
         try {
-            const data = await api('/api/desafios-editor/catalogo');
+            const data = await api('/api/asaltos-editor/catalogo');
             const parsed = M.filasDesdeRespuestaApi(data);
             state.columnas = parsed.columnas;
             state.filas = parsed.filas;
@@ -553,45 +491,34 @@
             if (aviso) aviso.hidden = true;
             if (layout) layout.hidden = false;
             renderAll();
-            toastMsg('Catálogo de desafíos cargado.');
-        } catch (e) {
-            mostrarAvisoInhabilitado(e);
-        }
+            toastMsg('Catálogo de asaltos cargado.');
+        } catch (e) { mostrarAvisoInhabilitado(e); }
     }
 
     async function guardarCatalogo() {
         const val = M.validarCatalogo(state.filas, filasCatalogoCartas, skinsIndexadosCache);
         if (!val.ok) {
             toastMsg(val.errores[0] || 'Validación fallida', true);
-            if (erroresEl) {
-                erroresEl.hidden = false;
-                erroresEl.innerHTML = val.errores.map((x) => `<li>${x}</li>`).join('');
-            }
+            if (erroresEl) { erroresEl.hidden = false; erroresEl.innerHTML = val.errores.map((x) => `<li>${x}</li>`).join(''); }
             return;
         }
         try {
-            await api('/api/desafios-editor/catalogo', {
+            await api('/api/asaltos-editor/catalogo', {
                 method: 'PUT',
                 body: JSON.stringify({ columnas: state.columnas, filas: state.filas }),
             });
             state.dirty = false;
             renderToolbar();
             window.DCEditorDevNav?.marcarCambiosEnDisco();
-            window.DCEditorSessionLog?.registrarGuardado?.(
-                'desafios',
-                'Guardado desafios.xlsx',
-                ['public/resources/desafios.xlsx']
-            );
-            toastMsg('desafios.xlsx guardado correctamente.');
-        } catch (e) {
-            toastMsg(e.message || 'Error al guardar', true);
-        }
+            window.DCEditorSessionLog?.registrarGuardado?.('asaltos', 'Guardado asaltos.xlsx', ['public/resources/asaltos.xlsx']);
+            toastMsg('asaltos.xlsx guardado correctamente.');
+        } catch (e) { toastMsg(e.message || 'Error al guardar', true); }
     }
 
     function nuevaFila() {
-        const fila = M.crearFilaDesafioVacia();
-        fila.ID_desafio = M.siguienteIdDesafio(state.filas);
-        fila.nombre = `Nuevo_desafio_${fila.ID_desafio}`;
+        const fila = M.crearFilaAsaltoVacia();
+        fila.asalto_ID = M.siguienteId(state.filas);
+        fila.nombre = `Nuevo_asalto_${fila.asalto_ID}`;
         state.filas.push(fila);
         state.selIndex = state.filas.length - 1;
         marcarDirty();
@@ -602,16 +529,16 @@
         if (layout) layout.hidden = true;
         if (!aviso) return;
         aviso.hidden = false;
-        if (err?.code === 'DESAFIOS_EDITOR_API_MISSING') {
-            aviso.innerHTML = 'API del editor no disponible. Despliega la rama <code>dev</code> con las rutas <code>/api/desafios-editor/*</code>.';
+        if (err?.code === 'ASALTOS_EDITOR_API_MISSING') {
+            aviso.innerHTML = 'API del editor no disponible. Despliega la rama <code>dev</code> con las rutas <code>/api/asaltos-editor/*</code>.';
         } else {
             aviso.textContent = err?.message || 'Editor no disponible.';
         }
     }
 
     async function init() {
-        $('editar-desafios-nueva')?.addEventListener('click', nuevaFila);
-        ['filtro-nombre-desafio', 'filtro-faccion-desafio', 'filtro-dificultad-desafio'].forEach((id) => {
+        $('editar-asaltos-nuevo')?.addEventListener('click', nuevaFila);
+        ['filtro-nombre-asalto', 'filtro-dificultad-asalto'].forEach((id) => {
             $(id)?.addEventListener('input', () => renderLista());
             $(id)?.addEventListener('change', () => renderLista());
         });
@@ -621,29 +548,24 @@
 
         let hab = null;
         try {
-            hab = await api('/api/desafios-editor/habilitado');
-            if (!hab.habilitado) {
-                mostrarAvisoInhabilitado(new Error('Editor deshabilitado en este entorno.'));
-                return;
-            }
+            hab = await api('/api/asaltos-editor/habilitado');
+            if (!hab.habilitado) { mostrarAvisoInhabilitado(new Error('Editor deshabilitado.')); return; }
             window.DCEditorDevNav?.init({
-                vistaActual: 'desafios',
-                alcance: 'desafios',
+                vistaActual: 'asaltos',
+                alcance: 'asaltos',
                 getDirty: () => state.dirty,
                 gitPushHabilitado: Boolean(hab.gitPush?.habilitado),
             });
             await window.DCEditorGitPush?.montarEnToolbar({
                 toolbar,
-                alcance: 'desafios',
-                endpoint: '/api/desafios-editor/git-push',
+                alcance: 'asaltos',
+                endpoint: '/api/asaltos-editor/git-push',
                 getDirty: () => state.dirty,
                 onSuccess: () => toastMsg('Cambios subidos a GitHub.'),
             });
             await cargarCatalogoCartasMemoria();
             await cargarCatalogo(false);
-        } catch (e) {
-            mostrarAvisoInhabilitado(e);
-        }
+        } catch (e) { mostrarAvisoInhabilitado(e); }
     }
 
     init();
