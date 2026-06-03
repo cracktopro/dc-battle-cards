@@ -291,6 +291,106 @@
         return wrap;
     }
 
+    function resolverUrlImagenPortada(val) {
+        const raw = String(val || '').trim();
+        if (!raw) return '';
+        if (/^https?:\/\//i.test(raw) || /^data:image\//i.test(raw)) return raw;
+        if (raw.startsWith('resources/')) return raw;
+        return `resources/${raw.replace(/^\/+/, '')}`;
+    }
+
+    function fieldImagenPortada(label, obj, prop, onChange) {
+        const wrap = document.createElement('div');
+        wrap.className = 'crear-ep-field editar-cartas-campo-imagen';
+
+        const lab = document.createElement('label');
+        lab.textContent = label;
+        wrap.appendChild(lab);
+
+        const drop = document.createElement('div');
+        drop.className = 'editar-cartas-imagen-preview-wrap';
+        const img = document.createElement('img');
+        img.className = 'editar-cartas-imagen-preview';
+        img.alt = '';
+        img.hidden = true;
+        const ph = document.createElement('span');
+        ph.className = 'editar-cartas-imagen-placeholder';
+        ph.textContent = 'Arrastra una imagen o pega una URL abajo';
+        drop.appendChild(img);
+        drop.appendChild(ph);
+
+        const inputUrl = document.createElement('input');
+        inputUrl.type = 'url';
+        inputUrl.className = 'crear-ep-select';
+        inputUrl.placeholder = 'https://… o ruta resources/…';
+        inputUrl.style.marginTop = '6px';
+
+        function refresh(val) {
+            const url = resolverUrlImagenPortada(val);
+            if (url) {
+                img.src = url;
+                img.hidden = false;
+                ph.hidden = true;
+            } else {
+                img.hidden = true;
+                img.removeAttribute('src');
+                ph.hidden = false;
+            }
+            inputUrl.value = String(val || '').trim();
+        }
+        refresh(obj[prop]);
+
+        function apply(val) {
+            obj[prop] = val;
+            refresh(val);
+            onChange();
+        }
+
+        inputUrl.addEventListener('change', () => apply(inputUrl.value.trim()));
+        inputUrl.addEventListener('input', () => apply(inputUrl.value));
+        inputUrl.addEventListener('blur', () => apply(inputUrl.value.trim()));
+
+        drop.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            drop.classList.add('editar-cartas-imagen-preview-wrap--drag');
+        });
+        drop.addEventListener('dragleave', () => {
+            drop.classList.remove('editar-cartas-imagen-preview-wrap--drag');
+        });
+        drop.addEventListener('drop', (e) => {
+            e.preventDefault();
+            drop.classList.remove('editar-cartas-imagen-preview-wrap--drag');
+            const url = e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain');
+            if (url && String(url).trim().startsWith('http')) {
+                apply(String(url).trim());
+                return;
+            }
+            const file = e.dataTransfer.files?.[0];
+            if (file && file.type.startsWith('image/')) {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    const data = String(reader.result || '');
+                    if (data.length > 120000) {
+                        toastMsg('Imagen demasiado grande para guardar en JSON. Usa una URL externa.', true);
+                        return;
+                    }
+                    apply(data);
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        wrap.appendChild(drop);
+        wrap.appendChild(inputUrl);
+
+        const ayuda = document.createElement('p');
+        ayuda.className = 'crear-ep-field-ayuda';
+        ayuda.textContent = 'Portada del carrusel (vista Episodios y panel del hub).';
+        wrap.appendChild(ayuda);
+
+        return wrap;
+    }
+
     function fieldCheck(label, checked, onChange) {
         const wrap = document.createElement('div');
         wrap.className = 'crear-ep-field crear-ep-field--row';
@@ -774,7 +874,7 @@
         const metaRow = document.createElement('div');
         metaRow.className = 'crear-ep-item' + (state.sel.kind === 'meta' ? ' crear-ep-item--sel' : '');
         metaRow.addEventListener('click', () => setSel({ kind: 'meta' }));
-        metaRow.innerHTML = '<span class="crear-ep-item-tipo">meta</span><span class="crear-ep-item-label">Episodio · ' + (state.data.nombre || '—') + '</span>';
+        metaRow.innerHTML = '<span class="crear-ep-item-tipo">meta</span><span class="crear-ep-item-label">Episodio · #' + (state.data.evento_id ?? '—') + ' · ' + (state.data.nombre || '—') + '</span>';
         meta.appendChild(metaRow);
         arbol.appendChild(meta);
 
@@ -946,8 +1046,22 @@
 
     function renderInspectorMeta() {
         const d = state.data;
-        inspector.appendChild(fieldText('episodio_id', d.episodio_id, (v) => { d.episodio_id = v; marcarDirty(); renderArbol(); }));
+        inspector.appendChild(fieldNum('evento_id', Number(d.evento_id) || 0, (v) => {
+            d.evento_id = Number.isFinite(v) ? v : 0;
+            marcarDirty();
+            renderArbol();
+        }));
         inspector.appendChild(fieldText('nombre', d.nombre, (v) => { d.nombre = v; marcarDirty(); renderArbol(); }));
+        inspector.appendChild(fieldText('descripcion', d.descripcion || '', (v) => {
+            d.descripcion = v;
+            marcarDirty();
+        }, { multiline: true, ayuda: 'Texto en las tarjetas del carrusel 3D.' }));
+        inspector.appendChild(fieldImagenPortada('imagen (portada carrusel)', d, 'imagen', () => marcarDirty()));
+        inspector.appendChild(fieldCheck('Visible en carrusel', d.mostrar_carrusel !== false, (v) => {
+            if (v) delete d.mostrar_carrusel;
+            else d.mostrar_carrusel = false;
+            marcarDirty();
+        }));
         inspector.appendChild(fieldText('_comentario (opcional)', d._comentario || '', (v) => {
             if (v) d._comentario = v; else delete d._comentario;
             marcarDirty();
@@ -1133,7 +1247,7 @@
             span.innerHTML = 'Archivo: <strong>' + state.fileName + '</strong>' + (state.dirty ? ' · sin guardar' : '');
             toolbar.appendChild(span);
         }
-        toolbar.appendChild(btn('Nuevo JSON', 'crear-ep-btn--secundario', crearArchivoNuevo));
+        toolbar.appendChild(btn('Nuevo JSON', 'crear-ep-btn--exito', crearArchivoNuevo));
         toolbar.appendChild(btn('Guardar', 'crear-ep-btn--primario', guardarArchivo));
         toolbar.appendChild(btn('Validar', 'crear-ep-btn--secundario', validarActual));
         toolbar.appendChild(btn('Vista JSON', 'crear-ep-btn--secundario', abrirVistaJson));
@@ -1204,6 +1318,11 @@
         state.dirty = false;
         renderToolbar();
         window.DCEditorDevNav?.marcarCambiosEnDisco();
+        window.DCEditorSessionLog?.registrarGuardado?.(
+            'episodios',
+            `Guardado ${state.fileName}`,
+            [`public/resources/episodios/${state.fileName}`]
+        );
         toastMsg('Guardado correctamente.');
     }
 
@@ -1228,6 +1347,11 @@
             body: JSON.stringify({ nombre: base, data }),
         }).then(async () => {
             window.DCEditorDevNav?.marcarCambiosEnDisco();
+            window.DCEditorSessionLog?.registrarGuardado?.(
+                'episodios',
+                `Creado ${base}`,
+                [`public/resources/episodios/${base}`]
+            );
             await cargarListaArchivos();
             await cargarArchivo(base);
             toastMsg('Archivo creado.');

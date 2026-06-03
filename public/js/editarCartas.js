@@ -709,6 +709,11 @@
             state.dirty = false;
             renderToolbar();
             window.DCEditorDevNav?.marcarCambiosEnDisco();
+            window.DCEditorSessionLog?.registrarGuardado?.(
+                'cartas',
+                'Guardado cartas.xlsx',
+                ['public/resources/cartas.xlsx']
+            );
             toastMsg('cartas.xlsx guardado correctamente.');
         } catch (e) {
             toastMsg(e.message || 'Error al guardar', true);

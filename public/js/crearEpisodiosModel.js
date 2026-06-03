@@ -18,8 +18,10 @@
 
     function crearEpisodioVacio() {
         return {
-            episodio_id: '0',
+            evento_id: 0,
             nombre: 'Nuevo episodio',
+            descripcion: '',
+            imagen: '',
             capitulos: [crearCapituloVacio(0)],
         };
     }
@@ -39,6 +41,24 @@
 
     function normalizarEpisodio(raw) {
         const data = raw && typeof raw === 'object' ? clone(raw) : crearEpisodioVacio();
+        if (data.evento_id == null && data.episodio_id != null && data.episodio_id !== '') {
+            const n = Number(data.episodio_id);
+            data.evento_id = Number.isFinite(n) ? n : data.episodio_id;
+        }
+        if (data.evento_id != null) {
+            delete data.episodio_id;
+        }
+        if (data.evento_id == null) {
+            data.evento_id = 0;
+        }
+        if (data.descripcion == null) {
+            data.descripcion = '';
+        }
+        if (data.imagen == null) {
+            data.imagen = '';
+        }
+        delete data.JSON_file;
+        delete data.json_file;
         if (!Array.isArray(data.capitulos) || !data.capitulos.length) {
             const timeline = Array.isArray(data.timeline) ? data.timeline : [];
             data.capitulos = [{
@@ -212,7 +232,11 @@
     }
 
     function limpiarParaGuardar(data) {
-        return JSON.parse(JSON.stringify(data));
+        const out = JSON.parse(JSON.stringify(data));
+        delete out.episodio_id;
+        delete out.JSON_file;
+        delete out.json_file;
+        return out;
     }
 
     function validarEpisodio(data) {
@@ -222,6 +246,9 @@
         }
         if (!String(data.nombre || '').trim()) {
             errores.push('Falta el nombre del episodio.');
+        }
+        if (data.evento_id == null && data.episodio_id == null) {
+            errores.push('Falta evento_id (orden en carrusel).');
         }
         const caps = data.capitulos;
         if (!Array.isArray(caps) || !caps.length) {

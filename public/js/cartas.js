@@ -2139,7 +2139,8 @@ function fusionarUsuarioSesionTrasUpdate(base, pendiente, servidor) {
 let _promesaRefrescoSesionServidor = null;
 
 function esPaginaEditorCartasSinSesionJuego() {
-    return document.body?.classList?.contains('editar-cartas-body') === true;
+    return document.body?.classList?.contains('editar-cartas-body') === true
+        || document.body?.classList?.contains('editar-desafios-body') === true;
 }
 
 async function refrescarUsuarioSesionDesdeServidor() {
@@ -3344,7 +3345,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     await window.DCCatalogoCartas.cargarFilas();
                 }
             } catch (error) {
-                console.warn('[cartas] Catálogo en editor de cartas:', error);
+                console.warn('[cartas] Catálogo en editor interno:', error);
             }
         })();
         return;

@@ -1,6 +1,8 @@
 {
-  "episodio_id": "0",
-  "nombre": "Aves de Presa: El Veredicto de las Sombras",
+  "evento_id": 1,
+  "nombre": "Aves de Presa",
+  "descripcion": "Ponte en la piel de las Heroinas más cañeras e imparables de todas, donde se enfrentarán a una serie de desafios que las podrán a prueba de formas inimaginables.",
+  "imagen": "https://i.ibb.co/7dPzn7FG/bop.jpg",
   "capitulos": [
     {
       "capitulo_id": "cap_01",

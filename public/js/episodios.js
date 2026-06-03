@@ -1,8 +1,8 @@
 /**
- * Vista Episodios: carrusel 3D + catálogo desde episodios.xlsx.
+ * Vista Episodios: carrusel 3D + catálogo desde metadatos en JSON (resources/episodios/).
  */
 (function () {
-    const PLACEHOLDER_IMG = 'resources/hud/universo.png';
+    const PLACEHOLDER_IMG = window.DCEpisodiosCatalogo?.PLACEHOLDER || 'resources/hud/universo.png';
 
     const escena = document.getElementById('episodios-carrusel-escena');
     const rueda = document.getElementById('episodios-carrusel-rueda');
@@ -212,6 +212,9 @@
     }
 
     function urlImagenEpisodio(ep) {
+        if (typeof window.DCEpisodiosCatalogo?.urlImagenEpisodio === 'function') {
+            return window.DCEpisodiosCatalogo.urlImagenEpisodio(ep);
+        }
         const raw = String(ep?.imagen || '').trim();
         if (!raw) {
             return PLACEHOLDER_IMG;
@@ -220,31 +223,6 @@
             return raw;
         }
         return raw.startsWith('resources/') ? raw : `resources/${raw.replace(/^\/+/, '')}`;
-    }
-
-    function resolverJsonFile(ep) {
-        const raw = String(ep?.JSON_file || ep?.json_file || '').trim();
-        if (raw) {
-            return raw.startsWith('resources/') ? raw : `resources/episodios/${raw.replace(/^\/+/, '')}`;
-        }
-        const id = String(ep?.evento_id ?? '').trim();
-        if (id !== '') {
-            return 'resources/episodios/ejemplo.json';
-        }
-        return '';
-    }
-
-    function mapearEpisodioDesdeFila(fila, idx) {
-        const eventoId = fila.evento_id ?? fila.eventoId ?? idx;
-        const ep = {
-            evento_id: Number.isFinite(Number(eventoId)) ? Number(eventoId) : idx,
-            nombre: String(fila.nombre || '').trim(),
-            descripcion: String(fila.descripcion || '').trim(),
-            imagen: String(fila.imagen || '').trim(),
-            JSON_file: String(fila.JSON_file || fila.json_file || '').trim(),
-        };
-        ep.jsonPath = resolverJsonFile(ep);
-        return ep;
     }
 
     function episodioEnFrente() {
@@ -618,22 +596,16 @@
         precargarRequisitosTodos();
     }
 
-    async function cargarEpisodiosDesdeExcel() {
-        const response = await fetch('resources/episodios.xlsx');
+    async function cargarEpisodiosCatalogo() {
+        if (typeof window.DCEpisodiosCatalogo?.cargarLista === 'function') {
+            return window.DCEpisodiosCatalogo.cargarLista();
+        }
+        const response = await fetch('/api/episodios/catalogo');
         if (!response.ok) {
-            throw new Error('No se pudo cargar episodios.xlsx');
+            throw new Error('No se pudo cargar el catálogo de episodios.');
         }
-        const data = await response.arrayBuffer();
-        if (typeof XLSX === 'undefined') {
-            throw new Error('Biblioteca XLSX no disponible');
-        }
-        const workbook = XLSX.read(data, { type: 'array' });
-        const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        const filas = XLSX.utils.sheet_to_json(sheet, { defval: '' });
-        return filas
-            .map((fila, idx) => mapearEpisodioDesdeFila(fila, idx))
-            .filter((ep) => ep.nombre)
-            .sort((a, b) => a.evento_id - b.evento_id);
+        const body = await response.json();
+        return Array.isArray(body.episodios) ? body.episodios : [];
     }
 
     btnIzq.addEventListener('click', () => {
@@ -657,7 +629,7 @@
             mostrarMensaje('');
             refrescarUsuarioActual();
             await asegurarCatalogoCartas();
-            const lista = await cargarEpisodiosDesdeExcel();
+            const lista = await cargarEpisodiosCatalogo();
             construirCarrusel(lista);
             if (!lista.length) {
                 mostrarMensaje('No hay episodios disponibles en el catálogo.');

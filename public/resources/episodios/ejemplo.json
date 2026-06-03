@@ -1,6 +1,8 @@
 {
-  "episodio_id": "0",
-  "nombre": "Supergirl: Fuga de las Sombras",
+  "evento_id": 0,
+  "nombre": "Supergirl: Woman of Tomorrow",
+  "descripcion": "Sigue a una Supergirl desilusionada que viaja al espacio para escapar de su pasado. Allí se cruza con Ruthye, una niña alienígena que busca venganza contra un mercenario que asesinó a su padre. Ambas, junto al Superperro Krypto, se embarcan en una épica cacería intergaláctica al estilo del western.",
+  "imagen": "https://i.ibb.co/Y4hSWkyS/Supergirl-Wo-T.jpg",
   "_comentario": "Referencia de sintaxis (episodio-engine.js). Ver CONTEXT.md. Puede usar capitulos[] (recomendado) o timeline en raíz (legacy).",
   "capitulos": [
     {

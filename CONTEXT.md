@@ -79,7 +79,7 @@ Documento vivo de referencia técnica para trabajar sobre DC Battle Cards sin ro
 | `eventos.xlsx` | Eventos rotativos del hub (`jugarPartida.js`) |
 | `eventos_online.xlsx` | Eventos coop online (`multijugadorEventosCoop.js`) |
 | `asaltos.xlsx` | Asaltos semanales |
-| `episodios.xlsx` | Catálogo de episodios (carrusel + `JSON_file`) |
+| `episodios.xlsx` | *(legacy, ya no usado)* — metadatos del carrusel viven en cada `resources/episodios/*.json` |
 | `misiones_diarias.xlsx` | Misiones diarias/semanales |
 | `skins.xlsx` | Apariencias / skins |
 | `consejos.xlsx` | Carrusel de consejos en `vistaJuego` |
@@ -96,6 +96,7 @@ Documento vivo de referencia técnica para trabajar sobre DC Battle Cards sin ro
 | `DCMisiones` | `js/misionesDiarias.js` | Track misiones (cola FIFO interna) |
 | `DCRedDot` | `js/menu-mobile.js` | Badges “nuevo” en cartas/sobres/menú |
 | `DCEpisodioEngine` | `js/episodio-engine.js` | Timeline episodios |
+| `DCEpisodiosCatalogo` | `js/episodiosCatalogo.js` | Catálogo carrusel (`GET /api/episodios/catalogo`) |
 | `DCEpisodiosRequisitos` | `js/episodiosRequisitos.js` | Cartas requeridas, niveles catálogo (`nivel_jugador: 0`) |
 | `aplicarColorPrincipalUsuario` | `js/cartas.js` | Tema RGB del jugador |
 
@@ -174,11 +175,11 @@ Documento vivo de referencia técnica para trabajar sobre DC Battle Cards sin ro
 
 ### 6) Episodios
 
-- Catálogo: `resources/episodios.xlsx` + JSON en `public/resources/episodios/` (campo `JSON_file` del Excel).
-- **JSON episodio:** metadatos en raíz (`episodio_id`, `nombre`) y array **`capitulos[]`**. Cada capítulo: `capitulo_id`, `nombre`, `descripcion` (opcional), `timeline[]` (misma sintaxis que antes). **Compatibilidad:** si solo existe `timeline` en raíz, el motor lo trata como un único capítulo (`DCEpisodiosCapitulos.normalizarCapitulos`).
+- Catálogo carrusel: `GET /api/episodios/catalogo` lee metadatos de cada `public/resources/episodios/*.json` (`evento_id`, `nombre`, `descripcion`, `imagen`, `jsonPath`). Sin `episodios.xlsx`.
+- **JSON episodio:** metadatos en raíz (`evento_id`, `nombre`, `descripcion`, `imagen` portada carrusel; alias legacy `episodio_id`) y array **`capitulos[]`**. Opcional `mostrar_carrusel: false` para excluir del carrusel (p. ej. copias legacy). Cada capítulo: `capitulo_id`, `nombre`, `descripcion` (opcional), `timeline[]` (misma sintaxis que antes). **Compatibilidad:** si solo existe `timeline` en raíz, el motor lo trata como un único capítulo (`DCEpisodiosCapitulos.normalizarCapitulos`).
 - UI: `episodios.html` + carrusel 3D (`episodios.js`) + botón **Comenzar** → modal **capítulos** (`#episodios-modal-capitulos`, estilo panel asaltos: marco neón ~920px, lista con número, estado y botón Jugar/Repetir/Bloqueado). Capítulo 0 siempre desbloqueado; el N+1 requiere completar el N (`js/episodiosProgreso.js`, LS `dc_episodios_progreso_v1`). → `DCEpisodioEngine.iniciarEpisodio(ep, capituloIndex)`.
 - **Editor cartas (solo URL):** `editarCartas.html` — sin enlace en menús. API `GET/PUT /api/cartas-editor/catalogo` (habilitado con `CARTAS_EDITOR=1`, `EPISODIOS_EDITOR=1`, rama Render `dev` o no producción). Catálogo: vista por defecto **imágenes** (`carta-mini` en rejilla) o **lista** (texto); toggle ▦ / ☰. Filtros: nombre, afiliación, facción, `skill_class`. Layout: catálogo y ficha **mismo ancho** (`1fr` + `1fr`); preview ~300–340px con miniatura centrada (~200px ancho, proporción 154:216). En `editarCartas.html`, `cartas.js` no llama a `/get-user` ni monta menú de sesión (evita 401 con email obsoleto en `localStorage`). Mini-cartas: `box-sizing` en franja nombre/poder; nombre alineado a la izquierda en rejilla del catálogo (`text-align` del botón no hereda al nombre). Selects `filtro-skill-class`: color de fondo vía `DCFiltrosCartas.aplicarClaseVisualSelectSkillClass` (clase + estilo inline) para que `crear-ep-select` / filtros del editor no lo pisen al cambiar valor; en `filtros-cartas.css`, reglas `:focus`/`:active` conservan el color de badge y la flecha del select (evitan el `background` de `select:focus` en `mazos.css` al clicar). Toolbar **Subir a GitHub** (`editorGitPush.js`) → `POST /api/cartas-editor/git-push` si `GIT_PUSH_TOKEN` está definido en el servidor. Al cambiar `Imagen` / `imagen_final` repinta al instante (URL desde la fila en edición, `registrarImagenesCatalogoEnMemoria`, bust de caché del navegador). Campos UI: imágenes (URL + drag&drop), `Tipo`, `faccion`, panel habilidad con colores `badge-habilidad--*` (`filtrosCartas.js`), resto en inputs. Validación antes de guardar; no altera lectores existentes de `cartas.xlsx`.
-- **Editor JSON (solo URL):** `crearEpisodios.html` — sin enlace en menús. API `GET/PUT/POST /api/episodios-editor/*` (habilitado en desarrollo, `EPISODIOS_EDITOR=1` o rama Render `dev`). Toolbar **Subir a GitHub** → `POST /api/episodios-editor/git-push` (JSON en `public/resources/episodios/`). Módulos `crearEpisodiosModel.js` + `crearEpisodios.js`: capítulos, timeline (cutscene / escena / combate / recompensa), diálogos (**dlg**), comandos (**cmd**: escena, fondo_negro, fundido_negro, fundido_fondo), voz en off (**voz**); cutscene desplegable independiente de la selección de línea; botón **⧉ Duplicar** en cada línea del cutscene (clon profundo debajo); **reordenar por arrastre** (asa ⠿ en eventos del timeline y líneas de cutscene; misma lista; actualiza selección y cutscenes expandidos); **selector visual de imágenes** (modal grande con rejilla, filtro por nombre y Aceptar) para `bust_image` (diálogo y personajes en escena/comando escena), `background_image` (cutscene y fundido_fondo), `tablero` (combate); checkbox **Invertir imagen** (`invertir_imagen`) en diálogo y en cada personaje de comando escena; escena inicial vía array `escena`; validación y vista JSON cruda.
+- **Editor JSON (solo URL):** `crearEpisodios.html` — sin enlace en menús. API `GET/PUT/POST /api/episodios-editor/*` (habilitado en desarrollo, `EPISODIOS_EDITOR=1` o rama Render `dev`). Toolbar **Subir a GitHub** → `POST /api/episodios-editor/git-push` (JSON en `public/resources/episodios/`). Módulos `crearEpisodiosModel.js` + `crearEpisodios.js`: metadatos carrusel (`evento_id`, `nombre`, `descripcion`, `imagen` con URL + drag&drop como `editarCartas`, `mostrar_carrusel`); capítulos, timeline (cutscene / escena / combate / recompensa), diálogos (**dlg**), comandos (**cmd**: escena, fondo_negro, fundido_negro, fundido_fondo), voz en off (**voz**); cutscene desplegable independiente de la selección de línea; botón **⧉ Duplicar** en cada línea del cutscene (clon profundo debajo); **reordenar por arrastre** (asa ⠿ en eventos del timeline y líneas de cutscene; misma lista; actualiza selección y cutscenes expandidos); **selector visual de imágenes** (modal grande con rejilla, filtro por nombre y Aceptar) para `bust_image` (diálogo y personajes en escena/comando escena), `background_image` (cutscene y fundido_fondo), `tablero` (combate); checkbox **Invertir imagen** (`invertir_imagen`) en diálogo y en cada personaje de comando escena; escena inicial vía array `escena`; validación y vista JSON cruda. Cliente carrusel: `js/episodiosCatalogo.js`.
 - Engine: `js/episodio-engine.js`, timeline lineal **por capítulo**:
   - `cutscene`: `background_image`, `dialogos[]`, comandos de escena (ver abajo). **Layout bustos:** `bottom: 0` en CSS; `side` = posición horizontal %.
   - **Comandos de escena** (`episodio-engine.js` → `aplicarComandosEscena`):
@@ -219,6 +220,8 @@ Documento vivo de referencia técnica para trabajar sobre DC Battle Cards sin ro
 |-------|-----|----------------------------|
 | Editor cartas | `editarCartas.html` | `public/resources/cartas.xlsx` |
 | Editor episodios | `crearEpisodios.html` | `public/resources/episodios/*.json` |
+| Editor desafíos | `editarDesafios.html` | `public/resources/desafios.xlsx` |
+| Despliegue | `despliegue.html` | — (push selectivo a rama `main`) |
 
 **Menú de juego (solo dev):** en vistas con `.menu-container` + `cartas.js`, un único enlace **Herramientas Desarrollo** → `editarCartas.html` (`actualizarEnlaceHerramientasDesarrolloMenu`; cola async + limpieza de duplicados; clase `menu-link-dev-tools` con estilo amarillo en `mazos.css` / `app-layout.css`) si:
 1. `GET /api/editors/entorno` → `mostrarMenuDevTools: true` (rama Render `dev` o `NODE_ENV !== 'production'`)
@@ -226,19 +229,28 @@ Documento vivo de referencia técnica para trabajar sobre DC Battle Cards sin ro
 
 Nunca se muestra en producción (`main` en Render).
 
-**Navegación entre editores:** barra `editor-dev-nav` (`editorDevNav.js`) en `crearEpisodios` / `editarCartas` con botones **Cartas**, **Episodios** y **Volver al juego** (rojo, → `vistaJuego.html`; misma guardia de cambios sin guardar / sin push). Extensible añadiendo entradas en `DCEditorDevNav.VISTAS`.
+**Navegación entre editores:** barra `editor-dev-nav` (`editorDevNav.js`) en cada herramienta con botones **Cartas**, **Episodios**, **Desafíos**, **Despliegue** y **Volver al juego** (rojo, → `vistaJuego.html`; guardia de cambios sin guardar / sin push). Extensible añadiendo entradas en `DCEditorDevNav.VISTAS`.
 
-**Flujo guardar → GitHub:**
+**Botón «Subir a GitHub»:** clase `crear-ep-btn--git-pendiente` (amarillo) cuando `GET /api/editors/git-push/pendiente` indica cambios sin commit/push en la rama **dev**. Sigue haciendo push solo a **dev**.
+
+**Registro de sesión:** `editorSessionLog.js` → `localStorage` `dc_editor_session_log_v1` (guardados y pushes desde editores).
+
+**Despliegue (`despliegue.html`):** registro visual de cambios de sesión + lista de archivos de editor distintos entre **dev** y **main**. Botón **Subir a Producción** → modal de confirmación → `POST /api/editors/despliegue/produccion` copia solo rutas de editores (`cartas.xlsx`, `desafios.xlsx`, `episodios/*.json`) a rama `main`. Requiere `GIT_PUSH_TOKEN` y entorno Render `dev` (`gitPushProduccionPermitido`). Opcional `GIT_PUSH_BRANCH_PROD` (default `main`), `GIT_PUSH_PROD_ENABLED=0` para desactivar.
+
+**Editor desafíos (`editarDesafios.html`):** columnas Excel en orden fijo (`ID_desafio`, `faccion`, `nombre`, `Descripción`, `dificultad`, `enemigo1`…`enemigo6`, `boss`, `mejora`, `mejora_especial`, `puntos`, `cartas`, `tablero`). UI: selector H/V; rejilla 6 enemigos + boss con slots visuales compactos (~180px; recompensa ~160px; `editorCartaPicker.js`); slot recompensa → `cartas`; selector tablero (modal `/api/tableros`, estilo `crearEpisodios`). Carga SheetJS (`xlsx.full.min.js`, igual que `editarCartas.html`) para el catálogo de cartas. Validación cruzada con `cartas.xlsx` (`editarDesafiosModel.nombresCartasEnCatalogoSet`).
+
+**Flujo guardar → GitHub → producción:**
 1. **Guardar** / **Guardar Excel** → escribe en disco del servidor (API PUT).
 2. **Subir a GitHub** (`editorGitPush.js`) → `git add` + `commit` + `push` a rama `dev` (requiere `GIT_PUSH_TOKEN` en Render).
+3. **Despliegue** (`despliegue.html`) → **Subir a Producción** → commit+push de archivos de editor a rama `main`.
 
 **Avisos al salir / cambiar vista:** `DCEditorDevNav.confirmarAntesDeNavegar()` avisa si:
 - Hay cambios **sin guardar** en memoria (`state.dirty`), o
-- Hay cambios **en disco sin commit/push** (`GET /api/editors/git-push/pendiente?alcance=episodios|cartas` — `git status` + commits sin push).
+- Hay cambios **en disco sin commit/push** (`GET /api/editors/git-push/pendiente?alcance=episodios|cartas|desafios` — `git status` + commits sin push).
 
 También engancha `beforeunload` del navegador.
 
-**Módulos:** `lib/editorGitPush.js` (servidor), `public/js/editorGitPush.js` (modal push), `public/js/editorDevNav.js` (nav + guardias).
+**Módulos:** `lib/editorGitPush.js` (servidor), `public/js/editorGitPush.js` (modal push dev), `public/js/editorDevNav.js` (nav + guardias), `public/js/editorSessionLog.js` (registro sesión), `public/js/despliegue.js`, `public/js/editorCartaPicker.js`, `public/js/editarDesafiosModel.js`, `public/js/editarDesafios.js`.
 
 **Variables Render (dev):** `GIT_PUSH_TOKEN` (PAT GitHub write); opcional `GIT_PUSH_BRANCH`, `GIT_PUSH_SECRET`, `GIT_USER_NAME`, `GIT_USER_EMAIL`, `GIT_PUSH_REPO_URL`. Documentadas en `render.yaml`.
 
@@ -436,6 +448,7 @@ También engancha `beforeunload` del navegador.
 - Episodios: `public/episodios.html`, `public/js/episodios.js`, `public/js/episodio-engine.js`
 - Editor episodios (oculto): `public/crearEpisodios.html`, `public/js/crearEpisodios.js`, `public/js/crearEpisodiosModel.js`, `public/js/editorGitPush.js`
 - Editor cartas (oculto): `public/editarCartas.html`, `public/js/editarCartas.js`, `public/js/editarCartasModel.js`, `public/js/editorGitPush.js` — edita `public/resources/cartas.xlsx` (mismas columnas que el Excel del juego); previsualización `carta-mini` vía `cartas.js`
+- Editor desafíos (oculto): `public/editarDesafios.html`, `public/js/editarDesafios.js`, `public/js/editarDesafiosModel.js`, `public/js/editorCartaPicker.js` — edita `public/resources/desafios.xlsx`
 - Git push editores: `lib/editorGitPush.js` (servidor)
 - Tienda: `public/tienda.js`
 - Crear/editar mazos: `public/crearMazos.js`, `public/mazos.js`
@@ -492,6 +505,8 @@ También engancha `beforeunload` del navegador.
   - Output: usuario guardado o `409 SYNC_CONFLICT`
 - `GET /api/tableros`
   - Output: lista de fondos disponibles
+- `GET /api/episodios/catalogo`
+  - Output: `{ episodios: [{ evento_id, nombre, descripcion, imagen, jsonPath, archivo }] }` — metadatos carrusel desde cada JSON en `public/resources/episodios/` (`mostrar_carrusel !== false`, `evento_id` único)
 - Editor episodios (`crearEpisodios.html`; requiere `NODE_ENV !== 'production'`, `EPISODIOS_EDITOR=1` o `RENDER_GIT_BRANCH=dev`):
   - `GET /api/episodios-editor/habilitado` → `{ habilitado, gitPush? }`
   - `GET /api/episodios-editor/archivos` · `GET /api/episodios-editor/archivo/:nombre`
@@ -504,12 +519,18 @@ También engancha `beforeunload` del navegador.
   - `GET /api/cartas-editor/catalogo` → `{ columnas, filas, skillClasses }`
   - `PUT /api/cartas-editor/catalogo` body `{ columnas?, filas }` — valida y escribe `public/resources/cartas.xlsx`
   - `POST /api/cartas-editor/git-push` body `{ mensaje?, token? }` — commit+push `cartas.xlsx`
+- Editor desafíos (`editarDesafios.html`; misma habilitación que cartas / rama `dev`):
+  - `GET /api/desafios-editor/habilitado` → `{ habilitado, gitPush? }`
+  - `GET /api/desafios-editor/catalogo` → `{ columnas, filas }`
+  - `PUT /api/desafios-editor/catalogo` body `{ columnas?, filas }` — valida y escribe `public/resources/desafios.xlsx`
+  - `POST /api/desafios-editor/git-push` body `{ mensaje?, token? }`
 - Git push editores (compartido):
   - `GET /api/editors/entorno` → `{ esDev, mostrarMenuDevTools, editoresHabilitados, rama, ramaDevRender }`
   - `GET /api/editors/git-push/estado` → `{ habilitado, rama, requiereTokenCliente, ramaDevRender }`
-  - `GET /api/editors/git-push/pendiente?alcance=episodios|cartas` → `{ pendiente, motivo? }` (`sin_commit` | `sin_push`)
-  - Lógica servidor: `lib/editorGitPush.js`. Env: `GIT_PUSH_TOKEN` (PAT GitHub), opcional `GIT_PUSH_BRANCH`, `GIT_PUSH_SECRET`, `GIT_PUSH_REPO_URL`, `GIT_USER_NAME`, `GIT_USER_EMAIL`
-  - UI cliente: `editorGitPush.js`, `editorDevNav.js`; menú dev en `cartas.js` (`DEV_TOOLS_MENU_EMAILS`)
+  - `GET /api/editors/git-push/pendiente?alcance=episodios|cartas|desafios` → `{ pendiente, motivo? }` (`sin_commit` | `sin_push`)
+  - `GET /api/editors/despliegue/habilitado` · `GET /api/editors/despliegue/resumen` · `POST /api/editors/despliegue/produccion` body `{ mensaje?, token?, archivos? }` — push archivos de editor a rama `main`
+  - Lógica servidor: `lib/editorGitPush.js`. Env: `GIT_PUSH_TOKEN` (PAT GitHub), opcional `GIT_PUSH_BRANCH`, `GIT_PUSH_BRANCH_PROD`, `GIT_PUSH_PROD_ENABLED`, `GIT_PUSH_SECRET`, `GIT_PUSH_REPO_URL`, `GIT_USER_NAME`, `GIT_USER_EMAIL`
+  - UI cliente: `editorGitPush.js`, `editorDevNav.js`, `editorSessionLog.js`, `despliegue.js`; menú dev en `cartas.js` (`DEV_TOOLS_MENU_EMAILS`)
 - `POST /admin/users/list`, `/admin/user/get`, `/admin/user/update`
   - Solo cuenta admin (`opciones.js`); mismo control de sync que `/update-user`
 

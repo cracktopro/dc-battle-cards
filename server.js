@@ -114,6 +114,71 @@ function listarJsonEpisodios() {
         .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
 }
 
+function leerEventoIdEpisodioJson(data) {
+    const raw = data?.evento_id ?? data?.episodio_id ?? data?.eventoId;
+    if (raw == null || raw === '') {
+        return null;
+    }
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : null;
+}
+
+function episodioJsonVisibleEnCarrusel(data) {
+    return !(data && data.mostrar_carrusel === false);
+}
+
+function mapearEpisodioCatalogoDesdeJson(nombreArchivo, data) {
+    return {
+        evento_id: leerEventoIdEpisodioJson(data),
+        nombre: String(data?.nombre || '').trim(),
+        descripcion: String(data?.descripcion || '').trim(),
+        imagen: String(data?.imagen || '').trim(),
+        jsonPath: `resources/episodios/${nombreArchivo}`,
+        archivo: nombreArchivo,
+    };
+}
+
+function listarEpisodiosCatalogo() {
+    const seenIds = new Set();
+    const result = [];
+    for (const nombre of listarJsonEpisodios()) {
+        try {
+            const full = path.join(EPISODIOS_JSON_DIR, nombre);
+            const data = JSON.parse(fs.readFileSync(full, 'utf8'));
+            if (!episodioJsonVisibleEnCarrusel(data)) {
+                continue;
+            }
+            const eventoId = leerEventoIdEpisodioJson(data);
+            if (eventoId == null) {
+                continue;
+            }
+            if (seenIds.has(eventoId)) {
+                console.warn(`[episodios/catalogo] evento_id duplicado ${eventoId} en ${nombre}, omitido`);
+                continue;
+            }
+            const ep = mapearEpisodioCatalogoDesdeJson(nombre, data);
+            if (!ep.nombre) {
+                continue;
+            }
+            seenIds.add(eventoId);
+            result.push(ep);
+        } catch (error) {
+            console.warn(`[episodios/catalogo] Error leyendo ${nombre}:`, error.message);
+        }
+    }
+    result.sort((a, b) => a.evento_id - b.evento_id);
+    return result;
+}
+
+app.get('/api/episodios/catalogo', (_req, res) => {
+    try {
+        return res.json({ episodios: listarEpisodiosCatalogo() });
+    } catch (error) {
+        console.warn('[api/episodios/catalogo]', error.message);
+        return res.status(500).json({ error: 'No se pudo leer el catálogo de episodios.' });
+    }
+});
+
 function listarImagenesEnSubcarpeta(sub) {
     const permitidos = { bust: 'bust', background: 'background' };
     const carpeta = permitidos[String(sub || '').trim()];
@@ -415,6 +480,156 @@ app.put('/api/cartas-editor/catalogo', (req, res) => {
     }
 });
 
+/** Editor desafios.xlsx (editarDesafios.html) */
+const DESAFIOS_XLSX_PATH = path.resolve(path.join(__dirname, 'public', 'resources', 'desafios.xlsx'));
+const DESAFIOS_COLUMNAS_ORDEN = [
+    'ID_desafio', 'faccion', 'nombre', 'Descripción', 'dificultad',
+    'enemigo1', 'enemigo2', 'enemigo3', 'enemigo4', 'enemigo5', 'enemigo6',
+    'boss', 'mejora', 'mejora_especial', 'puntos', 'cartas', 'tablero',
+];
+
+const desafiosEditorPermitido = cartasEditorPermitido;
+
+function asegurarFilaDesafiosServidor(fila, columnas) {
+    const out = {};
+    columnas.forEach((col) => {
+        let v = fila && Object.prototype.hasOwnProperty.call(fila, col) ? fila[col] : '';
+        if (['ID_desafio', 'dificultad', 'mejora', 'mejora_especial', 'puntos'].includes(col)) {
+            const n = Number(v);
+            v = Number.isFinite(n) ? n : (col === 'dificultad' ? 1 : 0);
+        } else if (col === 'faccion') {
+            v = String(v || '').trim().toUpperCase() === 'V' ? 'V' : 'H';
+        } else if (v === null || v === undefined) {
+            v = '';
+        } else if (typeof v !== 'string') {
+            v = String(v);
+        }
+        out[col] = v;
+    });
+    return out;
+}
+
+function leerDesafiosXlsxServidor() {
+    if (!fs.existsSync(DESAFIOS_XLSX_PATH)) {
+        throw new Error('No existe public/resources/desafios.xlsx');
+    }
+    const workbook = XLSX.readFile(DESAFIOS_XLSX_PATH);
+    const sheetName = workbook.SheetNames[0];
+    const sheet = workbook.Sheets[sheetName];
+    const filasRaw = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+    const columnas = DESAFIOS_COLUMNAS_ORDEN.slice();
+    const filas = filasRaw.map((f) => asegurarFilaDesafiosServidor(f, columnas));
+    return { columnas, filas, sheetName };
+}
+
+async function validarFilasDesafiosServidor(filas) {
+    let filasCartas = [];
+    try {
+        const cat = leerCartasXlsxServidor();
+        filasCartas = cat.filas;
+    } catch (_e) {
+        filasCartas = [];
+    }
+    const nombresCartas = new Set(
+        filasCartas.map((f) => String(f.Nombre || '').trim().toLowerCase()).filter(Boolean)
+    );
+    const errores = [];
+    const ids = new Map();
+    (filas || []).forEach((fila, indice) => {
+        const idx = indice + 1;
+        const id = Number(fila.ID_desafio);
+        if (!Number.isFinite(id)) {
+            errores.push(`Fila ${idx}: ID_desafio inválido.`);
+        } else if (ids.has(id)) {
+            errores.push(`Fila ${idx}: ID_desafio duplicado (${id}).`);
+        } else {
+            ids.set(id, true);
+        }
+        const nombre = String(fila.nombre || '').trim();
+        if (!nombre) {
+            errores.push(`Fila ${idx}: falta nombre.`);
+        }
+        const fac = String(fila.faccion || '').trim().toUpperCase();
+        if (fac !== 'H' && fac !== 'V') {
+            errores.push(`Fila ${idx} (${nombre || '?'}): faccion debe ser H o V.`);
+        }
+        const dif = Number(fila.dificultad);
+        if (!Number.isFinite(dif) || dif < 1 || dif > 6) {
+            errores.push(`Fila ${idx} (${nombre || '?'}): dificultad debe ser 1–6.`);
+        }
+        const refs = [
+            'enemigo1', 'enemigo2', 'enemigo3', 'enemigo4', 'enemigo5', 'enemigo6', 'boss',
+        ];
+        refs.forEach((key) => {
+            const nom = String(fila[key] || '').trim();
+            if (nom && nombresCartas.size && !nombresCartas.has(nom.toLowerCase())) {
+                errores.push(`Fila ${idx} (${nombre || '?'}): «${nom}» (${key}) no está en cartas.xlsx.`);
+            }
+        });
+        const cartaRecomp = String(fila.cartas || '').trim().split(/[;,|]/).map((s) => s.trim()).filter(Boolean)[0] || '';
+        if (cartaRecomp && nombresCartas.size && !nombresCartas.has(cartaRecomp.toLowerCase())) {
+            errores.push(`Fila ${idx} (${nombre || '?'}): carta recompensa «${cartaRecomp}» no está en cartas.xlsx.`);
+        }
+    });
+    return { ok: errores.length === 0, errores };
+}
+
+function escribirDesafiosXlsxServidor(filas, columnas, sheetName) {
+    const cols = columnas && columnas.length ? columnas : DESAFIOS_COLUMNAS_ORDEN;
+    const normalizadas = filas.map((f) => asegurarFilaDesafiosServidor(f, cols));
+    const sheet = XLSX.utils.json_to_sheet(normalizadas, { header: cols });
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, sheet, sheetName || 'Hoja1');
+    XLSX.writeFile(workbook, DESAFIOS_XLSX_PATH);
+}
+
+app.get('/api/desafios-editor/habilitado', (_req, res) => {
+    return res.json({
+        habilitado: desafiosEditorPermitido(),
+        gitPush: DCEditorGitPush.gitPushEstado(),
+    });
+});
+
+app.get('/api/desafios-editor/catalogo', (_req, res) => {
+    if (!desafiosEditorPermitido()) {
+        return res.status(403).json({ error: 'Editor de desafíos no disponible en este entorno.' });
+    }
+    try {
+        const { columnas, filas, sheetName } = leerDesafiosXlsxServidor();
+        return res.json({ columnas, filas, sheetName });
+    } catch (error) {
+        console.warn('[api/desafios-editor/catalogo GET]', error.message);
+        return res.status(500).json({ error: 'No se pudo leer desafios.xlsx', detalle: error.message });
+    }
+});
+
+app.put('/api/desafios-editor/catalogo', async (req, res) => {
+    if (!desafiosEditorPermitido()) {
+        return res.status(403).json({ error: 'Editor no disponible.' });
+    }
+    const filas = req.body?.filas;
+    const columnas = Array.isArray(req.body?.columnas) ? req.body.columnas : DESAFIOS_COLUMNAS_ORDEN;
+    if (!Array.isArray(filas)) {
+        return res.status(400).json({ error: 'Cuerpo inválido: se espera { filas: [] }.' });
+    }
+    const normalizadas = filas.map((f) => asegurarFilaDesafiosServidor(f, columnas));
+    const val = await validarFilasDesafiosServidor(normalizadas);
+    if (!val.ok) {
+        return res.status(400).json({ error: 'Validación fallida', errores: val.errores });
+    }
+    try {
+        let sheetName = 'Hoja1';
+        try {
+            sheetName = leerDesafiosXlsxServidor().sheetName || sheetName;
+        } catch (_e) { /* nuevo archivo */ }
+        escribirDesafiosXlsxServidor(normalizadas, columnas, sheetName);
+        return res.json({ ok: true, total: normalizadas.length });
+    } catch (error) {
+        console.warn('[api/desafios-editor/catalogo PUT]', error.message);
+        return res.status(500).json({ error: 'No se pudo guardar desafios.xlsx', detalle: error.message });
+    }
+});
+
 app.get('/api/editors/git-push/estado', (_req, res) => {
     return res.json(DCEditorGitPush.gitPushEstado());
 });
@@ -435,7 +650,10 @@ app.get('/api/editors/git-push/pendiente', async (req, res) => {
         if (alcance === 'cartas') {
             return res.json(await DCEditorGitPush.hayCambiosGitPendientesCartas());
         }
-        return res.status(400).json({ error: 'Parámetro alcance inválido (episodios | cartas).' });
+        if (alcance === 'desafios') {
+            return res.json(await DCEditorGitPush.hayCambiosGitPendientesDesafios());
+        }
+        return res.status(400).json({ error: 'Parámetro alcance inválido (episodios | cartas | desafios).' });
     } catch (error) {
         console.warn('[api/editors/git-push/pendiente]', error.message);
         return res.status(500).json({ error: 'No se pudo comprobar el estado git.', detalle: error.message });
@@ -477,6 +695,68 @@ app.post('/api/cartas-editor/git-push', async (req, res) => {
     } catch (error) {
         console.warn('[api/cartas-editor/git-push]', error.message);
         return res.status(500).json({ error: 'No se pudo subir a GitHub.', detalle: error.message });
+    }
+});
+
+app.post('/api/desafios-editor/git-push', async (req, res) => {
+    if (!desafiosEditorPermitido()) {
+        return res.status(403).json({ error: 'Editor de desafíos no disponible en este entorno.' });
+    }
+    if (!DCEditorGitPush.gitPushPermitido()) {
+        return res.status(403).json({ error: 'Git push no configurado (define GIT_PUSH_TOKEN en el servidor).' });
+    }
+    if (!DCEditorGitPush.verificarGitPushAuth(req)) {
+        return res.status(401).json({ error: 'Token de git push incorrecto.' });
+    }
+    try {
+        const resultado = await DCEditorGitPush.gitPushDesafios(req.body?.mensaje);
+        return res.json(resultado);
+    } catch (error) {
+        console.warn('[api/desafios-editor/git-push]', error.message);
+        return res.status(500).json({ error: 'No se pudo subir a GitHub.', detalle: error.message });
+    }
+});
+
+app.get('/api/editors/despliegue/habilitado', (_req, res) => {
+    return res.json({
+        habilitado: DCEditorGitPush.editoresInternosPermitidos(),
+        produccion: {
+            habilitado: DCEditorGitPush.gitPushProduccionPermitido(),
+            rama: DCEditorGitPush.obtenerRamaGitPushProduccion(),
+        },
+        gitPush: DCEditorGitPush.gitPushEstado(),
+    });
+});
+
+app.get('/api/editors/despliegue/resumen', async (_req, res) => {
+    if (!DCEditorGitPush.editoresInternosPermitidos()) {
+        return res.status(403).json({ error: 'Despliegue no disponible en este entorno.' });
+    }
+    try {
+        return res.json(await DCEditorGitPush.resumenDespliegueEditor());
+    } catch (error) {
+        console.warn('[api/editors/despliegue/resumen]', error.message);
+        return res.status(500).json({ error: 'No se pudo obtener el resumen.', detalle: error.message });
+    }
+});
+
+app.post('/api/editors/despliegue/produccion', async (req, res) => {
+    if (!DCEditorGitPush.gitPushProduccionPermitido()) {
+        return res.status(403).json({ error: 'Despliegue a producción no habilitado en este entorno.' });
+    }
+    if (!DCEditorGitPush.verificarGitPushAuth(req)) {
+        return res.status(401).json({ error: 'Token de git push incorrecto.' });
+    }
+    try {
+        const archivos = Array.isArray(req.body?.archivos) ? req.body.archivos : undefined;
+        const resultado = await DCEditorGitPush.gitPushProduccion({
+            rutas: archivos,
+            mensaje: req.body?.mensaje,
+        });
+        return res.json(resultado);
+    } catch (error) {
+        console.warn('[api/editors/despliegue/produccion]', error.message);
+        return res.status(500).json({ error: 'No se pudo desplegar a producción.', detalle: error.message });
     }
 });
 

@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <title>Despliegue — DC Battle Cards</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+    <link href="css/scrollbar.css" rel="stylesheet">
+    <link href="css/crearEpisodios.css" rel="stylesheet">
+    <link href="css/despliegue.css" rel="stylesheet">
+</head>
+<body class="crear-ep-body despliegue-body">
+    <header class="crear-ep-header">
+        <div class="crear-ep-header-marca">
+            <span class="crear-ep-header-kicker">Herramienta interna</span>
+            <h1 class="crear-ep-header-titulo">Despliegue a producción</h1>
+        </div>
+        <div class="crear-ep-header-acciones" id="despliegue-toolbar">
+            <button type="button" id="despliegue-btn-refrescar" class="crear-ep-btn crear-ep-btn--secundario">Actualizar</button>
+            <button type="button" id="despliegue-btn-produccion" class="crear-ep-btn crear-ep-btn--produccion" disabled>Subir a Producción</button>
+        </div>
+    </header>
+
+    <p id="despliegue-aviso" class="crear-ep-aviso" hidden></p>
+
+    <div class="despliegue-layout" id="despliegue-layout" hidden>
+        <section class="despliegue-panel despliegue-panel--registro">
+            <h2 class="despliegue-panel-titulo">Registro de cambios (sesión)</h2>
+            <p class="crear-ep-field-ayuda despliegue-ayuda">
+                Historial de guardados y subidas desde las herramientas de desarrollo en este navegador.
+                Solo incluye archivos editados con los editores internos (cartas, episodios, desafíos).
+            </p>
+            <textarea id="despliegue-registro" class="despliegue-registro" readonly spellcheck="false" aria-label="Registro de cambios de la sesión"></textarea>
+        </section>
+
+        <aside class="despliegue-panel despliegue-panel--archivos">
+            <h2 class="despliegue-panel-titulo">Archivos pendientes → main</h2>
+            <p class="crear-ep-field-ayuda despliegue-ayuda">
+                Diferencias detectadas en el servidor entre la rama <strong>dev</strong> actual y <strong>main</strong>
+                en rutas de editores. «Subir a GitHub» en cada editor sigue enviando solo a <strong>dev</strong>.
+            </p>
+            <ul id="despliegue-archivos" class="despliegue-archivos-lista"></ul>
+            <div class="despliegue-aviso-prod">
+                <strong>⚠ Producción</strong>
+                <p>El botón «Subir a Producción» copia únicamente estos archivos a la rama <code>main</code>. Requiere <code>GIT_PUSH_TOKEN</code> y entorno Render <code>dev</code>.</p>
+            </div>
+        </aside>
+    </div>
+
+    <dialog id="despliegue-dialog-prod" class="crear-ep-dialog-git-push">
+        <form method="dialog" class="crear-ep-dialog-git-push-inner">
+            <h3 class="crear-ep-dialog-titulo">Subir a Producción</h3>
+            <p class="crear-ep-dialog-ayuda">
+                Se desplegarán los archivos de editor pendientes a la rama <strong>main</strong>.
+                Asegúrate de haber subido antes los cambios a <strong>dev</strong> con «Subir a GitHub».
+            </p>
+            <label class="crear-ep-field crear-ep-field--git-push" for="despliegue-prod-mensaje">
+                <span>Mensaje del commit (opcional)</span>
+                <input type="text" id="despliegue-prod-mensaje" class="crear-ep-select" autocomplete="off" spellcheck="false">
+            </label>
+            <label id="despliegue-prod-token-wrap" class="crear-ep-field crear-ep-field--git-push" for="despliegue-prod-token" hidden>
+                <span>Token de autorización</span>
+                <input type="password" id="despliegue-prod-token" class="crear-ep-select" autocomplete="off" spellcheck="false">
+            </label>
+            <div id="despliegue-prod-progreso" class="editor-git-push-progreso" hidden>
+                <p id="despliegue-prod-estado" class="editor-git-push-estado" aria-live="polite">Desplegando…</p>
+            </div>
+            <p id="despliegue-prod-resultado" class="editor-git-push-resultado" hidden></p>
+            <div class="crear-ep-dialog-acciones">
+                <button type="button" id="despliegue-prod-ejecutar" class="crear-ep-btn crear-ep-btn--produccion">Confirmar despliegue</button>
+                <button type="button" id="despliegue-prod-cerrar" class="crear-ep-btn crear-ep-btn--secundario">Cancelar</button>
+            </div>
+        </form>
+    </dialog>
+
+    <div id="crear-ep-toast" class="crear-ep-toast" hidden role="status"></div>
+
+    <script src="js/editorSessionLog.js"></script>
+    <script src="js/editorDevNav.js"></script>
+    <script src="js/despliegue.js"></script>
+</body>
+</html>

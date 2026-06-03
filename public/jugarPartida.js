@@ -588,6 +588,9 @@ async function inicializarPanelConsejos() {
 }
 
 function urlImagenEpisodioPanel(ep) {
+    if (typeof window.DCEpisodiosCatalogo?.urlImagenEpisodio === 'function') {
+        return window.DCEpisodiosCatalogo.urlImagenEpisodio(ep);
+    }
     const raw = String(ep?.imagen || '').trim();
     if (!raw) {
         return EPISODIOS_PLACEHOLDER_IMG;
@@ -598,29 +601,20 @@ function urlImagenEpisodioPanel(ep) {
     return raw.startsWith('resources/') ? raw : `resources/${raw.replace(/^\/+/, '')}`;
 }
 
-async function cargarEpisodiosPanelDesdeExcel() {
-    if (typeof XLSX === 'undefined') {
+async function cargarEpisodiosPanelCatalogo() {
+    try {
+        if (typeof window.DCEpisodiosCatalogo?.cargarLista === 'function') {
+            return window.DCEpisodiosCatalogo.cargarLista();
+        }
+        const response = await fetch('/api/episodios/catalogo');
+        if (!response.ok) {
+            return [];
+        }
+        const body = await response.json();
+        return Array.isArray(body.episodios) ? body.episodios : [];
+    } catch (_e) {
         return [];
     }
-    const response = await fetch('resources/episodios.xlsx');
-    if (!response.ok) {
-        return [];
-    }
-    const data = await response.arrayBuffer();
-    const workbook = XLSX.read(data, { type: 'array' });
-    const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    const filas = XLSX.utils.sheet_to_json(sheet, { defval: '' });
-    return filas
-        .map((fila, idx) => {
-            const eventoId = fila.evento_id ?? fila.eventoId ?? idx;
-            return {
-                evento_id: Number.isFinite(Number(eventoId)) ? Number(eventoId) : idx,
-                nombre: String(fila.nombre || '').trim(),
-                imagen: String(fila.imagen || '').trim(),
-            };
-        })
-        .filter((ep) => ep.nombre)
-        .sort((a, b) => a.evento_id - b.evento_id);
 }
 
 function aplicarContenidoEpisodioPanel(item) {
@@ -735,7 +729,7 @@ async function inicializarCarruselEpisodiosPanel() {
         return;
     }
     try {
-        episodiosPanelCarrusel = await cargarEpisodiosPanelDesdeExcel();
+        episodiosPanelCarrusel = await cargarEpisodiosPanelCatalogo();
     } catch (error) {
         console.error('Error cargando episodios para el panel:', error);
         episodiosPanelCarrusel = [];

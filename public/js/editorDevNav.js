@@ -8,6 +8,8 @@
     const VISTAS = [
         { id: 'cartas', href: 'editarCartas.html', label: 'Cartas' },
         { id: 'episodios', href: 'crearEpisodios.html', label: 'Episodios' },
+        { id: 'desafios', href: 'editarDesafios.html', label: 'Desafíos' },
+        { id: 'despliegue', href: 'despliegue.html', label: 'Despliegue' },
     ];
 
     const VISTA_JUEGO_HREF = 'vistaJuego.html';
@@ -136,13 +138,21 @@
 
     function marcarCambiosEnDisco() {
         gitPendiente = true;
-        void consultarGitPendiente();
+        void consultarGitPendiente().then(() => {
+            document.querySelectorAll('.crear-ep-header-acciones').forEach((tb) => {
+                window.DCEditorGitPush?.actualizarEstadoPendienteGit?.(tb);
+            });
+        });
     }
 
     function marcarGitSincronizado() {
         gitPendiente = false;
         config.motivoGitPendiente = null;
-        void consultarGitPendiente();
+        void consultarGitPendiente().then(() => {
+            document.querySelectorAll('.crear-ep-header-acciones').forEach((tb) => {
+                window.DCEditorGitPush?.actualizarEstadoPendienteGit?.(tb);
+            });
+        });
     }
 
     window.DCEditorDevNav = {

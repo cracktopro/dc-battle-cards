@@ -1,6 +1,8 @@
 {
-  "episodio_id": "0",
+  "mostrar_carrusel": false,
+  "evento_id": 0,
   "nombre": "Supergirl: Fuga de las Sombras",
+  "_comentario": "Copia legacy; no aparece en carrusel. Usar ejemplo.json como episodio jugable.",
   "timeline": [
     {
       "type": "cutscene",

@@ -87,7 +87,9 @@
         if (ayuda) {
             ayuda.textContent = alcance === 'cartas'
                 ? `Se hará commit de public/resources/cartas.xlsx y push a la rama «${rama}». Guarda el Excel antes de subir.`
-                : `Se hará commit de los JSON en public/resources/episodios/ y push a la rama «${rama}». Guarda los archivos antes de subir.`;
+                : alcance === 'desafios'
+                    ? `Se hará commit de public/resources/desafios.xlsx y push a la rama «${rama}». Guarda el Excel antes de subir.`
+                    : `Se hará commit de los JSON en public/resources/episodios/ y push a la rama «${rama}». Guarda los archivos antes de subir.`;
         }
         if (mensaje) mensaje.value = '';
         if (resultado) {
@@ -150,8 +152,17 @@
                         + (data.commit ? `<br><code>${data.commit}</code>` : ''),
                         false
                     );
+                    window.DCEditorSessionLog?.registrarGitPushDev?.(
+                        opciones.alcance,
+                        data.commit || 'Push a dev completado',
+                        data.archivos || archivosPorAlcance(opciones.alcance)
+                    );
                 }
                 window.DCEditorDevNav?.marcarGitSincronizado();
+                void actualizarEstadoPendienteGit(document.querySelector('.crear-ep-header-acciones'));
+                document.querySelectorAll('.crear-ep-header-acciones').forEach((tb) => {
+                    void actualizarEstadoPendienteGit(tb);
+                });
                 opciones.onSuccess?.(data);
             } catch (err) {
                 setProgreso(true, 'Error', 100);
@@ -176,6 +187,34 @@
         return b;
     }
 
+    async function actualizarEstadoPendienteGit(toolbar) {
+        const opciones = toolbarConfigs.get(toolbar);
+        if (!opciones?.alcance || !gitPushEstado?.habilitado) {
+            return;
+        }
+        const btn = toolbar?.querySelector('[data-editor-git-push]');
+        if (!btn) {
+            return;
+        }
+        try {
+            const res = await fetch(`/api/editors/git-push/pendiente?alcance=${encodeURIComponent(opciones.alcance)}`);
+            if (!res.ok) {
+                return;
+            }
+            const data = await res.json();
+            btn.classList.toggle('crear-ep-btn--git-pendiente', Boolean(data.pendiente));
+            btn.title = data.pendiente
+                ? 'Hay cambios pendientes de subir a GitHub (rama dev)'
+                : 'Commit y push a la rama dev en GitHub';
+        } catch (_e) { /* ignorar */ }
+    }
+
+    function archivosPorAlcance(alcance) {
+        if (alcance === 'cartas') return ['public/resources/cartas.xlsx'];
+        if (alcance === 'desafios') return ['public/resources/desafios.xlsx'];
+        return ['public/resources/episodios/*.json'];
+    }
+
     function refrescarBotonEnToolbar(toolbar) {
         const opciones = toolbarConfigs.get(toolbar);
         if (!opciones || !gitPushEstado?.habilitado) {
@@ -191,6 +230,7 @@
             });
         });
         toolbar.appendChild(boton);
+        void actualizarEstadoPendienteGit(toolbar);
     }
 
     async function cargarEstado() {
@@ -221,6 +261,7 @@
     window.DCEditorGitPush = {
         montarEnToolbar,
         refrescarBotonEnToolbar,
+        actualizarEstadoPendienteGit,
         recargarEstado: cargarEstado,
     };
 })();
