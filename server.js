@@ -1200,7 +1200,8 @@ const CHAT_GRUPO_MAX_MENSAJES = 60;
 const GRUPO_RECONEXION_GRACIA_MS = 20000;
 const disolucionesPendientesGrupo = new Map(); // partyId -> timeoutId
 const sesionesPvpActivas = new Map(); // sessionId -> metadata
-const preparacionesCoopEvento = new Map(); // prepId -> estado invitación / selección 6 cartas
+const CARTAS_POR_JUGADOR_COOP = 4; // cartas que cada jugador selecciona para el evento coop
+const preparacionesCoopEvento = new Map(); // prepId -> estado invitación / selección de cartas
 const sesionesCoopEventoActivas = new Map(); // sessionId -> metadata coop vs BOT
 const intercambiosActivos = new Map(); // partyId -> estado intercambio
 let catalogoCartasServidorCache = null;
@@ -2727,7 +2728,7 @@ async function extraerCartasUsuarioPorIndicesCoop(email, indicesRaw) {
     const datos = await obtenerUsuarioPersistidoPorEmail(email);
     const cartasUsuario = Array.isArray(datos?.cartas) ? datos.cartas : [];
     const indices = Array.isArray(indicesRaw) ? indicesRaw.map(n => Number(n)) : [];
-    if (indices.length !== 6) {
+    if (indices.length !== CARTAS_POR_JUGADOR_COOP) {
         return null;
     }
     const usados = new Set();
@@ -2740,6 +2741,32 @@ async function extraerCartasUsuarioPorIndicesCoop(email, indicesRaw) {
         salida.push(JSON.parse(JSON.stringify(cartasUsuario[ix])));
     }
     return salida;
+}
+
+/** Representación ligera {n, skin} de una selección coop para sincronizar el panel-resumen en vivo. */
+function resumenSeleccionLiveCoop(cartas) {
+    if (!Array.isArray(cartas)) return [];
+    return cartas.slice(0, CARTAS_POR_JUGADOR_COOP).map((carta) => {
+        let nombre = '';
+        try {
+            nombre = DCSkinsCartas.obtenerNombreParentCarta(carta) || carta?.Nombre || '';
+        } catch (_e) {
+            nombre = carta?.Nombre || '';
+        }
+        const skinRaw = carta?.skinActivoId;
+        const skin = (skinRaw !== null && skinRaw !== undefined && Number.isFinite(Number(skinRaw))) ? Number(skinRaw) : null;
+        return { n: String(nombre || '').slice(0, 80), skin };
+    }).filter((c) => c.n);
+}
+
+/** Sanea la selección {n, skin} que envía el cliente en tiempo real (tipos y longitud). */
+function normalizarSeleccionLiveCoopEntrada(cartas) {
+    if (!Array.isArray(cartas)) return [];
+    return cartas.slice(0, CARTAS_POR_JUGADOR_COOP).map((c) => {
+        const skinRaw = c?.skin;
+        const skin = (skinRaw !== null && skinRaw !== undefined && Number.isFinite(Number(skinRaw))) ? Number(skinRaw) : null;
+        return { n: String(c?.n || '').slice(0, 80), skin };
+    }).filter((c) => c.n);
 }
 
 function enriquecerCartasConCatalogoCoop(cartas, mapaCatalogo) {
@@ -4030,7 +4057,9 @@ io.on('connection', (socket) => {
             listoA: false,
             listoB: false,
             cartasA: null,
-            cartasB: null
+            cartasB: null,
+            seleccionLiveA: [],
+            seleccionLiveB: []
         });
         const otro = obtenerUsuarioConectadoPorEmail(otroEmail);
         const nombreEv = String(eventoNombre || fila.nombre || 'Evento cooperativo').trim();
@@ -4072,13 +4101,17 @@ io.on('connection', (socket) => {
         prep.estado = 'seleccion';
         const inviter = obtenerUsuarioConectadoPorEmail(prep.inviterEmail);
         const invitee = usuario;
-        const nombreJugadorA = String(inviter?.nombre || prep.inviterEmail.split('@')[0] || 'Jugador').trim();
+        const nombreJugadorA = String(inviter?.nombre || prep.inviterEmail.split('@')[0] || 'Jugador 1').trim();
+        const nombreJugadorB = String(invitee?.nombre || prep.inviteeEmail.split('@')[0] || 'Jugador 2').trim();
+        prep.nombreJugadorA = nombreJugadorA;
+        prep.nombreJugadorB = nombreJugadorB;
         const basePayload = {
             prepId: prep.prepId,
             eventoId: prep.eventoId,
             eventoNombre: prep.eventoNombre,
             dificultad: prep.dificultad,
-            nombreJugadorA
+            nombreJugadorA,
+            nombreJugadorB
         };
         if (inviter?.id) {
             io.to(inviter.id).emit('coop:evento:preparacion', { ...basePayload, rolCoop: 'A' });
@@ -4104,7 +4137,7 @@ io.on('connection', (socket) => {
         let cartas = await extraerCartasUsuarioPorIndicesCoop(usuario.email, indicesCartas);
         if (!cartas) {
             console.error(`[coop] preparacion:listo: cartas inválidas para ${usuario.email} (indices=${JSON.stringify(indicesCartas)})`);
-            io.to(socket.id).emit('grupo:notificacion', { tipo: 'error', mensaje: 'Debes elegir exactamente 6 cartas válidas de tu colección.' });
+            io.to(socket.id).emit('grupo:notificacion', { tipo: 'error', mensaje: `Debes elegir exactamente ${CARTAS_POR_JUGADOR_COOP} cartas válidas de tu colección.` });
             return;
         }
         if (skinsPorIndice && typeof skinsPorIndice === 'object') {
@@ -4155,10 +4188,12 @@ io.on('connection', (socket) => {
         if (esA) {
             prep.cartasA = cartas;
             prep.listoA = true;
+            prep.seleccionLiveA = resumenSeleccionLiveCoop(cartas);
         }
         if (esB) {
             prep.cartasB = cartas;
             prep.listoB = true;
+            prep.seleccionLiveB = resumenSeleccionLiveCoop(cartas);
         }
         const inviter = obtenerUsuarioConectadoPorEmail(prep.inviterEmail);
         const invitee = obtenerUsuarioConectadoPorEmail(prep.inviteeEmail);
@@ -4167,7 +4202,9 @@ io.on('connection', (socket) => {
             prepId: prep.prepId,
             listoA: Boolean(prep.listoA),
             listoB: Boolean(prep.listoB),
-            clavesCartasA: clavesA
+            clavesCartasA: clavesA,
+            seleccionA: prep.seleccionLiveA || [],
+            seleccionB: prep.seleccionLiveB || []
         };
         if (inviter?.id) io.to(inviter.id).emit('coop:evento:preparacion:estado', estadoPrep);
         if (invitee?.id) io.to(invitee.id).emit('coop:evento:preparacion:estado', estadoPrep);
@@ -4197,6 +4234,35 @@ io.on('connection', (socket) => {
                 console.log(`[coop] sesión coop iniciada correctamente para prep=${prep.prepId}`);
             }
         }
+    });
+
+    /**
+     * Selección en vivo durante la preparación coop: cada jugador emite su selección parcial
+     * (`{ n, skin }`) en cada pick/unpick y el servidor la reenvía a ambos para el panel-resumen.
+     * No valida ni confirma nada (eso lo hace `coop:evento:preparacion:listo`); solo refleja estado.
+     */
+    socket.on('coop:evento:preparacion:seleccion', ({ prepId, cartas }) => {
+        const prep = preparacionesCoopEvento.get(String(prepId || '').trim());
+        if (!prep || prep.estado !== 'seleccion') return;
+        const usuario = obtenerUsuarioConectadoPorSocketId(socket.id);
+        if (!usuario) return;
+        const esA = normalizarTexto(usuario.email) === normalizarTexto(prep.inviterEmail);
+        const esB = normalizarTexto(usuario.email) === normalizarTexto(prep.inviteeEmail);
+        if (!esA && !esB) return;
+        const lista = normalizarSeleccionLiveCoopEntrada(cartas);
+        if (esA && !prep.listoA) prep.seleccionLiveA = lista;
+        if (esB && !prep.listoB) prep.seleccionLiveB = lista;
+        const inviter = obtenerUsuarioConectadoPorEmail(prep.inviterEmail);
+        const invitee = obtenerUsuarioConectadoPorEmail(prep.inviteeEmail);
+        const estado = {
+            prepId: prep.prepId,
+            listoA: Boolean(prep.listoA),
+            listoB: Boolean(prep.listoB),
+            seleccionA: prep.seleccionLiveA || [],
+            seleccionB: prep.seleccionLiveB || []
+        };
+        if (inviter?.id) io.to(inviter.id).emit('coop:evento:preparacion:seleccion:estado', estado);
+        if (invitee?.id) io.to(invitee.id).emit('coop:evento:preparacion:seleccion:estado', estado);
     });
 
     function unirSocketASalaCoopSiMiembro(socketRef, sesion) {

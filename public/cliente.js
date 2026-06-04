@@ -366,6 +366,10 @@ socket.on('coop:evento:preparacion:estado', (payload = {}) => {
     window.dispatchEvent(new CustomEvent('dc:coop-evento-preparacion-estado', { detail: payload }));
 });
 
+socket.on('coop:evento:preparacion:seleccion:estado', (payload = {}) => {
+    window.dispatchEvent(new CustomEvent('dc:coop-evento-preparacion-seleccion', { detail: payload }));
+});
+
 socket.on('multiplayer:coop:session:start', (payload = {}) => {
     window.dispatchEvent(new CustomEvent('dc:coop-session-start', { detail: payload }));
 });
@@ -380,6 +384,10 @@ window.emitCoopEventoInvitacionResponder = function emitCoopEventoInvitacionResp
 
 window.emitCoopEventoPreparacionListo = function emitCoopEventoPreparacionListo(payload) {
     socket.emit('coop:evento:preparacion:listo', payload || {});
+};
+
+window.emitCoopEventoPreparacionSeleccion = function emitCoopEventoPreparacionSeleccion(payload) {
+    socket.emit('coop:evento:preparacion:seleccion', payload || {});
 };
 
 window.emitMultiplayerCoopJoin = function emitMultiplayerCoopJoin(sessionId) {

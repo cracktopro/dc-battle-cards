@@ -319,12 +319,43 @@
         const snapDespues = opts.snapDespues;
         const ms = Math.max(300, Number(rep.msAviso || PAUSA_AVISO_HABILIDAD_MS));
         const txt = String(rep.textoAnuncio || '').trim();
+        const floats = Array.isArray(rep.floats) ? rep.floats : [];
+
+        /**
+         * El observador ya aplicó el snapshot final antes de este replay, por lo que todas las cartas
+         * afectadas por escudo/cura muestran su barra azul/verde definitiva de golpe. Antes de anunciar,
+         * devolvemos visualmente esas cartas a su estado previo (`snapAntes`) para que la animación carta
+         * a carta tenga recorrido y no se vea el "salto". Es el equivalente al reset que hace el emisor con
+         * `aplicarEstadoVisualDesdeSnapshotCoop(snapAntes)` antes de su propia animación.
+         */
+        if (!soloAnuncio && snapAntes && snapDespues) {
+            let huboReset = false;
+            for (let fi = 0; fi < floats.length; fi += 1) {
+                const f = floats[fi];
+                if (!f || typeof f !== 'object') continue;
+                const clase = String(f.claseVisual || '').trim();
+                if (clase !== 'escudo' && clase !== 'cura') continue;
+                const zona = f.zona;
+                const slot = Number(f.slot);
+                if ((zona !== 'A' && zona !== 'B' && zona !== 'bot') || !Number.isFinite(slot)) continue;
+                const c0 = obtenerMesaEnSnapshot(snapAntes, zona)[slot];
+                const live = obtenerMesaPorZona(zona)[slot];
+                if (!c0 || !live) continue;
+                restaurarSaludEscudoVisual(
+                    live,
+                    obtenerSaludActualCarta(c0),
+                    Math.max(0, Number(c0.escudoActual || 0))
+                );
+                huboReset = true;
+            }
+            if (huboReset) renderTodo();
+        }
+
         if (!omitirAnuncio && txt) {
             mostrarAvisoHabilidadCoop(txt, ms);
             await esperar(ms);
         }
         if (soloAnuncio) return;
-        const floats = Array.isArray(rep.floats) ? rep.floats : [];
         for (let fi = 0; fi < floats.length; fi += 1) {
             const f = floats[fi];
             if (!f || typeof f !== 'object') continue;
@@ -3587,14 +3618,14 @@
         procesandoBot = true;
         try {
             /**
-             * Inicio del ciclo BOT: si la mesa BOT quedó vacía durante P1/P2 se roba ahora;
-             * aunque no esté vacía, el BOSS se despliega solo si no quedan rivales normales
+             * Inicio del ciclo BOT: el BOT rellena SIEMPRE sus slots vacíos desde el mazo (igual que el
+             * oponente en partida.js al iniciar su turno, ver `rellenarSlotsVacios`), no solo cuando la
+             * mesa quedó totalmente vacía. Así mantiene presencia en el tablero turno a turno mientras le
+             * queden cartas en el mazo. `rellenarVaciosDesdeMazoAnimado` no hace nada si no hay huecos o el
+             * mazo está vacío. El BOSS se despliega solo si no quedan rivales normales
              * (`intentarDesplegarBossCoop`). Alineado con EVENTO_COOPERATIVO_ONLINE_ESPEC.md.
              */
-            let huboRoboInicio = false;
-            if (mesaTotalmenteVacia(snapshot.cartasEnJuegoBot)) {
-                huboRoboInicio = await rellenarVaciosDesdeMazoAnimado('bot', 4);
-            }
+            const huboRoboInicio = await rellenarVaciosDesdeMazoAnimado('bot', 4);
             const despBossInicio = intentarDesplegarBossCoop();
             renderTodo();
             if (huboRoboInicio || despBossInicio) {

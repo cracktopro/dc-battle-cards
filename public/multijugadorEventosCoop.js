@@ -4,6 +4,8 @@
  */
 (function () {
     const EVENTOS_COOP_GRID_ID = 'multi-eventos-coop-grid';
+    /** Cartas que cada jugador selecciona para el evento coop (antes 6, ahora 4). */
+    const CARTAS_POR_JUGADOR_COOP = 4;
 
     function normalizarNombre(nombre) {
         return String(nombre || '').trim().toLowerCase();
@@ -393,7 +395,10 @@
     let prepContext = null;
     /** Handler activo para sincronizar `coop:evento:preparacion:estado` con el modal de selección. */
     let coopPrepModalEstadoHandler = null;
+    /** Handler activo para sincronizar la selección en vivo (`coop:evento:preparacion:seleccion:estado`). */
+    let coopPrepModalSeleccionHandler = null;
     let ultimoDetalleEstadoPrepCoop = null;
+    let ultimoDetalleSeleccionPrepCoop = null;
     let usuarioCartasSeleccion = [];
     let seleccionIndices = new Set();
     let cartasVistaSeleccionCoop = new Map();
@@ -414,7 +419,7 @@
     let skillClassEventoCoopActiva = 'todas';
 
     /**
-     * Modal de selección de 6 cartas para el evento coop. Replica el formato
+     * Modal de selección de cartas (CARTAS_POR_JUGADOR_COOP) para el evento coop. Replica el formato
      * de `#modal-seleccion-evento` de VS BOT (`vistaJuego.html`): pestañas
      * Héroes/Villanos, filtro de afiliación, grid `cartas-seleccion-grid` con
      * `carta-mini` (estrellas, nombre, poder, badges y barra de salud).
@@ -427,11 +432,19 @@
             rolCoop: String(payload?.rolCoop || 'A').trim().toUpperCase()
         };
         const rolCoop = prepContext.rolCoop;
-        const nombreJugadorA = String(payload?.nombreJugadorA || payload?.invitadorNombre || 'tu compañero').trim();
+        const rolCompanero = rolCoop === 'A' ? 'B' : 'A';
+        const nombreJugadorA = String(payload?.nombreJugadorA || payload?.invitadorNombre || 'Jugador 1').trim();
+        const nombreJugadorB = String(payload?.nombreJugadorB || 'Jugador 2').trim();
+        let confirmadoLocal = false;
+        /** Selección en vivo de cada jugador para el panel-resumen (`{ cartas: [{n, skin}], listo }`). */
+        const panelSeleccion = {
+            A: { cartas: [], listo: false },
+            B: { cartas: [], listo: false }
+        };
 
         const usuario = await obtenerUsuarioActualCoop();
-        if (!usuario || !Array.isArray(usuario.cartas) || usuario.cartas.length < 6) {
-            mostrarMensajeCoop('Necesitas al menos 6 cartas en tu colección.', 'danger');
+        if (!usuario || !Array.isArray(usuario.cartas) || usuario.cartas.length < CARTAS_POR_JUGADOR_COOP) {
+            mostrarMensajeCoop(`Necesitas al menos ${CARTAS_POR_JUGADOR_COOP} cartas en tu colección.`, 'danger');
             return;
         }
         try {
@@ -482,8 +495,8 @@
             ? window.deduplicarItemsCartasUsuarioMejorNivel(itemsEnriquecidos)
             : itemsEnriquecidos;
 
-        if (usuarioCartasSeleccion.length < 6) {
-            mostrarMensajeCoop('Necesitas al menos 6 cartas distintas por nombre.', 'danger');
+        if (usuarioCartasSeleccion.length < CARTAS_POR_JUGADOR_COOP) {
+            mostrarMensajeCoop(`Necesitas al menos ${CARTAS_POR_JUGADOR_COOP} cartas distintas por nombre.`, 'danger');
             return;
         }
 
@@ -504,8 +517,18 @@
         modal.innerHTML = `
             <div class="modal-seleccion-contenido">
                 <div class="modal-header-desafio">
-                    <h4>Selecciona 6 cartas para el evento cooperativo</h4>
-                    <div class="estado-seleccion" data-coop-estado>Seleccionadas: 0 / 6</div>
+                    <h4>Selecciona ${CARTAS_POR_JUGADOR_COOP} cartas para el evento cooperativo</h4>
+                    <div class="estado-seleccion" data-coop-estado>Seleccionadas: 0 / ${CARTAS_POR_JUGADOR_COOP}</div>
+                </div>
+                <div class="coop-prep-resumen" data-coop-resumen>
+                    <div class="coop-prep-resumen-col" data-coop-resumen-col="A">
+                        <div class="coop-prep-resumen-titulo"><span data-coop-resumen-nombre="A"></span><span class="coop-prep-resumen-listo" data-coop-resumen-listo="A">✔</span></div>
+                        <div class="coop-prep-resumen-cartas" data-coop-resumen-cartas="A"></div>
+                    </div>
+                    <div class="coop-prep-resumen-col" data-coop-resumen-col="B">
+                        <div class="coop-prep-resumen-titulo"><span data-coop-resumen-nombre="B"></span><span class="coop-prep-resumen-listo" data-coop-resumen-listo="B">✔</span></div>
+                        <div class="coop-prep-resumen-cartas" data-coop-resumen-cartas="B"></div>
+                    </div>
                 </div>
                 <div class="filtros-seleccion">
                     <div class="faccion-tabs">
@@ -564,6 +587,7 @@
 
         function cerrarPrepCoop() {
             coopPrepModalEstadoHandler = null;
+            coopPrepModalSeleccionHandler = null;
             prepContext = null;
             modal.remove();
         }
@@ -587,6 +611,98 @@
             }
         }
 
+        const resumenNombreEl = {
+            A: modal.querySelector('[data-coop-resumen-nombre="A"]'),
+            B: modal.querySelector('[data-coop-resumen-nombre="B"]')
+        };
+        const resumenCartasEl = {
+            A: modal.querySelector('[data-coop-resumen-cartas="A"]'),
+            B: modal.querySelector('[data-coop-resumen-cartas="B"]')
+        };
+        const resumenListoEl = {
+            A: modal.querySelector('[data-coop-resumen-listo="A"]'),
+            B: modal.querySelector('[data-coop-resumen-listo="B"]')
+        };
+        if (resumenNombreEl.A) resumenNombreEl.A.textContent = nombreJugadorA + (rolCoop === 'A' ? ' (tú)' : '');
+        if (resumenNombreEl.B) resumenNombreEl.B.textContent = nombreJugadorB + (rolCoop === 'B' ? ' (tú)' : '');
+
+        /** Bloquea el modal mostrando el overlay de espera (mismo patrón que P2 mientras P1 elige). */
+        function bloquearModalEsperandoCompanero() {
+            if (!overlayEsperaEl) return;
+            const companeroListo = Boolean(panelSeleccion[rolCompanero]?.listo);
+            const nombreEspera = rolCoop === 'A' ? nombreJugadorB : nombreJugadorA;
+            const texto = overlayEsperaEl.querySelector('.coop-prep-espera-texto');
+            if (texto) {
+                texto.innerHTML = companeroListo
+                    ? 'Selección completa. Iniciando partida cooperativa...'
+                    : `Selección enviada. Esperando a que <strong class="coop-prep-espera-nombre">${nombreEspera}</strong> termine su selección.`;
+            }
+            overlayEsperaEl.style.display = '';
+        }
+
+        /** Representación ligera `{n, skin}` de la selección propia para el panel y la sincronización. */
+        function construirMiSeleccionLive() {
+            const lista = [];
+            seleccionIndices.forEach((idx) => {
+                const item = usuarioCartasSeleccion.find((x) => x.index === idx);
+                if (!item) return;
+                const vista = cartasVistaSeleccionCoop.get(idx);
+                let skin = null;
+                if (vista && vista.skinActivoId !== null && vista.skinActivoId !== undefined && Number.isFinite(Number(vista.skinActivoId))) {
+                    skin = Number(vista.skinActivoId);
+                }
+                lista.push({ n: String(item.carta.Nombre || ''), skin });
+            });
+            return lista;
+        }
+
+        /** Actualiza el panel propio y emite la selección al servidor para sincronizar al compañero. */
+        function notificarSeleccionLiveCoop() {
+            if (!prepContext?.prepId) return;
+            panelSeleccion[rolCoop].cartas = construirMiSeleccionLive();
+            renderResumenSeleccionCoop();
+            if (typeof window.emitCoopEventoPreparacionSeleccion === 'function') {
+                window.emitCoopEventoPreparacionSeleccion({
+                    prepId: prepContext.prepId,
+                    cartas: panelSeleccion[rolCoop].cartas
+                });
+            }
+        }
+
+        function crearMiniaturaResumenCoop(entry) {
+            const div = document.createElement('div');
+            div.className = 'coop-prep-resumen-carta';
+            if (!entry || !entry.n) {
+                div.classList.add('coop-prep-resumen-carta--vacia');
+                return div;
+            }
+            const ref = (entry.skin !== null && entry.skin !== undefined) ? `${entry.n}[${entry.skin}]` : entry.n;
+            const carta = resolverCartaEnemigoVistaSync(ref, mapaCatalogoSeleccionCoop);
+            if (typeof window.aplicarImagenFondoCarta === 'function') {
+                window.aplicarImagenFondoCarta(div, carta);
+            } else {
+                div.style.backgroundImage = `url(${obtenerImagenCarta(carta)})`;
+            }
+            div.title = String(carta?.Nombre || entry.n);
+            return div;
+        }
+
+        function renderResumenSeleccionCoop() {
+            ['A', 'B'].forEach((rol) => {
+                const cont = resumenCartasEl[rol];
+                if (cont) {
+                    cont.innerHTML = '';
+                    const cartas = Array.isArray(panelSeleccion[rol]?.cartas) ? panelSeleccion[rol].cartas : [];
+                    for (let i = 0; i < CARTAS_POR_JUGADOR_COOP; i += 1) {
+                        cont.appendChild(crearMiniaturaResumenCoop(cartas[i] || null));
+                    }
+                }
+                if (resumenListoEl[rol]) {
+                    resumenListoEl[rol].style.display = panelSeleccion[rol]?.listo ? '' : 'none';
+                }
+            });
+        }
+
         function procesarEstadoPreparacionCoop(det) {
             if (!prepContext || String(det?.prepId || '') !== String(prepContext.prepId)) {
                 return;
@@ -594,11 +710,28 @@
             if (Array.isArray(det.clavesCartasA)) {
                 aplicarClavesCartasA(det.clavesCartasA);
             }
-            if (rolCoop === 'B' && det.listoA && overlayEsperaEl) {
+            if (typeof det.listoA === 'boolean') panelSeleccion.A.listo = det.listoA;
+            if (typeof det.listoB === 'boolean') panelSeleccion.B.listo = det.listoB;
+            if (Array.isArray(det.seleccionA)) panelSeleccion.A.cartas = det.seleccionA;
+            if (Array.isArray(det.seleccionB)) panelSeleccion.B.cartas = det.seleccionB;
+            if (rolCoop === 'B' && det.listoA && !confirmadoLocal && overlayEsperaEl) {
                 overlayEsperaEl.style.display = 'none';
             }
+            renderResumenSeleccionCoop();
             renderizarGrid();
             actualizarEstado();
+        }
+
+        /** Sincroniza el panel-resumen con la selección en vivo emitida por el compañero. */
+        function procesarSeleccionLiveCoop(det) {
+            if (!prepContext || String(det?.prepId || '') !== String(prepContext.prepId)) {
+                return;
+            }
+            if (Array.isArray(det.seleccionA)) panelSeleccion.A.cartas = det.seleccionA;
+            if (Array.isArray(det.seleccionB)) panelSeleccion.B.cartas = det.seleccionB;
+            if (typeof det.listoA === 'boolean') panelSeleccion.A.listo = det.listoA;
+            if (typeof det.listoB === 'boolean') panelSeleccion.B.listo = det.listoB;
+            renderResumenSeleccionCoop();
         }
 
         function actualizarBotonesFaccion() {
@@ -635,8 +768,8 @@
         }
 
         function actualizarEstado() {
-            estadoEl.textContent = `Seleccionadas: ${seleccionIndices.size} / 6`;
-            let puedeConfirmar = seleccionIndices.size === 6;
+            estadoEl.textContent = `Seleccionadas: ${seleccionIndices.size} / ${CARTAS_POR_JUGADOR_COOP}`;
+            let puedeConfirmar = seleccionIndices.size === CARTAS_POR_JUGADOR_COOP;
             if (puedeConfirmar && rolCoop === 'B') {
                 for (const idx of seleccionIndices) {
                     const item = usuarioCartasSeleccion.find((x) => x.index === idx);
@@ -736,12 +869,13 @@
                     if (seleccionIndices.has(item.index)) {
                         seleccionIndices.delete(item.index);
                         cartasVistaSeleccionCoop.delete(item.index);
+                        notificarSeleccionLiveCoop();
                         actualizarEstado();
                         renderizarGrid();
                         return;
                     }
-                    if (seleccionIndices.size >= 6) {
-                        mostrarMensajeCoop('Solo puedes seleccionar 6 cartas.', 'warning');
+                    if (seleccionIndices.size >= CARTAS_POR_JUGADOR_COOP) {
+                        mostrarMensajeCoop(`Solo puedes seleccionar ${CARTAS_POR_JUGADOR_COOP} cartas.`, 'warning');
                         return;
                     }
                     let cartaFinal = { ...item.carta };
@@ -758,6 +892,7 @@
                     }
                     cartasVistaSeleccionCoop.set(item.index, cartaFinal);
                     seleccionIndices.add(item.index);
+                    notificarSeleccionLiveCoop();
                     actualizarEstado();
                     renderizarGrid();
                 };
@@ -803,7 +938,7 @@
         });
 
         btnConfirmar.addEventListener('click', () => {
-            if (seleccionIndices.size !== 6 || !prepContext?.prepId) return;
+            if (seleccionIndices.size !== CARTAS_POR_JUGADOR_COOP || !prepContext?.prepId) return;
             if (rolCoop === 'B') {
                 for (const idx of seleccionIndices) {
                     const item = usuarioCartasSeleccion.find((x) => x.index === idx);
@@ -828,20 +963,32 @@
                     skinsPorIndice
                 });
             }
-            /* Mantener el modal cerrado pero con un aviso (mismo patrón que la
-             * versión previa), ya que el inicio real depende del compañero. */
-            mostrarMensajeCoop('Esperando a que tu compañero termine la selección...', 'success');
-            cerrarPrepCoop();
+            /**
+             * Tras confirmar NO cerramos el modal: lo dejamos bloqueado con el overlay de espera
+             * (igual que P2 mientras P1 elige), mostrando en el panel-resumen las cartas de ambos
+             * en tiempo real. El inicio real lo dispara el servidor (`dc:coop-session-start`) cuando
+             * los dos jugadores estén listos, y la redirección a `tablero_coop.html` retira el modal.
+             */
+            confirmadoLocal = true;
+            if (panelSeleccion[rolCoop]) panelSeleccion[rolCoop].listo = true;
+            bloquearModalEsperandoCompanero();
+            renderResumenSeleccionCoop();
+            mostrarMensajeCoop('Selección enviada. Esperando a tu compañero...', 'success');
         });
 
         actualizarBotonesFaccion();
         renderizarFiltroAfiliacion();
         renderizarGrid();
         actualizarEstado();
+        renderResumenSeleccionCoop();
 
         coopPrepModalEstadoHandler = procesarEstadoPreparacionCoop;
+        coopPrepModalSeleccionHandler = procesarSeleccionLiveCoop;
         if (ultimoDetalleEstadoPrepCoop && String(ultimoDetalleEstadoPrepCoop.prepId || '') === String(prepContext.prepId)) {
             procesarEstadoPreparacionCoop(ultimoDetalleEstadoPrepCoop);
+        }
+        if (ultimoDetalleSeleccionPrepCoop && String(ultimoDetalleSeleccionPrepCoop.prepId || '') === String(prepContext.prepId)) {
+            procesarSeleccionLiveCoop(ultimoDetalleSeleccionPrepCoop);
         }
     }
 
@@ -903,6 +1050,14 @@
             ultimoDetalleEstadoPrepCoop = det;
             if (typeof coopPrepModalEstadoHandler === 'function') {
                 coopPrepModalEstadoHandler(det);
+            }
+        });
+
+        window.addEventListener('dc:coop-evento-preparacion-seleccion', (ev) => {
+            const det = ev.detail || {};
+            ultimoDetalleSeleccionPrepCoop = det;
+            if (typeof coopPrepModalSeleccionHandler === 'function') {
+                coopPrepModalSeleccionHandler(det);
             }
         });
     });

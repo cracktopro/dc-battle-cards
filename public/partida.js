@@ -3363,6 +3363,24 @@ async function generarMazoBot(dificultad) {
     return mazo.slice(0, 12).map(carta => escalarCartaSegunDificultad({ ...carta }, nivelObjetivo));
 }
 
+/**
+ * Cartas que le quedan al BOT "en el mazo" (sin contar las que ya están en mesa).
+ * En desafío/evento offline `mazoOponente` siempre está vacío porque los enemigos se
+ * gestionan por oleadas en `estadoDesafio` (`gruposPendientes` + `bossPendiente`); por eso
+ * el contador mostraba siempre 0. Para esos modos sumamos las cartas pendientes de salir.
+ */
+function obtenerCartasRestantesMazoOponente() {
+    if (estadoDesafio && estadoDesafio.activo) {
+        const enGrupos = (estadoDesafio.gruposPendientes || []).reduce(
+            (acc, grupo) => acc + (Array.isArray(grupo) ? grupo.length : 0),
+            0
+        );
+        const boss = estadoDesafio.bossPendiente ? 1 : 0;
+        return enGrupos + boss;
+    }
+    return mazoOponente.length;
+}
+
 function actualizarContadoresMazo() {
     const botonMazoJugador = document.getElementById('mazo-jugador');
     const botonMazoOponente = document.getElementById('mazo-oponente');
@@ -3381,7 +3399,7 @@ function actualizarContadoresMazo() {
     }
 
     if (contadorOponente) {
-        contadorOponente.textContent = `Cartas en mazo ${obtenerNombreVisibleOponente()}: ${mazoOponente.length}`;
+        contadorOponente.textContent = `Cartas en mazo ${obtenerNombreVisibleOponente()}: ${obtenerCartasRestantesMazoOponente()}`;
     }
 }
 

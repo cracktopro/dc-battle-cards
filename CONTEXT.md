@@ -147,6 +147,7 @@ Documento vivo de referencia técnica para trabajar sobre DC Battle Cards sin ro
 - Jugador elige **6 cartas** (no 12) + dificultad del desafío.
 - Persiste `desafioActivo` (sin `tipo: 'evento'` o con tipo desafío según payload).
 - `partida.js` → `construirEstadoDesafio()`, oleadas de enemigos, posible **BOSS** (`escalarBossSegunDificultad`).
+- En desafío/evento el `mazoOponente` queda vacío (los enemigos salen por oleadas desde `estadoDesafio.gruposPendientes` + `bossPendiente`). El contador "Cartas en mazo" del BOT usa `obtenerCartasRestantesMazoOponente()`, que en estos modos suma las cartas pendientes de oleadas + boss (en el resto de modos devuelve `mazoOponente.length`).
 - Recompensas: `otorgarRecompensasDesafio()`; primera victoria otorga cartas/objetos; repeticiones suelen dar solo puntos.
 
 ### 3b) Eventos rotativos (hub `vistaJuego`)
@@ -170,9 +171,16 @@ Documento vivo de referencia técnica para trabajar sobre DC Battle Cards sin ro
 
 - Deriva de Eventos + PvP (2 jugadores aliados).
 - Preparación por fases en `multijugadorEventosCoop.js`.
+- **Selección de cartas (preparación):** cada jugador elige **4 cartas** (`CARTAS_POR_JUGADOR_COOP` en cliente y servidor; antes 6). El servidor valida la cantidad en `extraerCartasUsuarioPorIndicesCoop`.
+  - Tras confirmar, el modal **no se cierra**: queda bloqueado con el overlay de espera (mismo patrón que P2 mientras P1 elige). La redirección a `tablero_coop.html` (`dc:coop-session-start`) lo retira cuando ambos están listos.
+  - **Panel-resumen en vivo:** ambos modales muestran las cartas que va eligiendo cada jugador en tiempo real. Cada pick/unpick emite `coop:evento:preparacion:seleccion` (`{ prepId, cartas:[{n,skin}] }`); el servidor guarda `seleccionLiveA/B` y reenvía `coop:evento:preparacion:seleccion:estado` a ambos. El panel se eleva por encima del overlay (z-index) para seguir visible aunque el modal esté bloqueado. El payload `coop:evento:preparacion` incluye `nombreJugadorA` y `nombreJugadorB`.
 - Servidor crea sesión coop y arranca `tablero_coop.html`.
 - `partidaCoop.js` usa snapshots y revisiones por socket.
 - Habilidades aliadas (shield/heal/heal_all etc.) aplicables entre P1/P2.
+- **Animación habilidades aliadas en el observador:** `procesarEstadoCoopDesdeRed` aplica el snapshot remoto y luego ejecuta `ejecutarCoopReplayVisual`. Para floats de `escudo`/`cura`, el replay primero **resetea** las cartas afectadas a su estado previo (`snapAntes`) antes del anuncio, replicando lo que hace el emisor (`animarHabilidadLocalEnEmisorCoop` → `aplicarEstadoVisualDesdeSnapshotCoop(snapAntes)`); así la animación carta a carta no "salta" tras mostrar todas las barras finales de golpe.
+- **Relleno de cartas del BOT (igual que `partida.js`):**
+  - Durante turno P1/P2, si la mesa BOT queda **totalmente vacía**, se roba del mazo BOT para que P1/P2 puedan seguir/terminar su turno (`aplicarRobosInicioDeFaseSegunFaseActual` rama P1/P2 + `rellenarMesaBotSiVaciaEnSnap`, equivalente a `partida.js` cuando el objetivo se queda sin cartas disponibles).
+  - Al **inicio del turno BOT**, `ejecutarTurnoBotSecuencial` rellena **siempre** los slots vacíos del BOT desde el mazo (no solo cuando está totalmente vacía), mientras queden cartas en el mazo (`rellenarVaciosDesdeMazoAnimado('bot', 4)` sin condición previa). Equivale a `rellenarSlotsVacios(mazoOponente, ...)` al iniciar el turno del oponente en `partida.js`.
 
 ### 6) Episodios
 
