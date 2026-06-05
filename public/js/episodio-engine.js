@@ -1540,6 +1540,9 @@
         const req = window.DCEpisodiosRequisitos;
 
         try {
+            if (typeof window.DCSkinsCartas?.asegurarSkinsCargados === 'function') {
+                await window.DCSkinsCartas.asegurarSkinsCargados();
+            }
             const mapa = await obtenerMapaCatalogoEpisodio();
             const entradasJ = construirMazoJugadorParaCombate(evento);
             const entradasB = (evento.cartas_BOT || []).map((n) => ({
@@ -1645,7 +1648,7 @@
 
         try {
             await aplicarRecompensas(evento);
-            renderizarPanelRecompensas(evento, contenedor);
+            await renderizarPanelRecompensas(evento, contenedor);
         } catch (e) {
             if (contenedor) {
                 contenedor.innerHTML =
@@ -1690,9 +1693,32 @@
 
         if (Array.isArray(recompensa.cartas) && recompensa.cartas.length > 0) {
             if (!Array.isArray(usuario.cartas)) usuario.cartas = [];
-            recompensa.cartas.forEach(nombreCarta => {
+            const skinsApi = (typeof window !== 'undefined' && window.DCSkinsCartas) ? window.DCSkinsCartas : null;
+            const skinsDesdeCartas = [];
+            for (const raw of recompensa.cartas) {
+                const texto = String(raw || '').trim();
+                if (!texto) {
+                    continue;
+                }
+                if (skinsApi?.esReferenciaRecompensaSkin?.(texto)) {
+                    try {
+                        const skinRec = await skinsApi.construirRecompensaSkinDesdeReferencia(texto);
+                        if (skinRec) {
+                            skinsDesdeCartas.push(skinRec);
+                        }
+                    } catch (errSkin) {
+                        console.warn('[EpisodioEngine] recompensa apariencia no resuelta:', texto, errSkin);
+                    }
+                    continue;
+                }
+                const nombreCarta = skinsApi?.obtenerNombreCatalogoDesdeReferencia
+                    ? skinsApi.obtenerNombreCatalogoDesdeReferencia(texto)
+                    : texto;
                 usuario.cartas.push({ Nombre: String(nombreCarta), Nivel: 1 });
-            });
+            }
+            if (skinsDesdeCartas.length > 0 && skinsApi?.persistirSkinsRecompensaEnUsuario) {
+                skinsApi.persistirSkinsRecompensaEnUsuario(usuario, skinsDesdeCartas);
+            }
         }
 
         localStorage.setItem('usuario', JSON.stringify(usuario));
@@ -1708,9 +1734,18 @@
         }
     }
 
-    function renderizarPanelRecompensas(recompensa, contenedor) {
+    async function renderizarPanelRecompensas(recompensa, contenedor) {
         if (!contenedor) return;
         contenedor.innerHTML = '';
+
+        const skinsApi = (typeof window !== 'undefined' && window.DCSkinsCartas) ? window.DCSkinsCartas : null;
+        if (skinsApi?.asegurarSkinsCargados) {
+            try {
+                await skinsApi.asegurarSkinsCargados();
+            } catch (_e) {
+                /* noop */
+            }
+        }
 
         const monedas = Number(recompensa.monedas || 0);
         if (monedas > 0) {
@@ -1740,19 +1775,78 @@
             contenedor.appendChild(grupo);
         };
 
-        if (Array.isArray(recompensa.cartas) && recompensa.cartas.length > 0) {
-            crearGrupo('Cartas obtenidas', recompensa.cartas, '');
+        const cartasNormales = [];
+        const skinsDesdeCartas = [];
+        if (Array.isArray(recompensa.cartas)) {
+            for (const raw of recompensa.cartas) {
+                const texto = String(raw || '').trim();
+                if (!texto) {
+                    continue;
+                }
+                if (skinsApi?.esReferenciaRecompensaSkin?.(texto)) {
+                    try {
+                        const skinRec = await skinsApi.construirRecompensaSkinDesdeReferencia(texto);
+                        if (skinRec) {
+                            skinsDesdeCartas.push(skinRec);
+                        }
+                    } catch (_e) {
+                        skinsDesdeCartas.push({ tipoRecompensa: 'skin', nombreSkin: texto, referenciaOriginal: texto });
+                    }
+                    continue;
+                }
+                const nombre = skinsApi?.obtenerNombreCatalogoDesdeReferencia
+                    ? skinsApi.obtenerNombreCatalogoDesdeReferencia(texto)
+                    : texto;
+                cartasNormales.push(String(nombre));
+            }
         }
-        if (Array.isArray(recompensa.skins) && recompensa.skins.length > 0) {
-            crearGrupo('Apariencias obtenidas', recompensa.skins, 'episodio-recomp-badge--skin');
+
+        if (cartasNormales.length > 0) {
+            crearGrupo('Cartas obtenidas', cartasNormales, '');
         }
+
+        const etiquetasSkinsNumericas = [];
+        if (Array.isArray(recompensa.skins)) {
+            recompensa.skins.forEach((sid) => {
+                const skin = skinsApi?.obtenerSkinPorId?.(sid);
+                etiquetasSkinsNumericas.push(String(skin?.Nombre || `Apariencia #${sid}`));
+            });
+        }
+
+        const todasSkinsVisuales = [...skinsDesdeCartas];
+        if (todasSkinsVisuales.length > 0 || etiquetasSkinsNumericas.length > 0) {
+            const grupo = document.createElement('div');
+            grupo.className = 'episodio-recomp-grupo';
+            const h4 = document.createElement('h4');
+            h4.className = 'episodio-recomp-subtitulo';
+            h4.textContent = 'Apariencias obtenidas';
+            grupo.appendChild(h4);
+            const fila = document.createElement('div');
+            fila.className = 'episodio-recomp-badges-fila episodio-recomp-skins-fila';
+            todasSkinsVisuales.forEach((skinRec) => {
+                const slot = skinsApi?.crearElementoRecompensaSkin?.(skinRec);
+                if (slot) {
+                    fila.appendChild(slot);
+                }
+            });
+            etiquetasSkinsNumericas.forEach((txt) => {
+                const b = document.createElement('span');
+                b.className = 'episodio-recomp-badge episodio-recomp-badge--skin';
+                b.textContent = txt;
+                fila.appendChild(b);
+            });
+            grupo.appendChild(fila);
+            contenedor.appendChild(grupo);
+        }
+
         if (Array.isArray(recompensa.objetos) && recompensa.objetos.length > 0) {
             crearGrupo('Objetos obtenidos', recompensa.objetos, '');
         }
 
         if (monedas === 0 &&
-            (!recompensa.cartas || !recompensa.cartas.length) &&
-            (!recompensa.skins || !recompensa.skins.length) &&
+            cartasNormales.length === 0 &&
+            todasSkinsVisuales.length === 0 &&
+            etiquetasSkinsNumericas.length === 0 &&
             (!recompensa.objetos || !recompensa.objetos.length)) {
             const p = document.createElement('p');
             p.className = 'episodio-recomp-guardando';

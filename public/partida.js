@@ -1581,6 +1581,10 @@ async function construirMazoEpisodioDesdeNombres(nombresConNivel, cartasCatalogo
             ? window.fusionarCartaCompletaDesdeCatalogo(stub, fila)
             : { ...fila, ...stub };
 
+        if (typeof window.DCSkinsCartas?.propagarAspectoSkinDesdeFilaResuelta === 'function') {
+            base = window.DCSkinsCartas.propagarAspectoSkinDesdeFilaResuelta(base, fila);
+        }
+
         base = escalarCartaSegunDificultad(base, nivelObjetivo);
         salida.push(base);
     }

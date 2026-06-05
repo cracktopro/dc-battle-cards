@@ -245,7 +245,22 @@
         if (String(filaCatalogo.skill_trigger || '').trim()) {
             resultado.skill_trigger = String(filaCatalogo.skill_trigger).trim().toLowerCase();
         }
+        if (filaCatalogo.skinActivoId !== null && filaCatalogo.skinActivoId !== undefined) {
+            resultado.skinActivoId = filaCatalogo.skinActivoId;
+            resultado.skinParentNombre = String(filaCatalogo.skinParentNombre || '').trim();
+        }
         return resultado;
+    }
+
+    /** Tras resolver `Parent[n]`, copia imagen/stats de skin sobre la carta de combate o previa. */
+    function propagarAspectoSkinDesdeFilaResuelta(carta, filaResuelta) {
+        if (!carta || !filaResuelta) {
+            return carta;
+        }
+        if (filaResuelta.skinActivoId === null || filaResuelta.skinActivoId === undefined) {
+            return carta;
+        }
+        return fusionarAspectoDesdeFilaCatalogo({ ...carta }, filaResuelta);
     }
 
     function obtenerEscaladoStatsApi() {
@@ -605,6 +620,30 @@
         return resolverFilaCatalogoConSkinSync(textoRaw, mapaPorNombre, indexados);
     }
 
+    /** Indexados en memoria tras `asegurarSkinsCargados` (sync, paneles PvE). */
+    function obtenerIndexadosSkinsEnCache() {
+        if (!skinsPorIdCache || skinsPorIdCache.size === 0) {
+            return null;
+        }
+        return { porId: skinsPorIdCache, porParent: skinsPorParentCache };
+    }
+
+    /**
+     * Vista previa síncrona (paneles evento/desafío/coop): aplica skin si el caché está cargado.
+     * @param {string} nombreRef — p. ej. "Cyborg" o "Cyborg[0]"
+     * @param {Map} mapaPorNombre
+     */
+    function resolverCartaEnemigoVistaSync(nombreRef, mapaPorNombre) {
+        const indexados = obtenerIndexadosSkinsEnCache();
+        const resuelta = resolverFilaCatalogoConSkinSync(nombreRef, mapaPorNombre, indexados);
+        if (resuelta) {
+            return resuelta;
+        }
+        const ref = parsearReferenciaCartaConSkin(nombreRef);
+        const clave = normalizarClaveNombre(ref.nombreCatalogo);
+        return mapaPorNombre?.get?.(clave) || { Nombre: String(nombreRef || '').trim() || nombreRef, Nivel: 1 };
+    }
+
     /** Vista previa (eventos/desafíos): carta con skin si aplica. */
     async function resolverCartaParaVista(textoRaw, mapaPorNombre) {
         const resuelta = await resolverFilaCatalogoConSkin(textoRaw, mapaPorNombre);
@@ -725,13 +764,16 @@
         quitarSkinJugadorDeCarta,
         construirVistaCartaJugadorConSkin,
         fusionarAspectoDesdeFilaCatalogo,
+        propagarAspectoSkinDesdeFilaResuelta,
         asegurarSkinsCargados,
         asegurarSkinsCargadosServidor,
+        obtenerIndexadosSkinsEnCache,
         obtenerSkinPorId,
         aplicarSkinSobreFilaCatalogo,
         resolverFilaCatalogoConSkin,
         resolverFilaCatalogoConSkinSync,
         resolverFilaCatalogoConSkinServidor,
+        resolverCartaEnemigoVistaSync,
         resolverCartaParaVista,
         esReferenciaRecompensaSkin,
         construirRecompensaSkinDesdeReferencia,

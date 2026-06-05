@@ -12,13 +12,10 @@
     }
 
     function resolverCartaEnemigoVistaSync(nombreRef, mapaCatalogo) {
-        if (typeof window.DCSkinsCartas !== 'undefined' && typeof window.DCSkinsCartas.resolverFilaCatalogoConSkinSync === 'function') {
-            const resuelta = window.DCSkinsCartas.resolverFilaCatalogoConSkinSync(nombreRef, mapaCatalogo);
-            if (resuelta) {
-                return resuelta;
-            }
+        if (typeof window.DCSkinsCartas?.resolverCartaEnemigoVistaSync === 'function') {
+            return window.DCSkinsCartas.resolverCartaEnemigoVistaSync(nombreRef, mapaCatalogo);
         }
-        const nombreCatalogo = typeof window.DCSkinsCartas !== 'undefined' && typeof window.DCSkinsCartas.obtenerNombreCatalogoDesdeReferencia === 'function'
+        const nombreCatalogo = typeof window.DCSkinsCartas?.obtenerNombreCatalogoDesdeReferencia === 'function'
             ? window.DCSkinsCartas.obtenerNombreCatalogoDesdeReferencia(nombreRef)
             : nombreRef;
         return mapaCatalogo.get(normalizarNombre(nombreCatalogo)) || { Nombre: nombreRef, Nivel: 1 };

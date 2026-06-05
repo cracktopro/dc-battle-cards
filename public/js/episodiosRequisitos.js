@@ -108,6 +108,13 @@
     }
 
     function resolverFilaCatalogo(nombreRef, mapaCatalogo) {
+        if (typeof root.DCSkinsCartas?.resolverCartaEnemigoVistaSync === 'function'
+            && mapaCatalogo instanceof Map) {
+            const resuelta = root.DCSkinsCartas.resolverCartaEnemigoVistaSync(nombreRef, mapaCatalogo);
+            if (resuelta) {
+                return resuelta;
+            }
+        }
         const nombre = nombreCatalogoDesdeRef(nombreRef);
         const clave = normalizarClave(nombre);
         if (mapaCatalogo instanceof Map && mapaCatalogo.has(clave)) {
@@ -297,6 +304,9 @@
                 : { ...fila, ...stub };
 
             base = escalarCartaEpisodio(base, nivelObjetivo);
+            if (typeof root.DCSkinsCartas?.propagarAspectoSkinDesdeFilaResuelta === 'function') {
+                base = root.DCSkinsCartas.propagarAspectoSkinDesdeFilaResuelta(base, fila);
+            }
             salida.push(base);
         }
 

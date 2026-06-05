@@ -385,6 +385,14 @@
         const evaluacion = evaluarEpisodio(ep);
         const req = window.DCEpisodiosRequisitos;
 
+        if (typeof window.DCSkinsCartas?.asegurarSkinsCargados === 'function') {
+            try {
+                await window.DCSkinsCartas.asegurarSkinsCargados();
+            } catch (_e) {
+                /* noop */
+            }
+        }
+
         if (bloqueEl) {
             bloqueEl.hidden = !evaluacion.detalle.length && !(ep._cartasRequeridas || []).length;
         }
@@ -633,6 +641,11 @@
             construirCarrusel(lista);
             if (!lista.length) {
                 mostrarMensaje('No hay episodios disponibles en el catálogo.');
+            }
+            if (typeof window.DCSkinsCartas?.asegurarSkinsCargados === 'function') {
+                void window.DCSkinsCartas.asegurarSkinsCargados()
+                    .then(() => void actualizarRequisitosCaraFrente())
+                    .catch((err) => console.warn('[episodios] carga skins en segundo plano:', err));
             }
         } catch (err) {
             console.error(err);
