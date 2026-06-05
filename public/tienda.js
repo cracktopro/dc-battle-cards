@@ -22,7 +22,7 @@ const OBJETOS_MEJORAS_TIENDA = [
         id: 'obj-mejora-carta',
         nombre: 'Mejora de carta',
         descripcion: 'Solo usable en cartas nivel 1 a 3. Permite subir hasta nivel 4.',
-        precio: 500,
+        precio: 1000,
         icono: '/resources/icons/mejora.png',
         filaTienda: 1
     },
@@ -30,7 +30,7 @@ const OBJETOS_MEJORAS_TIENDA = [
         id: 'obj-mejora-especial',
         nombre: 'Mejora especial',
         descripcion: 'Solo usable en cartas de nivel 5. Eleva la carta a nivel 6.',
-        precio: 3000,
+        precio: 6000,
         icono: '/resources/icons/mejora_especial.png',
         filaTienda: 1
     },
@@ -38,7 +38,7 @@ const OBJETOS_MEJORAS_TIENDA = [
         id: 'obj-mejora-suprema',
         nombre: 'Mejora suprema',
         descripcion: 'Mejora cualquier carta de héroe o villano al nivel 5 de forma inmediata.',
-        precio: 5000,
+        precio: 10000,
         icono: '/resources/icons/mejora_suprema.png',
         filaTienda: 1
     },
@@ -46,7 +46,7 @@ const OBJETOS_MEJORAS_TIENDA = [
         id: 'obj-mejora-definitiva',
         nombre: 'Mejora definitiva',
         descripcion: 'Mejora cualquier carta de héroe o villano al nivel 6 de forma inmediata.',
-        precio: 10000,
+        precio: 20000,
         icono: '/resources/icons/mejora_definitiva.png',
         filaTienda: 1
     },
@@ -58,7 +58,7 @@ const OBJETOS_MEJORAS_TIENDA = [
         icono: '/resources/icons/mejora_elite.png',
         filaTienda: 2,
         esFragmentoMejora: true,
-        precioMejoraCarta: 10
+        precioMejoraCarta: 15
     },
     {
         id: 'obj-fragmento-mejora-legendaria',
@@ -68,7 +68,7 @@ const OBJETOS_MEJORAS_TIENDA = [
         icono: '/resources/icons/mejora_legendaria.png',
         filaTienda: 2,
         esFragmentoMejora: true,
-        precioMejoraCarta: 20
+        precioMejoraCarta: 30
     },
     {
         id: 'obj-cofre-elite',
@@ -78,7 +78,7 @@ const OBJETOS_MEJORAS_TIENDA = [
         icono: '/resources/icons/cofre_elite.png',
         filaTienda: 2,
         esCofre: true,
-        precioMejoraEspecial: 10
+        precioMejoraEspecial: 25
     },
     {
         id: 'obj-cofre-legendario',
@@ -88,7 +88,7 @@ const OBJETOS_MEJORAS_TIENDA = [
         icono: '/resources/icons/cofre_legendario.png',
         filaTienda: 2,
         esCofre: true,
-        precioMejoraEspecial: 20
+        precioMejoraEspecial: 50
     }
 ];
 const ICONO_MEJORA_ESPECIAL_TIENDA = '/resources/icons/mejora_especial.png';
@@ -997,6 +997,205 @@ function renderizarSobresTienda() {
     contenedorPadre.appendChild(filaSobresVill);
 }
 
+const TIENDA_COMPRA_CANTIDAD_MIN = 1;
+const TIENDA_COMPRA_CANTIDAD_MAX = 999;
+
+function parsearCantidadCompraTienda(raw) {
+    const n = Math.floor(Number(raw));
+    if (!Number.isFinite(n) || n < TIENDA_COMPRA_CANTIDAD_MIN) {
+        return TIENDA_COMPRA_CANTIDAD_MIN;
+    }
+    return Math.min(TIENDA_COMPRA_CANTIDAD_MAX, n);
+}
+
+/** Durante la edición: vacío o no numérico → null (no reescribir el input). */
+function leerCantidadInputTiendaEnEdicion(raw) {
+    const texto = String(raw ?? '').trim();
+    if (texto === '') {
+        return null;
+    }
+    if (!/^\d+$/.test(texto)) {
+        return null;
+    }
+    const n = Math.floor(Number(texto));
+    if (!Number.isFinite(n)) {
+        return null;
+    }
+    if (n < TIENDA_COMPRA_CANTIDAD_MIN || n > TIENDA_COMPRA_CANTIDAD_MAX) {
+        return null;
+    }
+    return n;
+}
+
+function normalizarInputCantidadCompraTienda(cantInput) {
+    const cant = parsearCantidadCompraTienda(cantInput.value);
+    cantInput.value = String(cant);
+    return cant;
+}
+
+function crearBotonCantidadTienda(etiqueta, ariaLabel) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'tienda-compra-cantidad-btn';
+    btn.textContent = etiqueta;
+    btn.setAttribute('aria-label', ariaLabel);
+    return btn;
+}
+
+function adjuntarControlCantidadCompraTienda({ objeto, precio, botonComprar, alComprar }) {
+    const wrap = document.createElement('div');
+    wrap.className = 'tienda-compra-cantidad-wrap';
+
+    const btnMenos = crearBotonCantidadTienda('−', 'Reducir cantidad');
+    const btnMas = crearBotonCantidadTienda('+', 'Aumentar cantidad');
+
+    const cantInput = document.createElement('input');
+    cantInput.type = 'text';
+    cantInput.className = 'tienda-compra-cantidad';
+    cantInput.value = String(TIENDA_COMPRA_CANTIDAD_MIN);
+    cantInput.inputMode = 'numeric';
+    cantInput.autocomplete = 'off';
+    cantInput.setAttribute('aria-label', 'Cantidad a comprar');
+    cantInput.setAttribute('maxlength', '3');
+
+    const actualizarEstado = () => {
+        const cantEdicion = leerCantidadInputTiendaEnEdicion(cantInput.value);
+        const cantPreview = cantEdicion ?? TIENDA_COMPRA_CANTIDAD_MIN;
+        if (typeof precio.actualizarCantidad === 'function') {
+            precio.actualizarCantidad(cantPreview);
+        }
+        const cantValida = cantEdicion !== null;
+        botonComprar.disabled = !cantValida || !puedeComprarCantidadObjetoTienda(objeto, cantPreview);
+        btnMenos.disabled = !cantValida || cantPreview <= TIENDA_COMPRA_CANTIDAD_MIN;
+        btnMas.disabled = !cantValida || cantPreview >= TIENDA_COMPRA_CANTIDAD_MAX;
+    };
+
+    cantInput.addEventListener('input', () => {
+        cantInput.value = cantInput.value.replace(/\D/g, '').slice(0, 3);
+        actualizarEstado();
+    });
+    cantInput.addEventListener('blur', () => {
+        normalizarInputCantidadCompraTienda(cantInput);
+        actualizarEstado();
+    });
+    cantInput.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter') {
+            ev.preventDefault();
+            normalizarInputCantidadCompraTienda(cantInput);
+            actualizarEstado();
+            botonComprar.click();
+        }
+    });
+
+    btnMenos.addEventListener('click', () => {
+        const cant = normalizarInputCantidadCompraTienda(cantInput);
+        if (cant > TIENDA_COMPRA_CANTIDAD_MIN) {
+            cantInput.value = String(cant - 1);
+            actualizarEstado();
+        }
+    });
+    btnMas.addEventListener('click', () => {
+        const cant = normalizarInputCantidadCompraTienda(cantInput);
+        if (cant < TIENDA_COMPRA_CANTIDAD_MAX) {
+            cantInput.value = String(cant + 1);
+            actualizarEstado();
+        }
+    });
+
+    botonComprar.addEventListener('click', () => {
+        const cant = normalizarInputCantidadCompraTienda(cantInput);
+        actualizarEstado();
+        alComprar(cant);
+    });
+
+    wrap.appendChild(btnMenos);
+    wrap.appendChild(cantInput);
+    wrap.appendChild(btnMas);
+
+    actualizarEstado();
+    return wrap;
+}
+
+function obtenerModoPrecioObjetoTienda(objeto) {
+    const costeEspecial = Number(objeto.precioMejoraEspecial);
+    const costeMejoraCarta = Number(objeto.precioMejoraCarta);
+    if (Number.isFinite(costeEspecial) && costeEspecial > 0) {
+        return { tipo: 'mejoraEspecial', unitario: costeEspecial };
+    }
+    if (Number.isFinite(costeMejoraCarta) && costeMejoraCarta > 0) {
+        return { tipo: 'mejoraCarta', unitario: costeMejoraCarta };
+    }
+    return { tipo: 'puntos', unitario: Number(objeto.precio) || 0 };
+}
+
+function obtenerFondosCompraObjetoTienda(modo) {
+    if (modo.tipo === 'mejoraEspecial') {
+        return Number(usuarioActual.objetos?.mejoraEspecial || 0);
+    }
+    if (modo.tipo === 'mejoraCarta') {
+        return Number(usuarioActual.objetos?.mejoraCarta || 0);
+    }
+    return Number(usuarioActual.puntos || 0);
+}
+
+function puedeComprarCantidadObjetoTienda(objeto, cantidad) {
+    const modo = obtenerModoPrecioObjetoTienda(objeto);
+    const total = modo.unitario * cantidad;
+    return total > 0 && obtenerFondosCompraObjetoTienda(modo) >= total;
+}
+
+function construirElementoPrecioObjetoTienda(objeto) {
+    const precio = document.createElement('div');
+    precio.className = 'precio-item';
+    const modo = obtenerModoPrecioObjetoTienda(objeto);
+    const linea = document.createElement('span');
+    linea.className = 'tienda-precio-objeto-linea';
+    linea.appendChild(document.createTextNode('Precio: '));
+
+    const cantTxt = document.createElement('strong');
+    cantTxt.className = 'tienda-precio-objeto-total';
+
+    if (modo.tipo === 'mejoraEspecial') {
+        precio.classList.add('precio-item--mejora-especial');
+        const iconoCoste = document.createElement('img');
+        iconoCoste.src = ICONO_MEJORA_ESPECIAL_TIENDA;
+        iconoCoste.alt = 'Mejora especial';
+        iconoCoste.className = 'tienda-precio-mejora-especial-icono';
+        linea.appendChild(iconoCoste);
+        linea.appendChild(cantTxt);
+    } else if (modo.tipo === 'mejoraCarta') {
+        precio.classList.add('precio-item--mejora-carta');
+        const iconoCoste = document.createElement('img');
+        iconoCoste.src = ICONO_MEJORA_CARTA_TIENDA;
+        iconoCoste.alt = 'Mejora de carta';
+        iconoCoste.className = 'tienda-precio-mejora-carta-icono';
+        linea.appendChild(iconoCoste);
+        linea.appendChild(cantTxt);
+    } else {
+        linea.appendChild(cantTxt);
+        const moneda = document.createElement('img');
+        moneda.src = ICONO_MONEDA;
+        moneda.alt = 'Moneda';
+        moneda.className = 'tienda-precio-moneda-icono';
+        linea.appendChild(moneda);
+    }
+
+    precio.appendChild(linea);
+
+    precio.actualizarCantidad = (cantidad) => {
+        const cant = parsearCantidadCompraTienda(cantidad);
+        const total = modo.unitario * cant;
+        if (modo.tipo === 'puntos') {
+            cantTxt.textContent = String(total);
+        } else {
+            cantTxt.textContent = `×${total}`;
+        }
+        precio.classList.toggle('precio-item--insuficiente', !puedeComprarCantidadObjetoTienda(objeto, cant));
+    };
+
+    return precio;
+}
+
 function crearTarjetaObjetoTienda(objeto) {
     const esSobre = objeto.id && String(objeto.id).startsWith('obj-sobre-');
     const esCofre = Boolean(objeto.esCofre);
@@ -1095,61 +1294,31 @@ function crearTarjetaObjetoTienda(objeto) {
         item.appendChild(cuerpoSobre);
     }
 
-    const precio = document.createElement('div');
-    precio.className = 'precio-item';
-    const costeEspecial = Number(objeto.precioMejoraEspecial);
-    const costeMejoraCarta = Number(objeto.precioMejoraCarta);
-    if (Number.isFinite(costeEspecial) && costeEspecial > 0) {
-        precio.classList.add('precio-item--mejora-especial');
-        const linea = document.createElement('span');
-        linea.className = 'tienda-precio-objeto-linea';
-        linea.appendChild(document.createTextNode('Precio: '));
-        const iconoCoste = document.createElement('img');
-        iconoCoste.src = ICONO_MEJORA_ESPECIAL_TIENDA;
-        iconoCoste.alt = 'Mejora especial';
-        iconoCoste.className = 'tienda-precio-mejora-especial-icono';
-        const cantTxt = document.createElement('strong');
-        cantTxt.textContent = `×${costeEspecial}`;
-        linea.appendChild(iconoCoste);
-        linea.appendChild(cantTxt);
-        precio.appendChild(linea);
-    } else if (Number.isFinite(costeMejoraCarta) && costeMejoraCarta > 0) {
-        precio.classList.add('precio-item--mejora-carta');
-        const linea = document.createElement('span');
-        linea.className = 'tienda-precio-objeto-linea';
-        linea.appendChild(document.createTextNode('Precio: '));
-        const iconoCoste = document.createElement('img');
-        iconoCoste.src = ICONO_MEJORA_CARTA_TIENDA;
-        iconoCoste.alt = 'Mejora de carta';
-        iconoCoste.className = 'tienda-precio-mejora-carta-icono';
-        const cantTxt = document.createElement('strong');
-        cantTxt.textContent = `×${costeMejoraCarta}`;
-        linea.appendChild(iconoCoste);
-        linea.appendChild(cantTxt);
-        precio.appendChild(linea);
-    } else {
-        precio.innerHTML = `Precio: ${objeto.precio} <img src="${ICONO_MONEDA}" alt="Moneda" style="width:18px;height:18px;object-fit:contain;vertical-align:text-bottom;margin-left:4px;">`;
-    }
+    const precio = construirElementoPrecioObjetoTienda(objeto);
+
+    const filaAccion = document.createElement('div');
+    filaAccion.className = 'objeto-tienda-compra-acciones';
 
     const boton = document.createElement('button');
     boton.className = 'btn btn-primary';
     boton.textContent = 'Comprar';
-    if (Number.isFinite(costeEspecial) && costeEspecial > 0) {
-        const disp = Number(usuarioActual.objetos?.mejoraEspecial || 0);
-        boton.disabled = disp < costeEspecial;
-    } else if (Number.isFinite(costeMejoraCarta) && costeMejoraCarta > 0) {
-        const disp = Number(usuarioActual.objetos?.mejoraCarta || 0);
-        boton.disabled = disp < costeMejoraCarta;
-    } else {
-        boton.disabled = usuarioActual.puntos < objeto.precio;
-    }
-    boton.addEventListener('click', () => comprarObjeto(objeto.id));
+
+    const controlCantidad = adjuntarControlCantidadCompraTienda({
+        objeto,
+        precio,
+        botonComprar: boton,
+        alComprar: (cant) => comprarObjeto(objeto.id, cant)
+    });
+
+    filaAccion.appendChild(boton);
+    filaAccion.appendChild(controlCantidad);
 
     const pie = document.createElement('div');
     pie.className = 'objeto-tienda-pie-compra';
     pie.appendChild(precio);
-    pie.appendChild(boton);
+    pie.appendChild(filaAccion);
     item.appendChild(pie);
+
     return item;
 }
 
@@ -1341,7 +1510,7 @@ async function comprarCarta(seccion, indexOferta) {
     }
 }
 
-async function comprarObjeto(identificador) {
+async function comprarObjeto(identificador, cantidadRaw = 1) {
     if (!tiendaListaParaComprar()) {
         mostrarMensaje('La tienda se está actualizando. Inténtalo de nuevo en un momento.', 'warning');
         void prepararTiendaEnSegundoPlano();
@@ -1356,46 +1525,42 @@ async function comprarObjeto(identificador) {
         return;
     }
 
-    const costeEspecial = Number(objeto.precioMejoraEspecial);
-    const costeMejoraCarta = Number(objeto.precioMejoraCarta);
-    const pagaConMejoraEspecial = Number.isFinite(costeEspecial) && costeEspecial > 0;
-    const pagaConMejoraCarta = Number.isFinite(costeMejoraCarta) && costeMejoraCarta > 0;
+    const cantidad = parsearCantidadCompraTienda(cantidadRaw);
+    const modo = obtenerModoPrecioObjetoTienda(objeto);
+    const costeTotal = modo.unitario * cantidad;
+    const pagaConMejoraEspecial = modo.tipo === 'mejoraEspecial';
+    const pagaConMejoraCarta = modo.tipo === 'mejoraCarta';
 
-    if (pagaConMejoraEspecial) {
-        const disp = Number(usuarioActual.objetos?.mejoraEspecial || 0);
-        if (disp < costeEspecial) {
+    if (!puedeComprarCantidadObjetoTienda(objeto, cantidad)) {
+        if (pagaConMejoraEspecial) {
             mostrarMensaje('No tienes suficientes mejoras especiales para comprar este objeto.', 'danger');
-            return;
-        }
-    } else if (pagaConMejoraCarta) {
-        const disp = Number(usuarioActual.objetos?.mejoraCarta || 0);
-        if (disp < costeMejoraCarta) {
+        } else if (pagaConMejoraCarta) {
             mostrarMensaje('No tienes suficientes mejoras de carta para comprar este objeto.', 'danger');
-            return;
+        } else {
+            mostrarMensaje('No tienes suficientes puntos para comprar este objeto.', 'danger');
         }
-    } else if (usuarioActual.puntos < objeto.precio) {
-        mostrarMensaje('No tienes suficientes puntos para comprar este objeto.', 'danger');
         return;
     }
 
+    const opcionesConfirmacion = { cantidad };
     let confirmar;
     if (pagaConMejoraEspecial) {
-        confirmar = await pedirConfirmacionCompra(objeto.nombre, costeEspecial, { moneda: 'mejoraEspecial' });
+        confirmar = await pedirConfirmacionCompra(objeto.nombre, costeTotal, { moneda: 'mejoraEspecial', ...opcionesConfirmacion });
     } else if (pagaConMejoraCarta) {
-        confirmar = await pedirConfirmacionCompra(objeto.nombre, costeMejoraCarta, { moneda: 'mejoraCarta' });
+        confirmar = await pedirConfirmacionCompra(objeto.nombre, costeTotal, { moneda: 'mejoraCarta', ...opcionesConfirmacion });
     } else {
-        confirmar = await pedirConfirmacionCompra(objeto.nombre, objeto.precio);
+        confirmar = await pedirConfirmacionCompra(objeto.nombre, costeTotal, opcionesConfirmacion);
     }
     if (!confirmar) {
         return;
     }
 
     if (pagaConMejoraEspecial) {
-        usuarioActual.objetos.mejoraEspecial = Math.max(0, Number(usuarioActual.objetos.mejoraEspecial || 0) - costeEspecial);
+        usuarioActual.objetos.mejoraEspecial = Math.max(0, Number(usuarioActual.objetos.mejoraEspecial || 0) - costeTotal);
     } else if (pagaConMejoraCarta) {
-        usuarioActual.objetos.mejoraCarta = Math.max(0, Number(usuarioActual.objetos.mejoraCarta || 0) - costeMejoraCarta);
+        usuarioActual.objetos.mejoraCarta = Math.max(0, Number(usuarioActual.objetos.mejoraCarta || 0) - costeTotal);
     } else {
-        usuarioActual.puntos -= objeto.precio;
+        usuarioActual.puntos -= costeTotal;
     }
     usuarioActual.objetos = (usuarioActual.objetos && typeof usuarioActual.objetos === 'object')
         ? { ...usuarioActual.objetos }
@@ -1412,23 +1577,23 @@ async function comprarObjeto(identificador) {
 
     const defSobre = window.DC_SOBRES_POR_ID && window.DC_SOBRES_POR_ID[objeto.id];
     if (defSobre && defSobre.inventarioKey) {
-        usuarioActual.objetos[defSobre.inventarioKey] = Number(usuarioActual.objetos[defSobre.inventarioKey] || 0) + 1;
+        usuarioActual.objetos[defSobre.inventarioKey] = Number(usuarioActual.objetos[defSobre.inventarioKey] || 0) + cantidad;
     } else if (objeto.id === 'obj-mejora-carta') {
-        usuarioActual.objetos.mejoraCarta = Number(usuarioActual.objetos.mejoraCarta || 0) + 1;
+        usuarioActual.objetos.mejoraCarta = Number(usuarioActual.objetos.mejoraCarta || 0) + cantidad;
     } else if (objeto.id === 'obj-mejora-especial') {
-        usuarioActual.objetos.mejoraEspecial = Number(usuarioActual.objetos.mejoraEspecial || 0) + 1;
+        usuarioActual.objetos.mejoraEspecial = Number(usuarioActual.objetos.mejoraEspecial || 0) + cantidad;
     } else if (objeto.id === 'obj-mejora-suprema') {
-        usuarioActual.objetos.mejoraSuprema = Number(usuarioActual.objetos.mejoraSuprema || 0) + 1;
+        usuarioActual.objetos.mejoraSuprema = Number(usuarioActual.objetos.mejoraSuprema || 0) + cantidad;
     } else if (objeto.id === 'obj-mejora-definitiva') {
-        usuarioActual.objetos.mejoraDefinitiva = Number(usuarioActual.objetos.mejoraDefinitiva || 0) + 1;
+        usuarioActual.objetos.mejoraDefinitiva = Number(usuarioActual.objetos.mejoraDefinitiva || 0) + cantidad;
     } else if (objeto.id === 'obj-cofre-elite') {
-        usuarioActual.objetos.mejoraElite = Number(usuarioActual.objetos.mejoraElite || 0) + 12;
+        usuarioActual.objetos.mejoraElite = Number(usuarioActual.objetos.mejoraElite || 0) + (12 * cantidad);
     } else if (objeto.id === 'obj-cofre-legendario') {
-        usuarioActual.objetos.mejoraLegendaria = Number(usuarioActual.objetos.mejoraLegendaria || 0) + 12;
+        usuarioActual.objetos.mejoraLegendaria = Number(usuarioActual.objetos.mejoraLegendaria || 0) + (12 * cantidad);
     } else if (objeto.id === 'obj-fragmento-mejora-elite') {
-        usuarioActual.objetos.mejoraElite = Number(usuarioActual.objetos.mejoraElite || 0) + 1;
+        usuarioActual.objetos.mejoraElite = Number(usuarioActual.objetos.mejoraElite || 0) + cantidad;
     } else if (objeto.id === 'obj-fragmento-mejora-legendaria') {
-        usuarioActual.objetos.mejoraLegendaria = Number(usuarioActual.objetos.mejoraLegendaria || 0) + 1;
+        usuarioActual.objetos.mejoraLegendaria = Number(usuarioActual.objetos.mejoraLegendaria || 0) + cantidad;
     }
 
     usuarioActual.syncUpdatedAt = Date.now();
@@ -1439,8 +1604,8 @@ async function comprarObjeto(identificador) {
         let trackCompra = null;
         if (window.DCMisiones?.track) {
             trackCompra = defSobre
-                ? window.DCMisiones.track('shop_sobres', { amount: 1 })
-                : window.DCMisiones.track('shop_mejora', { amount: 1 });
+                ? window.DCMisiones.track('shop_sobres', { amount: cantidad })
+                : window.DCMisiones.track('shop_mejora', { amount: cantidad });
         }
         if (trackCompra && typeof trackCompra.then === 'function') {
             await Promise.allSettled([trackCompra]);
@@ -1450,7 +1615,8 @@ async function comprarObjeto(identificador) {
             window.DCRedDot.refresh();
         }
         renderizarTienda();
-        mostrarMensaje(`Has comprado ${objeto.nombre}.`, 'success');
+        const textoCantidad = cantidad > 1 ? `${cantidad} × ${objeto.nombre}` : objeto.nombre;
+        mostrarMensaje(`Has comprado ${textoCantidad}.`, 'success');
     } catch (error) {
         console.error('Error al comprar objeto:', error);
         mostrarMensaje('No se pudo completar la compra del objeto.', 'danger');
@@ -1525,11 +1691,18 @@ function pedirConfirmacionCompra(nombre, precio, opcionesPrecio) {
         }
 
         texto.innerHTML = '';
+        const cantidad = parsearCantidadCompraTienda(opcionesPrecio?.cantidad ?? 1);
         const t1 = document.createTextNode('¿Deseas comprar ');
+        texto.appendChild(t1);
+        if (cantidad > 1) {
+            const cantStrong = document.createElement('strong');
+            cantStrong.textContent = String(cantidad);
+            texto.appendChild(cantStrong);
+            texto.appendChild(document.createTextNode(' × '));
+        }
         const nombreStrong = document.createElement('strong');
         nombreStrong.textContent = String(nombre || '');
         const t2 = document.createTextNode(' por ');
-        texto.appendChild(t1);
         texto.appendChild(nombreStrong);
         texto.appendChild(t2);
         if (opcionesPrecio && opcionesPrecio.moneda === 'mejoraEspecial') {

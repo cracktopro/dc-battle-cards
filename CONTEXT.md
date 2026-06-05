@@ -316,6 +316,10 @@ Nunca se muestra en producción (`main` en Render).
   - UI con barra de progreso hasta siguiente rotación
 - Compra:
   - Puede pagar con `usuario.puntos` o con objetos (`mejoraCarta`, `mejoraEspecial`, etc.) según ítem
+  - Pestañas **Objetos** y **Sobres**: selector de cantidad (1–999) con botones ± y campo editable; a la derecha del botón Comprar; el precio mostrado es el **total** (unitario × cantidad) y se actualiza al cambiar la cantidad; el botón se desactiva si los fondos no alcanzan o el campo está vacío
+  - Precios objetos de mejora (monedas): Mejora de carta **1000**, Mejora especial **6000**, Mejora suprema **10000**, Mejora definitiva **20000**
+  - Fragmentos de mejora en tienda: **Mejora élite** ×15 `mejoraCarta`; **Mejora legendaria** ×30 `mejoraCarta`
+  - Cofres en tienda: **Cofre élite** ×25 `mejoraEspecial`; **Cofre legendario** ×50 `mejoraEspecial`
   - Sobres: claves `sobreH1`…`sobreV3` en `usuario.objetos`
   - Marca oferta `agotada: true`, merge LS antes de guardar, luego `/update-user`
 - Al abrir tienda: sincroniza stats de cartas del catálogo sin resetear rotación/agotados.
@@ -670,9 +674,9 @@ Nunca se muestra en producción (`main` en Render).
 
 | Key `usuario.objetos` | Uso |
 |----------------------|-----|
-| `mejoraCarta` | Solo cartas 1★–3★ → +1 nivel (tope 4★) |
+| `mejoraCarta` | Solo cartas 1★–3★ → +1 nivel (tope 4★); consume **×5** por uso |
 | `mejoraSuprema` | Niveles 1–4 → salta a 5★ |
-| `mejoraEspecial` | Solo 5★ → 6★ |
+| `mejoraEspecial` | Solo 5★ → 6★; consume **×3** por uso |
 | `mejoraDefinitiva` | Niveles 1–5 → salta a 6★ |
 | `mejoraElite` | Fragmento: sube a 7★ |
 | `mejoraLegendaria` | Fragmento: sube a 8★ |

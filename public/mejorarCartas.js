@@ -101,6 +101,8 @@ const ICONO_FRAGMENTO_LEGENDARIA_UI = '/resources/icons/mejora_legendaria.png';
 const ICONO_ANIM_ELITE = '/resources/icons/elite.png';
 const ICONO_ANIM_LEGENDARY = '/resources/icons/legendary.png';
 const COSTO_MEJORA_FRAGMENTOS = 12;
+const COSTO_USO_MEJORA_CARTA = 5;
+const COSTO_USO_MEJORA_ESPECIAL = 3;
 
 let indiceCartaModalFragmentos = null;
 let faccionFragmentosActiva = 'H';
@@ -879,9 +881,20 @@ function configurarFiltrosMejorasObjetos() {
     });
 }
 
+function obtenerCostoUsoObjetoMejora(keyObjeto) {
+    if (keyObjeto === 'mejoraCarta') {
+        return COSTO_USO_MEJORA_CARTA;
+    }
+    if (keyObjeto === 'mejoraEspecial') {
+        return COSTO_USO_MEJORA_ESPECIAL;
+    }
+    return 1;
+}
+
 function puedeUsarObjetoEnCarta(keyObjeto, nivelCarta, cantidadInventario) {
     const n = Number(nivelCarta || 1);
-    if (cantidadInventario <= 0) {
+    const costo = obtenerCostoUsoObjetoMejora(keyObjeto);
+    if (Number(cantidadInventario) < costo) {
         return false;
     }
     if (n >= 6) {
@@ -912,6 +925,7 @@ function renderizarFilasModalObjetosMejora(usuario, carta) {
 
     OBJETOS_MEJORA_UI.forEach((def) => {
         const cant = Number(usuario.objetos?.[def.key] || 0);
+        const costo = obtenerCostoUsoObjetoMejora(def.key);
         const habilitado = puedeUsarObjetoEnCarta(def.key, nivel, cant);
 
         const fila = document.createElement('div');
@@ -929,7 +943,7 @@ function renderizarFilasModalObjetosMejora(usuario, carta) {
         const strong = document.createElement('strong');
         strong.textContent = def.nombre;
         const small = document.createElement('small');
-        small.textContent = `${def.descripcion} · En inventario: ${cant}`;
+        small.textContent = `${def.descripcion} · Coste: ×${costo} · En inventario: ${cant}`;
         texto.appendChild(strong);
         texto.appendChild(small);
 
@@ -2191,8 +2205,9 @@ async function aplicarMejoraObjetoDesdeModal(tipo, indiceCarta) {
 
     const nivel = Number(carta.Nivel || 1);
     const stock = Number(usuario.objetos?.[tipo] || 0);
+    const costo = obtenerCostoUsoObjetoMejora(tipo);
     if (!puedeUsarObjetoEnCarta(tipo, nivel, stock)) {
-        mostrarMensaje('No puedes usar este objeto en esta carta o no tienes stock.', 'warning');
+        mostrarMensaje('No puedes usar este objeto en esta carta o no tienes stock suficiente.', 'warning');
         return;
     }
 
@@ -2205,7 +2220,7 @@ async function aplicarMejoraObjetoDesdeModal(tipo, indiceCarta) {
     const faccionMejorada = normalizarFaccion(mejorada?.faccion || mejorada?.Faccion || '');
     const subeANivel6 = Number(original?.Nivel || 1) < 6 && Number(mejorada?.Nivel || 1) === 6;
     usuario.cartas[indiceCarta] = mejorada;
-    usuario.objetos[tipo] = stock - 1;
+    usuario.objetos[tipo] = stock - costo;
     sincronizarMazosConColeccion(usuario);
 
     try {

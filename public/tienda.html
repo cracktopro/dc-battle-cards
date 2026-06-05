@@ -525,8 +525,90 @@
             justify-content: center;
         }
 
-        .objeto-tienda-pie-compra .btn {
+        .precio-item--insuficiente .tienda-precio-objeto-total {
+            color: #ff9a9a;
+        }
+
+        .objeto-tienda-compra-acciones {
+            display: flex;
+            flex-direction: row;
+            align-items: stretch;
+            gap: 8px;
             width: 100%;
+        }
+
+        .objeto-tienda-compra-acciones .btn {
+            flex: 1 1 auto;
+            width: auto;
+            min-width: 0;
+        }
+
+        .tienda-compra-cantidad-wrap {
+            display: flex;
+            flex-direction: row;
+            align-items: stretch;
+            flex: 0 0 auto;
+            border-radius: 8px;
+            border: 1px solid rgba(var(--dc-accent-user-rgb, 0, 123, 255), 0.45);
+            background: rgba(8, 16, 32, 0.92);
+            overflow: hidden;
+        }
+
+        .tienda-compra-cantidad-btn {
+            flex: 0 0 28px;
+            width: 28px;
+            padding: 0;
+            border: none;
+            background: rgba(var(--dc-accent-user-rgb, 0, 123, 255), 0.18);
+            color: #dff8ff;
+            font-size: 1.05rem;
+            font-weight: 700;
+            line-height: 1;
+            cursor: pointer;
+            transition: background 0.15s ease, color 0.15s ease;
+        }
+
+        .tienda-compra-cantidad-btn:hover:not(:disabled) {
+            background: rgba(var(--dc-accent-user-rgb, 0, 123, 255), 0.38);
+            color: #fff;
+        }
+
+        .tienda-compra-cantidad-btn:disabled {
+            opacity: 0.35;
+            cursor: not-allowed;
+        }
+
+        .tienda-compra-cantidad {
+            flex: 0 0 42px;
+            width: 42px;
+            min-width: 42px;
+            padding: 6px 2px;
+            border: none;
+            border-left: 1px solid rgba(var(--dc-accent-user-rgb, 0, 123, 255), 0.28);
+            border-right: 1px solid rgba(var(--dc-accent-user-rgb, 0, 123, 255), 0.28);
+            background: transparent;
+            color: #dff8ff;
+            font-size: 0.95rem;
+            font-weight: 700;
+            text-align: center;
+        }
+
+        .tienda-compra-cantidad:focus {
+            outline: none;
+            background: rgba(var(--dc-accent-user-rgb, 0, 123, 255), 0.12);
+        }
+
+        .tienda-compra-cantidad-wrap:focus-within {
+            border-color: rgba(var(--dc-accent-user-rgb, 0, 123, 255), 0.85);
+            box-shadow: 0 0 8px rgba(var(--dc-accent-user-rgb, 0, 123, 255), 0.35);
+        }
+
+        .tienda-precio-moneda-icono {
+            width: 18px;
+            height: 18px;
+            object-fit: contain;
+            vertical-align: text-bottom;
+            margin-left: 4px;
         }
 
         .objeto-tienda-fragmento-imagen-wrap,
