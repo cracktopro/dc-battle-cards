@@ -130,6 +130,7 @@ Documento vivo de referencia técnica para trabajar sobre DC Battle Cards sin ro
   - `estadoDesafio.activo === false`
   - Entonces `esPartidaRapidaVsBot() === true` → recompensas de partida rápida.
 - Victoria: `otorgarRecompensasVictoria()` + `/update-user` + misiones `bot`, `bot_defeat`, colección H/V.
+- **Modal de recompensas (VS BOT, desafíos, eventos, asaltos):** al ganar, `mostrarVentanaFinPartida` aplica recompensas en `localStorage` de inmediato (`soloLocal: true`), pinta puntos/objetos/cartas al instante y sincroniza Firebase + misiones en segundo plano (`persistirRecompensasRemotoEnSegundoPlano`). El catálogo `cartas.xlsx` se precarga al cargar el tablero vía `DCCatalogoCartas` (`precargarRecursosRecompensasPartida`); las cartas del grid usan `soloVista: true` para un DOM más ligero.
 - Fondo opcional: `js/tableroFondo.js` + `GET /api/tableros`.
 
 ### 2) PvP Online Multijugador
@@ -143,6 +144,7 @@ Documento vivo de referencia técnica para trabajar sobre DC Battle Cards sin ro
 ### 3a) Desafíos (camino `desafios.html`)
 
 - Excel: `resources/desafios.xlsx` (`desafios.js`).
+- **Rendimiento carga paneles (`desafios.js`):** el primer render solo espera `desafios.xlsx` + catálogo de cartas; el refresco de usuario (`/get-user`) y `skins.xlsx` van en segundo plano y re-renderizan al terminar. El mapa de catálogo se cachea (`obtenerMapaCatalogoDesafios`); los carruseles 3D de enemigos se montan por lotes (`requestAnimationFrame`, 2 por frame) mostrando antes una miniatura estática del primer enemigo/boss.
 - Progresión por nivel/facción (camino Héroes o Villanos), desbloqueo secuencial.
 - Jugador elige **6 cartas** (no 12) + dificultad del desafío.
 - Persiste `desafioActivo` (sin `tipo: 'evento'` o con tipo desafío según payload).
@@ -163,6 +165,7 @@ Documento vivo de referencia técnica para trabajar sobre DC Battle Cards sin ro
 ### 4) Asaltos
 
 - Flujo en `js/asaltos.js`, rotación semanal.
+- **Panel desplegable (detalle del asalto):** al abrir, el contenido se pinta al instante con datos locales y la animación `--visible` no espera a `/get-user`; el refresco de usuario y el selector de mazos se actualizan en segundo plano (`refrescarUsuarioSesionDesdeServidor` si está disponible). La imagen del asalto se precarga al mostrar cada planeta en el carrusel (`precargarImagenAsalto`).
 - Mazo enemigo predefinido (no aleatorio), dificultad 6/7/8.
 - `partidaModo=asalto`, `asaltoActivo` en LS.
 - `partida.js` aplica rama asalto con reglas/recompensas particulares.
@@ -181,6 +184,10 @@ Documento vivo de referencia técnica para trabajar sobre DC Battle Cards sin ro
 - **Relleno de cartas del BOT (igual que `partida.js`):**
   - Durante turno P1/P2, si la mesa BOT queda **totalmente vacía**, se roba del mazo BOT para que P1/P2 puedan seguir/terminar su turno (`aplicarRobosInicioDeFaseSegunFaseActual` rama P1/P2 + `rellenarMesaBotSiVaciaEnSnap`, equivalente a `partida.js` cuando el objetivo se queda sin cartas disponibles).
   - Al **inicio del turno BOT**, `ejecutarTurnoBotSecuencial` rellena **siempre** los slots vacíos del BOT desde el mazo (no solo cuando está totalmente vacía), mientras queden cartas en el mazo (`rellenarVaciosDesdeMazoAnimado('bot', 4)` sin condición previa). Equivale a `rellenarSlotsVacios(mazoOponente, ...)` al iniciar el turno del oponente en `partida.js`.
+  - **Integridad mazo BOT:** cada carta del rival lleva `coopCardUid` (asignado en `construirSnapshotInicialCoopServidor` / `server.js`). Al robar, `sacarSiguienteCartaDelMazoEnSnapshot` + `purificarMazoBotEnSnapshot` omiten instancias ya en mesa o `cementerioBot` (salvo `revive`, que devuelve la misma instancia al mazo). Antes de robar, `limpiarCartasMuertasEnMesaEnSnapshot` promueve muertos a cementerio y libera slots. Tras un ataque humano, el emisor aplica el snapshot canónico emitido (`aplicarEstadoCombateCanonicoDesdeSnapshot`) para no ejecutar un segundo robo local que duplicaba cartas eliminadas.
+- **Modal de recompensas coop:** mismo patrón que PvE offline — `otorgarRecompensasCoop({ soloLocal: true })` pinta la UI al instante; Firebase y misiones (`online`, `boss`, colección) en segundo plano. Precarga de catálogo/skins al iniciar `inicializarPartidaCoopUi` (`coopPrecargarRecursosRecompensas`).
+- **Auto-pase de turno humano:** si P1 o P2 no tiene cartas jugables (sin cartas en mesa/mazo, todo aturdido o ya actuaron), el jugador activo emite el avance de fase (`intentarAutoPasarTurnoHumanoSinJugada`) para no bloquear el flujo; puede encadenar P1→P2→BOT en una sola emisión.
+- **Paneles en multijugador (`multijugadorEventosCoop.js`):** primer render solo espera `eventos_online.xlsx` + catálogo (`DCCatalogoCartas`); skins y refresco de usuario van en segundo plano. Carruseles 3D de enemigos se montan por lotes (`requestAnimationFrame`, 2 por frame) con miniatura estática previa (`DCEventoPanelUi` + `encolarCarrusel`).
 
 ### 6) Episodios
 
@@ -621,12 +628,15 @@ Nunca se muestra en producción (`main` en Render).
 
 - Si se rompen recompensas:
   - revisar `partida.js` (rama de modo) + `cartas.js` (sync) + respuesta `/update-user`.
+  - el modal pinta con `soloLocal`; la sync remota va en `persistirRecompensasRemotoEnSegundoPlano` / bloque equivalente en `partidaCoop.js`.
 - Si se rompen modos al entrar a `tablero`:
   - revisar colisión de flags (`partidaModo`, `desafioActivo`, `asaltoActivo`, `episodioActivo`, `partidaPvpSessionId`).
 - Si hay desync multi-dispositivo:
   - confirmar manejo de `409 SYNC_CONFLICT` y merge cliente.
 - Si falla coop/pvp:
   - validar revisiones de estado, room/session id y orden de eventos socket.
+- Si el BOT coop saca cartas ya eliminadas:
+  - revisar `coopCardUid`, `purificarMazoBotEnSnapshot`, `sacarSiguienteCartaDelMazoEnSnapshot` y que el emisor no haga doble robo tras ataque (`aplicarEstadoCombateCanonicoDesdeSnapshot`).
 - Si hay stats incorrectos por nivel:
   - revisar `escaladoStatsCarta.js`, `partida.js`, y el origen de nivel en el modo concreto.
 

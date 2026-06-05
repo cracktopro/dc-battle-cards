@@ -89,6 +89,9 @@
     let eventosCoopListaCompleta = [];
     let eventosCoopEnRotacion = [];
     let temporizadorRotacionCoopEventos = null;
+    let _mapaCatalogoCoopCache = null;
+    let _colaMontajeCarruselesCoop = [];
+    let _montajeCarruselesCoopProgramado = false;
 
     function obtenerVentanaRotacionCoopEventos() {
         const ahora = Date.now();
@@ -162,20 +165,28 @@
         }, 1000);
     }
 
+    function obtenerUsuarioLocalCoop() {
+        try {
+            return JSON.parse(localStorage.getItem('usuario') || 'null');
+        } catch (_e) {
+            return null;
+        }
+    }
+
     async function obtenerUsuarioActualCoop() {
         const email = localStorage.getItem('email');
-        if (!email) return null;
+        if (!email) return obtenerUsuarioLocalCoop();
         try {
             const response = await fetch('/get-user', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email })
             });
-            if (!response.ok) return null;
+            if (!response.ok) return obtenerUsuarioLocalCoop();
             const data = await response.json();
-            return data?.usuario || null;
+            return data?.usuario || obtenerUsuarioLocalCoop();
         } catch (_e) {
-            return null;
+            return obtenerUsuarioLocalCoop();
         }
     }
 
@@ -204,12 +215,72 @@
     }
 
     async function obtenerCatalogoCartas() {
+        if (_mapaCatalogoCoopCache) {
+            return Array.from(_mapaCatalogoCoopCache.values());
+        }
+        if (typeof window.DCCatalogoCartas?.obtenerFilas === 'function') {
+            const filas = await window.DCCatalogoCartas.obtenerFilas();
+            _mapaCatalogoCoopCache = new Map(
+                filas.map((carta) => [normalizarNombre(carta.Nombre), carta])
+            );
+            return filas;
+        }
+        if (typeof window.DCCatalogoCartas?.cargarFilas === 'function') {
+            const filas = await window.DCCatalogoCartas.cargarFilas();
+            _mapaCatalogoCoopCache = new Map(
+                filas.map((carta) => [normalizarNombre(carta.Nombre), carta])
+            );
+            return filas;
+        }
         const response = await fetch('resources/cartas.xlsx');
         if (!response.ok) throw new Error('cartas');
         const data = await response.arrayBuffer();
         const workbook = XLSX.read(data, { type: 'array' });
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        return XLSX.utils.sheet_to_json(sheet, { defval: '' });
+        const filas = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+        _mapaCatalogoCoopCache = new Map(
+            filas.map((carta) => [normalizarNombre(carta.Nombre), carta])
+        );
+        return filas;
+    }
+
+    function cancelarMontajeCarruselesCoopPendiente() {
+        _colaMontajeCarruselesCoop = [];
+        _montajeCarruselesCoopProgramado = false;
+    }
+
+    function programarMontajeCarruselesCoop() {
+        if (_montajeCarruselesCoopProgramado || _colaMontajeCarruselesCoop.length === 0) {
+            return;
+        }
+        _montajeCarruselesCoopProgramado = true;
+        const LOTE = 2;
+        const procesarLote = () => {
+            if (_colaMontajeCarruselesCoop.length === 0) {
+                _montajeCarruselesCoopProgramado = false;
+                return;
+            }
+            const lote = _colaMontajeCarruselesCoop.splice(0, LOTE);
+            lote.forEach((entrada) => {
+                if (!entrada?.mount?.isConnected || typeof window.DCCarrusel3d?.montar !== 'function') {
+                    return;
+                }
+                entrada.mount.innerHTML = '';
+                window.DCCarrusel3d.montar(entrada.mount, entrada.opciones);
+            });
+            if (_colaMontajeCarruselesCoop.length > 0) {
+                requestAnimationFrame(procesarLote);
+            } else {
+                _montajeCarruselesCoopProgramado = false;
+            }
+        };
+        requestAnimationFrame(procesarLote);
+    }
+
+    function encolarCarruselCoop(mount, opciones) {
+        if (!mount) return;
+        _colaMontajeCarruselesCoop.push({ mount, opciones });
+        programarMontajeCarruselesCoop();
     }
 
     async function cargarEventosOnline() {
@@ -235,19 +306,17 @@
         }, 3200);
     }
 
-    async function renderizarEventosCoopGrid(eventos, catalogo) {
+    async function renderizarEventosCoopGrid(eventos, catalogo, opciones = {}) {
         const contenedor = document.getElementById(EVENTOS_COOP_GRID_ID);
         if (!contenedor) return;
 
-        const mapaCatalogo = new Map(
-            catalogo.map((carta) => [normalizarNombre(carta.Nombre), carta])
-        );
-        if (typeof window.DCSkinsCartas !== 'undefined' && typeof window.DCSkinsCartas.asegurarSkinsCargados === 'function') {
-            await window.DCSkinsCartas.asegurarSkinsCargados();
-        }
+        cancelarMontajeCarruselesCoopPendiente();
+
+        const mapaCatalogo = _mapaCatalogoCoopCache
+            || new Map(catalogo.map((carta) => [normalizarNombre(carta.Nombre), carta]));
 
         /* Progreso coop online aislado: `claveRotacion` usa prefijo propio (no el de VS BOT). */
-        const usuario = await obtenerUsuarioActualCoop();
+        const usuario = opciones.usuario || obtenerUsuarioLocalCoop();
         const claveRotacion = obtenerClaveRotacionEventosLocal();
         const jugadosPorRotacion = (usuario?.eventosJugadosPorRotacion && typeof usuario.eventosJugadosPorRotacion === 'object')
             ? usuario.eventosJugadosPorRotacion
@@ -272,7 +341,12 @@
             descripcion.textContent = evento.descripcion || 'Sin descripción.';
 
             const enemigosEl = panelUi
-                ? panelUi.montarBloqueEnemigosEvento(evento, mapaCatalogo, resolverCartaEnemigoVistaSync)
+                ? panelUi.montarBloqueEnemigosEvento(
+                    evento,
+                    mapaCatalogo,
+                    resolverCartaEnemigoVistaSync,
+                    { encolarCarrusel: encolarCarruselCoop }
+                )
                 : document.createElement('div');
 
             const { bloque: recompensasBloque, recompensasEl } = panelUi
@@ -1013,21 +1087,50 @@
         window.location.href = 'tablero_coop.html';
     }
 
-    document.addEventListener('DOMContentLoaded', async () => {
+    async function inicializarVistaEventosCoopOnline() {
         const gridHost = document.getElementById(EVENTOS_COOP_GRID_ID);
         if (!gridHost) return;
 
         try {
-            const [eventos, catalogo] = await Promise.all([cargarEventosOnline(), obtenerCatalogoCartas()]);
+            const [eventos, catalogo] = await Promise.all([
+                cargarEventosOnline(),
+                obtenerCatalogoCartas()
+            ]);
             eventosCoopListaCompleta = Array.isArray(eventos) ? eventos : [];
             const loteInicial = obtenerEventosRotacionActualCoop();
             eventosCoopEnRotacion = loteInicial;
-            await renderizarEventosCoopGrid(loteInicial, catalogo);
+            await renderizarEventosCoopGrid(loteInicial, catalogo, { usuario: obtenerUsuarioLocalCoop() });
             iniciarTemporizadorRotacionCoopEventos(catalogo);
+
+            const tareasFondo = [];
+            if (typeof window.DCSkinsCartas?.asegurarSkinsCargados === 'function') {
+                tareasFondo.push(window.DCSkinsCartas.asegurarSkinsCargados());
+            }
+            if (typeof window.refrescarUsuarioSesionDesdeServidor === 'function') {
+                tareasFondo.push(window.refrescarUsuarioSesionDesdeServidor());
+            } else {
+                tareasFondo.push(obtenerUsuarioActualCoop());
+            }
+            if (tareasFondo.length > 0) {
+                void Promise.all(tareasFondo)
+                    .then(() => renderizarEventosCoopGrid(
+                        obtenerEventosRotacionActualCoop(),
+                        catalogo,
+                        { usuario: obtenerUsuarioLocalCoop() }
+                    ))
+                    .catch((err) => console.warn('[coop-eventos] carga en segundo plano:', err));
+            }
         } catch (e) {
             console.error(e);
             gridHost.innerHTML = '<p class="text-warning">No se pudieron cargar los eventos cooperativos online.</p>';
         }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const gridHost = document.getElementById(EVENTOS_COOP_GRID_ID);
+        if (!gridHost) return;
+
+        void inicializarVistaEventosCoopOnline();
 
         window.addEventListener('dc:coop-evento-invitacion', (ev) => {
             modalInvitacionEventoCoop(ev.detail || {});

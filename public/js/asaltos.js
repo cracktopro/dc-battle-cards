@@ -59,8 +59,11 @@
     }
 
     async function sincronizarUsuarioParaAsaltos() {
+        if (typeof window.refrescarUsuarioSesionDesdeServidor === 'function') {
+            return window.refrescarUsuarioSesionDesdeServidor();
+        }
         const email = localStorage.getItem('email');
-        if (!email) return;
+        if (!email) return null;
         try {
             const response = await fetch('/get-user', {
                 method: 'POST',
@@ -76,6 +79,17 @@
         } catch (_e) {
             /* No bloquear la vista si el servidor no responde. */
         }
+        return null;
+    }
+
+    /** Precarga la imagen del asalto en caché del navegador antes de abrir el panel. */
+    function precargarImagenAsalto(asalto) {
+        if (!asalto) return;
+        const url = urlImagenAsalto(asalto);
+        if (!url) return;
+        const img = new Image();
+        img.decoding = 'async';
+        img.src = url;
     }
 
     function calcularPoderMazoCartas(cartas) {
@@ -390,13 +404,17 @@
         return DIF_MODO_RIVAL_ESTRELLAS[indiceModoDificultadActual()];
     }
 
-    function aplicarSpinDif() {
+    function aplicarSpinDifSoloVisual() {
         if (!escenaDif || !carasDif.length) return;
         escenaDif.style.setProperty('--asaltos-dif-spin', String(spinDif));
         const frente = indiceModoDificultadActual();
         carasDif.forEach((el, j) => {
             el.classList.toggle('asaltos-panel-dif-cara--frente', j === frente);
         });
+    }
+
+    function aplicarSpinDif() {
+        aplicarSpinDifSoloVisual();
         if (panelAbierto) {
             const { asalto } = asaltoEnFrente();
             if (asalto) {
@@ -419,6 +437,9 @@
                 elNombreFrente.textContent = comp ? `${base} (Completado)` : base;
                 elNombreFrente.classList.toggle('asaltos-nombre-frente--completado', comp);
             }
+        }
+        if (asalto) {
+            precargarImagenAsalto(asalto);
         }
         if (panelAbierto && asalto) {
             rellenarPanel(asalto);
@@ -515,6 +536,7 @@
         if (panelNombre) panelNombre.textContent = asalto.nombre || 'Asalto';
         if (panelDesc) panelDesc.textContent = asalto.descripcion || 'Sin descripción.';
         if (panelImagen) {
+            panelImagen.decoding = 'async';
             panelImagen.src = urlImagenAsalto(asalto);
             panelImagen.alt = asalto.nombre || '';
         }
@@ -535,13 +557,17 @@
     async function abrirPanel() {
         const { asalto } = asaltoEnFrente();
         if (!asalto || !panelDetalle || !btnTogglePanel) return;
-        rellenarPanel(asalto);
-        panelAbierto = true;
+        /**
+         * Mostrar el panel de inmediato con datos locales (descripción, recompensas, imagen
+         * precargada al girar el carrusel). Antes se hacía `await sincronizarUsuarioParaAsaltos()`
+         * antes de añadir `--visible`, bloqueando la animación hasta que respondiera /get-user.
+         */
         spinDif = 0;
-        aplicarSpinDif();
-        await sincronizarUsuarioParaAsaltos();
-        refrescarSelectorMazosPanel();
+        aplicarSpinDifSoloVisual();
+        precargarImagenAsalto(asalto);
         rellenarPanel(asalto);
+        refrescarSelectorMazosPanel();
+        panelAbierto = true;
         if (btnIzq) btnIzq.disabled = true;
         if (btnDer) btnDer.disabled = true;
         sincronizarAccesibilidadPanel(true);
@@ -550,6 +576,14 @@
         btnTogglePanel.classList.add('asaltos-btn-expand-panel--abierto');
         requestAnimationFrame(() => {
             panelDetalle.classList.add('asaltos-panel-detalle--visible');
+        });
+        void sincronizarUsuarioParaAsaltos().then(() => {
+            if (!panelAbierto) return;
+            refrescarSelectorMazosPanel();
+            const { asalto: asaltoActual } = asaltoEnFrente();
+            if (asaltoActual) {
+                aplicarEstadoBotonComenzar(asaltoActual);
+            }
         });
     }
 

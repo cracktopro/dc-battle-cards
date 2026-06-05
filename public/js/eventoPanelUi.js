@@ -268,7 +268,27 @@
      * @param {Map} mapaCatalogo
      * @param {function} resolverCartaEnemigo — (nombreRef, mapa) => carta
      */
-    function montarBloqueEnemigosEvento(evento, mapaCatalogo, resolverCartaEnemigo) {
+    function crearVistaPreviaEnemigoEvento(rival, mapaCatalogo, resolverCartaEnemigo) {
+        const cartaBase = resolverCartaEnemigo(rival.nombre, mapaCatalogo);
+        const obtenerImg = typeof root.obtenerImagenCarta === 'function'
+            ? root.obtenerImagenCarta
+            : () => '';
+        const preview = document.createElement('div');
+        preview.className = `evento-enemigo-card evento-enemigo-preview ${rival.boss ? 'boss' : ''}`;
+        preview.style.backgroundImage = `url(${obtenerImg(cartaBase)})`;
+        const etiqueta = document.createElement('div');
+        etiqueta.className = 'evento-enemigo-nombre';
+        const nombreBase = cartaBase.Nombre || rival.nombre;
+        etiqueta.textContent = rival.boss ? `${nombreBase} (Boss)` : nombreBase;
+        preview.appendChild(etiqueta);
+        return preview;
+    }
+
+    /**
+     * @param {object} [opciones]
+     * @param {function} [opciones.encolarCarrusel] — (mount, opcionesCarrusel) => void para montaje diferido
+     */
+    function montarBloqueEnemigosEvento(evento, mapaCatalogo, resolverCartaEnemigo, opciones = {}) {
         const enemigos = document.createElement('div');
         enemigos.className = 'evento-enemigos';
         const etiquetaEnemigos = document.createElement('div');
@@ -297,17 +317,30 @@
         const carruselMount = document.createElement('div');
         carruselMount.className = 'evento-enemigos-carrusel-mount';
 
+        const opcionesCarrusel = {
+            items: itemsCarruselEnemigos,
+            claseExtra: 'evento-enemigos-carrusel',
+            ariaAnterior: 'Enemigo anterior',
+            ariaSiguiente: 'Siguiente enemigo',
+            sufijoBoss: ' (Boss)',
+            iniciarEnBoss: tieneBoss,
+        };
+
         if (typeof root.DCCarrusel3d?.montar === 'function') {
             enemigos.appendChild(etiquetaEnemigos);
             enemigos.appendChild(carruselMount);
-            root.DCCarrusel3d.montar(carruselMount, {
-                items: itemsCarruselEnemigos,
-                claseExtra: 'evento-enemigos-carrusel',
-                ariaAnterior: 'Enemigo anterior',
-                ariaSiguiente: 'Siguiente enemigo',
-                sufijoBoss: ' (Boss)',
-                iniciarEnBoss: tieneBoss,
-            });
+            if (typeof opciones.encolarCarrusel === 'function') {
+                const indicePreview = tieneBoss
+                    ? Math.max(0, rivales.findIndex((r) => r.boss))
+                    : 0;
+                const rivalPreview = rivales[indicePreview] || rivales[0];
+                if (rivalPreview) {
+                    carruselMount.appendChild(crearVistaPreviaEnemigoEvento(rivalPreview, mapaCatalogo, resolverCartaEnemigo));
+                }
+                opciones.encolarCarrusel(carruselMount, opcionesCarrusel);
+            } else {
+                root.DCCarrusel3d.montar(carruselMount, opcionesCarrusel);
+            }
         } else {
             enemigos.classList.add('evento-enemigos--rejilla');
             enemigos.appendChild(etiquetaEnemigos);

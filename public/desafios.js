@@ -15,19 +15,31 @@ document.addEventListener('DOMContentLoaded', () => {
 
 async function inicializarVistaDesafios() {
     try {
-        const tareas = [cargarDesafiosDesdeExcel()];
+        /**
+         * Ruta crítica: solo desafíos + catálogo de cartas (necesarios para pintar paneles).
+         * Skins y refresco de usuario van en segundo plano: antes bloqueaban el primer render
+         * con dos peticiones de red extra (/get-user + skins.xlsx).
+         */
+        const tareasCriticas = [cargarDesafiosDesdeExcel()];
         if (typeof window.DCCatalogoCartas?.cargarFilas === 'function') {
-            tareas.push(window.DCCatalogoCartas.cargarFilas());
+            tareasCriticas.push(window.DCCatalogoCartas.cargarFilas());
         }
-        if (typeof window.DCSkinsCartas?.asegurarSkinsCargados === 'function') {
-            tareas.push(window.DCSkinsCartas.asegurarSkinsCargados());
-        }
-        if (typeof window.refrescarUsuarioSesionDesdeServidor === 'function') {
-            tareas.push(window.refrescarUsuarioSesionDesdeServidor());
-        }
-        const resultados = await Promise.all(tareas);
+        const resultados = await Promise.all(tareasCriticas);
         const desafios = resultados[0];
         await renderizarDesafios(desafios);
+
+        const tareasFondo = [];
+        if (typeof window.DCSkinsCartas?.asegurarSkinsCargados === 'function') {
+            tareasFondo.push(window.DCSkinsCartas.asegurarSkinsCargados());
+        }
+        if (typeof window.refrescarUsuarioSesionDesdeServidor === 'function') {
+            tareasFondo.push(window.refrescarUsuarioSesionDesdeServidor());
+        }
+        if (tareasFondo.length > 0) {
+            void Promise.all(tareasFondo)
+                .then(() => renderizarDesafiosGlobal())
+                .catch((err) => console.warn('[desafios] carga en segundo plano:', err));
+        }
     } catch (error) {
         console.error('Error al cargar desafíos:', error);
         mostrarMensaje('No se pudieron cargar los desafíos.', 'danger');
@@ -86,6 +98,11 @@ function normalizarFaccionCamino(valor) {
 
 let _desafiosListaCache = null;
 let _promesaDesafiosXlsx = null;
+/** Mapa nombre→carta reutilizado entre renders (evita reconstruir en cada cambio de tab). */
+let _mapaCatalogoDesafiosCache = null;
+/** Cola de carruseles 3D pendientes de montar por lotes (no bloquea el hilo principal). */
+let _colaMontajeCarruselesDesafio = [];
+let _montajeCarruselesDesafioProgramado = false;
 
 async function cargarDesafiosDesdeExcel() {
     if (_desafiosListaCache) {
@@ -340,6 +357,74 @@ function crearEstrellas(cantidad) {
     return wrapper;
 }
 
+async function obtenerMapaCatalogoDesafios() {
+    if (_mapaCatalogoDesafiosCache) {
+        return _mapaCatalogoDesafiosCache;
+    }
+    if (typeof window.DCCatalogoCartas?.obtenerMapaPorNombre === 'function') {
+        _mapaCatalogoDesafiosCache = await window.DCCatalogoCartas.obtenerMapaPorNombre();
+        return _mapaCatalogoDesafiosCache;
+    }
+    const catalogo = await cargarCatalogoCartas();
+    _mapaCatalogoDesafiosCache = new Map(
+        catalogo.map((carta) => [normalizarNombre(carta.Nombre), carta])
+    );
+    return _mapaCatalogoDesafiosCache;
+}
+
+/** Vista previa estática (1 imagen) mientras el carrusel 3D se monta en el siguiente frame. */
+function crearVistaPreviaEnemigoDesafio(rival, mapaCatalogo) {
+    const cartaBase = resolverCartaEnemigoVistaSync(rival.nombre, mapaCatalogo);
+    const preview = document.createElement('div');
+    preview.className = `evento-enemigo-card evento-enemigo-preview ${rival.boss ? 'boss' : ''}`;
+    preview.style.backgroundImage = `url(${obtenerImagenCarta(cartaBase)})`;
+    const etiqueta = document.createElement('div');
+    etiqueta.className = 'evento-enemigo-nombre';
+    const nombreBase = cartaBase.Nombre || rival.nombre;
+    etiqueta.textContent = rival.boss ? `${nombreBase} (Boss)` : nombreBase;
+    preview.appendChild(etiqueta);
+    return preview;
+}
+
+function cancelarMontajeCarruselesDesafioPendiente() {
+    _colaMontajeCarruselesDesafio = [];
+    _montajeCarruselesDesafioProgramado = false;
+}
+
+function programarMontajeCarruselesDesafio() {
+    if (_montajeCarruselesDesafioProgramado || _colaMontajeCarruselesDesafio.length === 0) {
+        return;
+    }
+    _montajeCarruselesDesafioProgramado = true;
+    const LOTE = 2;
+    const procesarLote = () => {
+        if (_colaMontajeCarruselesDesafio.length === 0) {
+            _montajeCarruselesDesafioProgramado = false;
+            return;
+        }
+        const lote = _colaMontajeCarruselesDesafio.splice(0, LOTE);
+        lote.forEach((entrada) => {
+            if (!entrada?.mount?.isConnected || typeof window.DCCarrusel3d?.montar !== 'function') {
+                return;
+            }
+            entrada.mount.innerHTML = '';
+            window.DCCarrusel3d.montar(entrada.mount, entrada.opciones);
+        });
+        if (_colaMontajeCarruselesDesafio.length > 0) {
+            requestAnimationFrame(procesarLote);
+        } else {
+            _montajeCarruselesDesafioProgramado = false;
+        }
+    };
+    requestAnimationFrame(procesarLote);
+}
+
+function encolarCarruselDesafio(mount, opciones, previewEl) {
+    if (!mount) return;
+    _colaMontajeCarruselesDesafio.push({ mount, opciones, previewEl });
+    programarMontajeCarruselesDesafio();
+}
+
 async function renderizarDesafios(desafios) {
     desafiosCache = Array.isArray(desafios) ? desafios : [];
     await renderizarDesafiosGlobal();
@@ -347,8 +432,10 @@ async function renderizarDesafios(desafios) {
 
 async function renderizarDesafiosGlobal() {
     const grid = document.getElementById('desafios-grid');
+    if (!grid) return;
+    cancelarMontajeCarruselesDesafioPendiente();
     grid.innerHTML = '';
-    const catalogo = await cargarCatalogoCartas();
+    const mapaCatalogo = await obtenerMapaCatalogoDesafios();
     const desafiosOrdenados = [...desafiosCache]
         .map(item => ({ ...item, id: Number(item.id) }))
         .filter(item => Number.isFinite(item.id))
@@ -365,9 +452,6 @@ async function renderizarDesafiosGlobal() {
     }
     renderizarTabsNivelesDesafio(desafiosPorNivel, desbloqueadoPorNivel, completadosSet);
     const desafiosVisibles = desafiosPorNivel.get(nivelDesafioActivo) || [];
-    const mapaCatalogo = new Map(
-        catalogo.map(carta => [normalizarNombre(carta.Nombre), carta])
-    );
 
     if (desafiosVisibles.length === 0) {
         const vacio = document.createElement('div');
@@ -416,13 +500,17 @@ async function renderizarDesafiosGlobal() {
         });
 
         const tieneBoss = rivales.some((rival) => rival.boss);
+        const rivalPreview = rivales.find((r) => r.boss) || rivales[0] || null;
         const carruselMount = document.createElement('div');
         carruselMount.className = 'evento-enemigos-carrusel-mount';
 
         if (typeof window.DCCarrusel3d?.montar === 'function') {
             enemigos.appendChild(etiquetaEnemigos);
+            if (rivalPreview) {
+                carruselMount.appendChild(crearVistaPreviaEnemigoDesafio(rivalPreview, mapaCatalogo));
+            }
             enemigos.appendChild(carruselMount);
-            window.DCCarrusel3d.montar(carruselMount, {
+            encolarCarruselDesafio(carruselMount, {
                 items: itemsCarruselEnemigos,
                 claseExtra: 'evento-enemigos-carrusel',
                 ariaAnterior: 'Enemigo anterior',

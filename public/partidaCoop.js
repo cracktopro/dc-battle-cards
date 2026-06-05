@@ -103,6 +103,8 @@
     let procesandoBot = false;
     /** Evita doble envío mientras se resuelve un ataque humano. */
     let aplicandoAccionCoop = false;
+    /** Evita emisiones paralelas al auto-pasar turno humano sin cartas jugables. */
+    let procesandoAutoPaseHumanoCoop = false;
 
     /**
      * Estado de la animación de entrada inicial (apertura de partida): mientras está activa,
@@ -962,6 +964,7 @@
          * `aplicarSnapshotRemoto`, el microtask del BOT puede intercalar con `animarEntradaRellenosCicloBotPostAplicar`
          * y solapar robo/ataque/mensajes en la primera fase BOT.
          */
+        void intentarAutoPasarTurnoHumanoSinJugada();
         intentarTurnoBotSiCorresponde();
     }
 
@@ -1327,6 +1330,54 @@
                 continue;
             }
             break;
+        }
+    }
+
+    function puedeEmitirAutoPaseTurnoHumanoCoop(fase) {
+        if (fase === 'P1') return MI_EMAIL === EMAIL_LEADER;
+        if (fase === 'P2') return MI_EMAIL === EMAIL_MEMBER;
+        return false;
+    }
+
+    /**
+     * Si P1 o P2 no tiene cartas jugables (mesa vacía / sin mazo / todo aturdido o agotado),
+     * el jugador activo emite el avance de fase para no bloquear la partida.
+     */
+    async function intentarAutoPasarTurnoHumanoSinJugada() {
+        if (partidaFinalizada || procesandoBot || aplicandoAccionCoop || procesandoAutoPaseHumanoCoop) {
+            return;
+        }
+        if (!snapshot) return;
+
+        const faseActual = snapshot.faseCoop;
+        if (faseActual !== 'P1' && faseActual !== 'P2') return;
+
+        const zonaActiva = faseActual === 'P1' ? 'A' : 'B';
+        if (!mesaSinAtaquesPendientesCoop(snapshot, zonaActiva)) return;
+        if (!puedeEmitirAutoPaseTurnoHumanoCoop(faseActual)) return;
+
+        const faseAntes = faseActual;
+        aplicarSaltosFaseHumanaHastaJugableOFinEnSnap(snapshot);
+        if (verificarFinPartidaCoop()) return;
+        if (snapshot.faseCoop === faseAntes) return;
+
+        logCoop(
+            faseAntes === 'P1'
+                ? 'Jugador 1 sin cartas jugables: pasa turno.'
+                : 'Jugador 2 sin cartas jugables: pasa turno.'
+        );
+
+        procesandoAutoPaseHumanoCoop = true;
+        renderTodo();
+        try {
+            await emitSnapshotCoopYEsperarEco(8000);
+        } finally {
+            procesandoAutoPaseHumanoCoop = false;
+        }
+
+        if (!partidaFinalizada) {
+            void intentarAutoPasarTurnoHumanoSinJugada();
+            intentarTurnoBotSiCorresponde();
         }
     }
 
@@ -2303,13 +2354,112 @@
         return [];
     }
 
+    function obtenerIdInstanciaCartaCoop(carta) {
+        const uid = String(carta?.coopCardUid || '').trim();
+        return uid || '';
+    }
+
+    /** UIDs de cartas BOT en mesa o cementerio (no deben volver a salir del mazo salvo revive). */
+    function construirSetUidsBotEnMesaOCementerio(snap) {
+        const uids = new Set();
+        if (!snap || typeof snap !== 'object') return uids;
+        (snap.cartasEnJuegoBot || []).forEach((carta) => {
+            const uid = obtenerIdInstanciaCartaCoop(carta);
+            if (uid) uids.add(uid);
+        });
+        (snap.cementerioBot || []).forEach((carta) => {
+            const uid = obtenerIdInstanciaCartaCoop(carta);
+            if (uid) uids.add(uid);
+        });
+        return uids;
+    }
+
+    /** Retira del mazo BOT entradas duplicadas de instancias ya en mesa o cementerio. */
+    function purificarMazoBotEnSnapshot(snap) {
+        if (!snap || typeof snap !== 'object' || !Array.isArray(snap.mazoBot)) return;
+        const ocupados = construirSetUidsBotEnMesaOCementerio(snap);
+        if (!ocupados.size) return;
+        snap.mazoBot = snap.mazoBot.filter((carta) => {
+            const uid = obtenerIdInstanciaCartaCoop(carta);
+            return !uid || !ocupados.has(uid);
+        });
+    }
+
+    /** Promueve cartas muertas a cementerio y deja el slot en null antes de robar. */
+    function limpiarCartasMuertasEnMesaEnSnapshot(snap, zona) {
+        if (!snap || typeof snap !== 'object') return;
+        const mesa = obtenerMesaEnSnapshot(snap, zona);
+        if (!Array.isArray(mesa)) return;
+        const cement = obtenerCementerioEnSnapshot(snap, zona);
+        mesa.forEach((carta, idx) => {
+            if (carta && !cartaViva(carta)) {
+                moverACementerio(cement, carta);
+                mesa[idx] = null;
+            }
+        });
+    }
+
+    function sacarSiguienteCartaDelMazoEnSnapshot(snap, zona) {
+        if (!snap || typeof snap !== 'object') return null;
+        const mazo = zona === 'bot' ? snap.mazoBot : zona === 'A' ? snap.mazoA : snap.mazoB;
+        if (!Array.isArray(mazo)) return null;
+        if (zona === 'bot') {
+            purificarMazoBotEnSnapshot(snap);
+            const ocupados = construirSetUidsBotEnMesaOCementerio(snap);
+            while (mazo.length > 0) {
+                const carta = mazo.shift();
+                const uid = obtenerIdInstanciaCartaCoop(carta);
+                if (uid && ocupados.has(uid)) {
+                    continue;
+                }
+                if (uid) {
+                    ocupados.add(uid);
+                }
+                return carta;
+            }
+            return null;
+        }
+        return mazo.length > 0 ? mazo.shift() : null;
+    }
+
+    /**
+     * Aplica al snapshot vivo mesas/mazos/cementerios/fase del snapshot canónico emitido a red,
+     * evitando doble robo local tras animaciones del emisor.
+     */
+    function aplicarEstadoCombateCanonicoDesdeSnapshot(snapCanon) {
+        if (!snapshot || !snapCanon || typeof snapCanon !== 'object') return;
+        normalizarSnapshotCoop(snapCanon);
+        snapshot.cartasEnJuegoBot = JSON.parse(JSON.stringify(snapCanon.cartasEnJuegoBot || []));
+        snapshot.cartasEnJuegoA = JSON.parse(JSON.stringify(snapCanon.cartasEnJuegoA || []));
+        snapshot.cartasEnJuegoB = JSON.parse(JSON.stringify(snapCanon.cartasEnJuegoB || []));
+        snapshot.mazoBot = JSON.parse(JSON.stringify(snapCanon.mazoBot || []));
+        snapshot.mazoA = JSON.parse(JSON.stringify(snapCanon.mazoA || []));
+        snapshot.mazoB = JSON.parse(JSON.stringify(snapCanon.mazoB || []));
+        snapshot.cementerioBot = JSON.parse(JSON.stringify(snapCanon.cementerioBot || []));
+        snapshot.cementerioA = JSON.parse(JSON.stringify(snapCanon.cementerioA || []));
+        snapshot.cementerioB = JSON.parse(JSON.stringify(snapCanon.cementerioB || []));
+        snapshot.bossPendienteCoop = snapCanon.bossPendienteCoop && typeof snapCanon.bossPendienteCoop === 'object'
+            ? JSON.parse(JSON.stringify(snapCanon.bossPendienteCoop))
+            : null;
+        if (snapCanon.faseCoop) {
+            snapshot.faseCoop = snapCanon.faseCoop;
+        }
+        snapshot.cartasYaAtacaronA = [...(snapCanon.cartasYaAtacaronA || [])];
+        snapshot.cartasYaAtacaronB = [...(snapCanon.cartasYaAtacaronB || [])];
+        snapshot.cartasYaAtacaronBot = [...(snapCanon.cartasYaAtacaronBot || [])];
+        normalizarSnapshotCoop(snapshot);
+    }
+
     function rellenarVaciosDesdeMazo(zona, maxSlots) {
+        if (!snapshot) return;
+        limpiarCartasMuertasEnMesaEnSnapshot(snapshot, zona);
         const mesa = obtenerMesaPorZona(zona);
-        const mazo = obtenerMazoPorZona(zona);
-        if (!Array.isArray(mesa) || !Array.isArray(mazo)) return;
+        if (!Array.isArray(mesa)) return;
         for (let i = 0; i < maxSlots; i += 1) {
-            if (!mesa[i] && mazo.length > 0) {
-                mesa[i] = crearCartaEnMesaDesdeMazo(mazo.shift());
+            if (!mesa[i]) {
+                const carta = sacarSiguienteCartaDelMazoEnSnapshot(snapshot, zona);
+                if (!carta) break;
+                mesa[i] = crearCartaEnMesaDesdeMazo(carta);
             }
         }
     }
@@ -2318,13 +2468,15 @@
     function rellenarVaciosDesdeMazoEnSnapshot(snap, zona, maxSlots) {
         if (!snap || typeof snap !== 'object') return false;
         normalizarSnapshotCoop(snap);
+        limpiarCartasMuertasEnMesaEnSnapshot(snap, zona);
         const mesa = obtenerMesaPorZonaEnSnapshot(snap, zona);
-        const mazo = zona === 'bot' ? snap.mazoBot : zona === 'A' ? snap.mazoA : snap.mazoB;
-        if (!Array.isArray(mesa) || !Array.isArray(mazo)) return false;
+        if (!Array.isArray(mesa)) return false;
         let hubo = false;
         for (let i = 0; i < maxSlots; i += 1) {
-            if (!mesa[i] && mazo.length > 0) {
-                mesa[i] = crearCartaEnMesaDesdeMazo(mazo.shift());
+            if (!mesa[i]) {
+                const carta = sacarSiguienteCartaDelMazoEnSnapshot(snap, zona);
+                if (!carta) break;
+                mesa[i] = crearCartaEnMesaDesdeMazo(carta);
                 hubo = true;
             }
         }
@@ -2388,13 +2540,16 @@
 
     /** Rellena vacíos robando del mazo con la misma cadencia que partida.js (render + `carta-robada` + pausa). */
     async function rellenarVaciosDesdeMazoAnimado(zona, maxSlots) {
+        if (!snapshot) return false;
+        limpiarCartasMuertasEnMesaEnSnapshot(snapshot, zona);
         const mesa = obtenerMesaPorZona(zona);
-        const mazo = obtenerMazoPorZona(zona);
-        if (!Array.isArray(mesa) || !Array.isArray(mazo)) return false;
+        if (!Array.isArray(mesa)) return false;
         let hubo = false;
         for (let i = 0; i < maxSlots; i += 1) {
-            if (!mesa[i] && mazo.length > 0) {
-                mesa[i] = crearCartaEnMesaDesdeMazo(mazo.shift());
+            if (!mesa[i]) {
+                const carta = sacarSiguienteCartaDelMazoEnSnapshot(snapshot, zona);
+                if (!carta) break;
+                mesa[i] = crearCartaEnMesaDesdeMazo(carta);
                 hubo = true;
                 renderTodo();
                 animarCartaRobadaCoop(zona, i);
@@ -2906,7 +3061,29 @@
         return data;
     }
 
+    let _promesaPrecargaRecursosRecompensasCoop = null;
+
+    function coopPrecargarRecursosRecompensas() {
+        if (!_promesaPrecargaRecursosRecompensasCoop) {
+            const tareas = [];
+            if (typeof window.DCCatalogoCartas?.cargarFilas === 'function') {
+                tareas.push(window.DCCatalogoCartas.cargarFilas());
+            }
+            if (typeof window.DCSkinsCartas?.asegurarSkinsCargados === 'function') {
+                tareas.push(window.DCSkinsCartas.asegurarSkinsCargados());
+            }
+            _promesaPrecargaRecursosRecompensasCoop = (tareas.length ? Promise.all(tareas) : Promise.resolve()).catch(() => {});
+        }
+        return _promesaPrecargaRecursosRecompensasCoop;
+    }
+
     async function coopObtenerCartasDisponibles() {
+        if (typeof window.DCCatalogoCartas?.obtenerFilas === 'function') {
+            return window.DCCatalogoCartas.obtenerFilas();
+        }
+        if (typeof window.DCCatalogoCartas?.cargarFilas === 'function') {
+            return window.DCCatalogoCartas.cargarFilas();
+        }
         const response = await fetch('resources/cartas.xlsx');
         if (!response.ok) {
             throw new Error('No se pudo cargar el archivo de cartas para generar las recompensas.');
@@ -2970,7 +3147,8 @@
      * Otorga las recompensas del evento al usuario local (cada cliente guarda solo
      * su propia cuenta). Equivalente coop de `otorgarRecompensasDesafio` (VS BOT).
      */
-    async function otorgarRecompensasCoop() {
+    async function otorgarRecompensasCoop(opciones = {}) {
+        const soloLocal = Boolean(opciones.soloLocal);
         const usuario = JSON.parse(localStorage.getItem('usuario') || 'null');
         const email = localStorage.getItem('email');
         if (!usuario || !email) {
@@ -3095,10 +3273,19 @@
             usuario.syncUpdatedAt = Date.now();
             localStorage.setItem('usuario', JSON.stringify(usuario));
         }
-        await coopActualizarUsuarioFirebase(usuario, email);
-        localStorage.setItem('usuario', JSON.stringify(usuario));
 
-        return {
+        const postPersistMisiones = async () => {
+            await registrarMisionOnlinePartidaCoopCompletada();
+            if (window.DCMisiones?.track) {
+                if (Boolean(bossEvento)) {
+                    window.DCMisiones.track('boss', { amount: 1 });
+                }
+                if (nuevasH > 0) window.DCMisiones.track('coleccion_h', { amount: nuevasH });
+                if (nuevasV > 0) window.DCMisiones.track('coleccion_v', { amount: nuevasV });
+            }
+        };
+
+        const resultado = {
             puntosGanados: puntosEvento,
             mejorasGanadas: mejorasEvento,
             mejorasEspecialesGanadas: mejorasEspecialesEvento,
@@ -3108,6 +3295,24 @@
             /** Misiones diarias (class boss): mismo criterio que recompensa carta 20 % boss. */
             huboBossMision: Boolean(bossEvento)
         };
+
+        if (soloLocal) {
+            resultado._persistenciaRemota = {
+                usuario,
+                email,
+                postPersist: async () => {
+                    await coopActualizarUsuarioFirebase(usuario, email);
+                    localStorage.setItem('usuario', JSON.stringify(usuario));
+                },
+                postPersistMisiones,
+            };
+            return resultado;
+        }
+
+        await coopActualizarUsuarioFirebase(usuario, email);
+        localStorage.setItem('usuario', JSON.stringify(usuario));
+        await postPersistMisiones();
+        return resultado;
     }
 
     function coopFormatoPuntosConMoneda(valor) {
@@ -3206,30 +3411,16 @@
         }
         coopRecompensasProcesadas = true;
 
-        const estadoGuardado = document.createElement('p');
-        estadoGuardado.classList.add('texto-recompensa-estado');
-        estadoGuardado.textContent = 'Guardando recompensas y progreso...';
-        recompensasContainer.appendChild(estadoGuardado);
-
         const botonVolver = document.getElementById('boton-volver-multi-coop');
         if (botonVolver) botonVolver.disabled = true;
 
         (async () => {
             try {
-                if (typeof window.DCMisiones?.awaitPersistenciaPendiente === 'function') {
-                    await window.DCMisiones.awaitPersistenciaPendiente();
-                }
-                const recompensa = await otorgarRecompensasCoop();
+                await coopPrecargarRecursosRecompensas();
+                const recompensa = await otorgarRecompensasCoop({ soloLocal: true });
+                const persistenciaRemota = recompensa._persistenciaRemota;
+                delete recompensa._persistenciaRemota;
                 recompensasContainer.innerHTML = '';
-                /** Misión `online` y resto tras persistir recompensas (evita que update-user pise el progreso). */
-                await registrarMisionOnlinePartidaCoopCompletada();
-                if (window.DCMisiones?.track) {
-                    if (recompensa.huboBossMision) {
-                        window.DCMisiones.track('boss', { amount: 1 });
-                    }
-                    if (Number(recompensa.nuevasH || 0) > 0) window.DCMisiones.track('coleccion_h', { amount: Number(recompensa.nuevasH || 0) });
-                    if (Number(recompensa.nuevasV || 0) > 0) window.DCMisiones.track('coleccion_v', { amount: Number(recompensa.nuevasV || 0) });
-                }
 
                 const resumen = document.createElement('p');
                 resumen.classList.add('texto-recompensa-resumen');
@@ -3266,6 +3457,26 @@
                 puntosTotales.classList.add('texto-recompensa-puntos');
                 puntosTotales.innerHTML = `Puntos totales: ${coopFormatoPuntosConMoneda(totalPuntos)}.`;
                 recompensasContainer.appendChild(puntosTotales);
+
+                void (async () => {
+                    try {
+                        if (typeof window.DCMisiones?.awaitPersistenciaPendiente === 'function') {
+                            await window.DCMisiones.awaitPersistenciaPendiente();
+                        }
+                        if (persistenciaRemota?.postPersist) {
+                            await persistenciaRemota.postPersist();
+                        }
+                        if (typeof persistenciaRemota?.postPersistMisiones === 'function') {
+                            await persistenciaRemota.postPersistMisiones();
+                        }
+                    } catch (syncErr) {
+                        console.error('[coop] error al sincronizar recompensas:', syncErr);
+                        const aviso = document.createElement('p');
+                        aviso.classList.add('texto-recompensa-error');
+                        aviso.textContent = `Aviso: no se pudo sincronizar con el servidor (${syncErr.message || syncErr}). Tus recompensas están guardadas localmente.`;
+                        recompensasContainer.appendChild(aviso);
+                    }
+                })();
             } catch (error) {
                 console.error('[coop] error al otorgar recompensas:', error);
                 recompensasContainer.innerHTML = '';
@@ -3543,14 +3754,11 @@
         } finally {
             await emitP;
         }
-        if (murio) {
-            moverACementerio(cementObj, objetivoRef);
-            mesaObj[slotObjetivo] = null;
-            /** Mantener orden visual: primero baja del objetivo, luego retirada y solo entonces nuevas entradas/BOSS. */
-            intentarDesplegarBossCoop();
-        }
-        avanzarFaseTrasHumano(zonaAtacante);
-        aplicarRobosInicioDeFaseSegunFaseActual();
+        /**
+         * El snapshot emitido ya incluye cementerio, fase y robos canónicos; reaplicarlo evita
+         * un segundo robo local que podía sacar de nuevo instancias ya eliminadas del mazo BOT.
+         */
+        aplicarEstadoCombateCanonicoDesdeSnapshot(snapEmitFin);
         aplicarSaltosFaseHumanaHastaJugableOFinEnSnap(snapshot);
         renderTodo();
     }
@@ -4138,6 +4346,7 @@
             window.location.replace('multijugador.html');
             return;
         }
+        void coopPrecargarRecursosRecompensas();
         configurarCabecera();
         wireUi();
 
@@ -4203,6 +4412,11 @@
                 void ejecutarTurnoBotSecuencial();
             });
         }
+
+        queueMicrotask(() => {
+            void intentarAutoPasarTurnoHumanoSinJugada();
+            intentarTurnoBotSiCorresponde();
+        });
     }
 
     document.addEventListener('DOMContentLoaded', () => {

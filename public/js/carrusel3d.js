@@ -80,6 +80,8 @@
             img.src = String(item.imagenUrl || '').trim() || 'img/default-image.jpg';
             img.alt = '';
             img.draggable = false;
+            img.loading = 'lazy';
+            img.decoding = 'async';
 
             billboard.appendChild(img);
             cara.appendChild(billboard);

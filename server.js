@@ -2789,33 +2789,57 @@ function enriquecerCartasConCatalogoCoop(cartas, mapaCatalogo) {
     });
 }
 
+/** UID estable por carta en coop: evita que el mazo BOT vuelva a sacar instancias ya eliminadas. */
+function asignarCoopCardUidsMazoCoop(cartas, contadorUid = { n: 0 }) {
+    return (Array.isArray(cartas) ? cartas : []).map((carta) => {
+        if (!carta || typeof carta !== 'object') {
+            return carta;
+        }
+        const copia = { ...carta };
+        if (!copia.coopCardUid) {
+            contadorUid.n += 1;
+            copia.coopCardUid = `coop-${contadorUid.n}`;
+        }
+        return copia;
+    });
+}
+
 function construirSnapshotInicialCoopServidor({
     mazoBotCompleto,
     bossPendienteCoop,
     cartasA,
     cartasB
 }) {
-    const poderJug = calcularPoderTotalMazo(cartasA) + calcularPoderTotalMazo(cartasB);
-    const mazoParaTotalBot = [...(Array.isArray(mazoBotCompleto) ? mazoBotCompleto : [])];
-    if (bossPendienteCoop && typeof bossPendienteCoop === 'object') {
-        mazoParaTotalBot.push(bossPendienteCoop);
+    const contadorUid = { n: 0 };
+    const mazoBotEtiquetado = asignarCoopCardUidsMazoCoop(mazoBotCompleto, contadorUid);
+    let bossEtiquetado = bossPendienteCoop;
+    if (bossEtiquetado && typeof bossEtiquetado === 'object') {
+        bossEtiquetado = asignarCoopCardUidsMazoCoop([bossEtiquetado], contadorUid)[0];
+    }
+    const cartasAEtiquetadas = asignarCoopCardUidsMazoCoop(cartasA, contadorUid);
+    const cartasBEtiquetadas = asignarCoopCardUidsMazoCoop(cartasB, contadorUid);
+
+    const poderJug = calcularPoderTotalMazo(cartasAEtiquetadas) + calcularPoderTotalMazo(cartasBEtiquetadas);
+    const mazoParaTotalBot = [...mazoBotEtiquetado];
+    if (bossEtiquetado && typeof bossEtiquetado === 'object') {
+        mazoParaTotalBot.push(bossEtiquetado);
     }
     const poderBot = calcularPoderTotalMazo(mazoParaTotalBot);
     const iniciativaJugadores = poderJug > poderBot;
 
-    const mazoBot = mezclarArrayServidor([...mazoBotCompleto]);
+    const mazoBot = mezclarArrayServidor([...mazoBotEtiquetado]);
     const cartasEnJuegoBot = [];
     for (let i = 0; i < 4; i += 1) {
         cartasEnJuegoBot.push(mazoBot.length > 0 ? inicializarSaludCarta(mazoBot.shift()) : null);
     }
 
-    let mazoACopia = mezclarArrayServidor([...cartasA]);
+    let mazoACopia = mezclarArrayServidor([...cartasAEtiquetadas]);
     const cartasEnJuegoA = [
         mazoACopia.length > 0 ? inicializarSaludCarta(mazoACopia.shift()) : null,
         mazoACopia.length > 0 ? inicializarSaludCarta(mazoACopia.shift()) : null
     ];
 
-    let mazoBCopia = mezclarArrayServidor([...cartasB]);
+    let mazoBCopia = mezclarArrayServidor([...cartasBEtiquetadas]);
     const cartasEnJuegoB = [
         mazoBCopia.length > 0 ? inicializarSaludCarta(mazoBCopia.shift()) : null,
         mazoBCopia.length > 0 ? inicializarSaludCarta(mazoBCopia.shift()) : null
@@ -2842,8 +2866,8 @@ function construirSnapshotInicialCoopServidor({
         accionesExtraA: 0,
         accionesExtraB: 0,
         accionesExtraBot: 0,
-        bossPendienteCoop: bossPendienteCoop && typeof bossPendienteCoop === 'object'
-            ? JSON.parse(JSON.stringify(bossPendienteCoop))
+        bossPendienteCoop: bossEtiquetado && typeof bossEtiquetado === 'object'
+            ? JSON.parse(JSON.stringify(bossEtiquetado))
             : null
     };
 }

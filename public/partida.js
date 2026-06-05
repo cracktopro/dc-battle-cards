@@ -2297,7 +2297,78 @@ async function actualizarUsuarioFirebase(usuario, email) {
     return data;
 }
 
+let _promesaPrecargaRecursosRecompensas = null;
+
+/** Precarga catálogo (y skins) al inicio de partidas PvE para que el modal de fin no espere al xlsx. */
+function precargarRecursosRecompensasPartida() {
+    if (!_promesaPrecargaRecursosRecompensas) {
+        const tareas = [];
+        if (typeof window.DCCatalogoCartas?.cargarFilas === 'function') {
+            tareas.push(window.DCCatalogoCartas.cargarFilas());
+        }
+        if (typeof window.DCSkinsCartas?.asegurarSkinsCargados === 'function') {
+            tareas.push(window.DCSkinsCartas.asegurarSkinsCargados());
+        }
+        _promesaPrecargaRecursosRecompensas = (tareas.length ? Promise.all(tareas) : Promise.resolve()).catch(() => {});
+    }
+    return _promesaPrecargaRecursosRecompensas;
+}
+
+/**
+ * Persiste en Firebase y ejecuta misiones tras pintar el modal de recompensas.
+ * Las recompensas ya están en localStorage vía `prepararUsuarioTrasRecompensaPartida`.
+ */
+async function persistirRecompensasRemotoEnSegundoPlano(persistencia, recompensasContainer) {
+    if (!persistencia || !persistencia.usuario || !persistencia.email) {
+        return;
+    }
+    const { usuario, email, postPersistMisiones, extras } = persistencia;
+    try {
+        if (typeof window.DCMisiones?.awaitPersistenciaPendiente === 'function') {
+            await window.DCMisiones.awaitPersistenciaPendiente();
+        }
+        await actualizarUsuarioFirebase(usuario, email);
+        if (typeof window.DCNormalizarObjetosUsuario === 'function') {
+            window.DCNormalizarObjetosUsuario(usuario);
+        }
+        localStorage.setItem('usuario', JSON.stringify(usuario));
+        if (typeof postPersistMisiones === 'function') {
+            await postPersistMisiones();
+        }
+        if (extras?.dispatchUsuarioActualizado) {
+            try {
+                window.dispatchEvent(new Event('dc:usuario-actualizado'));
+            } catch (_e) {
+                /* noop */
+            }
+        }
+        if (extras?.limpiarAsaltoStorage) {
+            try {
+                localStorage.removeItem('asaltoActivo');
+                localStorage.removeItem('partidaModo');
+            } catch (_e) {
+                /* noop */
+            }
+        }
+    } catch (error) {
+        console.error('Error al sincronizar recompensas en servidor:', error);
+        if (recompensasContainer) {
+            const aviso = document.createElement('p');
+            aviso.classList.add('texto-recompensa-error');
+            aviso.textContent = `Aviso: no se pudo sincronizar con el servidor (${error.message}). Tus recompensas están guardadas localmente.`;
+            recompensasContainer.appendChild(aviso);
+        }
+    }
+}
+
 async function obtenerCartasDisponibles() {
+    if (typeof window.DCCatalogoCartas?.obtenerFilas === 'function') {
+        return window.DCCatalogoCartas.obtenerFilas();
+    }
+    if (typeof window.DCCatalogoCartas?.cargarFilas === 'function') {
+        return window.DCCatalogoCartas.cargarFilas();
+    }
+
     const response = await fetch('resources/cartas.xlsx');
 
     if (!response.ok) {
@@ -2526,7 +2597,8 @@ function esMazoBotValido(mazo, dificultad) {
     return mazo.every(carta => Number(carta?.Nivel || 0) === dificultadObjetivo);
 }
 
-async function otorgarRecompensasVictoria() {
+async function otorgarRecompensasVictoria(opciones = {}) {
+    const soloLocal = Boolean(opciones.soloLocal);
     const usuario = JSON.parse(localStorage.getItem('usuario'));
     const email = localStorage.getItem('email');
 
@@ -2588,24 +2660,36 @@ async function otorgarRecompensasVictoria() {
         usuario.syncUpdatedAt = Date.now();
         localStorage.setItem('usuario', JSON.stringify(usuario));
     }
-    await actualizarUsuarioFirebase(usuario, email);
-    localStorage.setItem('usuario', JSON.stringify(usuario));
-    if (window.DCMisiones?.track) {
-        window.DCMisiones.track('bot', { amount: 1 });
-        window.DCMisiones.track('bot_defeat', { amount: 1 });
-        if (nuevasH > 0) window.DCMisiones.track('coleccion_h', { amount: nuevasH });
-        if (nuevasV > 0) window.DCMisiones.track('coleccion_v', { amount: nuevasV });
-    }
 
-    return {
+    const postPersistMisiones = async () => {
+        if (window.DCMisiones?.track) {
+            window.DCMisiones.track('bot', { amount: 1 });
+            window.DCMisiones.track('bot_defeat', { amount: 1 });
+            if (nuevasH > 0) window.DCMisiones.track('coleccion_h', { amount: nuevasH });
+            if (nuevasV > 0) window.DCMisiones.track('coleccion_v', { amount: nuevasV });
+        }
+    };
+
+    const resultado = {
         dificultad,
         puntosGanados,
         cartasGanadas: cartasPremio,
         mejorasAleatorias,
     };
+
+    if (soloLocal) {
+        resultado._persistenciaRemota = { usuario, email, postPersistMisiones };
+        return resultado;
+    }
+
+    await actualizarUsuarioFirebase(usuario, email);
+    localStorage.setItem('usuario', JSON.stringify(usuario));
+    await postPersistMisiones();
+    return resultado;
 }
 
-async function otorgarRecompensasDesafio() {
+async function otorgarRecompensasDesafio(opciones = {}) {
+    const soloLocal = Boolean(opciones.soloLocal);
     const usuario = JSON.parse(localStorage.getItem('usuario'));
     const email = localStorage.getItem('email');
     if (!usuario || !email) {
@@ -2816,32 +2900,44 @@ async function otorgarRecompensasDesafio() {
         usuario.syncUpdatedAt = Date.now();
         localStorage.setItem('usuario', JSON.stringify(usuario));
     }
-    await actualizarUsuarioFirebase(usuario, email);
-    localStorage.setItem('usuario', JSON.stringify(usuario));
-    if (window.DCMisiones?.track) {
-        const cuentaBossMision = Boolean(leerNombreBossMetaDesafio(desafioActivo));
-        if (esEvento) {
-            // Misión de desafíos excluye eventos.
-            if (cuentaBossMision) {
-                window.DCMisiones.track('boss', { amount: 1 });
+
+    const postPersistMisiones = async () => {
+        if (window.DCMisiones?.track) {
+            const cuentaBossMision = Boolean(leerNombreBossMetaDesafio(desafioActivo));
+            if (esEvento) {
+                // Misión de desafíos excluye eventos.
+                if (cuentaBossMision) {
+                    window.DCMisiones.track('boss', { amount: 1 });
+                }
+            } else {
+                window.DCMisiones.track('desafios', { amount: 1 });
+                if (cuentaBossMision) {
+                    window.DCMisiones.track('boss', { amount: 1 });
+                }
             }
-        } else {
-            window.DCMisiones.track('desafios', { amount: 1 });
-            if (cuentaBossMision) {
-                window.DCMisiones.track('boss', { amount: 1 });
-            }
+            if (nuevasH > 0) window.DCMisiones.track('coleccion_h', { amount: nuevasH });
+            if (nuevasV > 0) window.DCMisiones.track('coleccion_v', { amount: nuevasV });
         }
-        if (nuevasH > 0) window.DCMisiones.track('coleccion_h', { amount: nuevasH });
-        if (nuevasV > 0) window.DCMisiones.track('coleccion_v', { amount: nuevasV });
-    }
+    };
+
     localStorage.removeItem('desafioActivo');
 
-    return {
+    const resultado = {
         puntosGanados: puntosRecompensaOtorgados,
         mejorasGanadas: mejoraBruta,
         mejorasEspecialesGanadas: mejoraEspecialBruta,
         cartasGanadas
     };
+
+    if (soloLocal) {
+        resultado._persistenciaRemota = { usuario, email, postPersistMisiones };
+        return resultado;
+    }
+
+    await actualizarUsuarioFirebase(usuario, email);
+    localStorage.setItem('usuario', JSON.stringify(usuario));
+    await postPersistMisiones();
+    return resultado;
 }
 
 function probabilidadDropAsaltoDesdeExcel(val) {
@@ -2938,7 +3034,8 @@ function dcClaveRotacionAsaltoActual() {
     return `${VERSION_ROTACION_ASALTOS}-${inicio}`;
 }
 
-async function otorgarRecompensasAsalto() {
+async function otorgarRecompensasAsalto(opciones = {}) {
+    const soloLocal = Boolean(opciones.soloLocal);
     const usuario = JSON.parse(localStorage.getItem('usuario') || 'null');
     const email = localStorage.getItem('email');
     if (!usuario || !email) {
@@ -3028,6 +3125,42 @@ async function otorgarRecompensasAsalto() {
         }
         localStorage.setItem('usuario', JSON.stringify(usuario));
     }
+
+    const postPersistMisiones = async () => {
+        if (window.DCMisiones?.track) {
+            window.DCMisiones.track('bot', { amount: 1 });
+            window.DCMisiones.track('bot_defeat', { amount: 1 });
+            if (conteo.nuevasH > 0) window.DCMisiones.track('coleccion_h', { amount: conteo.nuevasH });
+            if (conteo.nuevasV > 0) window.DCMisiones.track('coleccion_v', { amount: conteo.nuevasV });
+        }
+    };
+
+    const resultado = {
+        puntosGanados: puntosOtorg,
+        mejoraElite: gar.mejoraElite,
+        mejoraLegendaria: gar.mejoraLegendaria,
+        mejorasAleatorias,
+        cartasGanadas: cartasPremio,
+    };
+
+    if (soloLocal) {
+        try {
+            localStorage.removeItem('asaltoActivo');
+            localStorage.removeItem('partidaModo');
+        } catch (_e) {
+            /* noop */
+        }
+        resultado._persistenciaRemota = {
+            usuario,
+            email,
+            postPersistMisiones,
+            extras: {
+                dispatchUsuarioActualizado: true,
+            },
+        };
+        return resultado;
+    }
+
     await actualizarUsuarioFirebase(usuario, email);
     if (typeof window.DCNormalizarObjetosUsuario === 'function') {
         window.DCNormalizarObjetosUsuario(usuario);
@@ -3038,28 +3171,14 @@ async function otorgarRecompensasAsalto() {
     } catch (_e) {
         /* noop */
     }
-
-    if (window.DCMisiones?.track) {
-        window.DCMisiones.track('bot', { amount: 1 });
-        window.DCMisiones.track('bot_defeat', { amount: 1 });
-        if (conteo.nuevasH > 0) window.DCMisiones.track('coleccion_h', { amount: conteo.nuevasH });
-        if (conteo.nuevasV > 0) window.DCMisiones.track('coleccion_v', { amount: conteo.nuevasV });
-    }
-
+    await postPersistMisiones();
     try {
         localStorage.removeItem('asaltoActivo');
         localStorage.removeItem('partidaModo');
     } catch (_e) {
         /* noop */
     }
-
-    return {
-        puntosGanados: puntosOtorg,
-        mejoraElite: gar.mejoraElite,
-        mejoraLegendaria: gar.mejoraLegendaria,
-        mejorasAleatorias,
-        cartasGanadas: cartasPremio,
-    };
+    return resultado;
 }
 
 function calcularPoderTotal(cartas) {
@@ -3091,7 +3210,7 @@ function crearCartaRecompensaElemento(carta) {
         contenedor.appendChild(etiquetaAsalto);
     }
 
-    contenedor.appendChild(crearCartaElemento(carta, 'recompensa', -1).root);
+    contenedor.appendChild(crearCartaElemento(carta, 'recompensa', -1, { soloVista: true }).root);
     return contenedor;
 }
 
@@ -4925,19 +5044,19 @@ async function mostrarVentanaFinPartida(ganador) {
 
     recompensasProcesadas = true;
 
-    const estadoGuardado = document.createElement('p');
-    estadoGuardado.classList.add('texto-recompensa-estado');
-    estadoGuardado.textContent = 'Guardando recompensas y progreso...';
-    recompensasContainer.appendChild(estadoGuardado);
-
     botonReiniciar.disabled = true;
     botonVolverMenu.disabled = true;
 
     try {
+        await precargarRecursosRecompensasPartida();
         recompensasContainer.innerHTML = '';
 
+        let persistenciaRemota = null;
+
         if (estadoDesafio.activo) {
-            const recompensaDesafio = await otorgarRecompensasDesafio();
+            const recompensaDesafio = await otorgarRecompensasDesafio({ soloLocal: true });
+            persistenciaRemota = recompensaDesafio._persistenciaRemota;
+            delete recompensaDesafio._persistenciaRemota;
             const resumenDesafio = document.createElement('p');
             resumenDesafio.classList.add('texto-recompensa-resumen');
             resumenDesafio.innerHTML = `Recompensas del desafío: ${formatoPuntosConMoneda(recompensaDesafio.puntosGanados)}.`;
@@ -4968,7 +5087,9 @@ async function mostrarVentanaFinPartida(ganador) {
                 recompensasContainer.appendChild(rejillaRecompensasEvento);
             }
         } else if (esAsalto) {
-            const r = await otorgarRecompensasAsalto();
+            const r = await otorgarRecompensasAsalto({ soloLocal: true });
+            persistenciaRemota = r._persistenciaRemota;
+            delete r._persistenciaRemota;
             const resumen = document.createElement('p');
             resumen.classList.add('texto-recompensa-resumen');
             resumen.innerHTML = `Recompensas del asalto: ${formatoPuntosConMoneda(r.puntosGanados)}.`;
@@ -5012,7 +5133,9 @@ async function mostrarVentanaFinPartida(ganador) {
                 recompensasContainer.appendChild(rejillaAsalto);
             }
         } else if (esPartidaRapidaVsBot()) {
-            const recompensa = await otorgarRecompensasVictoria();
+            const recompensa = await otorgarRecompensasVictoria({ soloLocal: true });
+            persistenciaRemota = recompensa._persistenciaRemota;
+            delete recompensa._persistenciaRemota;
             const resumen = document.createElement('p');
             resumen.classList.add('texto-recompensa-resumen');
             resumen.innerHTML = `Recompensas: ${formatoPuntosConMoneda(recompensa.puntosGanados)} y ${recompensa.cartasGanadas.length} cartas nuevas.`;
@@ -5057,6 +5180,7 @@ async function mostrarVentanaFinPartida(ganador) {
         recompensasContainer.appendChild(puntosTotales);
 
         escribirLog('Victoria guardada correctamente. Las recompensas se han añadido a tu usuario.');
+        void persistirRecompensasRemotoEnSegundoPlano(persistenciaRemota, recompensasContainer);
     } catch (error) {
         recompensasContainer.innerHTML = '';
 
@@ -5952,6 +6076,9 @@ document.addEventListener('DOMContentLoaded', () => {
     asegurarPanelDebug();
     intentarInicializarSocketPvp();
     configurarNombresTablero();
+    if (!ES_MODO_PVP && !ES_MODO_EPISODIO) {
+        void precargarRecursosRecompensasPartida();
+    }
     cargarCartasIniciales();
     escribirDebug('INIT', { desafioActivo: obtenerDesafioActivo(), estado: snapshotTableroDebug() });
 });
