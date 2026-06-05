@@ -10,155 +10,166 @@
       "nombre": "Capítulo 1",
       "descripcion": "Ejemplo de sintaxis",
       "timeline": [
-    {
-      "type": "cutscene",
-      "cutscene_id": "cs_intro",
-      "background_image": "bg_test.png",
-      "fondo_inicial": "negro",
-      "escena": [
         {
-          "id_character": "supergirl",
-          "bust_image": "supergirl_base.png",
-          "side": "8%",
-          "nombre": "Supergirl",
-          "visible": true
-        },
-        {
-          "id_character": "guardia_01",
-          "bust_image": "guardia.png",
-          "side": "62%",
-          "nombre": "Guardia Cadmus",
-          "visible": true
-        }
-      ],
-      "dialogos": [
-        {
-          "comando": "fundido_fondo",
+          "type": "cutscene",
+          "cutscene_id": "cs_intro",
           "background_image": "bg_test.png",
-          "duracion": 900
-        },
-        {
-          "dialogo_id": "d_voz_anon",
-          "voz_en_off": true,
-          "voz_en_off_sin_personaje": true,
-          "texto": "En las profundidades de Cadmus, una joven Kryptoniana despierta entre cadenas y luces frías."
-        },
-        {
-          "dialogo_id": "d001",
-          "bust_image": "supergirl_base.png",
-          "side": "8%",
-          "id_character": "supergirl",
-          "nombre": "Supergirl",
-          "visible": true,
-          "texto": "Se acabó el tiempo. Tenemos que salir de este laboratorio ya."
-        },
-        {
-          "dialogo_id": "d_voz_supergirl",
-          "voz_en_off": true,
-          "id_character": "supergirl",
-          "nombre": "Supergirl",
-          "texto": "No puedo permitir que nadie más sufra lo que yo he sufrido aquí."
-        },
-        {
-          "dialogo_id": "d002",
-          "bust_image": "guardia.png",
-          "side": "62%",
-          "id_character": "guardia_01",
-          "nombre": "Guardia Cadmus",
-          "visible": true,
-          "texto": "¡Alto ahí! ¡El espécimen está intentando escapar! ¡Llamen al Comandante!"
-        },
-        {
-          "dialogo_id": "d003",
-          "bust_image": "supergirl_base.png",
-          "side": "8%",
-          "id_character": "supergirl",
-          "nombre": "Supergirl",
-          "visible": true,
-          "texto": "Lo siento. No tengo tiempo para esto."
-        },
-        {
-          "comando": "escena",
+          "fondo_inicial": "negro",
           "escena": [
-            { "id_character": "guardia_01", "visible": false }
+            {
+              "id_character": "supergirl",
+              "bust_image": "supergirl_base.png",
+              "side": "8%",
+              "nombre": "Supergirl",
+              "visible": true
+            },
+            {
+              "id_character": "guardia_01",
+              "bust_image": "guardia.png",
+              "side": "62%",
+              "nombre": "Guardia Cadmus",
+              "visible": true
+            }
+          ],
+          "dialogos": [
+            {
+              "comando": "fundido_fondo",
+              "background_image": "bg_test.png",
+              "duracion": 900
+            },
+            {
+              "dialogo_id": "d_voz_anon",
+              "voz_en_off": true,
+              "voz_en_off_sin_personaje": true,
+              "texto": "En las profundidades de Cadmus, una joven Kryptoniana despierta entre cadenas y luces frías."
+            },
+            {
+              "dialogo_id": "d001",
+              "bust_image": "supergirl_base.png",
+              "side": "8%",
+              "id_character": "supergirl",
+              "nombre": "Supergirl",
+              "visible": true,
+              "texto": "Se acabó el tiempo. Tenemos que salir de este laboratorio ya."
+            },
+            {
+              "dialogo_id": "d_voz_supergirl",
+              "voz_en_off": true,
+              "id_character": "supergirl",
+              "nombre": "Supergirl",
+              "texto": "No puedo permitir que nadie más sufra lo que yo he sufrido aquí."
+            },
+            {
+              "dialogo_id": "d002",
+              "bust_image": "guardia.png",
+              "side": "62%",
+              "id_character": "guardia_01",
+              "nombre": "Guardia Cadmus",
+              "visible": true,
+              "texto": "¡Alto ahí! ¡El espécimen está intentando escapar! ¡Llamen al Comandante!"
+            },
+            {
+              "dialogo_id": "d003",
+              "bust_image": "supergirl_base.png",
+              "side": "8%",
+              "id_character": "supergirl",
+              "nombre": "Supergirl",
+              "visible": true,
+              "texto": "Lo siento. No tengo tiempo para esto."
+            },
+            {
+              "comando": "escena",
+              "escena": [
+                {
+                  "id_character": "guardia_01",
+                  "visible": false
+                }
+              ]
+            },
+            {
+              "comando": "fundido_negro",
+              "duracion": 700
+            }
           ]
         },
         {
-          "comando": "fundido_negro",
-          "duracion": 700
-        }
-      ]
-    },
-    {
-      "type": "escena",
-      "titulo": "Transición",
-      "texto": "La alarma resuena por todo el complejo…",
-      "background_image": "bg_test.png",
-      "escena": [
+          "type": "escena",
+          "titulo": "Transición",
+          "texto": "La alarma resuena por todo el complejo…",
+          "background_image": "bg_test.png",
+          "escena": [
+            {
+              "id_character": "supergirl",
+              "bust_image": "supergirl_base.png",
+              "side": "20%",
+              "nombre": "Supergirl",
+              "visible": true
+            }
+          ]
+        },
         {
-          "id_character": "supergirl",
-          "bust_image": "supergirl_base.png",
-          "side": "20%",
-          "nombre": "Supergirl",
-          "visible": true
-        }
-      ]
-    },
-    {
-      "type": "combate",
-      "combate_id": "comb_01",
-      "tablero": "tablero_background",
-      "cartas_jugador": ["Superman", "Supergirl", "Superboy"],
-      "nivel_jugador": 2,
-      "cartas_BOT": ["Joker", "Lex Luthor", "Harley Quinn"],
-      "nivel_BOT": 2
-    },
-    {
-      "type": "cutscene",
-      "cutscene_id": "cs_post_combate",
-      "background_image": "bg_test.jpg",
-      "dialogos": [
+          "type": "combate",
+          "combate_id": "comb_01",
+          "tablero": "tablero_background",
+          "cartas_jugador": [
+            "Superman",
+            "Supergirl",
+            "Superboy"
+          ],
+          "nivel_jugador": 2,
+          "cartas_BOT": [
+            "Joker",
+            "Lex Luthor",
+            "Harley Quinn"
+          ],
+          "nivel_BOT": 2
+        },
         {
-          "comando": "fundido_fondo",
+          "type": "cutscene",
+          "cutscene_id": "cs_post_combate",
           "background_image": "bg_test.jpg",
-          "duracion": 800
+          "dialogos": [
+            {
+              "comando": "fundido_fondo",
+              "background_image": "bg_test.jpg",
+              "duracion": 800
+            },
+            {
+              "dialogo_id": "d004",
+              "bust_image": "supergirl_base.png",
+              "side": "12%",
+              "id_character": "supergirl",
+              "nombre": "Supergirl",
+              "visible": true,
+              "texto": "Uf... Eso estuvo cerca. Pero la salida principal sigue bloqueada. Necesito encontrar otro camino."
+            },
+            {
+              "dialogo_id": "d005",
+              "bust_image": "supergirl_base.png",
+              "side": "60%",
+              "id_character": "alex",
+              "nombre": "Alex Danvers",
+              "visible": true,
+              "texto": "Kara, estoy rastreando tu señal. Hay un conducto de ventilación en el ala norte. Yo te guío."
+            },
+            {
+              "dialogo_id": "d006",
+              "bust_image": "supergirl_base.png",
+              "side": "12%",
+              "id_character": "supergirl",
+              "nombre": "Supergirl",
+              "visible": true,
+              "texto": "Recibido. Voy en camino."
+            }
+          ]
         },
         {
-          "dialogo_id": "d004",
-          "bust_image": "supergirl_base.png",
-          "side": "12%",
-          "id_character": "supergirl",
-          "nombre": "Supergirl",
-          "visible": true,
-          "texto": "Uf... Eso estuvo cerca. Pero la salida principal sigue bloqueada. Necesito encontrar otro camino."
-        },
-        {
-          "dialogo_id": "d005",
-          "bust_image": "supergirl_base.png",
-          "side": "60%",
-          "id_character": "alex",
-          "nombre": "Alex Danvers",
-          "visible": true,
-          "texto": "Kara, estoy rastreando tu señal. Hay un conducto de ventilación en el ala norte. Yo te guío."
-        },
-        {
-          "dialogo_id": "d006",
-          "bust_image": "supergirl_base.png",
-          "side": "12%",
-          "id_character": "supergirl",
-          "nombre": "Supergirl",
-          "visible": true,
-          "texto": "Recibido. Voy en camino."
+          "type": "recompensa",
+          "monedas": 250,
+          "objetos": [],
+          "cartas": [],
+          "skins": []
         }
-      ]
-    },
-    {
-      "type": "recompensa",
-      "monedas": 250,
-      "objetos": [],
-      "cartas": [],
-      "skins": []
-    }
       ]
     }
   ]

@@ -140,45 +140,160 @@
         }
     }
 
-    /**
-     * Rellena un contenedor grid con miniaturas estilo evento/desafío.
-     * @param {HTMLElement} contenedor — .episodios-cartas-requeridas-grid
-     * @param {{ detalle: { nombreRef, nombreCatalogo, obtenida }[] }} evaluacion
-     * @param {Map} mapaCatalogo
-     */
-    function renderizarGridCartasRequeridas(contenedor, evaluacion, mapaCatalogo) {
-        if (!contenedor) {
+    function esReferenciaApariencia(nombreRef) {
+        return typeof root.DCSkinsCartas?.esReferenciaRecompensaSkin === 'function'
+            && root.DCSkinsCartas.esReferenciaRecompensaSkin(nombreRef);
+    }
+
+    /** Etiqueta legible para UI y mensajes de error (incluye apariencias Parent[n]). */
+    function etiquetaRequisitoCarta(req) {
+        const nombreRef = String(req?.nombreRef || '').trim();
+        const nombreCatalogo = String(req?.nombreCatalogo || nombreCatalogoDesdeRef(nombreRef)).trim();
+        if (!esReferenciaApariencia(nombreRef)) {
+            return nombreCatalogo || nombreRef;
+        }
+        const skinsApi = root.DCSkinsCartas;
+        const ref = skinsApi?.parsearReferenciaCartaConSkin?.(nombreRef);
+        const skin = ref?.skinId != null ? skinsApi?.obtenerSkinPorId?.(ref.skinId) : null;
+        const nombreSkin = String(skin?.Nombre || '').trim();
+        if (nombreSkin) {
+            return `${nombreSkin} (apariencia de ${nombreCatalogo})`;
+        }
+        return `${nombreRef} (apariencia de ${nombreCatalogo})`;
+    }
+
+    function crearCartaRequeridaElemento(item, mapaCatalogo) {
+        const cartaBase = resolverFilaCatalogo(item.nombreRef, mapaCatalogo);
+        const card = document.createElement('div');
+        card.className = 'evento-enemigo-card episodios-carta-requerida';
+        if (!item.obtenida) {
+            card.classList.add('episodios-carta-requerida--falta');
+        }
+        card.style.backgroundImage = `url(${obtenerImagenCarta(cartaBase)})`;
+        const etiquetaTexto = etiquetaRequisitoCarta(item);
+        card.title = item.obtenida
+            ? `${etiquetaTexto} — en tu colección`
+            : `${etiquetaTexto} — no la tienes en tu colección`;
+
+        if (item.obtenida) {
+            const badge = document.createElement('span');
+            badge.className = 'episodios-carta-requerida-badge episodios-carta-requerida-badge--ok';
+            badge.setAttribute('aria-label', 'En tu colección');
+            badge.textContent = '✓';
+            card.appendChild(badge);
+        }
+
+        const etiqueta = document.createElement('div');
+        etiqueta.className = 'evento-enemigo-nombre';
+        etiqueta.textContent = cartaBase.Nombre || item.nombreCatalogo;
+        card.appendChild(etiqueta);
+        return card;
+    }
+
+    function destruirCarruselRequeridas(caja) {
+        if (caja?._carrusel3dDestroy) {
+            caja._carrusel3dDestroy();
+            caja._carrusel3dDestroy = null;
+        }
+    }
+
+    function aplicarEstadoVisualCaraRequerida(cara, item) {
+        if (!cara || !item) {
             return;
         }
-        contenedor.innerHTML = '';
+        cara.classList.toggle('episodios-carta-requerida-cara--falta', !item.obtenida);
+        if (!item.obtenida) {
+            return;
+        }
+        const billboard = cara.querySelector('.carrusel-3d-cara-billboard');
+        if (!billboard) {
+            return;
+        }
+        const badge = document.createElement('span');
+        badge.className = 'episodios-carta-requerida-badge episodios-carta-requerida-badge--ok';
+        badge.setAttribute('aria-label', 'En tu colección');
+        badge.textContent = '✓';
+        billboard.appendChild(badge);
+    }
+
+    /**
+     * Carrusel 3D de cartas requeridas (DCCarrusel3d, mismo patrón que eventos/desafíos).
+     * @param {HTMLElement} caja — `.episodios-cartas-requeridas-caja`
+     * @param {{ detalle: object[] }} evaluacion
+     * @param {Map} mapaCatalogo
+     */
+    function renderizarCarruselCartasRequeridas(caja, evaluacion, mapaCatalogo) {
+        if (!caja) {
+            return;
+        }
+        const mount = caja.querySelector('.episodios-cartas-requeridas-carrusel-mount');
+        if (!mount) {
+            return;
+        }
+
+        destruirCarruselRequeridas(caja);
+        mount.innerHTML = '';
+
         const detalle = Array.isArray(evaluacion?.detalle) ? evaluacion.detalle : [];
+        caja.dataset.totalSlides = String(detalle.length);
 
         if (!detalle.length) {
+            caja.dataset.indiceSlide = '0';
             const vacio = document.createElement('p');
             vacio.className = 'episodios-cartas-requeridas-vacio';
             vacio.textContent = 'Sin cartas de jugador en los combates de este episodio.';
-            contenedor.appendChild(vacio);
+            mount.appendChild(vacio);
             return;
         }
 
-        detalle.forEach((item) => {
+        const indicePrevio = Number(caja.dataset.indiceSlide || 0);
+        const itemsCarrusel = detalle.map((item) => {
             const cartaBase = resolverFilaCatalogo(item.nombreRef, mapaCatalogo);
-            const card = document.createElement('div');
-            card.className = 'evento-enemigo-card episodios-carta-requerida';
-            if (!item.obtenida) {
-                card.classList.add('episodios-carta-requerida--falta');
-            }
-            card.style.backgroundImage = `url(${obtenerImagenCarta(cartaBase)})`;
-            card.title = item.obtenida
-                ? `${cartaBase.Nombre || item.nombreCatalogo} — en tu colección`
-                : `${cartaBase.Nombre || item.nombreCatalogo} — no la tienes en tu colección`;
-
-            const etiqueta = document.createElement('div');
-            etiqueta.className = 'evento-enemigo-nombre';
-            etiqueta.textContent = cartaBase.Nombre || item.nombreCatalogo;
-            card.appendChild(etiqueta);
-            contenedor.appendChild(card);
+            return {
+                nombre: cartaBase.Nombre || item.nombreCatalogo || etiquetaRequisitoCarta(item),
+                imagenUrl: obtenerImagenCarta(cartaBase),
+            };
         });
+
+        if (typeof root.DCCarrusel3d?.montar !== 'function') {
+            mount.appendChild(crearCartaRequeridaElemento(detalle[0], mapaCatalogo));
+            return;
+        }
+
+        const handle = root.DCCarrusel3d.montar(mount, {
+            items: itemsCarrusel,
+            claseExtra: 'evento-enemigos-carrusel',
+            ariaAnterior: 'Carta requerida anterior',
+            ariaSiguiente: 'Siguiente carta requerida',
+            indiceInicial: indicePrevio >= 0 && indicePrevio < detalle.length ? indicePrevio : 0,
+            onFrenteChange: (idx) => {
+                caja.dataset.indiceSlide = String(idx);
+            },
+        });
+        caja._carrusel3dDestroy = handle.destroy;
+
+        const caras = mount.querySelectorAll('.carrusel-3d-cara');
+        detalle.forEach((item, i) => {
+            aplicarEstadoVisualCaraRequerida(caras[i], item);
+        });
+    }
+
+    /** @deprecated El carrusel 3D gestiona sus propios controles vía DCCarrusel3d. */
+    function enlazarControlesCarruselCartasRequeridas(_caja) {
+        /* noop */
+    }
+
+    /** @deprecated El carrusel 3D gestiona su propio índice vía onFrenteChange. */
+    function actualizarCarruselCartasRequeridas(_caja, _indice) {
+        /* noop */
+    }
+
+    /**
+     * @deprecated Usar renderizarCarruselCartasRequeridas sobre la caja del carrusel.
+     */
+    function renderizarGridCartasRequeridas(contenedor, evaluacion, mapaCatalogo) {
+        const caja = contenedor?.closest?.('.episodios-cartas-requeridas-caja') || contenedor;
+        renderizarCarruselCartasRequeridas(caja, evaluacion, mapaCatalogo);
     }
 
     /**
@@ -314,16 +429,17 @@
     }
 
     function mensajeFaltantes(evaluacion) {
-        const nombres = (evaluacion?.faltantes || [])
-            .map((f) => f.nombreCatalogo || f.nombreRef)
+        const faltantes = Array.isArray(evaluacion?.faltantes) ? evaluacion.faltantes : [];
+        const nombres = faltantes
+            .map((f) => etiquetaRequisitoCarta(f))
             .filter(Boolean);
         if (!nombres.length) {
             return '';
         }
         if (nombres.length === 1) {
-            return `Necesitas la carta «${nombres[0]}» en tu colección para jugar este episodio.`;
+            return `Te falta en tu colección: ${nombres[0]}.`;
         }
-        return `Necesitas estas cartas en tu colección: ${nombres.join(', ')}.`;
+        return `Te faltan estas cartas en tu colección: ${nombres.join(', ')}.`;
     }
 
     root.DCEpisodiosRequisitos = {
@@ -332,6 +448,10 @@
         evaluarRequisitosCartasEpisodio,
         resolverFilaCatalogo,
         renderizarGridCartasRequeridas,
+        renderizarCarruselCartasRequeridas,
+        enlazarControlesCarruselCartasRequeridas,
+        actualizarCarruselCartasRequeridas,
+        etiquetaRequisitoCarta,
         mensajeFaltantes,
         leerUsuarioLocal,
         nombreCatalogoDesdeRef,

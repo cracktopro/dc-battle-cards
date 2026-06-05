@@ -8,7 +8,6 @@
     const rueda = document.getElementById('episodios-carrusel-rueda');
     const btnIzq = document.getElementById('episodios-flecha-izq');
     const btnDer = document.getElementById('episodios-flecha-der');
-    const elNombreFrente = document.getElementById('episodios-nombre-frente');
     const elMensaje = document.getElementById('episodios-mensaje');
     const controles = document.getElementById('episodios-carrusel-controles');
 
@@ -243,13 +242,33 @@
     }
 
     function actualizarUiFrente() {
-        const ep = episodioEnFrente();
-        if (elNombreFrente) {
-            elNombreFrente.textContent = ep?.nombre || '—';
-        }
         const multiples = episodios.length > 1;
         btnIzq.disabled = !multiples;
         btnDer.disabled = !multiples;
+    }
+
+    /** Compensa el acercamiento por translateZ para que el panel frontal mantenga el mismo tamaño visual. */
+    function actualizarEscalaBillboardCarrusel() {
+        if (!escena) {
+            return;
+        }
+        const n = episodios.length;
+        if (n <= 1) {
+            escena.style.setProperty('--episodios-billboard-scale', '1');
+            return;
+        }
+        const radioRaw = getComputedStyle(escena).getPropertyValue('--episodios-radio').trim();
+        let radioPx = 260;
+        if (radioRaw.endsWith('px')) {
+            radioPx = parseFloat(radioRaw) || radioPx;
+        } else if (radioRaw.endsWith('vw')) {
+            radioPx = (window.innerWidth * (parseFloat(radioRaw) || 38)) / 100;
+        } else {
+            radioPx = parseFloat(radioRaw) || radioPx;
+        }
+        const perspective = 1400;
+        const scale = Math.max(0.72, Math.min(1, (perspective - radioPx) / perspective));
+        escena.style.setProperty('--episodios-billboard-scale', String(scale));
     }
 
     function normalizarClaveNombre(nombre) {
@@ -355,8 +374,8 @@
             return;
         }
         if (!evaluacion.cumple) {
-            btn.disabled = true;
-            btn.textContent = 'Cartas faltantes';
+            btn.disabled = false;
+            btn.textContent = 'Comenzar';
             btn.title = window.DCEpisodiosRequisitos?.mensajeFaltantes(evaluacion) || '';
             btn.classList.add('episodios-item-panel-btn--bloqueado');
             return;
@@ -369,19 +388,20 @@
 
     async function actualizarPanelCartasRequeridas(ep, elementosUi) {
         const {
-            gridEl,
+            cajaEl,
             avisoEl,
             bloqueEl,
             btnComenzar,
         } = elementosUi;
 
-        if (!ep || !gridEl) {
+        if (!ep || !cajaEl) {
             return;
         }
 
         aplicarEstadoBotonComenzar(btnComenzar, { cumple: true }, true);
 
         await cargarCartasRequeridasEpisodio(ep);
+        refrescarUsuarioActual();
         const evaluacion = evaluarEpisodio(ep);
         const req = window.DCEpisodiosRequisitos;
 
@@ -397,8 +417,10 @@
             bloqueEl.hidden = !evaluacion.detalle.length && !(ep._cartasRequeridas || []).length;
         }
 
-        if (req && typeof req.renderizarGridCartasRequeridas === 'function') {
-            req.renderizarGridCartasRequeridas(gridEl, evaluacion, mapaCatalogoCartas);
+        if (req && typeof req.renderizarCarruselCartasRequeridas === 'function') {
+            req.renderizarCarruselCartasRequeridas(cajaEl, evaluacion, mapaCatalogoCartas);
+        } else if (req && typeof req.renderizarGridCartasRequeridas === 'function') {
+            req.renderizarGridCartasRequeridas(cajaEl, evaluacion, mapaCatalogoCartas);
         }
 
         if (avisoEl) {
@@ -425,7 +447,7 @@
             return;
         }
         await actualizarPanelCartasRequeridas(ep, {
-            gridEl: panel.querySelector('.episodios-cartas-requeridas-grid'),
+            cajaEl: panel.querySelector('.episodios-cartas-requeridas-caja'),
             avisoEl: panel.querySelector('.episodios-cartas-requeridas-aviso'),
             bloqueEl: panel.querySelector('.episodios-cartas-requeridas-bloque'),
             btnComenzar: panel.querySelector('.episodios-item-panel-btn'),
@@ -457,6 +479,7 @@
             cara.classList.toggle('episodios-carrusel-cara--frente', j === frente);
         });
         actualizarUiFrente();
+        actualizarEscalaBillboardCarrusel();
         void actualizarRequisitosCaraFrente();
     }
 
@@ -470,15 +493,18 @@
 
         const caja = document.createElement('div');
         caja.className = 'episodios-cartas-requeridas-caja';
+        caja.dataset.indiceSlide = '0';
+        caja.dataset.totalSlides = '0';
 
-        const grid = document.createElement('div');
-        grid.className = 'episodios-cartas-requeridas-grid evento-enemigos--rejilla';
+        const mount = document.createElement('div');
+        mount.className = 'evento-enemigos-carrusel-mount episodios-cartas-requeridas-carrusel-mount';
+        mount.setAttribute('aria-live', 'polite');
+        caja.appendChild(mount);
 
         const aviso = document.createElement('p');
         aviso.className = 'episodios-cartas-requeridas-aviso';
         aviso.hidden = true;
 
-        caja.appendChild(grid);
         bloque.appendChild(label);
         bloque.appendChild(caja);
         bloque.appendChild(aviso);
@@ -527,6 +553,8 @@
         btn.addEventListener('click', (e) => {
             e.stopPropagation();
             void (async () => {
+                refrescarUsuarioActual();
+                await cargarCartasRequeridasEpisodio(ep);
                 const evaluacion = evaluarEpisodio(ep);
                 if (!evaluacion.cumple) {
                     mostrarMensaje(
@@ -590,16 +618,15 @@
 
         const n = episodios.length;
         const step = 360 / Math.max(n, 1);
-        const radio = n <= 1 ? '0px' : `min(${Math.round(260 + n * 22)}px, ${Math.round(44 + n * 5)}vw)`;
         escena.classList.toggle('episodios-carrusel-escena--unico', n <= 1);
         escena.style.setProperty('--episodios-step-num', String(step));
-        escena.style.setProperty('--episodios-radio', radio);
 
         episodios.forEach((ep, i) => {
             rueda.appendChild(crearCaraEpisodio(ep, i));
         });
 
         caras = rueda.querySelectorAll('.episodios-carrusel-cara');
+        actualizarEscalaBillboardCarrusel();
         aplicarSpin();
         precargarRequisitosTodos();
     }
@@ -630,6 +657,10 @@
         }
         spin += 1;
         aplicarSpin();
+    });
+
+    window.addEventListener('resize', () => {
+        actualizarEscalaBillboardCarrusel();
     });
 
     async function iniciar() {
