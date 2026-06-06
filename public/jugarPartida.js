@@ -10,7 +10,19 @@ let seleccionCartasEvento = new Set();
 let cartasVistaSeleccionEvento = new Map();
 let mapaCatalogoSeleccionEvento = null;
 let busquedaSeleccionEvento = '';
-let faccionEventoActiva = 'H';
+let faccionEventoActiva = '';
+
+function obtenerCartasParaSelectorFaccionEvento() {
+    return (usuarioCartasEvento || []).map((item) => item.carta);
+}
+
+function alCambiarFaccionEvento() {
+    afiliacionEventoActiva = 'todas';
+    skillClassEventoActiva = 'todas';
+    renderizarFiltroAfiliacionEvento();
+    sincronizarFiltroSkillClassEvento();
+    renderizarCartasSeleccionEvento();
+}
 
 function obtenerCartaDisplaySeleccionEvento(item) {
     if (cartasVistaSeleccionEvento.has(item.index)) {
@@ -1405,10 +1417,9 @@ function configurarModalEvento() {
     const cancelarBtn = document.getElementById('cancelar-evento-btn');
     const confirmarBtn = document.getElementById('confirmar-evento-btn');
     const filtroAfi = document.getElementById('filtro-afiliacion-evento');
-    const btnH = document.getElementById('filtro-evento-faccion-h');
-    const btnV = document.getElementById('filtro-evento-faccion-v');
+    const filtroFaccion = document.getElementById('filtro-faccion-evento');
 
-    if (!cancelarBtn || !confirmarBtn || !filtroAfi || !btnH || !btnV) {
+    if (!cancelarBtn || !confirmarBtn || !filtroAfi || !filtroFaccion) {
         return;
     }
 
@@ -1420,6 +1431,22 @@ function configurarModalEvento() {
         afiliacionEventoActiva = normalizarAfiliacion(filtroAfi.value || 'todas');
         renderizarCartasSeleccionEvento();
     };
+
+    if (window.DCFiltrosCartas) {
+        window.DCFiltrosCartas.configurarSelectorFaccion(filtroFaccion, {
+            obtenerCartas: obtenerCartasParaSelectorFaccionEvento,
+            valorActual: faccionEventoActiva,
+            onChange: (valor) => {
+                faccionEventoActiva = valor;
+                alCambiarFaccionEvento();
+            }
+        });
+    } else {
+        filtroFaccion.addEventListener('change', () => {
+            faccionEventoActiva = String(filtroFaccion.value || '').trim();
+            alCambiarFaccionEvento();
+        });
+    }
 
     const filtroSkill = document.getElementById('filtro-skill-class-evento');
     if (filtroSkill && window.DCFiltrosCartas) {
@@ -1439,26 +1466,6 @@ function configurarModalEvento() {
             renderizarCartasSeleccionEvento();
         });
     }
-
-    btnH.onclick = () => {
-        faccionEventoActiva = 'H';
-        afiliacionEventoActiva = 'todas';
-        skillClassEventoActiva = 'todas';
-        actualizarBotonesFaccionEvento();
-        renderizarFiltroAfiliacionEvento();
-        sincronizarFiltroSkillClassEvento();
-        renderizarCartasSeleccionEvento();
-    };
-
-    btnV.onclick = () => {
-        faccionEventoActiva = 'V';
-        afiliacionEventoActiva = 'todas';
-        skillClassEventoActiva = 'todas';
-        actualizarBotonesFaccionEvento();
-        renderizarFiltroAfiliacionEvento();
-        sincronizarFiltroSkillClassEvento();
-        renderizarCartasSeleccionEvento();
-    };
 }
 
 async function abrirModalSeleccionEvento(evento) {
@@ -1552,7 +1559,6 @@ async function abrirModalSeleccionEvento(evento) {
         return;
     }
 
-    faccionEventoActiva = 'H';
     afiliacionEventoActiva = 'todas';
     skillClassEventoActiva = 'todas';
     seleccionCartasEvento = new Set();
@@ -1562,7 +1568,14 @@ async function abrirModalSeleccionEvento(evento) {
     if (inputBusqueda) {
         inputBusqueda.value = '';
     }
-    actualizarBotonesFaccionEvento();
+    const filtroFaccion = document.getElementById('filtro-faccion-evento');
+    if (filtroFaccion && window.DCFiltrosCartas) {
+        faccionEventoActiva = window.DCFiltrosCartas.poblarSelectorFaccion(
+            filtroFaccion,
+            obtenerCartasParaSelectorFaccionEvento(),
+            faccionEventoActiva
+        );
+    }
     renderizarFiltroAfiliacionEvento();
     sincronizarFiltroSkillClassEvento();
     renderizarCartasSeleccionEvento();
@@ -1570,16 +1583,11 @@ async function abrirModalSeleccionEvento(evento) {
     document.getElementById('modal-seleccion-evento').style.display = 'flex';
 }
 
-function actualizarBotonesFaccionEvento() {
-    document.getElementById('filtro-evento-faccion-h').classList.toggle('active', faccionEventoActiva === 'H');
-    document.getElementById('filtro-evento-faccion-v').classList.toggle('active', faccionEventoActiva === 'V');
-}
-
 function renderizarFiltroAfiliacionEvento() {
     const filtro = document.getElementById('filtro-afiliacion-evento');
     const mapa = new Map();
     usuarioCartasEvento
-        .filter(item => normalizarFaccion(item.carta.faccion) === faccionEventoActiva)
+        .filter(item => window.DCFiltrosCartas?.cartaCoincideFaccion(item.carta, faccionEventoActiva) ?? normalizarFaccion(item.carta.faccion) === faccionEventoActiva)
         .forEach(item => {
             obtenerAfiliacionesCarta(item.carta).forEach(afi => {
                 const key = normalizarAfiliacion(afi);
@@ -1612,7 +1620,7 @@ function renderizarCartasSeleccionEvento() {
     grid.innerHTML = '';
 
     const cartasFiltradas = usuarioCartasEvento
-        .filter(item => normalizarFaccion(item.carta.faccion) === faccionEventoActiva)
+        .filter(item => window.DCFiltrosCartas?.cartaCoincideFaccion(item.carta, faccionEventoActiva) ?? normalizarFaccion(item.carta.faccion) === faccionEventoActiva)
         .filter(item => {
             if (afiliacionEventoActiva === 'todas') {
                 return true;

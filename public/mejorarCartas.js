@@ -77,7 +77,7 @@ async function enriquecerUsuarioSkillsDesdeCatalogoMejorar() {
 }
 
 let indiceCartaModalObjetos = null;
-let faccionMejorasObjetosActiva = 'H';
+let faccionMejorasObjetosActiva = '';
 let ordenarPoderMejorasObjetos = false;
 let filtrosMejorasObjetosRegistrados = false;
 let combinacionDuplicadosGrupo = null;
@@ -105,7 +105,7 @@ const COSTO_USO_MEJORA_CARTA = 5;
 const COSTO_USO_MEJORA_ESPECIAL = 3;
 
 let indiceCartaModalFragmentos = null;
-let faccionFragmentosActiva = 'H';
+let faccionFragmentosActiva = '';
 let ordenarPoderFragmentos = false;
 let filtrosFragmentosRegistrados = false;
 let mejoraAnimEnCurso = false;
@@ -113,12 +113,14 @@ let mejoraAnimEnCurso = false;
 let busquedaMejoraClasica = '';
 let afiliacionMejoraClasica = 'todas';
 let skillClassMejoraClasica = 'todas';
+let faccionMejoraClasicaActiva = '';
 let ordenarPoderMejoraClasica = false;
 let filtrosMejoraClasicaRegistrados = false;
 
 let busquedaDestruirRepetidas = '';
 let afiliacionDestruirRepetidas = 'todas';
 let skillClassDestruirRepetidas = 'todas';
+let faccionDestruirRepetidasActiva = '';
 let ordenarPoderDestruirRepetidas = false;
 let filtrosDestruirRepetidasRegistrados = false;
 
@@ -199,8 +201,24 @@ function cartaCoincideAfiliacionMejorar(carta, afiliacionActiva) {
         .includes(clave);
 }
 
+function cartaCoincideFaccionMejorar(carta, faccionActiva) {
+    return window.DCFiltrosCartas?.cartaCoincideFaccion(carta, faccionActiva) ?? true;
+}
+
 function cartaCoincideSkillClassMejorar(carta, filtroActivo) {
     return window.DCFiltrosCartas?.cartaCoincideSkillClass(carta, filtroActivo) ?? true;
+}
+
+function etiquetaFaccionMejorar(valor) {
+    return window.DCFiltrosCartas?.resolverEtiquetaFaccion(valor) || valor;
+}
+
+function poblarSelectorFaccionMejorar(selectorId, cartas, valorGuardado) {
+    const selector = document.getElementById(selectorId);
+    if (!selector || !window.DCFiltrosCartas) {
+        return valorGuardado;
+    }
+    return window.DCFiltrosCartas.poblarSelectorFaccion(selector, cartas, valorGuardado);
 }
 
 function compararCartasMejorarPorNombrePoder(a, b, ordenarPoder) {
@@ -798,12 +816,13 @@ function obtenerCartasPanelMejorasObjetos(usuario) {
 }
 
 function obtenerFaccionCartaMejorasObjetos(carta) {
-    return normalizarFaccion(carta?.faccion || carta?.Faccion || '');
+    return window.DCFiltrosCartas?.obtenerFaccionCarta(carta)
+        || normalizarFaccion(carta?.faccion || carta?.Faccion || '');
 }
 
 function filtrarYOrdenarCartasMejorasObjetos(cartas) {
     const lista = (Array.isArray(cartas) ? cartas : []).filter((carta) => {
-        return obtenerFaccionCartaMejorasObjetos(carta) === faccionMejorasObjetosActiva
+        return cartaCoincideFaccionMejorar(carta, faccionMejorasObjetosActiva)
             && cartaCoincideBusquedaMejorar(carta, busquedaMejorasObjetos)
             && cartaCoincideAfiliacionMejorar(carta, afiliacionMejorasObjetos)
             && cartaCoincideSkillClassMejorar(carta, skillClassMejorasObjetos);
@@ -812,38 +831,20 @@ function filtrarYOrdenarCartasMejorasObjetos(cartas) {
     return lista;
 }
 
-function actualizarTabsFaccionMejorasObjetos() {
-    const tabH = document.getElementById('tab-mejoras-objetos-heroes');
-    const tabV = document.getElementById('tab-mejoras-objetos-villanos');
-    if (tabH) {
-        tabH.classList.toggle('active', faccionMejorasObjetosActiva === 'H');
-    }
-    if (tabV) {
-        tabV.classList.toggle('active', faccionMejorasObjetosActiva === 'V');
-    }
-}
-
 function configurarFiltrosMejorasObjetos() {
     if (filtrosMejorasObjetosRegistrados) {
         return;
     }
-    const tabH = document.getElementById('tab-mejoras-objetos-heroes');
-    const tabV = document.getElementById('tab-mejoras-objetos-villanos');
+    const selectorFaccion = document.getElementById('selector-faccion-mejoras-objetos');
     const chkPoder = document.getElementById('ordenar-poder-mejoras-objetos');
-    if (!tabH && !tabV && !chkPoder) {
+    if (!selectorFaccion && !chkPoder) {
         return;
     }
     filtrosMejorasObjetosRegistrados = true;
 
-    tabH?.addEventListener('click', () => {
-        faccionMejorasObjetosActiva = 'H';
-        actualizarTabsFaccionMejorasObjetos();
-        const usuario = JSON.parse(localStorage.getItem('usuario') || 'null');
-        renderizarSeccionMejorasObjetos(usuario);
-    });
-    tabV?.addEventListener('click', () => {
-        faccionMejorasObjetosActiva = 'V';
-        actualizarTabsFaccionMejorasObjetos();
+    selectorFaccion?.addEventListener('change', () => {
+        faccionMejorasObjetosActiva = selectorFaccion.value;
+        afiliacionMejorasObjetos = 'todas';
         const usuario = JSON.parse(localStorage.getItem('usuario') || 'null');
         renderizarSeccionMejorasObjetos(usuario);
     });
@@ -999,7 +1000,6 @@ function cerrarModalSeleccionObjetoMejora() {
 
 function renderizarSeccionMejorasObjetos(usuario) {
     actualizarContadoresObjetos(usuario);
-    actualizarTabsFaccionMejorasObjetos();
     const contenedor = document.getElementById('contenedor-mejoras-objetos-todas');
     if (!contenedor) {
         return;
@@ -1007,9 +1007,15 @@ function renderizarSeccionMejorasObjetos(usuario) {
 
     contenedor.innerHTML = '';
     const todas = obtenerCartasPanelMejorasObjetos(usuario);
+    faccionMejorasObjetosActiva = poblarSelectorFaccionMejorar(
+        'selector-faccion-mejoras-objetos',
+        todas,
+        faccionMejorasObjetosActiva
+    );
+    const cartasFuenteAfiliacion = todas.filter((c) => cartaCoincideFaccionMejorar(c, faccionMejorasObjetosActiva));
     afiliacionMejorasObjetos = poblarSelectorAfiliacionMejorar(
         'selector-afiliacion-mejoras-objetos',
-        todas,
+        cartasFuenteAfiliacion,
         afiliacionMejorasObjetos
     );
     const cartas = filtrarYOrdenarCartasMejorasObjetos(todas);
@@ -1025,9 +1031,9 @@ function renderizarSeccionMejorasObjetos(usuario) {
     if (cartas.length === 0) {
         const vacio = document.createElement('div');
         vacio.className = 'alert alert-info';
-        const enFaccion = todas.filter((c) => obtenerFaccionCartaMejorasObjetos(c) === faccionMejorasObjetosActiva);
+        const enFaccion = todas.filter((c) => cartaCoincideFaccionMejorar(c, faccionMejorasObjetosActiva));
         vacio.textContent = enFaccion.length === 0
-            ? `No tienes cartas de ${faccionMejorasObjetosActiva === 'H' ? 'héroes' : 'villanos'} de nivel 1 a 5 en esta vista. Prueba la otra facción.`
+            ? `No tienes cartas de ${etiquetaFaccionMejorar(faccionMejorasObjetosActiva)} de nivel 1 a 5 en esta vista. Prueba otra facción.`
             : 'Ninguna carta coincide con los filtros aplicados.';
         contenedor.appendChild(vacio);
         return;
@@ -1106,7 +1112,7 @@ function obtenerCartasPanelFragmentos(usuario) {
 
 function filtrarYOrdenarCartasFragmentos(cartas) {
     const lista = (Array.isArray(cartas) ? cartas : []).filter((carta) => {
-        return obtenerFaccionCartaMejorasObjetos(carta) === faccionFragmentosActiva
+        return cartaCoincideFaccionMejorar(carta, faccionFragmentosActiva)
             && cartaCoincideBusquedaMejorar(carta, busquedaFragmentos)
             && cartaCoincideAfiliacionMejorar(carta, afiliacionFragmentos)
             && cartaCoincideSkillClassMejorar(carta, skillClassFragmentos);
@@ -1115,38 +1121,20 @@ function filtrarYOrdenarCartasFragmentos(cartas) {
     return lista;
 }
 
-function actualizarTabsFaccionFragmentos() {
-    const tabH = document.getElementById('tab-fragmentos-heroes');
-    const tabV = document.getElementById('tab-fragmentos-villanos');
-    if (tabH) {
-        tabH.classList.toggle('active', faccionFragmentosActiva === 'H');
-    }
-    if (tabV) {
-        tabV.classList.toggle('active', faccionFragmentosActiva === 'V');
-    }
-}
-
 function configurarFiltrosFragmentos() {
     if (filtrosFragmentosRegistrados) {
         return;
     }
-    const tabH = document.getElementById('tab-fragmentos-heroes');
-    const tabV = document.getElementById('tab-fragmentos-villanos');
+    const selectorFaccion = document.getElementById('selector-faccion-fragmentos');
     const chkPoder = document.getElementById('ordenar-poder-fragmentos');
-    if (!tabH && !tabV && !chkPoder) {
+    if (!selectorFaccion && !chkPoder) {
         return;
     }
     filtrosFragmentosRegistrados = true;
 
-    tabH?.addEventListener('click', () => {
-        faccionFragmentosActiva = 'H';
-        actualizarTabsFaccionFragmentos();
-        const usuario = JSON.parse(localStorage.getItem('usuario') || 'null');
-        renderizarSeccionFragmentos(usuario);
-    });
-    tabV?.addEventListener('click', () => {
-        faccionFragmentosActiva = 'V';
-        actualizarTabsFaccionFragmentos();
+    selectorFaccion?.addEventListener('change', () => {
+        faccionFragmentosActiva = selectorFaccion.value;
+        afiliacionFragmentos = 'todas';
         const usuario = JSON.parse(localStorage.getItem('usuario') || 'null');
         renderizarSeccionFragmentos(usuario);
     });
@@ -1298,7 +1286,6 @@ function cerrarModalSeleccionFragmentos() {
 
 function renderizarSeccionFragmentos(usuario) {
     actualizarContadoresFragmentos(usuario);
-    actualizarTabsFaccionFragmentos();
     const contenedor = document.getElementById('contenedor-fragmentos-todas');
     if (!contenedor) {
         return;
@@ -1306,9 +1293,15 @@ function renderizarSeccionFragmentos(usuario) {
 
     contenedor.innerHTML = '';
     const todas = obtenerCartasPanelFragmentos(usuario);
+    faccionFragmentosActiva = poblarSelectorFaccionMejorar(
+        'selector-faccion-fragmentos',
+        todas,
+        faccionFragmentosActiva
+    );
+    const cartasFuenteAfiliacion = todas.filter((c) => cartaCoincideFaccionMejorar(c, faccionFragmentosActiva));
     afiliacionFragmentos = poblarSelectorAfiliacionMejorar(
         'selector-afiliacion-fragmentos',
-        todas,
+        cartasFuenteAfiliacion,
         afiliacionFragmentos
     );
     const cartas = filtrarYOrdenarCartasFragmentos(todas);
@@ -1324,9 +1317,9 @@ function renderizarSeccionFragmentos(usuario) {
     if (cartas.length === 0) {
         const vacio = document.createElement('div');
         vacio.className = 'alert alert-info';
-        const enFaccion = todas.filter((c) => obtenerFaccionCartaMejorasObjetos(c) === faccionFragmentosActiva);
+        const enFaccion = todas.filter((c) => cartaCoincideFaccionMejorar(c, faccionFragmentosActiva));
         vacio.textContent = enFaccion.length === 0
-            ? `No tienes cartas de ${faccionFragmentosActiva === 'H' ? 'héroes' : 'villanos'} de nivel 6 o 7 en esta vista. Prueba la otra facción.`
+            ? `No tienes cartas de ${etiquetaFaccionMejorar(faccionFragmentosActiva)} de nivel 6 o 7 en esta vista. Prueba otra facción.`
             : 'Ninguna carta coincide con los filtros aplicados.';
         contenedor.appendChild(vacio);
         return;
@@ -1658,12 +1651,22 @@ function configurarFiltrosMejoraClasica() {
         return;
     }
     const inputBusqueda = document.getElementById('busqueda-mejora-clasica');
+    const selectorFaccion = document.getElementById('selector-faccion-mejora-clasica');
     const selectorAfiliacion = document.getElementById('selector-afiliacion-mejora-clasica');
     const chkPoder = document.getElementById('ordenar-poder-mejora-clasica');
-    if (!inputBusqueda && !selectorAfiliacion && !chkPoder) {
+    if (!inputBusqueda && !selectorAfiliacion && !chkPoder && !selectorFaccion) {
         return;
     }
     filtrosMejoraClasicaRegistrados = true;
+
+    selectorFaccion?.addEventListener('change', function () {
+        faccionMejoraClasicaActiva = this.value;
+        afiliacionMejoraClasica = 'todas';
+        const usuario = JSON.parse(localStorage.getItem('usuario') || 'null');
+        if (usuario) {
+            renderizarSeccionMejoraClasica(usuario);
+        }
+    });
 
     inputBusqueda?.addEventListener('input', function () {
         busquedaMejoraClasica = String(this.value || '').trim().toLowerCase();
@@ -1709,12 +1712,22 @@ function configurarFiltrosDestruirRepetidas() {
         return;
     }
     const inputBusqueda = document.getElementById('busqueda-destruir-repetidas');
+    const selectorFaccion = document.getElementById('selector-faccion-destruir-repetidas');
     const selectorAfiliacion = document.getElementById('selector-afiliacion-destruir-repetidas');
     const chkPoder = document.getElementById('ordenar-poder-destruir-repetidas');
-    if (!inputBusqueda && !selectorAfiliacion && !chkPoder) {
+    if (!inputBusqueda && !selectorAfiliacion && !chkPoder && !selectorFaccion) {
         return;
     }
     filtrosDestruirRepetidasRegistrados = true;
+
+    selectorFaccion?.addEventListener('change', function () {
+        faccionDestruirRepetidasActiva = this.value;
+        afiliacionDestruirRepetidas = 'todas';
+        const usuario = JSON.parse(localStorage.getItem('usuario') || 'null');
+        if (usuario) {
+            renderizarSeccionDestruccion(usuario);
+        }
+    });
 
     inputBusqueda?.addEventListener('input', function () {
         busquedaDestruirRepetidas = String(this.value || '').trim().toLowerCase();
@@ -1763,8 +1776,16 @@ function renderizarSeccionMejoraClasica(usuario) {
 
     contenedorCartas.innerHTML = '';
 
-    const fuenteAfiliacion = construirGruposMejoraClasica(usuario)
-        .filter(grupoVisibleEnVistaClasica)
+    const gruposBase = construirGruposMejoraClasica(usuario)
+        .filter(grupoVisibleEnVistaClasica);
+    const cartasFaccion = gruposBase.map((grupo) => grupo.keeperCarta);
+    faccionMejoraClasicaActiva = poblarSelectorFaccionMejorar(
+        'selector-faccion-mejora-clasica',
+        cartasFaccion,
+        faccionMejoraClasicaActiva
+    );
+    const fuenteAfiliacion = gruposBase
+        .filter((grupo) => cartaCoincideFaccionMejorar(grupo.keeperCarta, faccionMejoraClasicaActiva))
         .map((grupo) => grupo.keeperCarta);
     afiliacionMejoraClasica = poblarSelectorAfiliacionMejorar(
         'selector-afiliacion-mejora-clasica',
@@ -1772,8 +1793,8 @@ function renderizarSeccionMejoraClasica(usuario) {
         afiliacionMejoraClasica
     );
 
-    const grupos = construirGruposMejoraClasica(usuario)
-        .filter(grupoVisibleEnVistaClasica)
+    const grupos = gruposBase
+        .filter((grupo) => cartaCoincideFaccionMejorar(grupo.keeperCarta, faccionMejoraClasicaActiva))
         .filter((grupo) => cartaCoincideBusquedaMejorar(grupo.keeperCarta, busquedaMejoraClasica))
         .filter((grupo) => cartaCoincideAfiliacionMejorar(grupo.keeperCarta, afiliacionMejoraClasica))
         .filter((grupo) => cartaCoincideSkillClassMejorar(grupo.keeperCarta, skillClassMejoraClasica))
@@ -2399,7 +2420,15 @@ function renderizarSeccionDestruccion(usuario) {
     if (!contenedor) return;
 
     const gruposBase = construirGruposDestruccion(usuario);
-    const fuenteAfiliacion = gruposBase.map((grupo) => grupo.keeperCarta);
+    const cartasFaccion = gruposBase.map((grupo) => grupo.keeperCarta);
+    faccionDestruirRepetidasActiva = poblarSelectorFaccionMejorar(
+        'selector-faccion-destruir-repetidas',
+        cartasFaccion,
+        faccionDestruirRepetidasActiva
+    );
+    const fuenteAfiliacion = gruposBase
+        .filter((grupo) => cartaCoincideFaccionMejorar(grupo.keeperCarta, faccionDestruirRepetidasActiva))
+        .map((grupo) => grupo.keeperCarta);
     afiliacionDestruirRepetidas = poblarSelectorAfiliacionMejorar(
         'selector-afiliacion-destruir-repetidas',
         fuenteAfiliacion,
@@ -2407,6 +2436,7 @@ function renderizarSeccionDestruccion(usuario) {
     );
 
     const grupos = gruposBase
+        .filter((grupo) => cartaCoincideFaccionMejorar(grupo.keeperCarta, faccionDestruirRepetidasActiva))
         .filter((grupo) => cartaCoincideBusquedaMejorar(grupo.keeperCarta, busquedaDestruirRepetidas))
         .filter((grupo) => cartaCoincideAfiliacionMejorar(grupo.keeperCarta, afiliacionDestruirRepetidas))
         .filter((grupo) => cartaCoincideSkillClassMejorar(grupo.keeperCarta, skillClassDestruirRepetidas));

@@ -25,9 +25,12 @@
      * acoplar este módulo coop a esos ficheros, que no se cargan en multijugador.html.
      */
     function normalizarFaccionLocal(valor) {
-        if (!valor) return '';
-        const f = String(valor).trim().toUpperCase();
-        return (f === 'H' || f === 'V') ? f : '';
+        return window.DCFiltrosCartas?.normalizarFaccionValor(valor) || String(valor || '').trim().toUpperCase();
+    }
+
+    function cartaCoincideFaccionLocal(carta, faccionActiva) {
+        return window.DCFiltrosCartas?.cartaCoincideFaccion(carta, faccionActiva)
+            ?? normalizarFaccionLocal(carta?.faccion) === normalizarFaccionLocal(faccionActiva);
     }
 
     function normalizarAfiliacionLocal(afi) {
@@ -475,7 +478,7 @@
     let cartasVistaSeleccionCoop = new Map();
     let mapaCatalogoSeleccionCoop = null;
     let busquedaSeleccionCoop = '';
-    let faccionEventoCoopActiva = 'H';
+    let faccionEventoCoopActiva = '';
 
     function obtenerCartaDisplaySeleccionCoop(item) {
         if (cartasVistaSeleccionCoop.has(item.index)) {
@@ -574,7 +577,7 @@
         seleccionIndices = new Set();
         cartasVistaSeleccionCoop = new Map();
         busquedaSeleccionCoop = '';
-        faccionEventoCoopActiva = 'H';
+        faccionEventoCoopActiva = '';
         afiliacionEventoCoopActiva = 'todas';
         skillClassEventoCoopActiva = 'todas';
 
@@ -602,10 +605,7 @@
                     </div>
                 </div>
                 <div class="filtros-seleccion">
-                    <div class="faccion-tabs">
-                        <button type="button" class="btn faccion-tab active" data-coop-tab="H">Héroes</button>
-                        <button type="button" class="btn faccion-tab" data-coop-tab="V">Villanos</button>
-                    </div>
+                    <select class="form-control selector-faccion-cartas" data-coop-filtro-faccion aria-label="Facción" style="width:auto; min-width:200px;"></select>
                     <select class="form-control" data-coop-filtro-afi style="width:auto; min-width:220px;"></select>
                     <select class="form-control filtro-skill-class" data-coop-filtro-skill style="width:auto; min-width:240px;"></select>
                     <input type="search" class="form-control busqueda-seleccion-cartas" data-coop-busqueda placeholder="Buscar carta..." autocomplete="off" style="flex:1; min-width:180px;">
@@ -622,10 +622,9 @@
         const grid = modal.querySelector('[data-coop-grid]');
         const estadoEl = modal.querySelector('[data-coop-estado]');
         const filtroAfi = modal.querySelector('[data-coop-filtro-afi]');
+        const filtroFaccion = modal.querySelector('[data-coop-filtro-faccion]');
         const filtroSkill = modal.querySelector('[data-coop-filtro-skill]');
         const inputBusqueda = modal.querySelector('[data-coop-busqueda]');
-        const btnTabH = modal.querySelector('[data-coop-tab="H"]');
-        const btnTabV = modal.querySelector('[data-coop-tab="V"]');
         const btnCancelar = modal.querySelector('[data-coop-cancelar]');
         const btnConfirmar = modal.querySelector('[data-coop-confirmar]');
 
@@ -805,15 +804,31 @@
             renderResumenSeleccionCoop();
         }
 
-        function actualizarBotonesFaccion() {
-            btnTabH.classList.toggle('active', faccionEventoCoopActiva === 'H');
-            btnTabV.classList.toggle('active', faccionEventoCoopActiva === 'V');
+        function alCambiarFaccionCoop() {
+            afiliacionEventoCoopActiva = 'todas';
+            skillClassEventoCoopActiva = 'todas';
+            renderizarFiltroAfiliacion();
+            if (filtroSkill && window.DCFiltrosCartas) {
+                skillClassEventoCoopActiva = window.DCFiltrosCartas.poblarSelectorSkillClass(filtroSkill, 'todas');
+            }
+            renderizarGrid();
+        }
+
+        function poblarSelectorFaccionCoop() {
+            if (!filtroFaccion || !window.DCFiltrosCartas) {
+                return faccionEventoCoopActiva;
+            }
+            return window.DCFiltrosCartas.poblarSelectorFaccion(
+                filtroFaccion,
+                usuarioCartasSeleccion.map((item) => item.carta),
+                faccionEventoCoopActiva
+            );
         }
 
         function renderizarFiltroAfiliacion() {
             const mapa = new Map();
             usuarioCartasSeleccion
-                .filter((item) => normalizarFaccionLocal(item.carta.faccion) === faccionEventoCoopActiva)
+                .filter((item) => cartaCoincideFaccionLocal(item.carta, faccionEventoCoopActiva))
                 .forEach((item) => {
                     obtenerAfiliacionesCartaLocal(item.carta).forEach((afi) => {
                         const key = normalizarAfiliacionLocal(afi);
@@ -856,7 +871,7 @@
         function renderizarGrid() {
             grid.innerHTML = '';
             const cartasFiltradas = usuarioCartasSeleccion
-                .filter((item) => normalizarFaccionLocal(item.carta.faccion) === faccionEventoCoopActiva)
+                .filter((item) => cartaCoincideFaccionLocal(item.carta, faccionEventoCoopActiva))
                 .filter((item) => {
                     if (afiliacionEventoCoopActiva === 'todas') return true;
                     const afis = obtenerAfiliacionesCartaLocal(item.carta).map(normalizarAfiliacionLocal);
@@ -971,28 +986,12 @@
             });
         }
 
-        btnTabH.addEventListener('click', () => {
-            faccionEventoCoopActiva = 'H';
-            afiliacionEventoCoopActiva = 'todas';
-            skillClassEventoCoopActiva = 'todas';
-            actualizarBotonesFaccion();
-            renderizarFiltroAfiliacion();
-            if (filtroSkill && window.DCFiltrosCartas) {
-                skillClassEventoCoopActiva = window.DCFiltrosCartas.poblarSelectorSkillClass(filtroSkill, 'todas');
-            }
-            renderizarGrid();
-        });
-        btnTabV.addEventListener('click', () => {
-            faccionEventoCoopActiva = 'V';
-            afiliacionEventoCoopActiva = 'todas';
-            skillClassEventoCoopActiva = 'todas';
-            actualizarBotonesFaccion();
-            renderizarFiltroAfiliacion();
-            if (filtroSkill && window.DCFiltrosCartas) {
-                skillClassEventoCoopActiva = window.DCFiltrosCartas.poblarSelectorSkillClass(filtroSkill, 'todas');
-            }
-            renderizarGrid();
-        });
+        if (filtroFaccion) {
+            filtroFaccion.addEventListener('change', () => {
+                faccionEventoCoopActiva = filtroFaccion.value;
+                alCambiarFaccionCoop();
+            });
+        }
         filtroAfi.addEventListener('change', () => {
             afiliacionEventoCoopActiva = normalizarAfiliacionLocal(filtroAfi.value || 'todas');
             renderizarGrid();
@@ -1047,7 +1046,7 @@
             mostrarMensajeCoop('Selección enviada. Esperando a tu compañero...', 'success');
         });
 
-        actualizarBotonesFaccion();
+        faccionEventoCoopActiva = poblarSelectorFaccionCoop();
         renderizarFiltroAfiliacion();
         renderizarGrid();
         actualizarEstado();

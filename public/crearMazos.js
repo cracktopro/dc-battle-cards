@@ -6,7 +6,7 @@ document.addEventListener('DOMContentLoaded', async function () {
 const cartasSeleccionadas = new Set();
 /** id índice colección → carta con apariencia para este mazo nuevo */
 const cartasVistaSeleccionCrearMazo = new Map();
-let faccionVistaActiva = 'H';
+let faccionVistaActiva = '';
 let mapaDatosCartasCatalogo = null;
 let afiliacionFiltroActiva = 'todas';
 let skillClassFiltroActiva = 'todas';
@@ -25,20 +25,11 @@ function obtenerCartaDisplayCrearMazo(idCarta, usuario) {
 }
 
 function normalizarFaccion(valor) {
-    if (!valor) {
-        return '';
-    }
-
-    const faccion = String(valor).trim().toUpperCase();
-    if (faccion === 'H' || faccion === 'V') {
-        return faccion;
-    }
-
-    return '';
+    return window.DCFiltrosCartas?.normalizarFaccionValor(valor) || '';
 }
 
 function obtenerEtiquetaFaccion(faccion) {
-    return faccion === 'H' ? 'Héroes' : 'Villanos';
+    return window.DCFiltrosCartas?.resolverEtiquetaFaccion(faccion) || faccion;
 }
 
 function normalizarAfiliacion(afi) {
@@ -461,10 +452,21 @@ function actualizarIndicadorFaccion(usuario) {
     indicador.textContent = `Vista actual: ${obtenerEtiquetaFaccion(faccionVistaActiva)}`;
 }
 
+function sincronizarSelectorFaccionCrearMazo(usuario) {
+    const selector = document.getElementById('selector-faccion-crear-mazo');
+    if (!selector || !window.DCFiltrosCartas) {
+        return;
+    }
+    const cartas = (usuario?.cartas || []).filter(cartaEsElegibleCrearMazo);
+    faccionVistaActiva = window.DCFiltrosCartas.poblarSelectorFaccion(
+        selector,
+        cartas,
+        faccionVistaActiva
+    );
+}
+
 function actualizarPestanas() {
-    document.querySelectorAll('.faccion-tab').forEach(tab => {
-        tab.classList.toggle('active', tab.dataset.faccion === faccionVistaActiva);
-    });
+    sincronizarSelectorFaccionCrearMazo(JSON.parse(localStorage.getItem('usuario') || 'null'));
 }
 
 function aplicarFiltroFaccion(usuario) {
@@ -484,7 +486,9 @@ function aplicarFiltroFaccion(usuario) {
                 ? window.DCSeleccionCartaApariencia.cartaCoincideBusqueda(cartaDatos, busquedaCrearMazo)
                 : String(cartaDatos?.Nombre || '').toLowerCase().includes(busquedaCrearMazo));
         const coincideSkillClass = window.DCFiltrosCartas?.cartaCoincideSkillClass(cartaDatos, skillClassFiltroActiva) ?? true;
-        const debeMostrarse = faccionCarta === faccionVistaActiva && coincideAfiliacion && coincideBusqueda && coincideSkillClass;
+        const coincideFaccion = window.DCFiltrosCartas?.cartaCoincideFaccion(usuario.cartas[idCarta], faccionVistaActiva)
+            ?? faccionCarta === faccionVistaActiva;
+        const debeMostrarse = coincideFaccion && coincideAfiliacion && coincideBusqueda && coincideSkillClass;
 
         cartaDiv.classList.toggle('oculta-por-faccion', !debeMostrarse);
 
@@ -840,8 +844,9 @@ function configurarEventos() {
         btnDeseleccionarTodo.onclick = deseleccionarTodasLasCartas;
     }
 
-    document.querySelectorAll('.faccion-tab').forEach(tab => {
-        tab.addEventListener('click', () => cambiarVistaFaccion(tab.dataset.faccion));
+    const selectorFaccion = document.getElementById('selector-faccion-crear-mazo');
+    selectorFaccion?.addEventListener('change', () => {
+        cambiarVistaFaccion(selectorFaccion.value);
     });
 }
 
@@ -944,7 +949,7 @@ function mostrarMensaje(mensaje, tipo = 'warning') {
 
 function resetFormulario() {
     cartasSeleccionadas.clear();
-    faccionVistaActiva = 'H';
+    faccionVistaActiva = '';
     const botonGuardar = document.getElementById('guardar-mazo');
     if (botonGuardar) {
         botonGuardar.disabled = true;

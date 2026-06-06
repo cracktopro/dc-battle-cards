@@ -1,4 +1,4 @@
-let faccionColeccionActiva = 'H';
+let faccionColeccionActiva = '';
 /** `'cartas'` | `'sobres'` */
 let vistaColeccionActiva = 'cartas';
 let todasLasCartasCatalogo = [];
@@ -38,7 +38,12 @@ function obtenerClaveCartaUsuario(carta) {
 }
 
 function obtenerFaccionCarta(carta) {
-    return normalizarFaccion(carta?.faccion || carta?.Faccion || '');
+    return window.DCFiltrosCartas?.obtenerFaccionCarta(carta)
+        || normalizarFaccion(carta?.faccion || carta?.Faccion || '');
+}
+
+function etiquetaFaccionColeccion(valor) {
+    return window.DCFiltrosCartas?.resolverEtiquetaFaccion(valor) || valor;
 }
 
 function obtenerAfiliacionCarta(carta) {
@@ -54,9 +59,18 @@ function obtenerAfiliacionesCarta(carta) {
 }
 
 function configurarTabsColeccion() {
+    const btnCartas = document.getElementById('tab-coleccion-cartas');
     const btnSobres = document.getElementById('tab-coleccion-sobres');
-    const btnHeroes = document.getElementById('tab-coleccion-heroes');
-    const btnVillanos = document.getElementById('tab-coleccion-villanos');
+
+    btnCartas?.addEventListener('click', function () {
+        vistaColeccionActiva = 'cartas';
+        actualizarTabsColeccion();
+        actualizarIndicadorNuevoSobres();
+        actualizarSelectorFaccionColeccion();
+        actualizarSelectorAfiliacionColeccion();
+        actualizarVisibilidadFiltrosCartas();
+        renderizarVistaColeccion();
+    });
 
     btnSobres?.addEventListener('click', function () {
         vistaColeccionActiva = 'sobres';
@@ -65,26 +79,6 @@ function configurarTabsColeccion() {
         }
         actualizarTabsColeccion();
         actualizarIndicadorNuevoSobres();
-        actualizarVisibilidadFiltrosCartas();
-        renderizarVistaColeccion();
-    });
-
-    btnHeroes?.addEventListener('click', function () {
-        vistaColeccionActiva = 'cartas';
-        faccionColeccionActiva = 'H';
-        actualizarTabsColeccion();
-        actualizarIndicadorNuevoSobres();
-        actualizarSelectorAfiliacionColeccion();
-        actualizarVisibilidadFiltrosCartas();
-        renderizarVistaColeccion();
-    });
-
-    btnVillanos?.addEventListener('click', function () {
-        vistaColeccionActiva = 'cartas';
-        faccionColeccionActiva = 'V';
-        actualizarTabsColeccion();
-        actualizarIndicadorNuevoSobres();
-        actualizarSelectorAfiliacionColeccion();
         actualizarVisibilidadFiltrosCartas();
         renderizarVistaColeccion();
     });
@@ -115,9 +109,18 @@ function actualizarIndicadorNuevoSobres() {
 
 function configurarFiltrosColeccion() {
     const inputBusqueda = document.getElementById('busqueda-coleccion');
+    const selectorFaccion = document.getElementById('selector-faccion-coleccion');
     const selectorAfiliacion = document.getElementById('selector-afiliacion-coleccion');
     const selectorSkill = document.getElementById('selector-skill-class-coleccion');
     const toggleOrdenPoder = document.getElementById('ordenar-poder-coleccion');
+
+    selectorFaccion?.addEventListener('change', function () {
+        faccionColeccionActiva = this.value;
+        afiliacionFiltroActiva = 'todas';
+        actualizarTabsColeccion();
+        actualizarSelectorAfiliacionColeccion();
+        renderizarVistaColeccion();
+    });
 
     inputBusqueda?.addEventListener('input', function () {
         busquedaColeccion = String(this.value || '').trim().toLowerCase();
@@ -146,17 +149,13 @@ function configurarFiltrosColeccion() {
 }
 
 function actualizarTabsColeccion() {
+    document.getElementById('tab-coleccion-cartas')?.classList.toggle(
+        'active',
+        vistaColeccionActiva === 'cartas'
+    );
     document.getElementById('tab-coleccion-sobres')?.classList.toggle(
         'active',
         vistaColeccionActiva === 'sobres'
-    );
-    document.getElementById('tab-coleccion-heroes')?.classList.toggle(
-        'active',
-        vistaColeccionActiva === 'cartas' && faccionColeccionActiva === 'H'
-    );
-    document.getElementById('tab-coleccion-villanos')?.classList.toggle(
-        'active',
-        vistaColeccionActiva === 'cartas' && faccionColeccionActiva === 'V'
     );
 
     const indicador = document.getElementById('faccion-coleccion-actual');
@@ -164,9 +163,21 @@ function actualizarTabsColeccion() {
         if (vistaColeccionActiva === 'sobres') {
             indicador.textContent = 'Vista actual: Sobres de cartas';
         } else {
-            indicador.textContent = `Vista actual: ${faccionColeccionActiva === 'H' ? 'Héroes' : 'Villanos'}`;
+            indicador.textContent = `Vista actual: ${etiquetaFaccionColeccion(faccionColeccionActiva)}`;
         }
     }
+}
+
+function actualizarSelectorFaccionColeccion() {
+    const selector = document.getElementById('selector-faccion-coleccion');
+    if (!selector || !window.DCFiltrosCartas) {
+        return;
+    }
+    faccionColeccionActiva = window.DCFiltrosCartas.poblarSelectorFaccion(
+        selector,
+        todasLasCartasCatalogo,
+        faccionColeccionActiva
+    );
 }
 
 function actualizarVisibilidadFiltrosCartas() {
@@ -291,6 +302,7 @@ async function cargarColeccion() {
         }));
 
         actualizarTextosProgresoColeccion();
+        actualizarSelectorFaccionColeccion();
         actualizarTabsColeccion();
         actualizarIndicadorNuevoSobres();
         actualizarVisibilidadFiltrosCartas();
@@ -351,7 +363,7 @@ function actualizarSelectorAfiliacionColeccion() {
 
     const mapa = new Map();
     todasLasCartasCatalogo
-        .filter(carta => obtenerFaccionCarta(carta) === faccionColeccionActiva)
+        .filter(carta => window.DCFiltrosCartas?.cartaCoincideFaccion(carta, faccionColeccionActiva) ?? obtenerFaccionCarta(carta) === faccionColeccionActiva)
         .forEach(carta => {
             obtenerAfiliacionesCarta(carta).forEach(afi => {
                 const key = normalizarAfiliacion(afi);
@@ -497,7 +509,7 @@ function renderizarGrillaCartasColeccion() {
     contenedorCartas.innerHTML = '';
 
     const cartasFiltradas = [...todasLasCartasCatalogo]
-        .filter(carta => obtenerFaccionCarta(carta) === faccionColeccionActiva)
+        .filter(carta => window.DCFiltrosCartas?.cartaCoincideFaccion(carta, faccionColeccionActiva) ?? obtenerFaccionCarta(carta) === faccionColeccionActiva)
         .filter(carta => {
             if (!busquedaColeccion) {
                 return true;

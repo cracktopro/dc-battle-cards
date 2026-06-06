@@ -1,0 +1,29 @@
+/**
+ * Placeholder mientras la imagen de carta está en cola (lazy) o precargando.
+ * Mantiene ratio y bordes; no altera dimensiones de .carta / .carta-mini.
+ */
+.carta.carta--imagen-pendiente,
+.carta-mini.carta--imagen-pendiente {
+    background-color: rgba(6, 14, 32, 0.94);
+    background-image: none !important;
+}
+
+.carta.carta--imagen-pendiente > .carta-fondo,
+.carta-mini.carta--imagen-pendiente > .carta-fondo {
+    background-image: none !important;
+}
+
+.carta.carta--imagen-pendiente:not(.carta--con-holo)::after,
+.carta-mini.carta--imagen-pendiente:not(.carta--con-holo)::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(
+        135deg,
+        rgba(12, 28, 52, 0.15) 0%,
+        rgba(0, 209, 255, 0.06) 50%,
+        rgba(12, 28, 52, 0.15) 100%
+    );
+    opacity: 0.85;
+}

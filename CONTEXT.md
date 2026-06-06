@@ -70,6 +70,18 @@ Documento vivo de referencia técnica para trabajar sobre DC Battle Cards sin ro
 - `public/mejorarCartas.html` + `public/mejorarCartas.js`: mejora clásica/especial/fragmentos/destrucción.
 - `public/resources/*.xlsx`: catálogos y definición de contenido.
 
+### Fondos de vista (hub y menús)
+
+- **`body` compartido:** `css/mazos.css` y `css/jugarPartida.css` usan `resources/hud/universo.png` (mismo asset que Asaltos/Episodios; color de respaldo `#050814`).
+- **`menu.html`:** estilo inline en `body` con la misma imagen local.
+- **Tablero de partida:** `css/tablero.css` define fondos propios por partida (`resources/tableros/…`); no usa el fondo del hub.
+
+### Imágenes de cartas (`js/cartas.js`)
+
+- **`obtenerImagenCarta` / `aplicarImagenFondoCarta`:** arte en `background-image` (ratio `aspect-ratio: 6.3/8.8` en `.carta`, miniaturas 154×216 en `.carta-mini`). Redimensionar solo con CSS **no reduce** el peso descargado: el navegador baja el archivo completo de la URL.
+- **Optimización real:** `DCImagenCarta` + lazy en `aplicarImagenFondoCarta` — `IntersectionObserver` (margen 320px) aplaza la asignación de `background-image` en cartas fuera de pantalla (colección, mazos, filtros con `display:none`, rejillas largas). Precarga deduplicada por URL (`precargarImagenCartaUrl`). Placeholder `.carta--imagen-pendiente` (`css/carta-imagen-lazy.css`). Opciones: `cargaInmediata: true` o `lazy: false` (tablero, previews críticos).
+- **Holo 8★:** capas `.carta-fondo` + `.carta-holo` (`css/carta-holo.css`).
+
 ### Catálogos Excel (rutas reales)
 
 | Archivo | Uso principal |
@@ -368,18 +380,21 @@ Nunca se muestra en producción (`main` en Render).
 
 ## Filtros de búsqueda (vistas)
 
-- Núcleo de skill-class/filtros: `public/js/filtrosCartas.js`.
+- Núcleo compartido: `public/js/filtrosCartas.js` (`DCFiltrosCartas`).
+  - **Skill class:** `poblarSelectorSkillClass`, `configurarSelectorSkillClass`, `cartaCoincideSkillClass`.
+  - **Facción:** `poblarSelectorFaccion`, `configurarSelectorFaccion`, `cartaCoincideFaccion`, `obtenerFaccionesDistintasDeCartas`, `resolverEtiquetaFaccion`. Las etiquetas por código (p. ej. `H` → «Héroes») se configuran en un único mapa en ese módulo (`configurarEtiquetasFaccion`); las opciones del `<select>` se derivan de las facciones presentes en las cartas visibles, sin hardcodear H/V en cada vista.
 - Implementaciones en:
-  - `coleccion.js`
+  - `coleccion.js` — pestaña Cartas/Sobres + selector de facción en barra de filtros.
   - `crearMazos.js`
-  - `mejorarCartas.js`
-  - modales de selección en eventos/desafíos/coop.
+  - `mejorarCartas.js` (4 pestañas: mejora clásica, destruir repetidas, mejoras especiales, fragmentos).
+  - modales de selección en eventos (`jugarPartida.js`), desafíos (`desafios.js`) y coop online (`multijugadorEventosCoop.js`).
 - Criterios comunes:
   - nombre
+  - facción (selector dinámico)
   - afiliación
   - ordenar por poder
   - tipo de habilidad (`skill_class`)
-  - pestañas Héroes/Villanos.
+- Desafíos: si el camino fija facción y el jugador tiene ≥6 cartas de esa facción, el selector queda bloqueado en ese valor; si no alcanza el mínimo, se libera el selector y se muestra aviso (sin abrir el modal).
 
 ## Crear mazos (crearMazos)
 

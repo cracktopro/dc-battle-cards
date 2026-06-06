@@ -180,6 +180,152 @@
         return document.getElementById(id);
     }
 
+    /** Etiquetas opcionales por código de facción (único punto de configuración en la app). */
+    let etiquetasFaccionConfig = {
+        H: 'Héroes',
+        V: 'Villanos'
+    };
+
+    function configurarEtiquetasFaccion(mapa) {
+        if (!mapa || typeof mapa !== 'object') {
+            return;
+        }
+        etiquetasFaccionConfig = { ...etiquetasFaccionConfig, ...mapa };
+    }
+
+    function normalizarFaccionValor(valor) {
+        return String(valor ?? '').trim().toUpperCase();
+    }
+
+    function obtenerFaccionCarta(carta) {
+        return normalizarFaccionValor(carta?.faccion ?? carta?.Faccion ?? '');
+    }
+
+    function resolverEtiquetaFaccion(valor, cartaReferencia) {
+        const fac = normalizarFaccionValor(valor);
+        if (!fac) {
+            return '';
+        }
+        const fromCarta = String(
+            cartaReferencia?.faccionLabel ?? cartaReferencia?.FaccionLabel
+            ?? cartaReferencia?.faccionNombre ?? cartaReferencia?.FaccionNombre ?? ''
+        ).trim();
+        if (fromCarta) {
+            return fromCarta;
+        }
+        if (etiquetasFaccionConfig[fac]) {
+            return etiquetasFaccionConfig[fac];
+        }
+        return fac;
+    }
+
+    function obtenerFaccionesDistintasDeCartas(cartas) {
+        const mapa = new Map();
+        (Array.isArray(cartas) ? cartas : []).forEach((carta) => {
+            const valor = obtenerFaccionCarta(carta);
+            if (!valor) {
+                return;
+            }
+            if (!mapa.has(valor)) {
+                mapa.set(valor, resolverEtiquetaFaccion(valor, carta));
+            }
+        });
+        return [...mapa.entries()]
+            .sort((a, b) => String(a[1]).localeCompare(String(b[1]), undefined, { sensitivity: 'base' }))
+            .map(([valor, etiqueta]) => ({ valor, etiqueta }));
+    }
+
+    function cartaCoincideFaccion(carta, faccionActiva) {
+        const fac = normalizarFaccionValor(faccionActiva);
+        if (!fac || fac === 'TODAS') {
+            return true;
+        }
+        return obtenerFaccionCarta(carta) === fac;
+    }
+
+    /**
+     * Rellena un &lt;select&gt; con las facciones presentes en `cartas`.
+     * @returns {string} valor seleccionado
+     */
+    function poblarSelectorFaccion(selector, cartas, valorGuardado, opciones = {}) {
+        if (!selector) {
+            return normalizarFaccionValor(valorGuardado);
+        }
+        const facciones = obtenerFaccionesDistintasDeCartas(cartas);
+        const valorPrevio = normalizarFaccionValor(valorGuardado ?? selector.value);
+        const incluirTodas = Boolean(opciones.incluirTodas);
+        const faccionFijada = opciones.faccionFijada ? normalizarFaccionValor(opciones.faccionFijada) : '';
+
+        selector.innerHTML = '';
+        if (incluirTodas) {
+            const optTodas = document.createElement('option');
+            optTodas.value = 'todas';
+            optTodas.textContent = String(opciones.etiquetaTodas || 'Todas las facciones');
+            selector.appendChild(optTodas);
+        }
+
+        facciones.forEach(({ valor, etiqueta }) => {
+            const option = document.createElement('option');
+            option.value = valor;
+            option.textContent = etiqueta;
+            selector.appendChild(option);
+        });
+
+        const valoresValidos = facciones.map((f) => f.valor);
+        let valorFinal = valorPrevio;
+
+        if (faccionFijada && valoresValidos.includes(faccionFijada)) {
+            valorFinal = faccionFijada;
+        } else if (incluirTodas && String(valorGuardado || selector.value) === 'todas') {
+            valorFinal = 'todas';
+        } else if (!valoresValidos.includes(valorFinal)) {
+            const defecto = normalizarFaccionValor(opciones.valorPorDefecto);
+            valorFinal = valoresValidos.includes(defecto) ? defecto : (valoresValidos[0] || '');
+        }
+
+        if (faccionFijada && valoresValidos.includes(faccionFijada)) {
+            selector.disabled = true;
+            selector.hidden = Boolean(opciones.ocultarSiFijada);
+        } else {
+            selector.disabled = facciones.length <= 1 && !incluirTodas;
+            selector.hidden = false;
+        }
+
+        selector.value = valorFinal;
+        selector.classList.add('selector-faccion-cartas');
+        return valorFinal;
+    }
+
+    function configurarSelectorFaccion(selector, opciones = {}) {
+        if (!selector) {
+            return { repoblar: () => '' };
+        }
+        const obtenerCartas = typeof opciones.obtenerCartas === 'function'
+            ? opciones.obtenerCartas
+            : () => [];
+        const repoblar = () => poblarSelectorFaccion(
+            selector,
+            obtenerCartas(),
+            opciones.valorActual ?? selector.value,
+            {
+                incluirTodas: opciones.incluirTodas,
+                etiquetaTodas: opciones.etiquetaTodas,
+                faccionFijada: opciones.faccionFijada,
+                ocultarSiFijada: opciones.ocultarSiFijada,
+                valorPorDefecto: opciones.valorPorDefecto
+            }
+        );
+
+        selector.addEventListener('change', () => {
+            if (typeof opciones.onChange === 'function') {
+                opciones.onChange(selector.value, selector);
+            }
+        });
+
+        repoblar();
+        return { repoblar };
+    }
+
     window.DCFiltrosCartas = {
         ETIQUETAS_SKILL_CLASS,
         ORDEN_SKILL_CLASS,
@@ -189,6 +335,14 @@
         poblarSelectorSkillClass,
         configurarSelectorSkillClass,
         aplicarClaseVisualSelectSkillClass,
-        obtenerSelectorSkillClassPorId
+        obtenerSelectorSkillClassPorId,
+        configurarEtiquetasFaccion,
+        normalizarFaccionValor,
+        obtenerFaccionCarta,
+        resolverEtiquetaFaccion,
+        obtenerFaccionesDistintasDeCartas,
+        cartaCoincideFaccion,
+        poblarSelectorFaccion,
+        configurarSelectorFaccion
     };
 })();

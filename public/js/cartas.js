@@ -116,6 +116,7 @@ function quitarCapasHoloDeCarta(cartaDiv) {
     if (!cartaDiv) {
         return;
     }
+    cancelarImagenLazyCarta(cartaDiv);
     cartaDiv.querySelectorAll(':scope > .carta-fondo, :scope > .carta-holo').forEach((nodo) => nodo.remove());
     cartaDiv.classList.remove('carta--con-holo');
     delete cartaDiv.dataset.dcHoloActivo;
@@ -158,12 +159,151 @@ function insertarCapaHoloEnCarta(cartaDiv) {
     cartaDiv.insertBefore(crearCapaHoloElemento(), cartaDiv.firstChild);
 }
 
+/** Precarga deduplicada (misma URL no descarga dos veces; el caché HTTP del navegador hace el resto). */
+const _promesasPrecargaImagenCarta = new Map();
+const _estadoPrecargaImagenCarta = new Map();
+
+function precargarImagenCartaUrl(imagenUrl) {
+    const url = String(imagenUrl || '').trim();
+    if (!url || url.startsWith('data:')) {
+        return Promise.resolve(url);
+    }
+    if (_estadoPrecargaImagenCarta.get(url) === 'ok') {
+        return Promise.resolve(url);
+    }
+    if (_promesasPrecargaImagenCarta.has(url)) {
+        return _promesasPrecargaImagenCarta.get(url);
+    }
+    const promesa = new Promise((resolve) => {
+        const img = new Image();
+        if ('decoding' in img) {
+            img.decoding = 'async';
+        }
+        img.onload = () => {
+            _estadoPrecargaImagenCarta.set(url, 'ok');
+            resolve(url);
+        };
+        img.onerror = () => {
+            _estadoPrecargaImagenCarta.set(url, 'error');
+            resolve(url);
+        };
+        img.src = url;
+    }).finally(() => {
+        _promesasPrecargaImagenCarta.delete(url);
+    });
+    _promesasPrecargaImagenCarta.set(url, promesa);
+    return promesa;
+}
+
+const DC_IMAGEN_CARTA_LAZY = {
+    habilitado: true,
+    rootMargin: '320px 0px',
+    threshold: 0.01
+};
+
+const pendingLazyPorElemento = new WeakMap();
+let _observerLazyImagenCarta = null;
+
+function asegurarCssCartaImagenLazyCargado() {
+    if (typeof document === 'undefined' || document.querySelector('link[data-dc-carta-imagen-lazy-css]')) {
+        return;
+    }
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = 'css/carta-imagen-lazy.css';
+    link.dataset.dcCartaImagenLazyCss = '1';
+    document.head.appendChild(link);
+}
+
+function obtenerObserverLazyImagenCarta() {
+    if (typeof IntersectionObserver === 'undefined') {
+        return null;
+    }
+    if (!_observerLazyImagenCarta) {
+        _observerLazyImagenCarta = new IntersectionObserver((entries) => {
+            entries.forEach((entry) => {
+                if (!entry.isIntersecting) {
+                    return;
+                }
+                activarImagenLazyCarta(entry.target);
+            });
+        }, {
+            root: null,
+            rootMargin: DC_IMAGEN_CARTA_LAZY.rootMargin,
+            threshold: DC_IMAGEN_CARTA_LAZY.threshold
+        });
+    }
+    return _observerLazyImagenCarta;
+}
+
+function elementoDeberiaCargarImagenYa(cartaDiv) {
+    if (!cartaDiv || typeof cartaDiv.getBoundingClientRect !== 'function') {
+        return true;
+    }
+    const rect = cartaDiv.getBoundingClientRect();
+    const margen = 320;
+    const altoVentana = window.innerHeight || document.documentElement.clientHeight || 0;
+    const anchoVentana = window.innerWidth || document.documentElement.clientWidth || 0;
+    return rect.bottom >= -margen
+        && rect.top <= altoVentana + margen
+        && rect.right >= -margen
+        && rect.left <= anchoVentana + margen;
+}
+
+function cancelarImagenLazyCarta(cartaDiv) {
+    if (!cartaDiv) {
+        return;
+    }
+    pendingLazyPorElemento.delete(cartaDiv);
+    delete cartaDiv.dataset.dcImgLazy;
+    cartaDiv.classList.remove('carta--imagen-pendiente');
+    const obs = _observerLazyImagenCarta;
+    if (obs) {
+        obs.unobserve(cartaDiv);
+    }
+}
+
+function activarImagenLazyCarta(cartaDiv) {
+    if (!cartaDiv || !cartaDiv.dataset.dcImgLazy) {
+        return;
+    }
+    const pending = pendingLazyPorElemento.get(cartaDiv);
+    if (!pending) {
+        cancelarImagenLazyCarta(cartaDiv);
+        return;
+    }
+    pendingLazyPorElemento.delete(cartaDiv);
+    delete cartaDiv.dataset.dcImgLazy;
+    cartaDiv.classList.remove('carta--imagen-pendiente');
+    _observerLazyImagenCarta?.unobserve(cartaDiv);
+    const { carta, opciones } = pending;
+    void precargarImagenCartaUrl(opciones.imagenUrl).then(() => {
+        aplicarImagenFondoCartaDirecto(cartaDiv, carta, { ...opciones, cargaInmediata: true });
+    });
+}
+
+function programarImagenLazyCarta(cartaDiv, carta, opciones, imagenUrl) {
+    cancelarImagenLazyCarta(cartaDiv);
+    cartaDiv.classList.add('carta--imagen-pendiente');
+    cartaDiv.dataset.dcImgLazy = '1';
+    pendingLazyPorElemento.set(cartaDiv, {
+        carta,
+        opciones: { ...opciones, imagenUrl }
+    });
+    const obs = obtenerObserverLazyImagenCarta();
+    if (obs) {
+        obs.observe(cartaDiv);
+    } else {
+        activarImagenLazyCarta(cartaDiv);
+    }
+}
+
 /**
  * Imagen + holo nivel 8.
  * Por defecto conserva la maquetación existente (background en el mismo nodo).
  * modoColeccion: capa .carta-fondo + holo (solo vista colección).
  */
-function aplicarImagenFondoCarta(cartaDiv, carta, opciones = {}) {
+function aplicarImagenFondoCartaDirecto(cartaDiv, carta, opciones = {}) {
     if (!cartaDiv) {
         return;
     }
@@ -236,6 +376,36 @@ function aplicarImagenFondoCarta(cartaDiv, carta, opciones = {}) {
     cartaDiv.dataset.dcHoloImagen = imagenUrl;
 }
 
+/**
+ * Aplica la imagen de carta con carga diferida fuera del viewport (no reduce bytes descargados,
+ * pero evita peticiones simultáneas de cientos de cartas fuera de pantalla).
+ * opciones.cargaInmediata / opciones.lazy === false: fuerza carga al instante (p. ej. tablero).
+ */
+function aplicarImagenFondoCarta(cartaDiv, carta, opciones = {}) {
+    if (!cartaDiv) {
+        return;
+    }
+    const imagenUrl = opciones.imagenUrl
+        || (typeof obtenerImagenCarta === 'function' ? obtenerImagenCarta(carta) : 'img/default-image.jpg');
+    const forzarInmediato = opciones.cargaInmediata === true || opciones.lazy === false;
+    const lazyHabilitado = DC_IMAGEN_CARTA_LAZY.habilitado
+        && !forzarInmediato
+        && typeof IntersectionObserver === 'function';
+
+    if (!lazyHabilitado || elementoDeberiaCargarImagenYa(cartaDiv)) {
+        cancelarImagenLazyCarta(cartaDiv);
+        void precargarImagenCartaUrl(imagenUrl);
+        aplicarImagenFondoCartaDirecto(cartaDiv, carta, { ...opciones, imagenUrl, cargaInmediata: true });
+        return;
+    }
+
+    if (cartaDiv.dataset.dcHoloImagen === imagenUrl && cartaDiv.dataset.dcImgLazy === '1') {
+        return;
+    }
+
+    programarImagenLazyCarta(cartaDiv, carta, opciones, imagenUrl);
+}
+
 function asegurarCssCartaHoloCargado() {
     if (typeof document === 'undefined' || document.querySelector('link[data-dc-carta-holo-css]')) {
         return;
@@ -252,8 +422,23 @@ window.cartaDebeMostrarEfectoHolo = cartaDebeMostrarEfectoHolo;
 window.aplicarImagenFondoCarta = aplicarImagenFondoCarta;
 window.quitarCapasHoloDeCarta = quitarCapasHoloDeCarta;
 window.registrarImagenesCatalogoEnMemoria = registrarImagenesCatalogoEnMemoria;
+window.precargarImagenCartaUrl = precargarImagenCartaUrl;
+window.DCImagenCarta = {
+    precargar: precargarImagenCartaUrl,
+    cancelarLazy: cancelarImagenLazyCarta,
+    activarLazy: activarImagenLazyCarta,
+    configurarLazy(opciones = {}) {
+        if (typeof opciones.habilitado === 'boolean') {
+            DC_IMAGEN_CARTA_LAZY.habilitado = opciones.habilitado;
+        }
+        if (opciones.rootMargin) {
+            DC_IMAGEN_CARTA_LAZY.rootMargin = String(opciones.rootMargin);
+        }
+    }
+};
 
 asegurarCssCartaHoloCargado();
+asegurarCssCartaImagenLazyCargado();
 
 function normalizarTextoHabilidad(valor) {
     return String(valor || '').trim();

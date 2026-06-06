@@ -53,7 +53,7 @@ let seleccionCartasDesafio = new Set();
 let cartasVistaSeleccionDesafio = new Map();
 let mapaCatalogoSeleccionDesafio = null;
 let busquedaSeleccionDesafio = '';
-let faccionFiltroActiva = 'H';
+let faccionFiltroActiva = '';
 
 function obtenerCartaDisplaySeleccionDesafio(item) {
     if (cartasVistaSeleccionDesafio.has(item.index)) {
@@ -668,12 +668,46 @@ function crearBarraSaludElemento(carta) {
     return barraSaludContenedor;
 }
 
+function obtenerCartasParaSelectorFaccionDesafio() {
+    return (usuarioCartasSeleccion || []).map((item) => item.carta);
+}
+
+function etiquetaFaccionDesafio(valor) {
+    return window.DCFiltrosCartas?.resolverEtiquetaFaccion(valor) || valor;
+}
+
+function alCambiarFaccionDesafio() {
+    if (faccionFijadaModalDesafio && faccionFiltroActiva !== faccionFijadaModalDesafio) {
+        return;
+    }
+    afiliacionFiltroActiva = 'todas';
+    skillClassFiltroDesafio = 'todas';
+    renderizarFiltroAfiliacion();
+    sincronizarFiltroSkillClassDesafio();
+    renderizarCartasSeleccionDesafio();
+}
+
+function poblarSelectorFaccionDesafio() {
+    const selector = document.getElementById('filtro-faccion-desafio');
+    if (!selector || !window.DCFiltrosCartas) {
+        return faccionFiltroActiva;
+    }
+    return window.DCFiltrosCartas.poblarSelectorFaccion(
+        selector,
+        obtenerCartasParaSelectorFaccionDesafio(),
+        faccionFiltroActiva,
+        {
+            faccionFijada: faccionFijadaModalDesafio,
+            ocultarSiFijada: false
+        }
+    );
+}
+
 function configurarModalSeleccion() {
     const cancelarBtn = document.getElementById('cancelar-desafio-btn');
     const confirmarBtn = document.getElementById('confirmar-desafio-btn');
     const filtroAfi = document.getElementById('filtro-afiliacion-desafio');
-    const btnH = document.getElementById('filtro-faccion-h');
-    const btnV = document.getElementById('filtro-faccion-v');
+    const filtroFaccion = document.getElementById('filtro-faccion-desafio');
 
     cancelarBtn.onclick = cerrarModalSeleccionDesafio;
     confirmarBtn.onclick = confirmarSeleccionDesafio;
@@ -682,6 +716,17 @@ function configurarModalSeleccion() {
         afiliacionFiltroActiva = normalizarAfiliacion(filtroAfi.value || 'todas');
         renderizarCartasSeleccionDesafio();
     };
+
+    if (filtroFaccion) {
+        filtroFaccion.addEventListener('change', () => {
+            if (faccionFijadaModalDesafio && filtroFaccion.value !== faccionFijadaModalDesafio) {
+                filtroFaccion.value = faccionFijadaModalDesafio;
+                return;
+            }
+            faccionFiltroActiva = filtroFaccion.value;
+            alCambiarFaccionDesafio();
+        });
+    }
 
     const filtroSkill = document.getElementById('filtro-skill-class-desafio');
     if (filtroSkill && window.DCFiltrosCartas) {
@@ -701,28 +746,6 @@ function configurarModalSeleccion() {
             renderizarCartasSeleccionDesafio();
         });
     }
-
-    btnH.onclick = () => {
-        if (faccionFijadaModalDesafio && faccionFijadaModalDesafio !== 'H') return;
-        faccionFiltroActiva = 'H';
-        afiliacionFiltroActiva = 'todas';
-        skillClassFiltroDesafio = 'todas';
-        actualizarBotonesFaccion();
-        renderizarFiltroAfiliacion();
-        sincronizarFiltroSkillClassDesafio();
-        renderizarCartasSeleccionDesafio();
-    };
-
-    btnV.onclick = () => {
-        if (faccionFijadaModalDesafio && faccionFijadaModalDesafio !== 'V') return;
-        faccionFiltroActiva = 'V';
-        afiliacionFiltroActiva = 'todas';
-        skillClassFiltroDesafio = 'todas';
-        actualizarBotonesFaccion();
-        renderizarFiltroAfiliacion();
-        sincronizarFiltroSkillClassDesafio();
-        renderizarCartasSeleccionDesafio();
-    };
 }
 
 function sincronizarFiltroSkillClassDesafio() {
@@ -733,24 +756,12 @@ function sincronizarFiltroSkillClassDesafio() {
     skillClassFiltroDesafio = window.DCFiltrosCartas.poblarSelectorSkillClass(filtro, skillClassFiltroDesafio);
 }
 
-function actualizarBotonesFaccion() {
-    document.getElementById('filtro-faccion-h').classList.toggle('active', faccionFiltroActiva === 'H');
-    document.getElementById('filtro-faccion-v').classList.toggle('active', faccionFiltroActiva === 'V');
-}
-
-function actualizarEstadoSeleccion() {
-    const estado = document.getElementById('estado-seleccion-desafio');
-    const confirmarBtn = document.getElementById('confirmar-desafio-btn');
-    estado.textContent = `Seleccionadas: ${seleccionCartasDesafio.size} / 6`;
-    confirmarBtn.disabled = seleccionCartasDesafio.size !== 6;
-}
-
 function renderizarFiltroAfiliacion() {
     const filtro = document.getElementById('filtro-afiliacion-desafio');
     const mapa = new Map();
 
     usuarioCartasSeleccion
-        .filter(item => normalizarFaccion(item.carta.faccion) === faccionFiltroActiva)
+        .filter(item => window.DCFiltrosCartas?.cartaCoincideFaccion(item.carta, faccionFiltroActiva) ?? normalizarFaccion(item.carta.faccion) === faccionFiltroActiva)
         .forEach(item => {
             obtenerAfiliacionesCarta(item.carta).forEach(afi => {
                 const key = normalizarAfiliacion(afi);
@@ -778,12 +789,19 @@ function renderizarFiltroAfiliacion() {
     filtro.value = 'todas';
 }
 
+function actualizarEstadoSeleccion() {
+    const estado = document.getElementById('estado-seleccion-desafio');
+    const confirmarBtn = document.getElementById('confirmar-desafio-btn');
+    estado.textContent = `Seleccionadas: ${seleccionCartasDesafio.size} / 6`;
+    confirmarBtn.disabled = seleccionCartasDesafio.size !== 6;
+}
+
 function renderizarCartasSeleccionDesafio() {
     const grid = document.getElementById('cartas-desafio-grid');
     grid.innerHTML = '';
 
     const cartasFiltradas = usuarioCartasSeleccion
-        .filter(item => normalizarFaccion(item.carta.faccion) === faccionFiltroActiva)
+        .filter(item => window.DCFiltrosCartas?.cartaCoincideFaccion(item.carta, faccionFiltroActiva) ?? normalizarFaccion(item.carta.faccion) === faccionFiltroActiva)
         .filter(item => {
             if (afiliacionFiltroActiva === 'todas') {
                 return true;
@@ -985,22 +1003,16 @@ async function abrirModalSeleccionDesafio(desafio) {
         inputBusqueda.value = '';
     }
     sincronizarFiltroSkillClassDesafio();
-    const tabsFaccion = document.getElementById('filtro-faccion-tabs-desafio');
-    if (tabsFaccion) {
-        tabsFaccion.style.display = 'none';
-    }
-    actualizarBotonesFaccion();
+    faccionFiltroActiva = poblarSelectorFaccionDesafio();
     renderizarFiltroAfiliacion();
     const disponiblesPorFaccion = usuarioCartasSeleccion.filter(
-        item => normalizarFaccion(item.carta.faccion) === faccionFiltroActiva
+        item => window.DCFiltrosCartas?.cartaCoincideFaccion(item.carta, faccionFiltroActiva) ?? normalizarFaccion(item.carta.faccion) === faccionFiltroActiva
     );
     if (disponiblesPorFaccion.length < 6) {
-        if (tabsFaccion) {
-            tabsFaccion.style.display = '';
-        }
         faccionFijadaModalDesafio = null;
+        faccionFiltroActiva = poblarSelectorFaccionDesafio();
         mostrarMensaje(
-            `Necesitas al menos 6 cartas ${faccionFiltroActiva === 'H' ? 'de héroe' : 'de villano'} para este desafío.`,
+            `Necesitas al menos 6 cartas de ${etiquetaFaccionDesafio(faccionFiltroActiva)} para este desafío.`,
             'warning'
         );
         return;
@@ -1013,10 +1025,6 @@ async function abrirModalSeleccionDesafio(desafio) {
 
 function cerrarModalSeleccionDesafio() {
     document.getElementById('modal-seleccion-desafio').style.display = 'none';
-    const tabsFaccion = document.getElementById('filtro-faccion-tabs-desafio');
-    if (tabsFaccion) {
-        tabsFaccion.style.display = '';
-    }
     desafioPendiente = null;
     faccionFijadaModalDesafio = null;
     seleccionCartasDesafio.clear();
