@@ -2982,6 +2982,34 @@
         });
     }
 
+    let coopFallbackResultadoTimer = null;
+
+    function emitirResultadoCoopFinPartida(ganaronJugadores, motivo) {
+        let emitido = false;
+        if (typeof window.emitMultiplayerCoopResultado === 'function') {
+            window.emitMultiplayerCoopResultado({
+                sessionId: SESSION_ID,
+                ganaronJugadores: Boolean(ganaronJugadores),
+                motivo: String(motivo || 'fin_partida')
+            });
+            emitido = true;
+        }
+        if (!emitido) {
+            mostrarFin(Boolean(ganaronJugadores));
+            return;
+        }
+        if (coopFallbackResultadoTimer) {
+            clearTimeout(coopFallbackResultadoTimer);
+            coopFallbackResultadoTimer = null;
+        }
+        coopFallbackResultadoTimer = setTimeout(() => {
+            coopFallbackResultadoTimer = null;
+            if (!coopRecompensasProcesadas && !coopRecompensaEnCurso) {
+                mostrarFin(Boolean(ganaronJugadores));
+            }
+        }, 4500);
+    }
+
     function verificarFinPartidaCoop() {
         if (partidaFinalizada) return false;
         const pendienteBoss = snapshot.bossPendienteCoop ? 1 : 0;
@@ -2992,26 +3020,12 @@
         const quedanB = indicesAtacantesVivos(snapshot.cartasEnJuegoB).length + (snapshot.mazoB?.length || 0);
         if (quedanBot <= 0) {
             partidaFinalizada = true;
-            mostrarFin(true);
-            if (typeof window.emitMultiplayerCoopResultado === 'function') {
-                window.emitMultiplayerCoopResultado({
-                    sessionId: SESSION_ID,
-                    ganaronJugadores: true,
-                    motivo: 'sin_cartas_bot'
-                });
-            }
+            emitirResultadoCoopFinPartida(true, 'sin_cartas_bot');
             return true;
         }
         if (quedanA <= 0 && quedanB <= 0) {
             partidaFinalizada = true;
-            mostrarFin(false);
-            if (typeof window.emitMultiplayerCoopResultado === 'function') {
-                window.emitMultiplayerCoopResultado({
-                    sessionId: SESSION_ID,
-                    ganaronJugadores: false,
-                    motivo: 'sin_cartas_jugadores'
-                });
-            }
+            emitirResultadoCoopFinPartida(false, 'sin_cartas_jugadores');
             return true;
         }
         return false;
@@ -3032,6 +3046,7 @@
 
     /** Marca local que evita aplicar las recompensas más de una vez por sesión. */
     let coopRecompensasProcesadas = false;
+    let coopRecompensaEnCurso = false;
     let coopMisionOnlinePartidaRegistrada = false;
 
     function coopNormalizarNombre(nombre) {
@@ -3394,21 +3409,20 @@
         if (modal) modal.style.display = 'flex';
 
         const recompensasContainer = document.getElementById('coop-recompensas-container');
-        if (recompensasContainer) recompensasContainer.innerHTML = '';
 
         if (!ganaron || !recompensasContainer) {
+            if (recompensasContainer) recompensasContainer.innerHTML = '';
             /** Derrota: solo misión online (sin recompensas que pisen el guardado de misiones). */
             void registrarMisionOnlinePartidaCoopCompletada();
             return;
         }
 
-        if (coopRecompensasProcesadas) {
-            const aviso = document.createElement('p');
-            aviso.classList.add('texto-recompensa-estado');
-            aviso.textContent = 'Las recompensas de esta victoria ya se han aplicado.';
-            recompensasContainer.appendChild(aviso);
+        if (coopRecompensasProcesadas || coopRecompensaEnCurso) {
             return;
         }
+
+        recompensasContainer.innerHTML = '';
+        coopRecompensaEnCurso = true;
         coopRecompensasProcesadas = true;
 
         const botonVolver = document.getElementById('boton-volver-multi-coop');
@@ -3490,6 +3504,7 @@
                  */
                 coopRecompensasProcesadas = false;
             } finally {
+                coopRecompensaEnCurso = false;
                 if (botonVolver) botonVolver.disabled = false;
             }
         })();
@@ -4224,6 +4239,10 @@
     window.addEventListener('dc:coop-resultado', (ev) => {
         const det = ev.detail || {};
         if (String(det.sessionId || '') !== SESSION_ID) return;
+        if (coopFallbackResultadoTimer) {
+            clearTimeout(coopFallbackResultadoTimer);
+            coopFallbackResultadoTimer = null;
+        }
         partidaFinalizada = true;
         mostrarFin(Boolean(det.ganaronJugadores));
     });
