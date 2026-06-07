@@ -213,15 +213,37 @@
                         data.commit || 'Despliegue completado',
                         data.archivos
                     );
+                    toastMsg(`Push a ${data.rama || 'main'} completado. Esperando deploy en Render…`);
+                }
+
+                let htmlResultado = data.sinCambios
+                    ? 'No había cambios nuevos.'
+                    : `Push completado en <strong>${data.rama}</strong>.`
+                        + (data.commit ? `<br><code>${data.commit}</code>` : '');
+
+                if (!data.sinCambios && data.commitSha && window.DCEditorDeployMonitor) {
+                    if (estado) estado.textContent = 'Esperando deploy en Render (producción)…';
+                    const deployResult = await window.DCEditorDeployMonitor.esperarDeploy({
+                        commitEsperado: data.commitSha,
+                        destino: 'prod',
+                        onProgreso: (p) => {
+                            if (estado) estado.textContent = p.mensaje;
+                        },
+                    });
+                    htmlResultado += window.DCEditorDeployMonitor.mensajeResultadoMonitor(deployResult, 'prod');
+                    if (deployResult?.ok) {
+                        toastMsg('Deploy en producción completado.');
+                    } else if (deployResult?.motivo === 'timeout') {
+                        toastMsg('Tiempo de espera agotado; el deploy puede seguir en Render.', true);
+                    }
+                } else if (!data.sinCambios) {
                     toastMsg(`Desplegado a ${data.rama || 'main'}.`);
                 }
+
                 if (resultado) {
                     resultado.hidden = false;
                     resultado.className = 'editor-git-push-resultado editor-git-push-resultado--ok';
-                    resultado.innerHTML = data.sinCambios
-                        ? 'No había cambios nuevos.'
-                        : `Despliegue completado en <strong>${data.rama}</strong>.`
-                            + (data.commit ? `<br><code>${data.commit}</code>` : '');
+                    resultado.innerHTML = htmlResultado;
                 }
                 await cargarResumen();
             } catch (err) {
@@ -260,7 +282,6 @@
             await window.DCEditorGitPush?.montarEnDespliegue?.({
                 toolbar: $('despliegue-toolbar'),
                 onSuccess: async () => {
-                    toastMsg('Cambios subidos a GitHub (dev).');
                     await cargarResumen();
                 },
             });

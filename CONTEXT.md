@@ -272,7 +272,7 @@ Nunca se muestra en producción (`main` en Render).
 
 **Registro de sesión:** `editorSessionLog.js` → `localStorage` `dc_editor_session_log_v1` (guardados; push dev se registra desde Despliegue).
 
-**Despliegue (`despliegue.html`):** registro de sesión + lista archivos pendientes **→ dev** (GitHub) y **→ main** (producción). **Subir a GitHub** → push unificado a `dev`. **Subir a Producción** → `POST /api/editors/despliegue/produccion` copia rutas de editores a `main`. Requiere `GIT_PUSH_TOKEN` y entorno Render `dev`.
+**Despliegue (`despliegue.html`):** registro de sesión + lista archivos pendientes **→ dev** (GitHub) y **→ main** (producción). **Subir a GitHub** → push unificado a `dev`. Tras el push, la UI **espera el deploy en Render (dev)** consultando el commit en ejecución (`GET /api/public/deploy-version`) hasta que coincida con el commit subido (máx. ~15 min, intervalo ~8 s). **Subir a Producción** → `POST /api/editors/despliegue/produccion` copia rutas de editores a `main`; si está definida `RENDER_PROD_PUBLIC_URL`, también espera el deploy del servicio de producción (consulta vía proxy `GET /api/editors/deploy/version?destino=prod`). Requiere `GIT_PUSH_TOKEN` y entorno Render `dev`.
 
 **Flujo guardar → GitHub → producción:**
 1. **Guardar** en cada editor → disco del servidor (API PUT).
@@ -285,7 +285,7 @@ Nunca se muestra en producción (`main` en Render).
 
 **Editor desafíos (`editarDesafios.html`):** columnas Excel en orden fijo (`ID_desafio`, `faccion`, `nombre`, `Descripción`, `dificultad`, `enemigo1`…`enemigo6`, `boss`, `mejora`, `mejora_especial`, `puntos`, `cartas`, `tablero`). UI: selector H/V; rejilla 6 enemigos + boss; slot recompensa → `cartas`; selector tablero (modal `/api/tableros`). Botón **+ Nuevo** (`#editar-desafios-nuevo`).
 
-**Módulos:** `lib/editorXlsxSeguro.js` (escritura segura servidor), `lib/editorGitPush.js` (servidor), `public/js/editorGuardadoSeguro.js` (confirmaciones cliente), `public/js/editorGitPush.js` (modal push dev), `public/js/editorDevNav.js` (nav + guardias), `public/js/editorSessionLog.js` (registro sesión), `public/js/despliegue.js`, `public/js/editorCartaPicker.js`, `public/js/editarDesafiosModel.js`, `public/js/editarDesafios.js`, `public/js/editarAsaltosModel.js`, `public/js/editarAsaltos.js`, `public/js/editarEventosModel.js`, `public/js/editarEventos.js`, `public/js/editarEventosCoopModel.js`, `public/js/editarEventosCoop.js`, `public/js/editarSkinsModel.js`, `public/js/editarSkins.js`.
+**Módulos:** `lib/editorXlsxSeguro.js` (escritura segura servidor), `lib/renderDeployMonitor.js` (versión/commit desplegado + consulta prod), `lib/editorGitPush.js` (servidor), `public/js/editorGuardadoSeguro.js` (confirmaciones cliente), `public/js/editorDeployMonitor.js` (espera deploy Render en UI), `public/js/editorGitPush.js` (modal push dev), `public/js/editorDevNav.js` (nav + guardias), `public/js/editorSessionLog.js` (registro sesión), `public/js/despliegue.js`, `public/js/editorCartaPicker.js`, …
 
 **Referencias carta con skin (Excel y editores PvE):** en celdas de enemigos/recompensas/asaltos puede guardarse `NombreParent[skin_id]` (misma convención que el juego en `skinsCartas.js`). En **juego** (no solo editores): eventos offline, eventos coop online y episodios resuelven la apariencia en paneles (`resolverCartaEnemigoVistaSync`), combate (`resolverFilaCatalogoConSkin` / servidor) y desbloquean recompensas `Parent[n]` como asaltos. `editorCartaPicker.js` resuelve miniaturas con skin; con `permitirSkin: true` tras elegir carta abre `abrirModalAparienciaEditor` (todas las apariencias del parent). Validación cliente/servidor vía `validarReferenciaCartaEnCatalogo`.
 
@@ -598,13 +598,16 @@ Nunca se muestra en producción (`main` en Render).
 - Git push editores (compartido):
   - `GET /api/editors/entorno` → `{ esDev, mostrarMenuDevTools, editoresHabilitados, rama, ramaDevRender }`
   - `GET /api/editors/git-push/pendiente?alcance=todos` → `{ pendiente, motivo?, archivos? }` (todos los editores; default `todos`)
-  - `POST /api/editors/git-push/dev` body `{ mensaje?, token? }` — commit+push unificado de todos los archivos de editor a `dev` (valida mínimos de filas en Excel antes de commit)
+  - `GET /api/public/deploy-version` → `{ commit, commitCorto, rama, url, esRender, ts }` (sin auth; para detectar fin de deploy)
+  - `GET /api/editors/deploy/config` → `{ urlDev, urlProd, intervaloMs, timeoutMs, monitorDevDisponible, monitorProdDisponible, … }`
+  - `GET /api/editors/deploy/version?destino=dev|prod` — versión en ejecución (prod vía proxy server-side a `RENDER_PROD_PUBLIC_URL`)
+  - `POST /api/editors/git-push/dev` body `{ mensaje?, token? }` — commit+push unificado; respuesta incluye `commitSha` para monitor
   - `GET /api/editors/keepalive` — ping ligero para mantener activo el servicio Render durante edición
   - `GET /api/editors/git-push/estado` → `{ habilitado, rama, requiereTokenCliente, ramaDevRender }`
   - Endpoints legacy por editor (`POST /api/*-editor/git-push`) siguen existiendo pero la UI usa solo el push unificado
   - `GET /api/editors/despliegue/habilitado` · `GET /api/editors/despliegue/resumen` · `POST /api/editors/despliegue/produccion` body `{ mensaje?, token?, archivos? }` — push archivos de editor a rama `main`
-  - Lógica servidor: `lib/editorGitPush.js`, `lib/editorXlsxSeguro.js`. Env: `GIT_PUSH_TOKEN` (PAT GitHub), opcional `GIT_PUSH_BRANCH`, `GIT_PUSH_BRANCH_PROD`, `GIT_PUSH_PROD_ENABLED`, `GIT_PUSH_SECRET`, `GIT_PUSH_REPO_URL`, `GIT_USER_NAME`, `GIT_USER_EMAIL`, `EDITOR_XLSX_MIN_RATIO`, `CARTAS_EDITOR_MIN_FILAS`, …
-  - UI cliente: `editorGuardadoSeguro.js`, `editorGitPush.js`, `editorDevNav.js`, `editorSessionLog.js`, `despliegue.js`; menú dev en `cartas.js` (`DEV_TOOLS_MENU_EMAILS`)
+  - Lógica servidor: `lib/editorGitPush.js`, `lib/editorXlsxSeguro.js`, `lib/renderDeployMonitor.js`. Env: `GIT_PUSH_TOKEN` (PAT GitHub), opcional `GIT_PUSH_BRANCH`, `GIT_PUSH_BRANCH_PROD`, `GIT_PUSH_PROD_ENABLED`, `GIT_PUSH_SECRET`, `GIT_PUSH_REPO_URL`, `GIT_USER_NAME`, `GIT_USER_EMAIL`, `RENDER_PROD_PUBLIC_URL`, `DEPLOY_MONITOR_INTERVAL_MS`, `DEPLOY_MONITOR_TIMEOUT_MS`, …
+  - UI cliente: `editorGuardadoSeguro.js`, `editorDeployMonitor.js`, `editorGitPush.js`, `editorDevNav.js`, `editorSessionLog.js`, `despliegue.js`; menú dev en `cartas.js` (`DEV_TOOLS_MENU_EMAILS`)
 - `POST /admin/users/list`, `/admin/user/get`, `/admin/user/update`
   - Solo cuentas admin (`opciones.js` / `esEmailAdmin` en `server.js`); mismo control de sync que `/update-user`
 

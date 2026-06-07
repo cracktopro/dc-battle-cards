@@ -13,4 +13,6 @@ services:
     #   GIT_PUSH_BRANCH  — opcional; por defecto usa RENDER_GIT_BRANCH (dev)
     #   GIT_PUSH_SECRET  — opcional; si se define, el modal pide token de autorización
     #   GIT_USER_NAME / GIT_USER_EMAIL — opcional; identidad del commit
+    #   RENDER_PROD_PUBLIC_URL — URL pública del servicio Render de producción (main);
+    #                            permite avisar en Despliegue cuando termina el deploy de prod.
     # Producción (main): no defines EPISODIOS_EDITOR ni GIT_PUSH_TOKEN → editores deshabilitados.

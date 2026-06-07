@@ -103,6 +103,17 @@
         setProgreso(false);
     }
 
+    async function esperarDeployTrasPush(data, destino, onProgreso) {
+        if (!data || data.sinCambios || !data.commitSha || !window.DCEditorDeployMonitor) {
+            return null;
+        }
+        return window.DCEditorDeployMonitor.esperarDeploy({
+            commitEsperado: data.commitSha,
+            destino,
+            onProgreso,
+        });
+    }
+
     async function abrirModal(opciones) {
         const dialog = asegurarDialogo();
         gitPushEstado = gitPushEstado || await cargarEstado();
@@ -141,22 +152,35 @@
                 if (!res.ok) {
                     throw new Error(data.detalle || data.error || `HTTP ${res.status}`);
                 }
-                setProgreso(true, 'Completado', 100);
+
+                let htmlResultado = '';
                 if (data.sinCambios) {
-                    mostrarResultado('No había cambios nuevos respecto al último commit en el servidor.', false);
+                    htmlResultado = 'No había cambios nuevos respecto al último commit en el servidor.';
                 } else {
-                    mostrarResultado(
-                        `Subida completada a <strong>${data.rama || gitPushEstado?.rama || 'dev'}</strong>.`
-                        + (data.commit ? `<br><code>${data.commit}</code>` : ''),
-                        false
-                    );
+                    htmlResultado = `Subida completada a <strong>${data.rama || gitPushEstado?.rama || 'dev'}</strong>.`
+                        + (data.commit ? `<br><code>${data.commit}</code>` : '');
+
+                    const deployResult = await esperarDeployTrasPush(data, 'dev', (p) => {
+                        if (p.fase === 'completado') {
+                            setProgreso(true, p.mensaje, 100);
+                        } else {
+                            setProgreso(true, p.mensaje, 95);
+                        }
+                    });
+                    htmlResultado += window.DCEditorDeployMonitor?.mensajeResultadoMonitor?.(deployResult, 'dev') || '';
+
                     window.DCEditorSessionLog?.registrarGitPushDev?.(
                         'despliegue',
                         data.commit || 'Push a dev completado',
                         data.archivos || []
                     );
                 }
-                window.DCEditorDevNav?.marcarGitSincronizado();
+
+                setProgreso(true, data.sinCambios ? 'Completado' : 'Listo', 100);
+                mostrarResultado(htmlResultado, false);
+                if (!data.sinCambios) {
+                    window.DCEditorDevNav?.marcarGitSincronizado();
+                }
                 void actualizarEstadoPendienteGit(document.getElementById('despliegue-toolbar'));
                 opciones?.onSuccess?.(data);
             } catch (err) {

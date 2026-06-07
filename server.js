@@ -13,6 +13,7 @@ const DCHealDebuff = require(path.join(__dirname, 'public', 'js', 'healDebuffCom
 const DCSkinsCartas = require(path.join(__dirname, 'public', 'js', 'skinsCartas.js'));
 const DCEscaladoStatsCarta = require(path.join(__dirname, 'public', 'js', 'escaladoStatsCarta.js'));
 const DCEditorGitPush = require(path.join(__dirname, 'lib', 'editorGitPush.js'));
+const DCRenderDeployMonitor = require(path.join(__dirname, 'lib', 'renderDeployMonitor.js'));
 const DCEditorXlsxSeguro = require(path.join(__dirname, 'lib', 'editorXlsxSeguro.js'));
 
 function responderErrorEscrituraEditor(res, error, etiquetaArchivo) {
@@ -662,6 +663,52 @@ app.put('/api/desafios-editor/catalogo', async (req, res) => {
         return res.json({ ok: true, total: resultado.total, advertencia: resultado.advertencia });
     } catch (error) {
         return responderErrorEscrituraEditor(res, error, 'desafios.xlsx');
+    }
+});
+
+app.get('/api/public/deploy-version', async (_req, res) => {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+    try {
+        const version = await DCRenderDeployMonitor.obtenerVersionDespliegueCompleta();
+        return res.json(version);
+    } catch (error) {
+        console.warn('[api/public/deploy-version]', error.message);
+        return res.status(500).json({ error: 'No se pudo leer la versión desplegada.', detalle: error.message });
+    }
+});
+
+app.get('/api/editors/deploy/config', (_req, res) => {
+    if (!DCEditorGitPush.editoresInternosPermitidos()) {
+        return res.status(403).json({ error: 'Editores no disponibles en este entorno.' });
+    }
+    return res.json(DCRenderDeployMonitor.obtenerConfigMonitorDespliegue());
+});
+
+app.get('/api/editors/deploy/version', async (req, res) => {
+    if (!DCEditorGitPush.editoresInternosPermitidos()) {
+        return res.status(403).json({ error: 'Editores no disponibles en este entorno.' });
+    }
+    const destino = String(req.query.destino || 'dev').trim().toLowerCase();
+    const config = DCRenderDeployMonitor.obtenerConfigMonitorDespliegue();
+    try {
+        if (destino === 'prod') {
+            if (!config.urlProd) {
+                return res.status(503).json({
+                    error: 'Monitor de producción no configurado.',
+                    detalle: 'Define RENDER_PROD_PUBLIC_URL en el servicio Render dev.',
+                });
+            }
+            const version = await DCRenderDeployMonitor.consultarVersionRemota(config.urlProd);
+            return res.json({ destino: 'prod', url: config.urlProd, ...version });
+        }
+        const version = await DCRenderDeployMonitor.obtenerVersionDespliegueCompleta();
+        return res.json({ destino: 'dev', url: config.urlDev, ...version });
+    } catch (error) {
+        console.warn('[api/editors/deploy/version]', error.message);
+        return res.status(502).json({
+            error: 'No se pudo consultar la versión desplegada.',
+            detalle: error.message,
+        });
     }
 });
 
