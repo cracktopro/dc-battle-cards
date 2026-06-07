@@ -62,6 +62,10 @@
         if (resumenServidor?.produccion) {
             const prod = resumenServidor.produccion;
             lineas.push(`Rama producción: ${prod.rama || 'main'}`);
+            lineas.push(`Rama dev: ${prod.ramaDev || 'dev'}`);
+            if (prod.comparacion) {
+                lineas.push(`Comparación: ${prod.comparacion}`);
+            }
             lineas.push(`Despliegue habilitado: ${prod.habilitado ? 'sí' : 'no'}`);
             lineas.push('');
             lineas.push('Archivos de editor distintos respecto a producción:');
@@ -107,7 +111,9 @@
         pintarArchivosPendientes(
             resumenServidor?.produccion?.archivosPendientes || [],
             archivosEl,
-            'No hay diferencias de archivos de editor entre dev y producción.'
+            resumenServidor?.produccion?.comparacion
+                ? `No hay archivos de editor distintos entre ${resumenServidor.produccion.comparacion}.`
+                : 'No hay archivos de editor distintos entre dev y main en GitHub.'
         );
         const puedeProd = Boolean(
             resumenServidor?.produccion?.habilitado

@@ -272,7 +272,7 @@ Nunca se muestra en producción (`main` en Render).
 
 **Registro de sesión:** `editorSessionLog.js` → `localStorage` `dc_editor_session_log_v1` (guardados; push dev se registra desde Despliegue).
 
-**Despliegue (`despliegue.html`):** registro de sesión + lista archivos pendientes **→ dev** (GitHub) y **→ main** (producción). **Subir a GitHub** → push unificado a `dev`. Tras el push, la UI **espera el deploy en Render (dev)** consultando el commit en ejecución (`GET /api/public/deploy-version`) hasta que coincida con el commit subido (máx. ~15 min, intervalo ~8 s). **Subir a Producción** → `POST /api/editors/despliegue/produccion` copia rutas de editores a `main`; si está definida `RENDER_PROD_PUBLIC_URL`, también espera el deploy del servicio de producción (consulta vía proxy `GET /api/editors/deploy/version?destino=prod`). Requiere `GIT_PUSH_TOKEN` y entorno Render `dev`.
+**Despliegue (`despliegue.html`):** registro de sesión + lista archivos pendientes **→ dev** (GitHub) y **→ main** (producción). **Subir a GitHub** → push unificado a `dev`. Tras el push, la UI **espera el deploy en Render (dev)** consultando el commit en ejecución (`GET /api/public/deploy-version`) hasta que coincida con el commit subido (máx. ~15 min, intervalo ~8 s). **Pendiente → main** compara archivos de editor entre **`origin/dev` y `origin/main` en GitHub** (fetch explícito de ambas ramas), más cambios locales sin push. **Subir a Producción** → `POST /api/editors/despliegue/produccion` copia esos archivos desde el disco del servidor dev a la rama `main`; si está definida `RENDER_PROD_PUBLIC_URL` en el servicio **dev**, también espera el deploy del servicio Render de **main**. Requiere `GIT_PUSH_TOKEN` en Render **dev** (no en main).
 
 **Flujo guardar → GitHub → producción:**
 1. **Guardar** en cada editor → disco del servidor (API PUT).
@@ -299,7 +299,7 @@ Nunca se muestra en producción (`main` en Render).
 
 **Editor eventos coop (`editarEventosCoop.html`):** `enemigo1`…`enemigo8`, `boss`; sin recompensa carta.
 
-**Variables Render (dev):** `GIT_PUSH_TOKEN` (PAT GitHub write); opcional `GIT_PUSH_BRANCH`, `GIT_PUSH_SECRET`, `GIT_USER_NAME`, `GIT_USER_EMAIL`, `GIT_PUSH_REPO_URL`. Documentadas en `render.yaml`.
+**Variables Render (dev):** `GIT_PUSH_TOKEN` (PAT GitHub write, **solo servicio dev**); `RENDER_PROD_PUBLIC_URL` (URL pública del servicio **main**, p. ej. `https://dc-battle-cards.onrender.com` — necesaria para avisar fin de deploy de producción); opcional `GIT_PUSH_BRANCH`, `GIT_PUSH_BRANCH_PROD` (default `main`), `GIT_PUSH_SECRET`, `GIT_USER_NAME`, `GIT_USER_EMAIL`, `GIT_PUSH_REPO_URL`, `DEPLOY_MONITOR_*`. **Main** no necesita `GIT_PUSH_TOKEN` ni `RENDER_PROD_PUBLIC_URL` para el flujo de editores (el push a main se hace desde dev). Documentadas en `render.yaml`.
 
 ## Sincronización con Firebase (SyncToken)
 
