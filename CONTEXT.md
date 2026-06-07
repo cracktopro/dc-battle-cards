@@ -2,7 +2,7 @@
 
 Documento vivo de referencia técnica para trabajar sobre DC Battle Cards sin romper flujos existentes.
 
-> **Última validación contra código:** 2026-06-02. Incluye editores dev, git push, navegación `editorDevNav` y menú Herramientas Desarrollo.
+> **Última validación contra código:** 2026-06-05. Incluye editores dev, git push, navegación `editorDevNav`, menú Herramientas Desarrollo y **salvaguardas anti-truncamiento** en editores internos.
 
 ## Visión General
 
@@ -279,11 +279,13 @@ Nunca se muestra en producción (`main` en Render).
 2. **Despliegue** → **Subir a GitHub** → un commit con todos los Excel/JSON de editores modificados → push a `dev`.
 3. **Despliegue** → **Subir a Producción** → archivos de editor a rama `main`.
 
+**Salvaguardas anti-pérdida de datos (editores internos):** el servidor **no sobrescribe** un catálogo Excel/JSON si el payload es sospechosamente pequeño respecto al archivo existente (ratio ~85 % por defecto, configurable con `EDITOR_XLSX_MIN_RATIO`). Antes de escribir: **backup** en `public/resources/.backups/` (ignorado por git), **escritura atómica** (tmp → destino) y **verificación post-guardado**. Si el guardado se bloquea: HTTP **409** `{ codigo: 'TRUNCAMIENTO_CATALOGO', ... }`. Para forzar (solo tras confirmación explícita): body `{ ..., confirmarTruncamiento: true }`. Lógica servidor: `lib/editorXlsxSeguro.js` (`escribirXlsxProtegido`, `escribirTextoProtegido`). Cliente: `public/js/editorGuardadoSeguro.js` — compara filas/tamaño al cargar vs al guardar, pide confirmación y reintenta con `confirmarTruncamiento`. **Git push** también valida mínimos (`validarPerfilAntesDeGitPush` en `lib/editorGitPush.js`) para no subir un `cartas.xlsx` truncado. Mínimos por perfil (env opcional): cartas ≥40 filas (`CARTAS_EDITOR_MIN_FILAS`), desafíos ≥3, resto ≥1.
+
 **Avisos al salir / cambiar vista:** `DCEditorDevNav.confirmarAntesDeNavegar()` avisa si hay cambios sin guardar o pendientes de push (`GET /api/editors/git-push/pendiente?alcance=todos`). Remite a Despliegue para subir a GitHub.
 
 **Editor desafíos (`editarDesafios.html`):** columnas Excel en orden fijo (`ID_desafio`, `faccion`, `nombre`, `Descripción`, `dificultad`, `enemigo1`…`enemigo6`, `boss`, `mejora`, `mejora_especial`, `puntos`, `cartas`, `tablero`). UI: selector H/V; rejilla 6 enemigos + boss; slot recompensa → `cartas`; selector tablero (modal `/api/tableros`). Botón **+ Nuevo** (`#editar-desafios-nuevo`).
 
-**Módulos:** `lib/editorGitPush.js` (servidor), `public/js/editorGitPush.js` (modal push dev), `public/js/editorDevNav.js` (nav + guardias), `public/js/editorSessionLog.js` (registro sesión), `public/js/despliegue.js`, `public/js/editorCartaPicker.js`, `public/js/editarDesafiosModel.js`, `public/js/editarDesafios.js`, `public/js/editarAsaltosModel.js`, `public/js/editarAsaltos.js`, `public/js/editarEventosModel.js`, `public/js/editarEventos.js`, `public/js/editarEventosCoopModel.js`, `public/js/editarEventosCoop.js`, `public/js/editarSkinsModel.js`, `public/js/editarSkins.js`.
+**Módulos:** `lib/editorXlsxSeguro.js` (escritura segura servidor), `lib/editorGitPush.js` (servidor), `public/js/editorGuardadoSeguro.js` (confirmaciones cliente), `public/js/editorGitPush.js` (modal push dev), `public/js/editorDevNav.js` (nav + guardias), `public/js/editorSessionLog.js` (registro sesión), `public/js/despliegue.js`, `public/js/editorCartaPicker.js`, `public/js/editarDesafiosModel.js`, `public/js/editarDesafios.js`, `public/js/editarAsaltosModel.js`, `public/js/editarAsaltos.js`, `public/js/editarEventosModel.js`, `public/js/editarEventos.js`, `public/js/editarEventosCoopModel.js`, `public/js/editarEventosCoop.js`, `public/js/editarSkinsModel.js`, `public/js/editarSkins.js`.
 
 **Referencias carta con skin (Excel y editores PvE):** en celdas de enemigos/recompensas/asaltos puede guardarse `NombreParent[skin_id]` (misma convención que el juego en `skinsCartas.js`). En **juego** (no solo editores): eventos offline, eventos coop online y episodios resuelven la apariencia en paneles (`resolverCartaEnemigoVistaSync`), combate (`resolverFilaCatalogoConSkin` / servidor) y desbloquean recompensas `Parent[n]` como asaltos. `editorCartaPicker.js` resuelve miniaturas con skin; con `permitirSkin: true` tras elegir carta abre `abrirModalAparienciaEditor` (todas las apariencias del parent). Validación cliente/servidor vía `validarReferenciaCartaEnCatalogo`.
 
@@ -499,13 +501,14 @@ Nunca se muestra en producción (`main` en Render).
 - Asaltos: `public/js/asaltos.js`
 - Episodios: `public/episodios.html`, `public/js/episodios.js`, `public/js/episodio-engine.js`
 - Editor episodios (oculto): `public/crearEpisodios.html`, `public/js/crearEpisodios.js`, `public/js/crearEpisodiosModel.js`, `public/js/editorGitPush.js`
-- Editor cartas (oculto): `public/editarCartas.html`, `public/js/editarCartas.js`, `public/js/editarCartasModel.js`, `public/js/editorGitPush.js` — edita `public/resources/cartas.xlsx` (mismas columnas que el Excel del juego); previsualización `carta-mini` vía `cartas.js`
+- Editor cartas (oculto): `public/editarCartas.html`, `public/js/editarCartas.js`, `public/js/editarCartasModel.js`, `public/js/editorGuardadoSeguro.js`, `public/js/editorGitPush.js` — edita `public/resources/cartas.xlsx` (mismas columnas que el Excel del juego); previsualización `carta-mini` vía `cartas.js`
 - Editor desafíos (oculto): `public/editarDesafios.html`, `public/js/editarDesafios.js`, `public/js/editarDesafiosModel.js`, `public/js/editorCartaPicker.js` — edita `public/resources/desafios.xlsx`
 - Editor asaltos (oculto): `public/editarAsaltos.html`, `public/js/editarAsaltos.js`, `public/js/editarAsaltosModel.js` — edita `public/resources/asaltos.xlsx`; 12 slots de cartas (todas normales, sin boss), imagen drag-drop, tablero modal
 - Editor eventos (oculto): `public/editarEventos.html`, `public/js/editarEventos.js`, `public/js/editarEventosModel.js` — edita `public/resources/eventos.xlsx`; 6 enemigos + boss, slot recompensa, tablero modal
 - Editor eventos coop (oculto): `public/editarEventosCoop.html`, `public/js/editarEventosCoop.js`, `public/js/editarEventosCoopModel.js` — edita `public/resources/eventos_online.xlsx`; 8 enemigos + boss, sin recompensa de carta, tablero modal
 - Editor skins (oculto): `public/editarSkins.html`, `public/js/editarSkins.js`, `public/js/editarSkinsModel.js` — edita `public/resources/skins.xlsx`; parent card picker (modal catálogo), imagen drag-drop, preview de carta renderizada, campos skill completos
-- Git push editores: `lib/editorGitPush.js` (servidor) — incluye rutas para asaltos.xlsx, eventos.xlsx, eventos_online.xlsx, skins.xlsx en despliegue a producción
+- Escritura segura editores: `lib/editorXlsxSeguro.js` (backup, escritura atómica, anti-truncamiento)
+- Git push editores: `lib/editorGitPush.js` (servidor) — incluye rutas para asaltos.xlsx, eventos.xlsx, eventos_online.xlsx, skins.xlsx en despliegue a producción; valida mínimos antes de commit
 - Tienda: `public/tienda.js`
 - Crear/editar mazos: `public/crearMazos.js`, `public/mazos.js`
 - Mejoras: `public/mejorarCartas.js`
@@ -566,19 +569,19 @@ Nunca se muestra en producción (`main` en Render).
 - Editor episodios (`crearEpisodios.html`; requiere `NODE_ENV !== 'production'`, `EPISODIOS_EDITOR=1` o `RENDER_GIT_BRANCH=dev`):
   - `GET /api/episodios-editor/habilitado` → `{ habilitado, gitPush? }`
   - `GET /api/episodios-editor/archivos` · `GET /api/episodios-editor/archivo/:nombre`
-  - `PUT /api/episodios-editor/archivo/:nombre` body `{ data: object }`
+  - `PUT /api/episodios-editor/archivo/:nombre` body `{ data: object, confirmarTruncamiento?: true }`
   - `POST /api/episodios-editor/archivo` body `{ nombre, data }`
   - `GET /api/episodios-editor/recursos` → `{ bustos, fondos, tableros }`
   - `POST /api/episodios-editor/git-push` body `{ mensaje?, token? }` — commit+push JSON episodios (requiere `GIT_PUSH_TOKEN` en servidor)
 - Editor cartas (`editarCartas.html`; `CARTAS_EDITOR=1`, `EPISODIOS_EDITOR=1`, rama `dev` o no producción):
   - `GET /api/cartas-editor/habilitado` → `{ habilitado, gitPush? }`
   - `GET /api/cartas-editor/catalogo` → `{ columnas, filas, skillClasses }`
-  - `PUT /api/cartas-editor/catalogo` body `{ columnas?, filas }` — valida y escribe `public/resources/cartas.xlsx`
+  - `PUT /api/cartas-editor/catalogo` body `{ columnas?, filas, confirmarTruncamiento?: true }` — valida, escribe con salvaguardas y backup `public/resources/cartas.xlsx`
   - `POST /api/cartas-editor/git-push` body `{ mensaje?, token? }` — commit+push `cartas.xlsx`
 - Editor desafíos (`editarDesafios.html`; misma habilitación que cartas / rama `dev`):
   - `GET /api/desafios-editor/habilitado` → `{ habilitado, gitPush? }`
   - `GET /api/desafios-editor/catalogo` → `{ columnas, filas }`
-  - `PUT /api/desafios-editor/catalogo` body `{ columnas?, filas }` — valida y escribe `public/resources/desafios.xlsx`
+  - `PUT /api/desafios-editor/catalogo` body `{ columnas?, filas, confirmarTruncamiento?: true }` — valida y escribe `public/resources/desafios.xlsx`
   - `POST /api/desafios-editor/git-push` body `{ mensaje?, token? }`
 - Editor asaltos (`editarAsaltos.html`; misma habilitación):
   - `GET/PUT /api/asaltos-editor/catalogo` — `public/resources/asaltos.xlsx`
@@ -595,13 +598,13 @@ Nunca se muestra en producción (`main` en Render).
 - Git push editores (compartido):
   - `GET /api/editors/entorno` → `{ esDev, mostrarMenuDevTools, editoresHabilitados, rama, ramaDevRender }`
   - `GET /api/editors/git-push/pendiente?alcance=todos` → `{ pendiente, motivo?, archivos? }` (todos los editores; default `todos`)
-  - `POST /api/editors/git-push/dev` body `{ mensaje?, token? }` — commit+push unificado de todos los archivos de editor a `dev`
+  - `POST /api/editors/git-push/dev` body `{ mensaje?, token? }` — commit+push unificado de todos los archivos de editor a `dev` (valida mínimos de filas en Excel antes de commit)
   - `GET /api/editors/keepalive` — ping ligero para mantener activo el servicio Render durante edición
   - `GET /api/editors/git-push/estado` → `{ habilitado, rama, requiereTokenCliente, ramaDevRender }`
   - Endpoints legacy por editor (`POST /api/*-editor/git-push`) siguen existiendo pero la UI usa solo el push unificado
   - `GET /api/editors/despliegue/habilitado` · `GET /api/editors/despliegue/resumen` · `POST /api/editors/despliegue/produccion` body `{ mensaje?, token?, archivos? }` — push archivos de editor a rama `main`
-  - Lógica servidor: `lib/editorGitPush.js`. Env: `GIT_PUSH_TOKEN` (PAT GitHub), opcional `GIT_PUSH_BRANCH`, `GIT_PUSH_BRANCH_PROD`, `GIT_PUSH_PROD_ENABLED`, `GIT_PUSH_SECRET`, `GIT_PUSH_REPO_URL`, `GIT_USER_NAME`, `GIT_USER_EMAIL`
-  - UI cliente: `editorGitPush.js`, `editorDevNav.js`, `editorSessionLog.js`, `despliegue.js`; menú dev en `cartas.js` (`DEV_TOOLS_MENU_EMAILS`)
+  - Lógica servidor: `lib/editorGitPush.js`, `lib/editorXlsxSeguro.js`. Env: `GIT_PUSH_TOKEN` (PAT GitHub), opcional `GIT_PUSH_BRANCH`, `GIT_PUSH_BRANCH_PROD`, `GIT_PUSH_PROD_ENABLED`, `GIT_PUSH_SECRET`, `GIT_PUSH_REPO_URL`, `GIT_USER_NAME`, `GIT_USER_EMAIL`, `EDITOR_XLSX_MIN_RATIO`, `CARTAS_EDITOR_MIN_FILAS`, …
+  - UI cliente: `editorGuardadoSeguro.js`, `editorGitPush.js`, `editorDevNav.js`, `editorSessionLog.js`, `despliegue.js`; menú dev en `cartas.js` (`DEV_TOOLS_MENU_EMAILS`)
 - `POST /admin/users/list`, `/admin/user/get`, `/admin/user/update`
   - Solo cuentas admin (`opciones.js` / `esEmailAdmin` en `server.js`); mismo control de sync que `/update-user`
 

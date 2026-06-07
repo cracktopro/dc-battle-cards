@@ -28,6 +28,7 @@
     let state = {
         fileName: null,
         data: null,
+        bytesAlCargar: 0,
         dirty: false,
         sel: { kind: 'meta' },
         /** Claves "capIdx-eventIdx" de cutscenes con diálogos desplegados */
@@ -72,7 +73,8 @@
                 err.code = 'EPISODIOS_EDITOR_API_MISSING';
                 throw err;
             }
-            throw new Error(body.error || body.detalle || `HTTP ${res.status}`);
+            throw window.DCEditorGuardadoSeguro?.errorDesdeRespuestaApi(body, res.status)
+                || new Error(body.error || body.detalle || `HTTP ${res.status}`);
         }
         return body;
     }
@@ -1290,6 +1292,9 @@
         const res = await api(`/api/episodios-editor/archivo/${encodeURIComponent(nombre)}`);
         state.fileName = res.nombre;
         state.data = M.normalizarEpisodio(res.data);
+        const payloadCarga = M.limpiarParaGuardar(state.data);
+        delete payloadCarga.timeline;
+        state.bytesAlCargar = new Blob([JSON.stringify({ data: payloadCarga })]).size;
         state.dirty = false;
         state.sel = { kind: 'meta' };
         state.expandedCutscenes = new Set();
@@ -1310,19 +1315,37 @@
         }
         const payload = M.limpiarParaGuardar(state.data);
         delete payload.timeline;
-        await api(`/api/episodios-editor/archivo/${encodeURIComponent(state.fileName)}`, {
-            method: 'PUT',
-            body: JSON.stringify({ data: payload }),
-        });
-        state.dirty = false;
-        renderToolbar();
-        window.DCEditorDevNav?.marcarCambiosEnDisco();
-        window.DCEditorSessionLog?.registrarGuardado?.(
-            'episodios',
-            `Guardado ${state.fileName}`,
-            [`public/resources/episodios/${state.fileName}`]
-        );
-        toastMsg('Guardado correctamente.');
+        const bytesActual = new Blob([JSON.stringify({ data: payload })]).size;
+        try {
+            const guardado = await window.DCEditorGuardadoSeguro.intentarGuardarBytes({
+                bytesActual,
+                bytesAlCargar: state.bytesAlCargar,
+                minBytes: 80,
+                etiquetaRecurso: state.fileName,
+                guardarFn: ({ confirmarTruncamiento }) => api(
+                    `/api/episodios-editor/archivo/${encodeURIComponent(state.fileName)}`,
+                    {
+                        method: 'PUT',
+                        body: JSON.stringify({ data: payload, confirmarTruncamiento }),
+                    }
+                ),
+            });
+            if (guardado.cancelado) {
+                return;
+            }
+            state.dirty = false;
+            state.bytesAlCargar = bytesActual;
+            renderToolbar();
+            window.DCEditorDevNav?.marcarCambiosEnDisco();
+            window.DCEditorSessionLog?.registrarGuardado?.(
+                'episodios',
+                `Guardado ${state.fileName}`,
+                [`public/resources/episodios/${state.fileName}`]
+            );
+            toastMsg('Guardado correctamente.');
+        } catch (e) {
+            toastMsg(e.message || 'Error al guardar', true);
+        }
     }
 
     function validarActual() {

@@ -13,6 +13,22 @@ const DCHealDebuff = require(path.join(__dirname, 'public', 'js', 'healDebuffCom
 const DCSkinsCartas = require(path.join(__dirname, 'public', 'js', 'skinsCartas.js'));
 const DCEscaladoStatsCarta = require(path.join(__dirname, 'public', 'js', 'escaladoStatsCarta.js'));
 const DCEditorGitPush = require(path.join(__dirname, 'lib', 'editorGitPush.js'));
+const DCEditorXlsxSeguro = require(path.join(__dirname, 'lib', 'editorXlsxSeguro.js'));
+
+function responderErrorEscrituraEditor(res, error, etiquetaArchivo) {
+    if (error?.codigo === 'TRUNCAMIENTO_CATALOGO') {
+        return res.status(409).json({
+            error: error.message,
+            codigo: error.codigo,
+            ...(error.detalles || {}),
+        });
+    }
+    console.warn(`[editor PUT ${etiquetaArchivo}]`, error.message);
+    return res.status(500).json({
+        error: `No se pudo guardar ${etiquetaArchivo}`,
+        detalle: error.message,
+    });
+}
 
 // Configuración de Firebase
 const firebaseConfig = {
@@ -257,9 +273,16 @@ app.put('/api/episodios-editor/archivo/:nombre', (req, res) => {
     try {
         const json = `${JSON.stringify(data, null, 2)}\n`;
         JSON.parse(json);
-        fs.writeFileSync(resolved.full, json, 'utf8');
+        DCEditorXlsxSeguro.escribirTextoProtegido(resolved.full, json, {
+            etiqueta: `episodio-${resolved.base}`,
+            minBytes: 80,
+            confirmarTruncamiento: req.body?.confirmarTruncamiento === true,
+        });
         return res.json({ ok: true, nombre: resolved.base });
     } catch (error) {
+        if (error?.codigo === 'TRUNCAMIENTO_CATALOGO') {
+            return res.status(409).json({ error: error.message, codigo: error.codigo, ...(error.detalles || {}) });
+        }
         console.warn('[api/episodios-editor/archivo PUT]', error.message);
         return res.status(500).json({ error: 'No se pudo guardar.', detalle: error.message });
     }
@@ -424,13 +447,17 @@ function validarFilasCartasServidor(filas) {
     return { ok: errores.length === 0, errores };
 }
 
-function escribirCartasXlsxServidor(filas, columnas) {
+function escribirCartasXlsxServidor(filas, columnas, opciones = {}) {
     const cols = columnas && columnas.length ? columnas : CARTAS_COLUMNAS_ORDEN;
     const normalizadas = filas.map((f) => asegurarFilaCartasServidor(f, cols));
-    const sheet = XLSX.utils.json_to_sheet(normalizadas, { header: cols });
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, sheet, 'Cartas');
-    XLSX.writeFile(workbook, CARTAS_XLSX_PATH);
+    return DCEditorXlsxSeguro.escribirXlsxProtegido(
+        'cartas',
+        CARTAS_XLSX_PATH,
+        normalizadas,
+        cols,
+        'Cartas',
+        opciones
+    );
 }
 
 app.get('/api/cartas-editor/habilitado', (_req, res) => {
@@ -472,11 +499,12 @@ app.put('/api/cartas-editor/catalogo', (req, res) => {
         return res.status(400).json({ error: 'Validación fallida', errores: val.errores });
     }
     try {
-        escribirCartasXlsxServidor(normalizadas, columnas);
-        return res.json({ ok: true, total: normalizadas.length });
+        const resultado = escribirCartasXlsxServidor(normalizadas, columnas, {
+            confirmarTruncamiento: req.body?.confirmarTruncamiento === true,
+        });
+        return res.json({ ok: true, total: resultado.total, advertencia: resultado.advertencia });
     } catch (error) {
-        console.warn('[api/cartas-editor/catalogo PUT]', error.message);
-        return res.status(500).json({ error: 'No se pudo guardar cartas.xlsx', detalle: error.message });
+        return responderErrorEscrituraEditor(res, error, 'cartas.xlsx');
     }
 });
 
@@ -576,13 +604,17 @@ async function validarFilasDesafiosServidor(filas) {
     return { ok: errores.length === 0, errores };
 }
 
-function escribirDesafiosXlsxServidor(filas, columnas, sheetName) {
+function escribirDesafiosXlsxServidor(filas, columnas, sheetName, opciones = {}) {
     const cols = columnas && columnas.length ? columnas : DESAFIOS_COLUMNAS_ORDEN;
     const normalizadas = filas.map((f) => asegurarFilaDesafiosServidor(f, cols));
-    const sheet = XLSX.utils.json_to_sheet(normalizadas, { header: cols });
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, sheet, sheetName || 'Hoja1');
-    XLSX.writeFile(workbook, DESAFIOS_XLSX_PATH);
+    return DCEditorXlsxSeguro.escribirXlsxProtegido(
+        'desafios',
+        DESAFIOS_XLSX_PATH,
+        normalizadas,
+        cols,
+        sheetName || 'Hoja1',
+        opciones
+    );
 }
 
 app.get('/api/desafios-editor/habilitado', (_req, res) => {
@@ -624,11 +656,12 @@ app.put('/api/desafios-editor/catalogo', async (req, res) => {
         try {
             sheetName = leerDesafiosXlsxServidor().sheetName || sheetName;
         } catch (_e) { /* nuevo archivo */ }
-        escribirDesafiosXlsxServidor(normalizadas, columnas, sheetName);
-        return res.json({ ok: true, total: normalizadas.length });
+        const resultado = escribirDesafiosXlsxServidor(normalizadas, columnas, sheetName, {
+            confirmarTruncamiento: req.body?.confirmarTruncamiento === true,
+        });
+        return res.json({ ok: true, total: resultado.total, advertencia: resultado.advertencia });
     } catch (error) {
-        console.warn('[api/desafios-editor/catalogo PUT]', error.message);
-        return res.status(500).json({ error: 'No se pudo guardar desafios.xlsx', detalle: error.message });
+        return responderErrorEscrituraEditor(res, error, 'desafios.xlsx');
     }
 });
 
@@ -785,13 +818,17 @@ function leerAsaltosXlsxServidor() {
     return { columnas: ASALTOS_COLUMNAS_ORDEN.slice(), filas, sheetName };
 }
 
-function escribirAsaltosXlsxServidor(filas, columnas, sheetName) {
+function escribirAsaltosXlsxServidor(filas, columnas, sheetName, opciones = {}) {
     const cols = columnas && columnas.length ? columnas : ASALTOS_COLUMNAS_ORDEN;
     const norm = filas.map((f) => asegurarFilaAsaltosServidor(f, cols));
-    const sheet = XLSX.utils.json_to_sheet(norm, { header: cols });
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, sheet, sheetName || 'Hoja1');
-    XLSX.writeFile(wb, ASALTOS_XLSX_PATH);
+    return DCEditorXlsxSeguro.escribirXlsxProtegido(
+        'asaltos',
+        ASALTOS_XLSX_PATH,
+        norm,
+        cols,
+        sheetName || 'Hoja1',
+        opciones
+    );
 }
 
 function validarReferenciasCartasEditorServidor(texto, nombresCartas, skinsIndexados) {
@@ -847,9 +884,11 @@ app.put('/api/asaltos-editor/catalogo', async (req, res) => {
     try {
         let sheetName = 'Hoja1';
         try { sheetName = leerAsaltosXlsxServidor().sheetName || sheetName; } catch(_e){}
-        escribirAsaltosXlsxServidor(norm, columnas, sheetName);
-        return res.json({ ok: true, total: norm.length });
-    } catch (e) { console.warn('[api/asaltos-editor/catalogo PUT]', e.message); return res.status(500).json({ error: 'No se pudo guardar asaltos.xlsx', detalle: e.message }); }
+        const resultado = escribirAsaltosXlsxServidor(norm, columnas, sheetName, {
+            confirmarTruncamiento: req.body?.confirmarTruncamiento === true,
+        });
+        return res.json({ ok: true, total: resultado.total, advertencia: resultado.advertencia });
+    } catch (e) { return responderErrorEscrituraEditor(res, e, 'asaltos.xlsx'); }
 });
 app.post('/api/asaltos-editor/git-push', async (req, res) => {
     if (!asaltosEditorPermitido()) return res.status(403).json({ error: 'Editor no disponible.' });
@@ -890,13 +929,17 @@ function leerEventosXlsxServidor() {
     return { columnas: EVENTOS_COLUMNAS_ORDEN.slice(), filas, sheetName };
 }
 
-function escribirEventosXlsxServidor(filas, columnas, sheetName) {
+function escribirEventosXlsxServidor(filas, columnas, sheetName, opciones = {}) {
     const cols = columnas && columnas.length ? columnas : EVENTOS_COLUMNAS_ORDEN;
     const norm = filas.map((f) => asegurarFilaEventosServidor(f, cols));
-    const sheet = XLSX.utils.json_to_sheet(norm, { header: cols });
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, sheet, sheetName || 'Hoja1');
-    XLSX.writeFile(wb, EVENTOS_XLSX_PATH);
+    return DCEditorXlsxSeguro.escribirXlsxProtegido(
+        'eventos',
+        EVENTOS_XLSX_PATH,
+        norm,
+        cols,
+        sheetName || 'Hoja1',
+        opciones
+    );
 }
 
 async function validarFilasEventosServidor(filas) {
@@ -944,9 +987,11 @@ app.put('/api/eventos-editor/catalogo', async (req, res) => {
     try {
         let sheetName = 'Hoja1';
         try { sheetName = leerEventosXlsxServidor().sheetName || sheetName; } catch(_e){}
-        escribirEventosXlsxServidor(norm, columnas, sheetName);
-        return res.json({ ok: true, total: norm.length });
-    } catch (e) { console.warn('[api/eventos-editor/catalogo PUT]', e.message); return res.status(500).json({ error: 'No se pudo guardar eventos.xlsx', detalle: e.message }); }
+        const resultado = escribirEventosXlsxServidor(norm, columnas, sheetName, {
+            confirmarTruncamiento: req.body?.confirmarTruncamiento === true,
+        });
+        return res.json({ ok: true, total: resultado.total, advertencia: resultado.advertencia });
+    } catch (e) { return responderErrorEscrituraEditor(res, e, 'eventos.xlsx'); }
 });
 app.post('/api/eventos-editor/git-push', async (req, res) => {
     if (!eventosEditorPermitido()) return res.status(403).json({ error: 'Editor no disponible.' });
@@ -987,13 +1032,17 @@ function leerEventosOnlineXlsxServidor() {
     return { columnas: EVENTOS_ONLINE_COLUMNAS_ORDEN.slice(), filas, sheetName };
 }
 
-function escribirEventosOnlineXlsxServidor(filas, columnas, sheetName) {
+function escribirEventosOnlineXlsxServidor(filas, columnas, sheetName, opciones = {}) {
     const cols = columnas && columnas.length ? columnas : EVENTOS_ONLINE_COLUMNAS_ORDEN;
     const norm = filas.map((f) => asegurarFilaEventosOnlineServidor(f, cols));
-    const sheet = XLSX.utils.json_to_sheet(norm, { header: cols });
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, sheet, sheetName || 'Hoja1');
-    XLSX.writeFile(wb, EVENTOS_ONLINE_XLSX_PATH);
+    return DCEditorXlsxSeguro.escribirXlsxProtegido(
+        'eventos_online',
+        EVENTOS_ONLINE_XLSX_PATH,
+        norm,
+        cols,
+        sheetName || 'Hoja1',
+        opciones
+    );
 }
 
 async function validarFilasEventosOnlineServidor(filas) {
@@ -1036,9 +1085,11 @@ app.put('/api/eventos-online-editor/catalogo', async (req, res) => {
     try {
         let sheetName = 'Hoja1';
         try { sheetName = leerEventosOnlineXlsxServidor().sheetName || sheetName; } catch(_e){}
-        escribirEventosOnlineXlsxServidor(norm, columnas, sheetName);
-        return res.json({ ok: true, total: norm.length });
-    } catch (e) { console.warn('[api/eventos-online-editor/catalogo PUT]', e.message); return res.status(500).json({ error: 'No se pudo guardar eventos_online.xlsx', detalle: e.message }); }
+        const resultado = escribirEventosOnlineXlsxServidor(norm, columnas, sheetName, {
+            confirmarTruncamiento: req.body?.confirmarTruncamiento === true,
+        });
+        return res.json({ ok: true, total: resultado.total, advertencia: resultado.advertencia });
+    } catch (e) { return responderErrorEscrituraEditor(res, e, 'eventos_online.xlsx'); }
 });
 app.post('/api/eventos-online-editor/git-push', async (req, res) => {
     if (!eventosOnlineEditorPermitido()) return res.status(403).json({ error: 'Editor no disponible.' });
@@ -1078,13 +1129,17 @@ function leerSkinsXlsxServidor() {
     return { columnas: SKINS_COLUMNAS_ORDEN.slice(), filas, sheetName };
 }
 
-function escribirSkinsXlsxServidor(filas, columnas, sheetName) {
+function escribirSkinsXlsxServidor(filas, columnas, sheetName, opciones = {}) {
     const cols = columnas && columnas.length ? columnas : SKINS_COLUMNAS_ORDEN;
     const norm = filas.map((f) => asegurarFilaSkinsServidor(f, cols));
-    const sheet = XLSX.utils.json_to_sheet(norm, { header: cols });
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, sheet, sheetName || 'Hoja1');
-    XLSX.writeFile(wb, SKINS_XLSX_PATH);
+    return DCEditorXlsxSeguro.escribirXlsxProtegido(
+        'skins',
+        SKINS_XLSX_PATH,
+        norm,
+        cols,
+        sheetName || 'Hoja1',
+        opciones
+    );
 }
 
 async function validarFilasSkinsServidor(filas) {
@@ -1124,9 +1179,11 @@ app.put('/api/skins-editor/catalogo', async (req, res) => {
     try {
         let sheetName = 'Hoja1';
         try { sheetName = leerSkinsXlsxServidor().sheetName || sheetName; } catch(_e){}
-        escribirSkinsXlsxServidor(norm, columnas, sheetName);
-        return res.json({ ok: true, total: norm.length });
-    } catch (e) { console.warn('[api/skins-editor/catalogo PUT]', e.message); return res.status(500).json({ error: 'No se pudo guardar skins.xlsx', detalle: e.message }); }
+        const resultado = escribirSkinsXlsxServidor(norm, columnas, sheetName, {
+            confirmarTruncamiento: req.body?.confirmarTruncamiento === true,
+        });
+        return res.json({ ok: true, total: resultado.total, advertencia: resultado.advertencia });
+    } catch (e) { return responderErrorEscrituraEditor(res, e, 'skins.xlsx'); }
 });
 app.post('/api/skins-editor/git-push', async (req, res) => {
     if (!skinsEditorPermitido()) return res.status(403).json({ error: 'Editor no disponible.' });

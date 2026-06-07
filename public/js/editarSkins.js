@@ -26,6 +26,7 @@
     let state = {
         columnas: M.COLUMNAS_SKINS.slice(),
         filas: [],
+        filasAlCargar: 0,
         selIndex: -1,
         dirty: false,
         filtros: { nombre: '', parent: '' },
@@ -45,10 +46,8 @@
                 err.code = 'SKINS_EDITOR_API_MISSING';
                 throw err;
             }
-            const msg = body.errores?.length
-                ? body.errores.join('\n')
-                : (body.error || body.detalle || `HTTP ${res.status}`);
-            throw new Error(msg);
+            throw window.DCEditorGuardadoSeguro?.errorDesdeRespuestaApi(body, res.status)
+                || new Error(body.error || body.detalle || `HTTP ${res.status}`);
         }
         return body;
     }
@@ -535,6 +534,7 @@
             const data = await api('/api/skins-editor/catalogo');
             const parsed = M.filasDesdeRespuestaApi(data);
             state.columnas = parsed.columnas; state.filas = parsed.filas;
+            state.filasAlCargar = window.DCEditorGuardadoSeguro?.contarFilasCatalogo(state.filas, 'Nombre') ?? state.filas.length;
             state.dirty = false; state.imagenRevision = {};
             state.selIndex = state.filas.length ? 0 : -1;
             if (aviso) aviso.hidden = true;
@@ -551,11 +551,27 @@
             return;
         }
         try {
-            await api('/api/skins-editor/catalogo', {
-                method: 'PUT',
-                body: JSON.stringify({ columnas: state.columnas, filas: state.filas }),
+            const guardado = await window.DCEditorGuardadoSeguro.intentarGuardarCatalogo({
+                filas: state.filas,
+                filasAlCargar: state.filasAlCargar,
+                campoClave: 'Nombre',
+                minAbsoluto: 1,
+                etiquetaRecurso: 'skins.xlsx',
+                guardarFn: ({ confirmarTruncamiento }) => api('/api/skins-editor/catalogo', {
+                    method: 'PUT',
+                    body: JSON.stringify({
+                        columnas: state.columnas,
+                        filas: state.filas,
+                        confirmarTruncamiento,
+                    }),
+                }),
             });
-            state.dirty = false; renderToolbar();
+            if (guardado.cancelado) {
+                return;
+            }
+            state.dirty = false;
+            state.filasAlCargar = window.DCEditorGuardadoSeguro.contarFilasCatalogo(state.filas, 'Nombre');
+            renderToolbar();
             window.DCEditorDevNav?.marcarCambiosEnDisco();
             window.DCEditorSessionLog?.registrarGuardado?.('skins', 'Guardado skins.xlsx', ['public/resources/skins.xlsx']);
             toastMsg('skins.xlsx guardado correctamente.');

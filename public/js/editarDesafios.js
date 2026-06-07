@@ -28,6 +28,7 @@
     let state = {
         columnas: M.COLUMNAS_DESAFIO.slice(),
         filas: [],
+        filasAlCargar: 0,
         selIndex: -1,
         dirty: false,
     };
@@ -44,10 +45,8 @@
                 err.code = 'DESAFIOS_EDITOR_API_MISSING';
                 throw err;
             }
-            const msg = body.errores?.length
-                ? body.errores.join('\n')
-                : (body.error || body.detalle || `HTTP ${res.status}`);
-            throw new Error(msg);
+            throw window.DCEditorGuardadoSeguro?.errorDesdeRespuestaApi(body, res.status)
+                || new Error(body.error || body.detalle || `HTTP ${res.status}`);
         }
         return body;
     }
@@ -547,6 +546,7 @@
             const parsed = M.filasDesdeRespuestaApi(data);
             state.columnas = parsed.columnas;
             state.filas = parsed.filas;
+            state.filasAlCargar = window.DCEditorGuardadoSeguro?.contarFilasCatalogo(state.filas, 'nombre') ?? state.filas.length;
             state.dirty = false;
             state.selIndex = state.filas.length ? 0 : -1;
             if (aviso) aviso.hidden = true;
@@ -569,11 +569,26 @@
             return;
         }
         try {
-            await api('/api/desafios-editor/catalogo', {
-                method: 'PUT',
-                body: JSON.stringify({ columnas: state.columnas, filas: state.filas }),
+            const guardado = await window.DCEditorGuardadoSeguro.intentarGuardarCatalogo({
+                filas: state.filas,
+                filasAlCargar: state.filasAlCargar,
+                campoClave: 'nombre',
+                minAbsoluto: 3,
+                etiquetaRecurso: 'desafios.xlsx',
+                guardarFn: ({ confirmarTruncamiento }) => api('/api/desafios-editor/catalogo', {
+                    method: 'PUT',
+                    body: JSON.stringify({
+                        columnas: state.columnas,
+                        filas: state.filas,
+                        confirmarTruncamiento,
+                    }),
+                }),
             });
+            if (guardado.cancelado) {
+                return;
+            }
             state.dirty = false;
+            state.filasAlCargar = window.DCEditorGuardadoSeguro.contarFilasCatalogo(state.filas, 'nombre');
             renderToolbar();
             window.DCEditorDevNav?.marcarCambiosEnDisco();
             window.DCEditorSessionLog?.registrarGuardado?.(
