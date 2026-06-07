@@ -110,7 +110,7 @@
         if (!lista.length) {
             return 'Sin cambios registrados en esta sesión de navegador.\n\n'
                 + 'Los registros aparecen al guardar desde los editores internos. '
-                + 'La subida a GitHub se hace desde Despliegue → «Subir a GitHub».';
+                + 'La subida a dev se hace desde Despliegue → «Subir a DEV».';
         }
         return lista.map(formatearEntrada).join('\n\n');
     }

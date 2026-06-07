@@ -266,22 +266,22 @@ Nunca se muestra en producción (`main` en Render).
 
 **Navegación entre editores:** barra `editor-dev-nav` (`editorDevNav.js`) en cada herramienta con botones **Cartas**, **Skins**, **Episodios**, **Desafíos**, **Asaltos**, **Eventos**, **Eventos Coop**, **Despliegue** y **Volver al juego** (rojo, → `vistaJuego.html`; guardia de cambios sin guardar / sin push). Extensible añadiendo entradas en `DCEditorDevNav.VISTAS`.
 
-**Botón «Subir a GitHub» (centralizado en Despliegue):** solo en `despliegue.html`. Un único commit con **todos** los archivos de editor modificados (`POST /api/editors/git-push/dev` → `gitPushEditoresSesion` en servidor). Clase `crear-ep-btn--git-pendiente` cuando `GET /api/editors/git-push/pendiente?alcance=todos` o el registro de sesión indica guardados sin push. Los editores individuales ya no muestran este botón.
+**Botón «Subir a DEV» (centralizado en Despliegue):** solo en `despliegue.html`. Commit+push unificado a `dev` (`POST /api/editors/git-push/dev`). Tras completar, el modal oculta el botón de subida. Clase `crear-ep-btn--git-pendiente` cuando hay pendientes.
 
 **Keepalive Render:** `editorDevNav.js` envía `GET /api/editors/keepalive` cada 60 s mientras hay cambios sin guardar en memoria, guardados en sesión sin push (`editorSessionLog.tieneCambiosPendientesPush`) o git pendiente en servidor — evita suspensión del servicio durante edición prolongada.
 
 **Registro de sesión:** `editorSessionLog.js` → `localStorage` `dc_editor_session_log_v1` (guardados; push dev se registra desde Despliegue).
 
-**Despliegue (`despliegue.html`):** registro de sesión + lista archivos pendientes **→ dev** (GitHub) y **→ main** (producción). **Subir a GitHub** → push unificado a `dev`. Tras el push, la UI **espera el deploy en Render (dev)** consultando el commit en ejecución (`GET /api/public/deploy-version`) hasta que coincida con el commit subido (máx. ~15 min, intervalo ~8 s). **Pendiente → main** compara archivos de editor entre **`origin/dev` y `origin/main` en GitHub** (fetch explícito de ambas ramas), más cambios locales sin push. **Subir a Producción** → `POST /api/editors/despliegue/produccion` copia esos archivos desde el disco del servidor dev a la rama `main` (rama temporal `deploy-prod-*` en git local; limpieza compatible con HEAD detached en Render); si está definida `RENDER_PROD_PUBLIC_URL` en el servicio **dev**, también espera el deploy del servicio Render de **main**. Requiere `GIT_PUSH_TOKEN` en Render **dev** (no en main).
+**Despliegue (`despliegue.html`):** **Subir a DEV** → push a `dev` + espera deploy Render dev. **Actualizar cambios** → `gitPushActualizarCambios` (dev si pendiente + main) + espera deploy en dev y producción. Pendiente main: diff `origin/dev` vs `origin/main`. Requiere `GIT_PUSH_TOKEN` y `RENDER_PROD_PUBLIC_URL` en Render dev.
 
 **Flujo guardar → GitHub → producción:**
 1. **Guardar** en cada editor → disco del servidor (API PUT).
-2. **Despliegue** → **Subir a GitHub** → un commit con todos los Excel/JSON de editores modificados → push a `dev`.
-3. **Despliegue** → **Subir a Producción** → archivos de editor a rama `main`.
+2. **Despliegue** → **Subir a DEV** (opcional si solo quieres dev).
+3. **Despliegue** → **Actualizar cambios** → dev (si hace falta) + `main` + deploys Render.
 
 **Salvaguardas anti-pérdida de datos (editores internos):** el servidor **no sobrescribe** un catálogo Excel/JSON si el payload es sospechosamente pequeño respecto al archivo existente (ratio ~85 % por defecto, configurable con `EDITOR_XLSX_MIN_RATIO`). Antes de escribir: **backup** en `public/resources/.backups/` (ignorado por git), **escritura atómica** (tmp → destino) y **verificación post-guardado**. Si el guardado se bloquea: HTTP **409** `{ codigo: 'TRUNCAMIENTO_CATALOGO', ... }`. Para forzar (solo tras confirmación explícita): body `{ ..., confirmarTruncamiento: true }`. Lógica servidor: `lib/editorXlsxSeguro.js` (`escribirXlsxProtegido`, `escribirTextoProtegido`). Cliente: `public/js/editorGuardadoSeguro.js` — compara filas/tamaño al cargar vs al guardar, pide confirmación y reintenta con `confirmarTruncamiento`. **Git push** también valida mínimos (`validarPerfilAntesDeGitPush` en `lib/editorGitPush.js`) para no subir un `cartas.xlsx` truncado. Mínimos por perfil (env opcional): cartas ≥40 filas (`CARTAS_EDITOR_MIN_FILAS`), desafíos ≥3, resto ≥1.
 
-**Avisos al salir / cambiar vista:** `DCEditorDevNav.confirmarAntesDeNavegar()` avisa si hay cambios sin guardar o pendientes de push (`GET /api/editors/git-push/pendiente?alcance=todos`). Remite a Despliegue para subir a GitHub.
+**Avisos al salir / cambiar vista:** `DCEditorDevNav.confirmarAntesDeNavegar()` avisa si hay cambios sin guardar o pendientes de push. Remite a Despliegue para **Subir a DEV** o **Actualizar cambios**.
 
 **Editor desafíos (`editarDesafios.html`):** columnas Excel en orden fijo (`ID_desafio`, `faccion`, `nombre`, `Descripción`, `dificultad`, `enemigo1`…`enemigo6`, `boss`, `mejora`, `mejora_especial`, `puntos`, `cartas`, `tablero`). UI: selector H/V; rejilla 6 enemigos + boss; slot recompensa → `cartas`; selector tablero (modal `/api/tableros`). Botón **+ Nuevo** (`#editar-desafios-nuevo`).
 
@@ -605,7 +605,8 @@ Nunca se muestra en producción (`main` en Render).
   - `GET /api/editors/keepalive` — ping ligero para mantener activo el servicio Render durante edición
   - `GET /api/editors/git-push/estado` → `{ habilitado, rama, requiereTokenCliente, ramaDevRender }`
   - Endpoints legacy por editor (`POST /api/*-editor/git-push`) siguen existiendo pero la UI usa solo el push unificado
-  - `GET /api/editors/despliegue/habilitado` · `GET /api/editors/despliegue/resumen` · `POST /api/editors/despliegue/produccion` body `{ mensaje?, token?, archivos? }` — push archivos de editor a rama `main`
+  - `GET /api/editors/despliegue/habilitado` · `GET /api/editors/despliegue/resumen`
+  - `POST /api/editors/despliegue/produccion` body `{ mensaje?, token?, archivos? }` — **Actualizar cambios**: push a dev (si pendiente) + main (`gitPushActualizarCambios`); respuesta `{ dev, main, sinCambios, commitSha… }`
   - Lógica servidor: `lib/editorGitPush.js`, `lib/editorXlsxSeguro.js`, `lib/renderDeployMonitor.js`. Env: `GIT_PUSH_TOKEN` (PAT GitHub), opcional `GIT_PUSH_BRANCH`, `GIT_PUSH_BRANCH_PROD`, `GIT_PUSH_PROD_ENABLED`, `GIT_PUSH_SECRET`, `GIT_PUSH_REPO_URL`, `GIT_USER_NAME`, `GIT_USER_EMAIL`, `RENDER_PROD_PUBLIC_URL`, `DEPLOY_MONITOR_INTERVAL_MS`, `DEPLOY_MONITOR_TIMEOUT_MS`, …
   - UI cliente: `editorGuardadoSeguro.js`, `editorDeployMonitor.js`, `editorGitPush.js`, `editorDevNav.js`, `editorSessionLog.js`, `despliegue.js`; menú dev en `cartas.js` (`DEV_TOOLS_MENU_EMAILS`)
 - `POST /admin/users/list`, `/admin/user/get`, `/admin/user/update`

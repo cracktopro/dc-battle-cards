@@ -14,11 +14,11 @@
     <header class="crear-ep-header">
         <div class="crear-ep-header-marca">
             <span class="crear-ep-header-kicker">Herramienta interna</span>
-            <h1 class="crear-ep-header-titulo">Despliegue a producción</h1>
+            <h1 class="crear-ep-header-titulo">Despliegue</h1>
         </div>
         <div class="crear-ep-header-acciones" id="despliegue-toolbar">
             <button type="button" id="despliegue-btn-refrescar" class="crear-ep-btn crear-ep-btn--secundario">Actualizar</button>
-            <button type="button" id="despliegue-btn-produccion" class="crear-ep-btn crear-ep-btn--produccion" disabled>Subir a Producción</button>
+            <button type="button" id="despliegue-btn-produccion" class="crear-ep-btn crear-ep-btn--produccion" disabled>Actualizar cambios</button>
         </div>
     </header>
 
@@ -28,38 +28,38 @@
         <section class="despliegue-panel despliegue-panel--registro">
             <h2 class="despliegue-panel-titulo">Registro de cambios (sesión)</h2>
             <p class="crear-ep-field-ayuda despliegue-ayuda">
-                Historial de guardados en esta sesión de navegador. La subida a GitHub se centraliza en esta vista.
+                Historial de guardados en esta sesión de navegador. La subida a dev se centraliza en esta vista.
             </p>
             <textarea id="despliegue-registro" class="despliegue-registro" readonly spellcheck="false" aria-label="Registro de cambios de la sesión"></textarea>
         </section>
 
         <aside class="despliegue-panel despliegue-panel--archivos">
-            <h2 class="despliegue-panel-titulo">Pendiente → GitHub (dev)</h2>
+            <h2 class="despliegue-panel-titulo">Pendiente → dev (GitHub)</h2>
             <p class="crear-ep-field-ayuda despliegue-ayuda">
                 Archivos de editor guardados en el servidor y aún no subidos a la rama <strong>dev</strong>.
-                Usa <strong>Subir a GitHub</strong> (arriba) para un commit único con todos los cambios de la sesión.
+                Usa <strong>Subir a DEV</strong> (arriba) para un commit único con todos los cambios de la sesión.
             </p>
             <ul id="despliegue-archivos-dev" class="despliegue-archivos-lista"></ul>
 
             <h2 class="despliegue-panel-titulo despliegue-panel-titulo--sec">Pendiente → main (producción)</h2>
             <p class="crear-ep-field-ayuda despliegue-ayuda">
-                Archivos de editor que en <strong>GitHub</strong> difieren entre la rama <strong>dev</strong> y <strong>main</strong>
-                (más cambios guardados en el servidor aún no subidos a dev). Usa <strong>Subir a Producción</strong> para copiarlos a <code>main</code>.
+                Archivos que en <strong>GitHub</strong> difieren entre <strong>dev</strong> y <strong>main</strong>.
+                <strong>Actualizar cambios</strong> sube a dev (solo si hace falta) y a main, y espera el deploy en ambos servicios Render.
             </p>
             <ul id="despliegue-archivos" class="despliegue-archivos-lista"></ul>
             <div class="despliegue-aviso-prod">
                 <strong>⚠ Producción</strong>
-                <p>El botón «Subir a Producción» copia únicamente estos archivos a la rama <code>main</code>. Requiere <code>GIT_PUSH_TOKEN</code> y entorno Render <code>dev</code>.</p>
+                <p>«Actualizar cambios» hace commit + push a <code>dev</code> (si hay pendientes) y a <code>main</code>. Requiere <code>GIT_PUSH_TOKEN</code> y <code>RENDER_PROD_PUBLIC_URL</code> en Render dev.</p>
             </div>
         </aside>
     </div>
 
     <dialog id="despliegue-dialog-prod" class="crear-ep-dialog-git-push">
         <form method="dialog" class="crear-ep-dialog-git-push-inner">
-            <h3 class="crear-ep-dialog-titulo">Subir a Producción</h3>
+            <h3 class="crear-ep-dialog-titulo">Actualizar cambios</h3>
             <p class="crear-ep-dialog-ayuda">
-                Se desplegarán los archivos de editor pendientes a la rama <strong>main</strong>.
-                Asegúrate de haber subido antes los cambios a <strong>dev</strong> con «Subir a GitHub» en esta vista.
+                Se subirán los cambios a <strong>dev</strong> (solo si aún no están en GitHub) y a <strong>main</strong>.
+                Tras el push se esperará el deploy en Render en ambos entornos.
             </p>
             <label class="crear-ep-field crear-ep-field--git-push" for="despliegue-prod-mensaje">
                 <span>Mensaje del commit (opcional)</span>
@@ -70,12 +70,12 @@
                 <input type="password" id="despliegue-prod-token" class="crear-ep-select" autocomplete="off" spellcheck="false">
             </label>
             <div id="despliegue-prod-progreso" class="editor-git-push-progreso" hidden>
-                <p id="despliegue-prod-estado" class="editor-git-push-estado" aria-live="polite">Desplegando…</p>
+                <p id="despliegue-prod-estado" class="editor-git-push-estado" aria-live="polite">Actualizando…</p>
             </div>
             <p id="despliegue-prod-resultado" class="editor-git-push-resultado" hidden></p>
             <div class="crear-ep-dialog-acciones">
-                <button type="button" id="despliegue-prod-ejecutar" class="crear-ep-btn crear-ep-btn--produccion">Confirmar despliegue</button>
-                <button type="button" id="despliegue-prod-cerrar" class="crear-ep-btn crear-ep-btn--secundario">Cancelar</button>
+                <button type="button" id="despliegue-prod-ejecutar" class="crear-ep-btn crear-ep-btn--produccion">Confirmar actualización</button>
+                <button type="button" id="despliegue-prod-cerrar" class="crear-ep-btn crear-ep-btn--secundario">Cerrar</button>
             </div>
         </form>
     </dialog>

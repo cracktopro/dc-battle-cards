@@ -161,10 +161,53 @@
         return '';
     }
 
+    /**
+     * Espera deploys en dev y/o prod en secuencia (dev primero).
+     * @param {{ dev?: { commitSha?: string }, main?: { commitSha?: string }, onProgreso?: Function }} opts
+     */
+    async function esperarDeploysTrasActualizar(opts = {}) {
+        const onProgreso = typeof opts.onProgreso === 'function' ? opts.onProgreso : null;
+        const resultados = { dev: null, prod: null };
+
+        const shaDev = extraerSha(opts.dev?.commitSha);
+        const shaMain = extraerSha(opts.main?.commitSha);
+
+        if (shaDev) {
+            resultados.dev = await esperarDeploy({
+                commitEsperado: shaDev,
+                destino: 'dev',
+                onProgreso: (p) => onProgreso?.({ ...p, servicio: 'dev' }),
+            });
+        }
+
+        if (shaMain) {
+            resultados.prod = await esperarDeploy({
+                commitEsperado: shaMain,
+                destino: 'prod',
+                onProgreso: (p) => onProgreso?.({ ...p, servicio: 'prod' }),
+            });
+        }
+
+        return resultados;
+    }
+
+    function mensajeResultadoActualizacion(resultados) {
+        let html = '';
+        if (resultados?.dev) {
+            html += mensajeResultadoMonitor(resultados.dev, 'dev');
+        }
+        if (resultados?.prod) {
+            html += mensajeResultadoMonitor(resultados.prod, 'prod');
+        }
+        return html;
+    }
+
     window.DCEditorDeployMonitor = {
         extraerSha,
         obtenerConfig,
         esperarDeploy,
+        esperarDeploysTrasActualizar,
         mensajeResultadoMonitor,
+        mensajeResultadoActualizacion,
     };
 })();

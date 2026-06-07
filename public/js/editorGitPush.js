@@ -24,7 +24,7 @@
         dialogEl.className = 'crear-ep-dialog-git-push';
         dialogEl.innerHTML = `
             <form method="dialog" class="crear-ep-dialog-git-push-inner">
-                <h3 class="crear-ep-dialog-titulo">Subir cambios a GitHub</h3>
+                <h3 class="crear-ep-dialog-titulo">Subir a DEV</h3>
                 <p id="editor-git-push-ayuda" class="crear-ep-dialog-ayuda"></p>
                 <label class="crear-ep-field crear-ep-field--git-push" for="editor-git-push-mensaje">
                     <span>Mensaje del commit (opcional)</span>
@@ -42,7 +42,7 @@
                 </div>
                 <p id="editor-git-push-resultado" class="editor-git-push-resultado" hidden></p>
                 <div class="crear-ep-dialog-acciones">
-                    <button type="button" id="editor-git-push-ejecutar" class="crear-ep-btn crear-ep-btn--primario">Subir a GitHub</button>
+                    <button type="button" id="editor-git-push-ejecutar" class="crear-ep-btn crear-ep-btn--primario">Subir a DEV</button>
                     <button type="button" id="editor-git-push-cerrar" class="crear-ep-btn crear-ep-btn--secundario">Cerrar</button>
                 </div>
             </form>
@@ -66,6 +66,13 @@
         }
         if (fill && valor !== null) {
             fill.style.width = `${valor}%`;
+        }
+    }
+
+    function setBotonEjecutarVisible(visible) {
+        const ejecutar = $('editor-git-push-ejecutar');
+        if (ejecutar) {
+            ejecutar.hidden = !visible;
         }
     }
 
@@ -100,6 +107,7 @@
             tokenInput.value = localStorage.getItem(LS_TOKEN_KEY) || '';
         }
         if (ejecutar) ejecutar.disabled = false;
+        setBotonEjecutarVisible(true);
         setProgreso(false);
     }
 
@@ -122,7 +130,7 @@
         const ejecutar = $('editor-git-push-ejecutar');
         const handler = async () => {
             if (opciones?.getDirty?.()) {
-                window.alert('Hay cambios sin guardar en el editor actual. Pulsa Guardar antes de subir a GitHub.');
+                window.alert('Hay cambios sin guardar en el editor actual. Pulsa Guardar antes de subir a DEV.');
                 return;
             }
 
@@ -140,6 +148,7 @@
                 headers['X-Editor-Git-Token'] = token;
             }
 
+            let exito = false;
             try {
                 setProgreso(true, 'Creando commit…', 45);
                 const res = await fetch(ENDPOINT_SESION, {
@@ -183,11 +192,17 @@
                 }
                 void actualizarEstadoPendienteGit(document.getElementById('despliegue-toolbar'));
                 opciones?.onSuccess?.(data);
+                exito = true;
             } catch (err) {
                 setProgreso(true, 'Error', 100);
                 mostrarResultado(String(err.message || err), true);
             } finally {
-                ejecutar.disabled = false;
+                if (exito) {
+                    setBotonEjecutarVisible(false);
+                } else if (ejecutar) {
+                    ejecutar.disabled = false;
+                    setBotonEjecutarVisible(true);
+                }
             }
         };
 
@@ -200,7 +215,7 @@
         b.type = 'button';
         b.className = 'crear-ep-btn crear-ep-btn--secundario';
         b.dataset.editorGitPush = '1';
-        b.textContent = 'Subir a GitHub';
+        b.textContent = 'Subir a DEV';
         b.title = 'Commit y push de todos los editores a la rama dev';
         b.addEventListener('click', onClick);
         return b;
@@ -222,8 +237,8 @@
             btn.classList.toggle('crear-ep-btn--git-pendiente', pendiente);
             btn.disabled = !pendiente;
             btn.title = pendiente
-                ? 'Hay cambios guardados pendientes de subir a GitHub (rama dev)'
-                : 'No hay cambios pendientes de subir a GitHub';
+                ? 'Hay cambios guardados pendientes de subir a dev (GitHub)'
+                : 'No hay cambios pendientes de subir a dev';
         } catch (_e) { /* ignorar */ }
     }
 
@@ -238,7 +253,7 @@
     }
 
     /**
-     * Monta el botón «Subir a GitHub» en la toolbar de despliegue.html.
+     * Monta el botón «Subir a DEV» en la toolbar de despliegue.html.
      * @param {{ toolbar: HTMLElement|null, getDirty?: () => boolean, onSuccess?: Function }} opciones
      */
     async function montarEnDespliegue(opciones) {

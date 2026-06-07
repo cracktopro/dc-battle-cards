@@ -1272,7 +1272,7 @@ app.post('/api/editors/despliegue/produccion', async (req, res) => {
     }
     try {
         const archivos = Array.isArray(req.body?.archivos) ? req.body.archivos : undefined;
-        const resultado = await DCEditorGitPush.gitPushProduccion({
+        const resultado = await DCEditorGitPush.gitPushActualizarCambios({
             rutas: archivos,
             mensaje: req.body?.mensaje,
         });

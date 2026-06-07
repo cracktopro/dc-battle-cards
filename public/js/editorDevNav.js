@@ -90,7 +90,7 @@
         if (pendiente) {
             const ok = window.confirm(
                 `${mensajeGitPendiente(config?.motivoGitPendiente)}\n\n`
-                + 'Sube los cambios desde la vista «Despliegue» → «Subir a GitHub» antes de salir, '
+                + 'Sube los cambios desde la vista «Despliegue» → «Subir a DEV» antes de salir, '
                 + 'o Render puede perder los datos no subidos.\n\n'
                 + '¿Continuar de todos modos?'
             );

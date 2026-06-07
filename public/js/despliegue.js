@@ -1,5 +1,5 @@
 /**
- * Vista Despliegue: registro de sesión + push a producción (rama main).
+ * Vista Despliegue: registro de sesión + push a dev / actualización dev+main.
  */
 (function () {
     'use strict';
@@ -10,7 +10,7 @@
     const registroEl = $('despliegue-registro');
     const archivosEl = $('despliegue-archivos');
     const archivosDevEl = $('despliegue-archivos-dev');
-    const btnProd = $('despliegue-btn-produccion');
+    const btnActualizar = $('despliegue-btn-produccion');
     const btnRefrescar = $('despliegue-btn-refrescar');
     const toast = $('crear-ep-toast');
 
@@ -66,7 +66,7 @@
             if (prod.comparacion) {
                 lineas.push(`Comparación: ${prod.comparacion}`);
             }
-            lineas.push(`Despliegue habilitado: ${prod.habilitado ? 'sí' : 'no'}`);
+            lineas.push(`Actualización habilitada: ${prod.habilitado ? 'sí' : 'no'}`);
             lineas.push('');
             lineas.push('Archivos de editor distintos respecto a producción:');
             if (prod.archivosPendientes?.length) {
@@ -79,7 +79,7 @@
 
         const pend = resumenServidor?.pendienteDevGithub;
         if (pend) {
-            lineas.push('Pendiente de subir a GitHub (rama dev):');
+            lineas.push('Pendiente de subir a dev (GitHub):');
             const todos = pend.todos;
             if (todos?.pendiente) {
                 lineas.push(`  ⚠ Todos los editores: ${motivoPendienteDev(todos)}`);
@@ -99,6 +99,12 @@
         return lineas.join('\n');
     }
 
+    function hayCambiosParaActualizar() {
+        const pendDev = Boolean(resumenServidor?.pendienteDevGithub?.todos?.pendiente);
+        const pendMain = Boolean(resumenServidor?.produccion?.archivosPendientes?.length);
+        return pendDev || pendMain;
+    }
+
     function actualizarRegistroVista() {
         if (registroEl) {
             registroEl.value = construirTextoRegistro();
@@ -115,15 +121,15 @@
                 ? `No hay archivos de editor distintos entre ${resumenServidor.produccion.comparacion}.`
                 : 'No hay archivos de editor distintos entre dev y main en GitHub.'
         );
-        const puedeProd = Boolean(
+        const puedeActualizar = Boolean(
             resumenServidor?.produccion?.habilitado
-            && resumenServidor?.produccion?.archivosPendientes?.length
+            && hayCambiosParaActualizar()
         );
-        if (btnProd) {
-            btnProd.disabled = !puedeProd;
-            btnProd.title = puedeProd
-                ? `Desplegar ${resumenServidor.produccion.archivosPendientes.length} archivo(s) a ${resumenServidor.produccion.rama}`
-                : 'No hay archivos de editor pendientes de desplegar a producción';
+        if (btnActualizar) {
+            btnActualizar.disabled = !puedeActualizar;
+            btnActualizar.title = puedeActualizar
+                ? 'Commit + push a dev (si hace falta) y a main; espera deploy en ambos servicios Render'
+                : 'No hay cambios pendientes de actualizar en dev o main';
         }
         void window.DCEditorGitPush?.actualizarEstadoPendienteGit?.($('despliegue-toolbar'));
     }
@@ -146,19 +152,46 @@
         }
     }
 
-    async function confirmarDespliegue() {
-        const archivos = resumenServidor?.produccion?.archivosPendientes || [];
-        const rama = resumenServidor?.produccion?.rama || 'main';
-        const lista = archivos.map((a) => `  • ${a}`).join('\n');
+    function formatearResumenPush(parte, etiqueta) {
+        if (!parte) {
+            return '';
+        }
+        if (parte.omitido) {
+            return `<p><strong>${etiqueta}:</strong> ${parte.mensaje || 'Sin cambios.'}</p>`;
+        }
+        if (parte.sinCambios) {
+            return `<p><strong>${etiqueta}:</strong> Sin cambios nuevos.</p>`;
+        }
+        return `<p><strong>${etiqueta}:</strong> Push completado en <strong>${parte.rama || etiqueta}</strong>.`
+            + (parte.commit ? `<br><code>${parte.commit}</code>` : '') + '</p>';
+    }
+
+    async function confirmarActualizacion() {
+        const pendDev = resumenServidor?.pendienteDevGithub?.todos?.pendiente;
+        const archivosMain = resumenServidor?.produccion?.archivosPendientes || [];
+        const ramaMain = resumenServidor?.produccion?.rama || 'main';
+        const lineas = [];
+        if (pendDev) {
+            lineas.push('  • Push a dev (GitHub) — cambios aún no subidos');
+        } else {
+            lineas.push('  • Dev ya sincronizado — no se repetirá el push a dev');
+        }
+        if (archivosMain.length) {
+            lineas.push(`  • Push a ${ramaMain} — ${archivosMain.length} archivo(s):`);
+            archivosMain.forEach((a) => lineas.push(`      · ${a}`));
+        } else if (!pendDev) {
+            lineas.push(`  • ${ramaMain} ya alineado con dev`);
+        }
         return window.confirm(
-            `¿Subir a PRODUCCIÓN (rama «${rama}»)?\n\n`
-            + `Se copiarán ${archivos.length} archivo(s) desde el estado actual de dev:\n\n${lista}\n\n`
-            + 'Esta acción afectará al entorno de producción. ¿Continuar?'
+            '¿Actualizar cambios en dev y producción?\n\n'
+            + 'Se hará commit + push según corresponda:\n\n'
+            + lineas.join('\n')
+            + '\n\nSe esperará el deploy en Render (dev y producción). ¿Continuar?'
         );
     }
 
-    async function abrirModalProduccion() {
-        if (!(await confirmarDespliegue())) return;
+    async function abrirModalActualizar() {
+        if (!(await confirmarActualizacion())) return;
 
         const dialog = $('despliegue-dialog-prod');
         const resultado = $('despliegue-prod-resultado');
@@ -183,14 +216,17 @@
         if (tokenInput && resumenServidor?.gitPush?.requiereTokenCliente) {
             tokenInput.value = localStorage.getItem('dc_editor_git_push_token_v1') || '';
         }
-        if (ejecutar) ejecutar.disabled = false;
+        if (ejecutar) {
+            ejecutar.disabled = false;
+            ejecutar.hidden = false;
+        }
 
         dialog.showModal();
 
         ejecutar.onclick = async () => {
             ejecutar.disabled = true;
             if (progreso) progreso.hidden = false;
-            if (estado) estado.textContent = 'Desplegando a producción…';
+            if (estado) estado.textContent = 'Actualizando cambios…';
 
             const headers = { 'Content-Type': 'application/json' };
             const token = tokenInput?.value?.trim() || '';
@@ -199,6 +235,7 @@
                 localStorage.setItem('dc_editor_git_push_token_v1', token);
             }
 
+            let exito = false;
             try {
                 const res = await fetch('/api/editors/despliegue/produccion', {
                     method: 'POST',
@@ -212,38 +249,52 @@
                 if (!res.ok) {
                     throw new Error(data.detalle || data.error || `HTTP ${res.status}`);
                 }
+
+                let htmlResultado = '';
                 if (data.sinCambios) {
-                    toastMsg('No había cambios nuevos respecto a producción.');
+                    htmlResultado = `<p>${data.mensaje || 'No había cambios pendientes en dev ni en main.'}</p>`;
+                    toastMsg('No había cambios pendientes.');
                 } else {
-                    window.DCEditorSessionLog?.registrarDespliegueProd?.(
-                        data.commit || 'Despliegue completado',
-                        data.archivos
-                    );
-                    toastMsg(`Push a ${data.rama || 'main'} completado. Esperando deploy en Render…`);
-                }
+                    htmlResultado = formatearResumenPush(data.dev, 'Dev');
+                    htmlResultado += formatearResumenPush(data.main, 'Producción (main)');
 
-                let htmlResultado = data.sinCambios
-                    ? 'No había cambios nuevos.'
-                    : `Push completado en <strong>${data.rama}</strong>.`
-                        + (data.commit ? `<br><code>${data.commit}</code>` : '');
-
-                if (!data.sinCambios && data.commitSha && window.DCEditorDeployMonitor) {
-                    if (estado) estado.textContent = 'Esperando deploy en Render (producción)…';
-                    const deployResult = await window.DCEditorDeployMonitor.esperarDeploy({
-                        commitEsperado: data.commitSha,
-                        destino: 'prod',
-                        onProgreso: (p) => {
-                            if (estado) estado.textContent = p.mensaje;
-                        },
-                    });
-                    htmlResultado += window.DCEditorDeployMonitor.mensajeResultadoMonitor(deployResult, 'prod');
-                    if (deployResult?.ok) {
-                        toastMsg('Deploy en producción completado.');
-                    } else if (deployResult?.motivo === 'timeout') {
-                        toastMsg('Tiempo de espera agotado; el deploy puede seguir en Render.', true);
+                    if (data.dev && !data.dev.omitido && !data.dev.sinCambios) {
+                        window.DCEditorSessionLog?.registrarGitPushDev?.(
+                            'despliegue',
+                            data.dev.commit || 'Push a dev (actualizar cambios)',
+                            data.dev.archivos || []
+                        );
                     }
-                } else if (!data.sinCambios) {
-                    toastMsg(`Desplegado a ${data.rama || 'main'}.`);
+                    if (data.main && !data.main.omitido && !data.main.sinCambios) {
+                        window.DCEditorSessionLog?.registrarDespliegueProd?.(
+                            data.main.commit || 'Actualización main completada',
+                            data.main.archivos
+                        );
+                    }
+
+                    const necesitaDev = data.dev?.commitSha && !data.dev.omitido && !data.dev.sinCambios;
+                    const necesitaMain = data.main?.commitSha && !data.main.omitido && !data.main.sinCambios;
+
+                    if ((necesitaDev || necesitaMain) && window.DCEditorDeployMonitor) {
+                        if (estado) estado.textContent = 'Esperando deploys en Render…';
+                        const deployResults = await window.DCEditorDeployMonitor.esperarDeploysTrasActualizar({
+                            dev: necesitaDev ? data.dev : null,
+                            main: necesitaMain ? data.main : null,
+                            onProgreso: (p) => {
+                                if (estado) estado.textContent = p.mensaje;
+                            },
+                        });
+                        htmlResultado += window.DCEditorDeployMonitor.mensajeResultadoActualizacion(deployResults);
+                        if (deployResults.dev?.ok && deployResults.prod?.ok) {
+                            toastMsg('Deploys en dev y producción completados.');
+                        } else if (deployResults.dev?.ok || deployResults.prod?.ok) {
+                            toastMsg('Deploy completado en al menos un servicio.');
+                        } else if (necesitaDev || necesitaMain) {
+                            toastMsg('Push completado; revisa el estado de deploy en Render.', true);
+                        }
+                    } else {
+                        toastMsg('Cambios actualizados en GitHub.');
+                    }
                 }
 
                 if (resultado) {
@@ -251,7 +302,9 @@
                     resultado.className = 'editor-git-push-resultado editor-git-push-resultado--ok';
                     resultado.innerHTML = htmlResultado;
                 }
+                if (estado) estado.textContent = 'Listo';
                 await cargarResumen();
+                exito = true;
             } catch (err) {
                 if (resultado) {
                     resultado.hidden = false;
@@ -259,9 +312,14 @@
                     resultado.textContent = String(err.message || err);
                 }
                 toastMsg(String(err.message || err), true);
+                if (estado) estado.textContent = 'Error';
             } finally {
-                ejecutar.disabled = false;
-                if (estado) estado.textContent = 'Listo';
+                if (exito) {
+                    if (ejecutar) ejecutar.hidden = true;
+                } else if (ejecutar) {
+                    ejecutar.disabled = false;
+                    ejecutar.hidden = false;
+                }
             }
         };
     }
@@ -270,7 +328,7 @@
         btnRefrescar?.addEventListener('click', () => {
             cargarResumen().catch((e) => toastMsg(e.message, true));
         });
-        btnProd?.addEventListener('click', abrirModalProduccion);
+        btnActualizar?.addEventListener('click', abrirModalActualizar);
         $('despliegue-prod-cerrar')?.addEventListener('click', () => {
             $('despliegue-dialog-prod')?.close();
         });
